@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "plotlet"
+version = "0.1.0"
+description = "Small, hackable Python library that emits matplotlib-style SVG plots."
+readme = "README.md"
+license = { text = "MIT" }
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [
+    { name = "gitbamboo42" },
+]
+keywords = [
+    "plot",
+    "svg",
+    "matplotlib",
+    "scientific",
+    "visualization",
+    "jupyter",
+    "reproducible",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Topic :: Multimedia :: Graphics",
+]
+dependencies = [
+  "fonttools>=4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "jupyter",
+  "nbconvert",
+]
+
+[project.urls]
+Homepage = "https://github.com/gitbamboo42/plotlet"
+Repository = "https://github.com/gitbamboo42/plotlet"
+Issues = "https://github.com/gitbamboo42/plotlet/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+plotlet = ["spec.json", "fonts/*.ttf"]
