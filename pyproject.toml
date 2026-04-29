@@ -7,7 +7,7 @@ name = "plotlet"
 version = "0.1.0"
 description = "Small, hackable Python library that emits matplotlib-style SVG plots."
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
 authors = [
@@ -26,7 +26,6 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
