@@ -40,9 +40,12 @@ plotlet/
 │       ├── colors.py
 │       ├── scales.py            # _LinearScale, _LogScale, _BandScale, nice ticks
 │       ├── font.py              # _measure_text, _text_path (DejaVu Sans)
-│       ├── artists.py           # plot/scatter/bar/hist/fill_between
+│       ├── artists.py           # plot/scatter/bar/hist/fill_between/imshow + reflines
 │       ├── core.py              # Figure class + _render orchestrator
 │       ├── chart.py             # Chart facade for tabular data
+│       ├── colormaps.py         # 180 vendored matplotlib colormaps (continuous, value→RGB)
+│       ├── _cm_data.py          # generated LUT data — do not edit by hand
+│       ├── _png.py              # tiny stdlib-only PNG encoder for imshow's large-image path
 │       ├── spec.json            # locked visual constants — package data
 │       └── fonts/DejaVuSans.ttf # bundled font (~700 KB)
 ├── cookbook/                    # reference implementations of custom plot types
@@ -125,7 +128,7 @@ The replay function reconstructs `title`, `xlabel`, `ylabel`, `xlim`, `ylim`, `x
 
 When suggesting changes or adding features:
 
-- **Decide core vs cookbook first.** Cookbook is the default for new plot types; core is only for shared infrastructure (e.g. `imshow` would bring PNG embedding + colormaps that benefit other artists too) or genuine essentials.
+- **Decide core vs cookbook first.** Cookbook is the default for new plot types; core is only for shared infrastructure (this is how `imshow` got in — it carries the colormap registry and the PNG encoder, both reusable) or genuine essentials.
 - **Refuse new core plot types by default.** "Let's add a Sankey to the core" is almost always wrong; the right answer is `cookbook/<name>.py` or the user's own project.
 - **Match existing code style.** Plain Python, top-to-bottom readable, no clever metaclasses or classes-everywhere.
 - **Preserve matplotlib API parity** for standard plots. If matplotlib calls it `axhline`, don't call it `horizontalLine`.

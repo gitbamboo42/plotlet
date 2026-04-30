@@ -16,8 +16,10 @@ Chained API (legacy, still supported):
 """
 from ._spec import SPEC
 from .colors import TAB10, colors
+from .colormaps import colormap, list_colormaps
 from .core import Figure, figure
 from .chart import Chart, chart
 
-__all__ = ["chart", "Chart", "figure", "Figure", "SPEC", "TAB10", "colors"]
+__all__ = ["chart", "Chart", "figure", "Figure", "SPEC", "TAB10", "colors",
+           "colormap", "list_colormaps"]
 __version__ = "0.1.0"

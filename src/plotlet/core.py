@@ -19,9 +19,10 @@ from .colors import _resolve_color, TAB10
 from .scales import _LinearScale, _LogScale, _BandScale, _nice_domain, _fmt_tick
 from .font import _measure_text, _text_path
 from .artists import (
-    _to_pylist, _histogram,
+    _to_pylist, _to_2d_pylist, _histogram,
     _artist_plot, _artist_scatter, _artist_bar, _artist_hist, _artist_fill_between,
     _artist_axhline, _artist_axvline, _artist_axhspan, _artist_axvspan,
+    _artist_imshow,
     _marker_at,
 )
 
@@ -35,7 +36,7 @@ _FONT = _FONTSPEC["family"]
 
 _RECORDABLE = {
     "plot", "scatter", "bar", "hist", "fill_between",
-    "axhline", "axvline", "axhspan", "axvspan",
+    "axhline", "axvline", "axhspan", "axvspan", "imshow",
     "title", "xlabel", "ylabel", "xlim", "ylim",
     "xscale", "yscale", "grid", "legend",
 }
@@ -96,6 +97,8 @@ class Figure:
             elif name == "axvspan":
                 st["artists"].append({"type": "axvspan",
                                       "xmin": args[0], "xmax": args[1], "opts": kw})
+            elif name == "imshow":
+                st["artists"].append({"type": "imshow", "data": args[0], "opts": kw})
             elif name == "title":  st["title"] = args[0]
             elif name == "xlabel": st["xlabel"] = args[0]
             elif name == "ylabel": st["ylabel"] = args[0]
@@ -157,6 +160,23 @@ def _render(st, W, H, M):
         if a["type"] == "hist":
             a["_bins"] = _histogram(a["data"], a["opts"].get("bins", 10))
 
+    # pre-process imshow: 2-D-ify input, autocompute vmin/vmax
+    for a in st["artists"]:
+        if a["type"] == "imshow":
+            d = _to_2d_pylist(a["data"])
+            a["_data"] = d
+            a["_nrows"] = len(d)
+            a["_ncols"] = len(d[0]) if d else 0
+            vmin = a["opts"].get("vmin"); vmax = a["opts"].get("vmax")
+            if vmin is None or vmax is None:
+                flat = [v for row in d for v in row if v == v]
+                if flat:
+                    if vmin is None: vmin = min(flat)
+                    if vmax is None: vmax = max(flat)
+                else:
+                    vmin, vmax = 0.0, 1.0
+            a["_vmin"] = vmin; a["_vmax"] = vmax
+
     # ---- x scale ----
     has_bar = any(a["type"] == "bar" for a in st["artists"])
     if has_bar:
@@ -178,6 +198,12 @@ def _render(st, W, H, M):
                 for b in a["_bins"]:
                     if b["x0"] < x_min: x_min = b["x0"]
                     if b["x1"] > x_max: x_max = b["x1"]
+            elif a["type"] == "imshow":
+                ext = a["opts"].get("extent")
+                x0, x1 = (ext[0], ext[1]) if ext else (0, a["_ncols"])
+                lo, hi = (x0, x1) if x0 <= x1 else (x1, x0)
+                if lo < x_min: x_min = lo
+                if hi > x_max: x_max = hi
         if st["xlim"] is not None:
             x_min, x_max = st["xlim"]
         elif math.isinf(x_min):
@@ -212,6 +238,12 @@ def _render(st, W, H, M):
             for b in a["_bins"]:
                 if b["count"] > y_max: y_max = b["count"]
             if y_min > 0: y_min = 0
+        elif a["type"] == "imshow":
+            ext = a["opts"].get("extent")
+            y0, y1 = (ext[2], ext[3]) if ext else (0, a["_nrows"])
+            lo, hi = (y0, y1) if y0 <= y1 else (y1, y0)
+            if lo < y_min: y_min = lo
+            if hi > y_max: y_max = hi
     if has_bar and y_min > 0: y_min = 0
     if st["ylim"] is not None:
         y_min, y_max = st["ylim"]
@@ -260,6 +292,8 @@ def _render(st, W, H, M):
             a["_color"] = _resolve_color(a["opts"].get("color")) or _D["refline_color"]
         elif a["type"] in _REFSPAN:
             a["_color"] = _resolve_color(a["opts"].get("color")) or _D["refspan_color"]
+        elif a["type"] == "imshow":
+            a["_color"] = None  # uses cmap, not the categorical cycle
         else:
             a["_color"] = _resolve_color(a["opts"].get("color")) or next_color()
 
@@ -274,6 +308,7 @@ def _render(st, W, H, M):
         if a["type"] == "axvline":      return _artist_axvline(a, x_scale, y_scale, iw, ih, col)
         if a["type"] == "axhspan":      return _artist_axhspan(a, x_scale, y_scale, iw, ih, col)
         if a["type"] == "axvspan":      return _artist_axvspan(a, x_scale, y_scale, iw, ih, col)
+        if a["type"] == "imshow":       return _artist_imshow(a, x_scale, y_scale, col)
         return ""
 
     for a in st["artists"]:

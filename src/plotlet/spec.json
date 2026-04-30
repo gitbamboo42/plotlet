@@ -65,7 +65,9 @@
     "refline_color": "#000000",
     "refline_width": 0.8,
     "refspan_color": "#000000",
-    "refspan_alpha": 0.2
+    "refspan_alpha": 0.2,
+    "default_cmap": "viridis",
+    "imshow_max_rects": 10000
   },
   "legend": {
     "row_height": 16,

@@ -95,6 +95,31 @@ def chart_fill_between():
     return c
 
 
+def chart_imshow_rect():
+    data = [[math.sin(r * 0.4) * math.cos(c * 0.3) for c in range(20)]
+            for r in range(15)]
+    c = pt.chart(title="imshow (rect path)", xlabel="col", ylabel="row")
+    c.imshow(data, cmap="viridis")
+    return c
+
+
+def chart_imshow_png():
+    data = [[math.sin(r * 0.07) + math.cos(c * 0.05) for c in range(160)]
+            for r in range(120)]
+    c = pt.chart(title="imshow (PNG path, magma)", xlabel="col", ylabel="row")
+    c.imshow(data, cmap="magma")
+    return c
+
+
+def chart_imshow_diverging():
+    data = [[(r - 7) * (c - 7) for c in range(15)] for r in range(15)]
+    c = pt.chart(title="imshow (bwr, extent, vmin/vmax)",
+                 xlabel="x", ylabel="y")
+    c.imshow(data, cmap="bwr", extent=(-1.5, 1.5, -1.5, 1.5),
+             vmin=-49, vmax=49)
+    return c
+
+
 def chart_reflines():
     xs = _xs()
     df = {"t": xs, "v": [math.sin(x) for x in xs]}
@@ -110,13 +135,16 @@ def chart_reflines():
 
 
 PLOTS = {
-    "table":        chart_table,
-    "hue":          chart_hue,
-    "scatter_hue":  chart_scatter_hue,
-    "bar":          chart_bar,
-    "hist":         chart_hist,
-    "fill_between": chart_fill_between,
-    "reflines":     chart_reflines,
+    "table":             chart_table,
+    "hue":               chart_hue,
+    "scatter_hue":       chart_scatter_hue,
+    "bar":               chart_bar,
+    "hist":              chart_hist,
+    "fill_between":      chart_fill_between,
+    "reflines":          chart_reflines,
+    "imshow_rect":       chart_imshow_rect,
+    "imshow_png":        chart_imshow_png,
+    "imshow_diverging":  chart_imshow_diverging,
 }
 
 

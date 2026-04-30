@@ -4,9 +4,12 @@ Each `_artist_<type>` takes the recorded artist dict, the x and y scales,
 and the resolved color, and returns an SVG fragment. They're called from
 `core._render`.
 """
+import base64
 import math
 
 from ._spec import _D, _DASH
+from ._png import encode_rgb
+from .colormaps import colormap_lut
 
 
 def _to_pylist(obj):
@@ -16,6 +19,21 @@ def _to_pylist(obj):
     if isinstance(obj, (list, tuple)):
         return list(obj)
     return list(obj)
+
+
+def _to_2d_pylist(obj):
+    """Convert a 2-D input (list-of-lists, numpy 2-D, DataFrame) to nested lists."""
+    if hasattr(obj, "values") and not hasattr(obj, "tolist"):
+        obj = obj.values
+    if hasattr(obj, "tolist"):
+        out = obj.tolist()
+    else:
+        out = [list(row) for row in obj]
+    if not out:
+        return out
+    if not isinstance(out[0], list):
+        raise ValueError("imshow data must be 2-D")
+    return out
 
 
 def _histogram(data, bins):
@@ -182,6 +200,84 @@ def _artist_fill_between(a, xs_, ys_, col):
     d = "M" + "L".join(f"{p[0]:.2f},{p[1]:.2f}" for p in pts) + "Z"
     alpha = a["opts"].get("alpha", _D["fill_alpha"])
     return f'<path d="{d}" fill="{col}" opacity="{alpha}"/>'
+
+
+def _artist_imshow(a, xs_, ys_, col):
+    """2-D array → colored grid. Branches between many <rect>s and one PNG.
+
+    The threshold (`imshow_max_rects` in spec.json) trades vector cleanliness
+    for SVG file size. Below the threshold, each cell is its own <rect> — sharp
+    at any zoom. Above, the whole image is encoded as base64 PNG.
+
+    Row 0 is rendered at the TOP of the data rectangle. With plotlet's standard
+    Cartesian y-axis (small y at bottom), this means image row 0 lands at the
+    LARGEST y value of `extent`. Users coming from matplotlib's `origin='upper'`
+    convention should know: the image looks correct (matrix as printed), but
+    the y-axis tick labels read in Cartesian order.
+    """
+    nrows = a["_nrows"]; ncols = a["_ncols"]
+    if nrows == 0 or ncols == 0:
+        return ""
+    data = a["_data"]
+    vmin = a["_vmin"]; vmax = a["_vmax"]
+    span = (vmax - vmin) or 1.0
+    lut = colormap_lut(a["opts"].get("cmap", _D["default_cmap"]))
+
+    extent = a["opts"].get("extent")
+    if extent is None:
+        x_left, x_right, y_bot, y_top = 0.0, float(ncols), 0.0, float(nrows)
+    else:
+        x_left, x_right, y_bot, y_top = extent
+
+    sx_l = xs_(min(x_left, x_right)); sx_r = xs_(max(x_left, x_right))
+    sy_t = ys_(max(y_bot, y_top));    sy_b = ys_(min(y_bot, y_top))
+    pw = sx_r - sx_l; ph = sy_b - sy_t
+    if pw <= 0 or ph <= 0:
+        return ""
+
+    use_rects = nrows * ncols <= _D["imshow_max_rects"]
+
+    if use_rects:
+        out = []
+        cw = pw / ncols; ch = ph / nrows
+        for r in range(nrows):
+            row = data[r]
+            y = sy_t + r * ch
+            for c in range(ncols):
+                v = row[c]
+                if v != v:
+                    fill = "rgb(0,0,0)"
+                else:
+                    t = (v - vmin) / span
+                    if t < 0: t = 0
+                    elif t > 1: t = 1
+                    i = int(t * 255 + 0.5) * 3
+                    fill = f"rgb({lut[i]},{lut[i+1]},{lut[i+2]})"
+                x = sx_l + c * cw
+                out.append(
+                    f'<rect x="{x:.3f}" y="{y:.3f}" width="{cw:.3f}" '
+                    f'height="{ch:.3f}" fill="{fill}"/>')
+        return "".join(out)
+
+    buf = bytearray()
+    for r in range(nrows):
+        row = data[r]
+        for c in range(ncols):
+            v = row[c]
+            if v != v:
+                buf.append(0); buf.append(0); buf.append(0)
+            else:
+                t = (v - vmin) / span
+                if t < 0: t = 0
+                elif t > 1: t = 1
+                i = int(t * 255 + 0.5) * 3
+                buf.append(lut[i]); buf.append(lut[i+1]); buf.append(lut[i+2])
+    png = encode_rgb(bytes(buf), ncols, nrows)
+    b64 = base64.b64encode(png).decode("ascii")
+    return (f'<image x="{sx_l:.3f}" y="{sy_t:.3f}" '
+            f'width="{pw:.3f}" height="{ph:.3f}" '
+            f'preserveAspectRatio="none" image-rendering="pixelated" '
+            f'href="data:image/png;base64,{b64}"/>')
 
 
 # ---------------------------------------------------------------------------

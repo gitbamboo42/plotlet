@@ -84,6 +84,7 @@ class Chart:
     def axvline(self, x, **opts):  self._fig.axvline(x, **opts);          return self
     def axhspan(self, ymin, ymax, **opts): self._fig.axhspan(ymin, ymax, **opts); return self
     def axvspan(self, xmin, xmax, **opts): self._fig.axvspan(xmin, xmax, **opts); return self
+    def imshow(self, data, **opts): self._fig.imshow(data, **opts);       return self
 
     # ---------- helpers ----------
 
