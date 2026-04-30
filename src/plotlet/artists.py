@@ -115,6 +115,64 @@ def _artist_hist(a, xs_, ys_, ih, col):
     return "".join(out)
 
 
+def _artist_axhline(a, xs_, ys_, iw, ih, col):
+    opts = a["opts"]
+    y = ys_(a["y"])
+    if not math.isfinite(y) or y < 0 or y > ih:
+        return ""
+    x0 = iw * opts.get("xmin", 0.0)
+    x1 = iw * opts.get("xmax", 1.0)
+    lw = opts.get("linewidth", _D["refline_width"])
+    ls = opts.get("linestyle")
+    da = f' stroke-dasharray="{_DASH[ls]}"' if ls and _DASH.get(ls) else ""
+    alpha = opts.get("alpha", 1)
+    return (f'<line x1="{x0:.2f}" x2="{x1:.2f}" y1="{y:.2f}" y2="{y:.2f}" '
+            f'stroke="{col}" stroke-width="{lw}" opacity="{alpha}"{da}/>')
+
+
+def _artist_axvline(a, xs_, ys_, iw, ih, col):
+    opts = a["opts"]
+    x = xs_(a["x"])
+    if not math.isfinite(x) or x < 0 or x > iw:
+        return ""
+    y0 = ih * (1 - opts.get("ymax", 1.0))
+    y1 = ih * (1 - opts.get("ymin", 0.0))
+    lw = opts.get("linewidth", _D["refline_width"])
+    ls = opts.get("linestyle")
+    da = f' stroke-dasharray="{_DASH[ls]}"' if ls and _DASH.get(ls) else ""
+    alpha = opts.get("alpha", 1)
+    return (f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{y0:.2f}" y2="{y1:.2f}" '
+            f'stroke="{col}" stroke-width="{lw}" opacity="{alpha}"{da}/>')
+
+
+def _artist_axhspan(a, xs_, ys_, iw, ih, col):
+    opts = a["opts"]
+    y_a = ys_(a["ymin"]); y_b = ys_(a["ymax"])
+    y0 = max(0.0, min(ih, min(y_a, y_b)))
+    y1 = max(0.0, min(ih, max(y_a, y_b)))
+    if y1 - y0 <= 0:
+        return ""
+    x0 = iw * opts.get("xmin", 0.0)
+    x1 = iw * opts.get("xmax", 1.0)
+    alpha = opts.get("alpha", _D["refspan_alpha"])
+    return (f'<rect x="{x0:.2f}" y="{y0:.2f}" width="{x1 - x0:.2f}" '
+            f'height="{y1 - y0:.2f}" fill="{col}" opacity="{alpha}"/>')
+
+
+def _artist_axvspan(a, xs_, ys_, iw, ih, col):
+    opts = a["opts"]
+    x_a = xs_(a["xmin"]); x_b = xs_(a["xmax"])
+    x0 = max(0.0, min(iw, min(x_a, x_b)))
+    x1 = max(0.0, min(iw, max(x_a, x_b)))
+    if x1 - x0 <= 0:
+        return ""
+    y0 = ih * (1 - opts.get("ymax", 1.0))
+    y1 = ih * (1 - opts.get("ymin", 0.0))
+    alpha = opts.get("alpha", _D["refspan_alpha"])
+    return (f'<rect x="{x0:.2f}" y="{y0:.2f}" width="{x1 - x0:.2f}" '
+            f'height="{y1 - y0:.2f}" fill="{col}" opacity="{alpha}"/>')
+
+
 def _artist_fill_between(a, xs_, ys_, col):
     upper = [(xs_(x), ys_(y)) for x, y in zip(a["xs"], a["y1"])]
     lower = [(xs_(x), ys_(y)) for x, y in zip(a["xs"], a["y2"])]

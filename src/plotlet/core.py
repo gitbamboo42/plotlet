@@ -21,6 +21,7 @@ from .font import _measure_text, _text_path
 from .artists import (
     _to_pylist, _histogram,
     _artist_plot, _artist_scatter, _artist_bar, _artist_hist, _artist_fill_between,
+    _artist_axhline, _artist_axvline, _artist_axhspan, _artist_axvspan,
     _marker_at,
 )
 
@@ -34,9 +35,14 @@ _FONT = _FONTSPEC["family"]
 
 _RECORDABLE = {
     "plot", "scatter", "bar", "hist", "fill_between",
+    "axhline", "axvline", "axhspan", "axvspan",
     "title", "xlabel", "ylabel", "xlim", "ylim",
     "xscale", "yscale", "grid", "legend",
 }
+
+_REFLINE = {"axhline", "axvline"}
+_REFSPAN = {"axhspan", "axvspan"}
+_REF = _REFLINE | _REFSPAN
 
 
 class Figure:
@@ -80,6 +86,16 @@ class Figure:
                                       "xs": _to_pylist(args[0]),
                                       "y1": _to_pylist(args[1]),
                                       "y2": _to_pylist(args[2]), "opts": kw})
+            elif name == "axhline":
+                st["artists"].append({"type": "axhline", "y": args[0], "opts": kw})
+            elif name == "axvline":
+                st["artists"].append({"type": "axvline", "x": args[0], "opts": kw})
+            elif name == "axhspan":
+                st["artists"].append({"type": "axhspan",
+                                      "ymin": args[0], "ymax": args[1], "opts": kw})
+            elif name == "axvspan":
+                st["artists"].append({"type": "axvspan",
+                                      "xmin": args[0], "xmax": args[1], "opts": kw})
             elif name == "title":  st["title"] = args[0]
             elif name == "xlabel": st["xlabel"] = args[0]
             elif name == "ylabel": st["ylabel"] = args[0]
@@ -233,24 +249,39 @@ def _render(st, W, H, M):
             parts.append(f'<line x1="0" x2="{iw}" y1="{y:.2f}" y2="{y:.2f}" '
                          f'stroke="{_GRID}" stroke-width="{gw}" stroke-dasharray="{gd}"/>')
 
-    # artists
+    # artists — assign colors in original order so the data cycle is stable,
+    # but emit in three passes: spans (background), data, lines (foreground).
     color_idx = [0]
     def next_color():
         c = TAB10[color_idx[0] % 10]; color_idx[0] += 1; return c
 
     for a in st["artists"]:
-        col = _resolve_color(a["opts"].get("color")) or next_color()
-        a["_color"] = col
-        if a["type"] == "plot":
-            parts.append(_artist_plot(a, x_scale, y_scale, col))
-        elif a["type"] == "scatter":
-            parts.append(_artist_scatter(a, x_scale, y_scale, col))
-        elif a["type"] == "bar":
-            parts.append(_artist_bar(a, x_scale, y_scale, col))
-        elif a["type"] == "hist":
-            parts.append(_artist_hist(a, x_scale, y_scale, ih, col))
-        elif a["type"] == "fill_between":
-            parts.append(_artist_fill_between(a, x_scale, y_scale, col))
+        if a["type"] in _REFLINE:
+            a["_color"] = _resolve_color(a["opts"].get("color")) or _D["refline_color"]
+        elif a["type"] in _REFSPAN:
+            a["_color"] = _resolve_color(a["opts"].get("color")) or _D["refspan_color"]
+        else:
+            a["_color"] = _resolve_color(a["opts"].get("color")) or next_color()
+
+    def _draw(a):
+        col = a["_color"]
+        if a["type"] == "plot":         return _artist_plot(a, x_scale, y_scale, col)
+        if a["type"] == "scatter":      return _artist_scatter(a, x_scale, y_scale, col)
+        if a["type"] == "bar":          return _artist_bar(a, x_scale, y_scale, col)
+        if a["type"] == "hist":         return _artist_hist(a, x_scale, y_scale, ih, col)
+        if a["type"] == "fill_between": return _artist_fill_between(a, x_scale, y_scale, col)
+        if a["type"] == "axhline":      return _artist_axhline(a, x_scale, y_scale, iw, ih, col)
+        if a["type"] == "axvline":      return _artist_axvline(a, x_scale, y_scale, iw, ih, col)
+        if a["type"] == "axhspan":      return _artist_axhspan(a, x_scale, y_scale, iw, ih, col)
+        if a["type"] == "axvspan":      return _artist_axvspan(a, x_scale, y_scale, iw, ih, col)
+        return ""
+
+    for a in st["artists"]:
+        if a["type"] in _REFSPAN: parts.append(_draw(a))
+    for a in st["artists"]:
+        if a["type"] not in _REF: parts.append(_draw(a))
+    for a in st["artists"]:
+        if a["type"] in _REFLINE: parts.append(_draw(a))
 
     # spines (4 sides)
     for x1, y1, x2, y2 in [(0, 0, iw, 0), (0, ih, iw, ih), (0, 0, 0, ih), (iw, 0, iw, ih)]:
@@ -309,12 +340,13 @@ def _render(st, W, H, M):
                          f'stroke-width="{_SPW}" opacity="{_LEGSPEC["opacity"]}"/>')
             for i, a in enumerate(labeled):
                 ry = pad_y + i * row_h + row_h / 2
-                if a["type"] in ("plot", "fill_between"):
+                if a["type"] in ("plot", "fill_between", "axhline", "axvline"):
                     ls = a["opts"].get("linestyle")
                     da = f' stroke-dasharray="{_DASH[ls]}"' if ls and _DASH.get(ls) else ""
+                    default_lw = _D["refline_width"] if a["type"] in _REFLINE else _D["linewidth"]
                     parts.append(f'<line x1="{pad_x}" x2="{pad_x + sw}" y1="{ry}" y2="{ry}" '
                                  f'stroke="{a["_color"]}" '
-                                 f'stroke-width="{a["opts"].get("linewidth", _D["linewidth"])}"{da}/>')
+                                 f'stroke-width="{a["opts"].get("linewidth", default_lw)}"{da}/>')
                     if a["opts"].get("marker"):
                         parts.append(_marker_at(a["opts"]["marker"], pad_x + sw / 2, ry,
                                                 a["opts"].get("markersize", _D["markersize"]),
@@ -325,9 +357,10 @@ def _render(st, W, H, M):
                                             pad_x + sw / 2, ry, s_size, a["_color"],
                                             a["opts"].get("alpha", _D["scatter_alpha"])))
                 else:
+                    default_alpha = _D["refspan_alpha"] if a["type"] in _REFSPAN else 1
                     parts.append(f'<rect x="{pad_x}" y="{ry - 5}" width="{sw}" height="10" '
                                  f'fill="{a["_color"]}" '
-                                 f'opacity="{a["opts"].get("alpha", 1)}"/>')
+                                 f'opacity="{a["opts"].get("alpha", default_alpha)}"/>')
                 parts.append(_text_path(a["opts"]["label"], pad_x + sw + 6, ry + 4,
                                         tick_size, anchor="start"))
             parts.append('</g>')

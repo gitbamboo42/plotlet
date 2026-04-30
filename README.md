@@ -24,12 +24,8 @@ c                                        # auto-renders in Jupyter
 
 ## Install
 
-Not on PyPI yet — clone and install editable:
-
 ```bash
-git clone <repo>
-cd plotlet
-pip install -e .
+pip install plotlet
 ```
 
 ## Properties
@@ -59,8 +55,10 @@ Pass at construction (`pt.chart(data, title=..., grid=True, ...)`) or as chained
 | `.bar(x=, y=, **opts)` | `color`, `label`, `alpha` |
 | `.hist(x=, **opts)` | `bins`, `color`, `alpha`, `label` |
 | `.fill_between(x=, y1=, y2=, **opts)` | `color`, `alpha`, `label` |
+| `.axhline(y, **opts)` / `.axvline(x, **opts)` | `color`, `linewidth`, `linestyle`, `alpha`, `label`, axes-fraction `xmin`/`xmax` (or `ymin`/`ymax`) |
+| `.axhspan(ymin, ymax, **opts)` / `.axvspan(xmin, xmax, **opts)` | `color`, `alpha`, `label`, axes-fraction `xmin`/`xmax` (or `ymin`/`ymax`) |
 
-`hue=<col>` (on `.line` / `.scatter`) splits into one call per unique value with auto-labels and tab10 colors.
+`hue=<col>` (on `.line` / `.scatter`) splits into one call per unique value with auto-labels and tab10 colors. Reference lines and spans default to black; spans use `alpha=0.2`. They're drawn outside the data color cycle and don't participate in autoscaling — they're decorations on the frame, not data.
 
 ### Render / save
 

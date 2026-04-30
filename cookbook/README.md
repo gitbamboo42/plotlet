@@ -14,12 +14,6 @@ deliberately does not grow a long list of built-in plot types.** Instead:
 - For your custom needs, copy a cookbook example, modify it for your data, and
   use it in your project. AI assistance makes this fast.
 
-## Files
-
-| file | what it shows |
-|---|---|
-| [`karyotype.py`](karyotype.py) | Chromosome ideograms with banded coloring. Demonstrates the three-step recipe (record → domain → draw) for a fully custom artist. |
-
 ## How to use a recipe
 
 1. Copy the file into your own project.

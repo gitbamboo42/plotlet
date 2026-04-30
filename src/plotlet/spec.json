@@ -61,7 +61,11 @@
     "bar_alpha": 1,
     "hist_alpha": 1,
     "bar_padding": 0.2,
-    "hist_gap": 1.0
+    "hist_gap": 1.0,
+    "refline_color": "#000000",
+    "refline_width": 0.8,
+    "refspan_color": "#000000",
+    "refspan_alpha": 0.2
   },
   "legend": {
     "row_height": 16,

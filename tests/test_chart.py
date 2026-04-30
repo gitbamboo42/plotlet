@@ -95,6 +95,20 @@ def chart_fill_between():
     return c
 
 
+def chart_reflines():
+    xs = _xs()
+    df = {"t": xs, "v": [math.sin(x) for x in xs]}
+    c = pt.chart(df, title="reference lines",
+                 xlabel="t", ylabel="v", legend=True, grid=True)
+    c.axhspan(-0.5, 0.5, color="C2")
+    c.axvspan(2.0, 3.5)
+    c.line(x="t", y="v", label="sin(t)")
+    c.axhline(0)
+    c.axhline(0.8, color="red", linestyle="--", label="upper")
+    c.axvline(math.pi, color="gray", linestyle=":")
+    return c
+
+
 PLOTS = {
     "table":        chart_table,
     "hue":          chart_hue,
@@ -102,6 +116,7 @@ PLOTS = {
     "bar":          chart_bar,
     "hist":         chart_hist,
     "fill_between": chart_fill_between,
+    "reflines":     chart_reflines,
 }
 
 
