@@ -19,7 +19,8 @@ from .colors import TAB10, colors
 from .colormaps import colormap, list_colormaps
 from .core import Figure, figure
 from .chart import Chart, chart
+from .registry import ArtistSpec, add_artist
 
 __all__ = ["chart", "Chart", "figure", "Figure", "SPEC", "TAB10", "colors",
-           "colormap", "list_colormaps"]
-__version__ = "0.1.0"
+           "colormap", "list_colormaps", "ArtistSpec", "add_artist"]
+__version__ = "0.1.1"

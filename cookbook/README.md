@@ -17,7 +17,8 @@ deliberately does not grow a long list of built-in plot types.** Instead:
 ## How to use a recipe
 
 1. Copy the file into your own project.
-2. Either patch the `Figure` class directly, or wrap it in a thin helper.
+2. Register your artist with `pt.add_artist(pt.ArtistSpec(...))` — see
+   [`docs/EXTENDING.md`](../docs/EXTENDING.md) for the full API.
 3. Adjust styling, data shape, and details for your specific use case.
 4. Don't PR your version back here — your version is for your project.
 

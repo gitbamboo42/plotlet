@@ -40,7 +40,9 @@ plotlet/
 │       ├── colors.py
 │       ├── scales.py            # _LinearScale, _LogScale, _BandScale, nice ticks
 │       ├── font.py              # _measure_text, _text_path (DejaVu Sans)
-│       ├── artists.py           # plot/scatter/bar/hist/fill_between/imshow + reflines
+│       ├── artists.py           # SVG-emitting helpers for the built-in plot types
+│       ├── registry.py          # ArtistSpec + add_artist — the extension API
+│       ├── builtin_artists.py   # registers the 11 built-in artists at import
 │       ├── core.py              # Figure class + _render orchestrator
 │       ├── chart.py             # Chart facade for tabular data
 │       ├── colormaps.py         # 180 vendored matplotlib colormaps (continuous, value→RGB)
@@ -74,11 +76,11 @@ The test runner plumbing lives in `tests/_runner.py`. Machine-specific interpret
 
 ### The deferred-rendering pattern (the heart of the library)
 
-Every artist method records a tuple `(name, args, kwargs)` into `Figure._calls`:
+Every artist method records a tuple `(name, args, kwargs)` into `Figure._calls`. A name is recordable if it's a frame-state method (`title`, `xlim`, …) or a registered artist:
 
 ```python
 def __getattr__(self, name):
-    if name in _RECORDABLE:
+    if name in _FRAME_METHODS or get_artist(name) is not None:
         def recorder(*args, **kwargs):
             self._calls.append((name, list(args), dict(kwargs)))
             return self
@@ -87,15 +89,15 @@ def __getattr__(self, name):
 
 Then `to_svg()` does five phases:
 
-1. **Replay** — walks `_calls` to build a state dict (`artists`, `title`, `xlim`, …).
-2. **Domain compute** — for each numeric artist, expand `x_min/x_max/y_min/y_max`. Histograms pre-bin here.
-3. **Scale build** — `_LinearScale`, `_LogScale`, `_BandScale` (bar charts). Ticks are computed via the standard 1/2/5 × 10ⁿ "nice numbers" algorithm.
-4. **Render artists** — each artist type has a `_artist_<type>(a, x_scale, y_scale, color)` helper in `artists.py` that emits SVG strings.
-5. **Frame, ticks, labels, legend** — spines, tick lines, text-as-paths labels, then the legend box.
+1. **Replay** — walks `_calls` to build a state dict (`artists`, `title`, `xlim`, …). Each artist call goes through its registered `spec.record(args, kwargs)`.
+2. **Domain compute** — `_scan_domain` walks the artists and calls each one's `spec.xdomain(a)` / `spec.ydomain(a)` to gather autoscale values. A handful of cases still leak through (categorical x for bars, hist pre-binning, `force_zero` for hist/bar).
+3. **Scale build** — `_LinearScale`, `_LogScale`, `_BandScale` (bar charts). Ticks come from the standard 1/2/5 × 10ⁿ "nice numbers" algorithm.
+4. **Render artists** — three layers (`background` → `data` → `foreground`); each artist's `spec.draw(a, ctx)` emits SVG. `RenderContext` carries the scales, dimensions, color, and defaults.
+5. **Frame, ticks, labels, legend** — spines, tick lines, text-as-paths labels, then the legend box. Custom artists can supply `spec.legend_swatch` for the legend marker.
 
 ### Adding a new plot type
 
-The three-step recipe (add to `_RECORDABLE`, extend domain logic in `_render()`, add a draw branch + `_artist_<type>` helper) is plotlet's central hackability claim. **For most custom plots, the right home is your own project (or [`cookbook/`](cookbook/)) — not the core.** Full guide: [docs/EXTENDING.md](docs/EXTENDING.md).
+The three-step recipe (`record`, `xdomain`/`ydomain`, `draw`, all bundled in an `ArtistSpec` and handed to `add_artist(...)`) is plotlet's central hackability claim — no edits to `core.py`, no monkey-patching. **For most custom plots, the right home is your own project (or [`cookbook/`](cookbook/)) — not the core.** Full guide: [docs/EXTENDING.md](docs/EXTENDING.md); worked recipe: [`cookbook/lollipop.py`](cookbook/lollipop.py).
 
 ### Text rendering — text-as-paths via fontTools
 
@@ -137,7 +139,7 @@ When suggesting changes or adding features:
 - **Test with baselines.** Core changes get added to `tests/test_chart.py` with a committed SVG; cookbook examples are reference, not regression-tested.
 - **Mention matplotlib quirks that aren't replicated** and why, when relevant.
 
-The actual mechanics of adding an artist (`_RECORDABLE`, replay, domain, draw + `_artist_<type>`) are in [docs/EXTENDING.md](docs/EXTENDING.md).
+The actual mechanics of adding an artist (`ArtistSpec`, `add_artist`, `RenderContext`) are in [docs/EXTENDING.md](docs/EXTENDING.md).
 
 ---
 
