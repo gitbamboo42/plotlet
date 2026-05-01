@@ -1,0 +1,3 @@
+notebooks/** linguist-documentation
+src/plotlet/fonts/DejaVuSans.ttf linguist-vendored
+src/plotlet/_cm_data.py linguist-generated
