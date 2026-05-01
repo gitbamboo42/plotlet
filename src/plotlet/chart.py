@@ -15,8 +15,9 @@ pandas dependency.
 """
 from __future__ import annotations
 
-from .core import Figure
+from .core import Figure, _FRAME_METHODS
 from .artists import _to_pylist
+from .registry import get_artist, all_artist_names
 
 
 class Chart:
@@ -39,7 +40,21 @@ class Chart:
         if legend is not None: self._fig.legend(legend)
         if grid   is not None: self._fig.grid(grid)
 
-    # ---------- mark methods ----------
+    def __getattr__(self, name):
+        # Mirrors Figure.__getattr__: any frame method or registered artist
+        # forwards to self._fig and returns self for chaining. So custom
+        # artists registered via add_artist() Just Work on Chart too.
+        if name in _FRAME_METHODS or get_artist(name) is not None:
+            def call(*args, **kwargs):
+                getattr(self._fig, name)(*args, **kwargs)
+                return self
+            return call
+        raise AttributeError(f"Chart has no method {name!r}")
+
+    def __dir__(self):
+        return sorted(set(super().__dir__()) | _FRAME_METHODS | set(all_artist_names()))
+
+    # ---------- tabular mark methods ----------
 
     def line(self, *args, x=None, y=None, hue=None, data=None, **opts):
         if x is not None or y is not None:
@@ -80,11 +95,8 @@ class Chart:
             self._fig.fill_between(*args, **opts)
         return self
 
-    def axhline(self, y, **opts):  self._fig.axhline(y, **opts);          return self
-    def axvline(self, x, **opts):  self._fig.axvline(x, **opts);          return self
-    def axhspan(self, ymin, ymax, **opts): self._fig.axhspan(ymin, ymax, **opts); return self
-    def axvspan(self, xmin, xmax, **opts): self._fig.axvspan(xmin, xmax, **opts); return self
-    def imshow(self, data, **opts): self._fig.imshow(data, **opts);       return self
+    # Reflines, imshow, and any user-registered artist forward through
+    # __getattr__ above. They take raw lists/values, not column names.
 
     # ---------- helpers ----------
 
@@ -116,17 +128,8 @@ class Chart:
             ys_g = [ys_all[i] for i, h in enumerate(hue_vals) if h == v]
             method(xs_g, ys_g, label=str(v), **opts)
 
-    # ---------- frame metadata (passthrough) ----------
-
-    def title(self, s):        self._fig.title(s);   return self
-    def xlabel(self, s):       self._fig.xlabel(s);  return self
-    def ylabel(self, s):       self._fig.ylabel(s);  return self
-    def xlim(self, a, b):      self._fig.xlim(a, b); return self
-    def ylim(self, a, b):      self._fig.ylim(a, b); return self
-    def xscale(self, s):       self._fig.xscale(s);  return self
-    def yscale(self, s):       self._fig.yscale(s);  return self
-    def grid(self, on=True):   self._fig.grid(on);   return self
-    def legend(self, on=True): self._fig.legend(on); return self
+    # Frame-state methods (title/xlabel/ylabel/xlim/ylim/xscale/yscale/
+    # grid/legend) forward through __getattr__ above.
 
     # ---------- render ----------
 
