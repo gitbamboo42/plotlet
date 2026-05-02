@@ -5,11 +5,11 @@ allocates a pixel rect to each leaf, and emits one outer `<svg>` containing
 one `<g transform>` per leaf — each calling `_render_inner` from `core.py`.
 
 Composition is component-first: a parent's total size is the sum of its
-children plus gutters; leaf size hints (`pt.chart(width=…)`) act as
-relative ratios when a parent allocates space. The auto-zero-gutter rule
+children plus gaps; leaf size hints (`pt.chart(width=…)`) act as
+relative ratios when a parent allocates space. The auto-zero-gap rule
 collapses the gap between two leaves connected by `share_x=` / `share_y=`,
 and the share pre-pass forces both panels onto a single shared scale so
-domains line up. Inner-edge tick labels and axis labels on the collapsed
+domains line up. Inner-edge tick labels and axis labels on the joined
 side are dropped; spines and tick marks remain so each panel still reads
 as a closed rectangle. See `docs/SUBPLOTS.md` for the design rationale.
 """
@@ -24,8 +24,8 @@ from .core import (
 )
 from .chart import Chart
 
-_GUTTER = _LAYOUTSPEC["gutter"]
-_FLUSH_MARGIN = _LAYOUTSPEC["flush_margin"]
+_GAP = _LAYOUTSPEC["gap"]
+_INNER_GAP = _LAYOUTSPEC["inner_gap"]
 _FONT = _FONTSPEC["family"]
 
 
@@ -79,45 +79,45 @@ def grid(cells: list[list], *, widths: list[float] | None = None,
 
 
 # ---------------------------------------------------------------------------
-# Gutter rules — when adjacent leaves coordinate on the orthogonal axis,
+# Gap rules — when adjacent leaves coordinate on the orthogonal axis,
 # the gap between them collapses to 0.
 # ---------------------------------------------------------------------------
 
-def _pair_gutter(a: Chart | None, b: Chart | None, *, axis: str) -> float:
-    """Gutter between two adjacent cells. Collapses to 0 only when both are
+def _pair_gap(a: Chart | None, b: Chart | None, *, axis: str) -> float:
+    """Gap between two adjacent cells. Collapses to 0 only when both are
     leaves and one of them shares the orthogonal axis with the other —
     horizontal pairs check `_share_y`, vertical pairs check `_share_x`."""
     if a is None or b is None or a._is_parent or b._is_parent:
-        return _GUTTER
+        return _GAP
     share = "_share_y" if axis == "h" else "_share_x"
     if getattr(b, share, None) is a or getattr(a, share, None) is b:
         return 0.0
-    return _GUTTER
+    return _GAP
 
 
-def _gutters_h(children: list[Chart | None]) -> list[float]:
-    return [_pair_gutter(children[i], children[i + 1], axis="h")
+def _gaps_h(children: list[Chart | None]) -> list[float]:
+    return [_pair_gap(children[i], children[i + 1], axis="h")
             for i in range(len(children) - 1)]
 
 
-def _gutters_v(children: list[Chart | None]) -> list[float]:
-    return [_pair_gutter(children[i], children[i + 1], axis="v")
+def _gaps_v(children: list[Chart | None]) -> list[float]:
+    return [_pair_gap(children[i], children[i + 1], axis="v")
             for i in range(len(children) - 1)]
 
 
 def _grid_col_gap(children: list[Chart | None], rows: int, cols: int, c: int) -> float:
-    """Gutter between grid columns c and c+1: min over all rows. If any row
-    has a flush share-pair across this column boundary, the whole boundary
-    collapses — otherwise the default gutter."""
+    """Gap between grid columns c and c+1: min over all rows. If any row
+    has a joined pair across this column boundary, the whole boundary
+    collapses — otherwise the default gap."""
     return min(
-        _pair_gutter(children[r * cols + c], children[r * cols + c + 1], axis="h")
+        _pair_gap(children[r * cols + c], children[r * cols + c + 1], axis="h")
         for r in range(rows)
     )
 
 
 def _grid_row_gap(children: list[Chart | None], rows: int, cols: int, r: int) -> float:
     return min(
-        _pair_gutter(children[r * cols + c], children[(r + 1) * cols + c], axis="v")
+        _pair_gap(children[r * cols + c], children[(r + 1) * cols + c], axis="v")
         for c in range(cols)
     )
 
@@ -137,7 +137,7 @@ def _measure(node: Chart) -> tuple[int, int]:
     """The pixel (W, H) the node wants.
 
     Component-first: a leaf reports its declared size; a parent reports
-    sum-of-children plus gutters in the layout direction, and max-of-children
+    sum-of-children plus gaps in the layout direction, and max-of-children
     in the orthogonal direction. The figure size emerges from composition,
     so a 100-row heatmap stays 100 rows tall and an attached dendrogram
     sits next to it at its own natural width."""
@@ -145,13 +145,13 @@ def _measure(node: Chart) -> tuple[int, int]:
         return _leaf_rect_size(node)
     if node._layout_kind == "h":
         sizes = [_measure(c) for c in node._children]
-        gaps = _gutters_h(node._children)
+        gaps = _gaps_h(node._children)
         W = sum(w for w, _ in sizes) + sum(gaps)
         H = max(h for _, h in sizes)
         return W, H
     if node._layout_kind == "v":
         sizes = [_measure(c) for c in node._children]
-        gaps = _gutters_v(node._children)
+        gaps = _gaps_v(node._children)
         W = max(w for w, _ in sizes)
         H = sum(h for _, h in sizes) + sum(gaps)
         return W, H
@@ -223,7 +223,7 @@ def _allocate(node: Chart, x: float, y: float, w: float, h: float, out: list):
         out.append((node, (x, y, w, h)))
         return
     if node._layout_kind == "h":
-        gaps = _gutters_h(node._children)
+        gaps = _gaps_h(node._children)
         remaining = w - sum(gaps)
         sizes = [_measure(c)[0] for c in node._children]
         ratios = _hint_ratios(sizes, len(node._children))
@@ -236,7 +236,7 @@ def _allocate(node: Chart, x: float, y: float, w: float, h: float, out: list):
                 cx += gaps[i]
         return
     if node._layout_kind == "v":
-        gaps = _gutters_v(node._children)
+        gaps = _gaps_v(node._children)
         remaining = h - sum(gaps)
         sizes = [_measure(c)[1] for c in node._children]
         ratios = _hint_ratios(sizes, len(node._children))
@@ -357,19 +357,19 @@ def _build_axis_descriptors(leaves: list[Chart],
 
 
 # ---------------------------------------------------------------------------
-# Per-leaf hide flags — wherever auto-zero-gutter fires, the inner side of
+# Per-leaf hide flags — wherever auto-zero-gap fires, the inner side of
 # each panel of the pair drops its spine + ticks + tick labels. The matching
-# margin shrinks to flush_margin so the data areas truly butt up.
+# margin shrinks to inner_gap so the data areas truly butt up.
 # ---------------------------------------------------------------------------
 
-def _mark_flush_pair(a: Chart | None, b: Chart | None, *, axis: str,
+def _mark_joined_pair(a: Chart | None, b: Chart | None, *, axis: str,
                       out: dict[int, _PanelOpts]) -> None:
-    """If `a` and `b` are flush along `axis`, set `hide_*` on both sides of
-    the joint and `suppress_*_labels` on the side whose tick labels would
-    duplicate the neighbor's. h-axis: y-tick labels live on the left, so the
-    right panel suppresses. v-axis: x-tick labels live on the bottom, so the
-    top panel suppresses."""
-    if a is None or b is None or _pair_gutter(a, b, axis=axis) != 0.0:
+    """If `a` and `b` are joined along `axis` (gap collapsed to 0), set
+    `hide_*` on both sides of the joint and `suppress_*_labels` on the side
+    whose tick labels would duplicate the neighbor's. h-axis: y-tick labels
+    live on the left, so the right panel suppresses. v-axis: x-tick labels
+    live on the bottom, so the top panel suppresses."""
+    if a is None or b is None or _pair_gap(a, b, axis=axis) != 0.0:
         return
     if axis == "h":
         out[id(a)].hide_right = True
@@ -382,13 +382,13 @@ def _mark_flush_pair(a: Chart | None, b: Chart | None, *, axis: str,
 
 
 def _annotate_collapses(node: Chart, out: dict[int, _PanelOpts]) -> None:
-    """Walk the tree, marking flush flags wherever auto-zero-gutter fires."""
+    """Walk the tree, marking joined-pair flags wherever auto-zero-gap fires."""
     if not node._is_parent:
         return
     if node._layout_kind in ("h", "v"):
         axis = node._layout_kind
         for a, b in zip(node._children, node._children[1:]):
-            _mark_flush_pair(a, b, axis=axis, out=out)
+            _mark_joined_pair(a, b, axis=axis, out=out)
         for c in node._children:
             _annotate_collapses(c, out)
         return
@@ -396,18 +396,18 @@ def _annotate_collapses(node: Chart, out: dict[int, _PanelOpts]) -> None:
     children = node._children
     for r in range(rows):
         for c in range(cols - 1):
-            _mark_flush_pair(children[r * cols + c],
-                             children[r * cols + c + 1], axis="h", out=out)
+            _mark_joined_pair(children[r * cols + c],
+                              children[r * cols + c + 1], axis="h", out=out)
     for c in range(cols):
         for r in range(rows - 1):
-            _mark_flush_pair(children[r * cols + c],
-                             children[(r + 1) * cols + c], axis="v", out=out)
+            _mark_joined_pair(children[r * cols + c],
+                              children[(r + 1) * cols + c], axis="v", out=out)
     for cell in children:
         if cell is not None:
             _annotate_collapses(cell, out)
 
 
-def _propagate_grid_flush(node: Chart, out: dict[int, _PanelOpts]) -> None:
+def _propagate_grid_joins(node: Chart, out: dict[int, _PanelOpts]) -> None:
     """Within a grid, propagate `hide_*` (margin) flags column-wise and
     row-wise so panels in the same column/row share effective margins and
     their data areas stay aligned. `suppress_*_labels` does NOT propagate
@@ -438,7 +438,7 @@ def _propagate_grid_flush(node: Chart, out: dict[int, _PanelOpts]) -> None:
                 if any_b: out[id(cell)].hide_bottom = True
     for cell in node._children:
         if cell is not None:
-            _propagate_grid_flush(cell, out)
+            _propagate_grid_joins(cell, out)
 
 
 def _build_panel_opts(root: Chart) -> tuple[dict[int, _PanelOpts], dict[int, dict]]:
@@ -451,18 +451,18 @@ def _build_panel_opts(root: Chart) -> tuple[dict[int, _PanelOpts], dict[int, dic
         for l in leaves
     }
     _annotate_collapses(root, panel_opts)
-    _propagate_grid_flush(root, panel_opts)
+    _propagate_grid_joins(root, panel_opts)
     return panel_opts, states
 
 
 def _effective_margin(M: dict, po: _PanelOpts, w: float, h: float) -> dict:
-    """Margin used at render time: scale by panel size, then force flush
-    sides to `flush_margin` so share-pairs have a tight, predictable joint."""
+    """Margin used at render time: scale by panel size, then force joined
+    sides to `inner_gap` so share-pairs have a tight, predictable joint."""
     M_eff = _scaled_margin(M, w, h)
-    if po.hide_left:   M_eff["left"]   = _FLUSH_MARGIN
-    if po.hide_right:  M_eff["right"]  = _FLUSH_MARGIN
-    if po.hide_top:    M_eff["top"]    = _FLUSH_MARGIN
-    if po.hide_bottom: M_eff["bottom"] = _FLUSH_MARGIN
+    if po.hide_left:   M_eff["left"]   = _INNER_GAP
+    if po.hide_right:  M_eff["right"]  = _INNER_GAP
+    if po.hide_top:    M_eff["top"]    = _INNER_GAP
+    if po.hide_bottom: M_eff["bottom"] = _INNER_GAP
     return M_eff
 
 

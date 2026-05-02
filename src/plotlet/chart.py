@@ -47,7 +47,7 @@ class Chart:
         self._parent: Chart | None = None
         self._layout_kind: str | None = None
         self._children: list[Chart] = []
-        # Layout hints — used in step 1 only for auto-zero-gutter.
+        # Layout hints — used in step 1 only for auto-zero-gap.
         # Step 2 will plumb these through to scale-build.
         self._share_x: Chart | None = share_x
         self._share_y: Chart | None = share_y

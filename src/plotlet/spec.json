@@ -80,7 +80,7 @@
     "border_offset": 6
   },
   "layout": {
-    "gutter": 20,
-    "flush_margin": 12
+    "gap": 20,
+    "inner_gap": 12
   }
 }

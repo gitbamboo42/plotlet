@@ -6,9 +6,9 @@
     python tests/test_subplots.py --gallery  # write baseline_images/subplots/index.html
 
 Step 1 covers: `|`, `/`, `pt.grid`, single-parent invariant, show-on-child
-raise, default gutter, auto-zero-gutter when neighbors have share_x= /
+raise, default gap, auto-zero-gap when neighbors have share_x= /
 share_y=. Step 2 adds scale-sharing — shared panels render on the source's
-domain — plus inner-axis collapse on flush share-pairs (no inner spine,
+domain — plus inner-axis collapse on joined share-pairs (no inner spine,
 ticks, or labels) and leaf size-hint honoring (`pt.chart(width=...)` acts
 as a relative width when no explicit ratios are given).
 """
@@ -29,7 +29,7 @@ def _xs():
 # Composition is component-first (sum-sizes), so each test below picks per-leaf
 # dimensions that *add up* to roughly the spec default of 600×400 — that way
 # the gallery and at-a-glance review aren't dominated by one giant 1800-wide
-# canvas. Sizes account for the default 20 px gutter on non-flush pairs and
+# canvas. Sizes account for the default 20 px gap on non-joined pairs and
 # 0 px on auto-collapsed share-pairs.
 
 def _sin(width=290, height=400):
@@ -59,12 +59,12 @@ def _hist(width=290, height=400):
 
 
 def row_two():
-    # 2 panels h, default gutter 20 → 290 + 20 + 290 = 600.
+    # 2 panels h, default gap 20 → 290 + 20 + 290 = 600.
     return _sin(width=290) | _cos(width=290)
 
 
 def col_two():
-    # 2 panels v, default gutter 20 → 190 + 20 + 190 = 400 tall, 600 wide.
+    # 2 panels v, default gap 20 → 190 + 20 + 190 = 400 tall, 600 wide.
     return _sin(width=600, height=190) / _cos(width=600, height=190)
 
 
@@ -108,16 +108,16 @@ def grid_with_widths():
     return pt.grid([[a, b, c]], widths=[0.4, 1, 1])
 
 
-def share_y_collapses_gutter():
-    # Sharer adopts source's y-domain. share_y → flush, gutter 0.
+def share_y_collapses_gap():
+    # Sharer adopts source's y-domain. share_y → joined, gap 0.
     # 300 + 0 + 300 = 600 wide.
     hm   = pt.chart(title="hm",   width=300);                 hm.line([1,2,3], [1,4,9])
     tree = pt.chart(title="tree", width=300, share_y=hm);     tree.line([1,2,3], [3,1,2])
     return tree | hm
 
 
-def share_x_collapses_gutter_vertical():
-    # share_x → flush, gutter 0. 200 + 0 + 200 = 400 tall.
+def share_x_collapses_gap_vertical():
+    # share_x → joined, gap 0. 200 + 0 + 200 = 400 tall.
     main = pt.chart(title="main", height=200);                  main.line([1, 2, 3], [1, 4, 9])
     top  = pt.chart(title="top",  height=200, share_x=main);    top.line([1, 2, 3], [3, 1, 2])
     return top / main
@@ -134,7 +134,7 @@ def share_x_three_panels():
 
 
 def share_y_chain():
-    # Chain: B shares y from A, C shares y from B. All three flush.
+    # Chain: B shares y from A, C shares y from B. All three joined.
     # 3*200 = 600 wide.
     a = pt.chart(title="a", width=200);                a.line([1,2,3], [0, 100, 0])
     b = pt.chart(title="b", width=200, share_y=a);     b.line([1,2,3], [10, 50, 90])
@@ -161,7 +161,7 @@ def height_hint_short_top():
 
 def complex_grid_shares():
     # ComplexHeatmap-flavored shape: top track shares x with main; left tree
-    # shares y with main. Both share-pairs are flush (gutter 0). The
+    # shares y with main. Both share-pairs are joined (gap 0). The
     # None-bordered cells mean col / row gaps are still 0 (min over the
     # boundary). Cols: 120 + 0 + 480 = 600. Rows: 80 + 0 + 320 = 400.
     main = pt.chart(title="main", width=480, height=320)
@@ -183,8 +183,8 @@ PLOTS = {
     "two_by_two":          two_by_two,
     "grid_with_spacers":   grid_with_spacers,
     "grid_with_widths":    grid_with_widths,
-    "share_y_no_gutter":   share_y_collapses_gutter,
-    "share_x_no_gutter":   share_x_collapses_gutter_vertical,
+    "share_y_no_gap":      share_y_collapses_gap,
+    "share_x_no_gap":      share_x_collapses_gap_vertical,
     "share_x_three":       share_x_three_panels,
     "share_y_chain":       share_y_chain,
     "width_hint":          width_hint_narrow_side,

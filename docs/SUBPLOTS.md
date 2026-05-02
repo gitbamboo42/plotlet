@@ -2,11 +2,11 @@
 
 Status: **steps 1 and 2 landed.** Composition primitives (`|`, `/`,
 `pt.grid`), single-parent invariant, show-on-child raise, default +
-auto-zero-gutter for `share_x=` / `share_y=` neighbors are in (step 1).
+auto-zero-gap for `share_x=` / `share_y=` neighbors are in (step 1).
 Step 2 layers scale sharing on top: a topo-sorted pre-pass over the
 parent's leaf tree builds one `_AxisDescriptor` (kind + domain) per
 share-equivalence class, every sharer adopts its source's domain, the
-matching inner margin shrinks to `layout.flush_margin`, and inner tick
+matching inner margin shrinks to `layout.inner_gap`, and inner tick
 labels redundant with a sharing sibling are dropped (spines and tick
 marks remain so each panel still reads as a closed rectangle). Margins
 auto-scale with panel size — a 290-px-wide leaf gets ~28 px of left
@@ -332,18 +332,18 @@ Recommended:
 
 3. **Spacing between panels.** *Resolved: one default + auto-collapse
    for coordinated panels.*
-   - Default gutter comes from `spec.json` (one number, used for both
-     horizontal and vertical gaps). No new API surface; users get a
-     sane gutter without thinking.
-   - **Coordinated panels auto-collapse to zero gutter.** When
+   - Default gap comes from `spec.json` (one number, used for both
+     horizontal and vertical directions). No new API surface; users get a
+     sane gap without thinking.
+   - **Coordinated panels auto-collapse to zero gap.** When
      `b.share_y=a` and `b` is `a`'s horizontal neighbor (or
-     `share_x=` + vertical neighbor), the gutter between them goes to
+     `share_x=` + vertical neighbor), the gap between them goes to
      0. matplotlib makes you write `gridspec_kw={'wspace': 0}`
      manually for this; plotlet's `share_y=` already carries the
      intent, so the spacing follows.
    - Same rule for colorbar adjacent to its source chart: `hm |
-     pt.colorbar(hm)` collapses the gutter between them. Generalized:
-     "panel reads its data from immediate neighbor → zero gutter."
+     pt.colorbar(hm)` collapses the gap between them. Generalized:
+     "panel reads its data from immediate neighbor → zero gap."
    - **Override** via a kwarg only when someone hits a wall.
      `pt.grid(..., gap=10)` or `(a | b).gap(0)`. Don't build it until
      a real use case forces it.
@@ -374,19 +374,19 @@ Not a roadmap — just the dependency order:
 1. **Parent-Chart layout + rect computation.** ✅ *landed.* Single
    `Chart` class, leaf vs. parent flag. Children list + layout direction
    (h / v / grid). `|` / `/` on `Chart`, plus `pt.grid([[...]])`.
-   Single-parent invariant + show-on-child raise. Default gutter from
-   spec.json (`layout.gutter`); auto-zero-gutter rule for coordinated
+   Single-parent invariant + show-on-child raise. Default gap from
+   spec.json (`layout.gap`); auto-zero-gap rule for coordinated
    neighbors (the rect computer reads `share_x` / `share_y` to collapse
-   gutters). Two implementation details worth recording:
+   gaps). Two implementation details worth recording:
    - **Operators flatten same-direction LHS in place.** `a | b | c` is
      one parent with three equal children, not a 25/25/50 nested
      `(a|b)|c`. Reusing the LHS variable after composition isn't
      supported — patchwork-style mutating semantics. Cross-direction
      composition (`(a|b)/c`) nests, as expected.
-   - **Sub-layout gutter is unconditional.** The auto-zero-gutter rule
+   - **Sub-layout gap is unconditional.** The auto-zero-gap rule
      only fires when *both* sides of a pair are leaves with a
      `share_x=` / `share_y=` link. If either side is itself a parent
-     (h / v / grid), the gutter is the default. More precise inspection
+     (h / v / grid), the gap is the default. More precise inspection
      ("would the leaf at this edge share with the leaf across the
      boundary?") was not worth the complexity for step 1 — users hit it
      only when nesting layouts and re-asserting sharing across the
@@ -404,13 +404,13 @@ Not a roadmap — just the dependency order:
      drops xlabel / ylabel / title there — no room) but keeps spines and
      tick lines intact; `suppress_left_labels` / `suppress_bottom_labels`
      drops tick labels redundant with a sharing sibling. Both apply at
-     a flush share-pair joint; only the second is asymmetric (set on the
+     a joined share-pair joint; only the second is asymmetric (set on the
      panel whose tick-label side faces the joint). The margin flag
      propagates column-wise and row-wise within a grid for alignment;
      the label flag does NOT propagate, so a column-aligned-but-not-
      actually-sharing track keeps its own tick labels.
-   - **Inner-margin collapse** uses `layout.flush_margin` (default 12 px
-     each side) so flush data areas sit `2 * flush_margin` apart — close
+   - **Inner-margin collapse** uses `layout.inner_gap` (default 12 px
+     each side) so joined data areas sit `2 * inner_gap` apart — close
      enough to read as coordinated, with breathing room so corner tick
      labels of independent x/y axes don't kiss across the joint.
    - **Colorbar size hint** falls out of leaf size hints: `pt.chart(width=
@@ -435,8 +435,8 @@ Not a roadmap — just the dependency order:
      y — narrow panels (a tree at 80-px-wide inner) don't get 8 crushed
      labels.
 
-   Grid pair-gutters consider all rows/cols at a boundary (min wins) so
-   a share-flush in row 1 still collapses the column gap.
+   Grid pair-gaps consider all rows/cols at a boundary (min wins) so
+   a joined pair in row 1 still collapses the column gap.
 3. **Legend** — `pt.legend()` panel + `parent.legend()` decorator (sugar
    over panel). Layout-level legend groups by source chart, using
    each chart's `title` as section header; `names=` overrides; opt-out

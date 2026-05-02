@@ -359,8 +359,8 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             spec = get_artist(a["type"])
             parts.append(spec.draw(a, _ctx_for(a)))
 
-    # All four spines always render — flush share-pairs show two parallel
-    # spines (one per panel) `flush_margin` pixels apart, by design.
+    # All four spines always render — joined share-pairs show two parallel
+    # spines (one per panel) `inner_gap` pixels apart, by design.
     for x1, y1, x2, y2 in [(0, 0, iw, 0), (0, ih, iw, ih),
                             (0, 0, 0, ih),  (iw, 0, iw, ih)]:
         parts.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" '
@@ -377,7 +377,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="0" y2="{_TICK_LEN}" '
                      f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
         # Drop only labels redundant with a sharing sibling. A small label
-        # overflow into a flush neighbor's collapsed margin is acceptable.
+        # overflow into a joined neighbor's collapsed margin is acceptable.
         if not suppress_xt:
             parts.append(_text_path(_fmt_tick(t), x, ih + _TICK_LEN + _TICK_PAD + 8,
                                     tick_size, anchor="middle"))
@@ -393,7 +393,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             parts.append(_text_path(_fmt_tick(t), -_TICK_PAD, y + 4, tick_size, anchor="end"))
 
     # xlabel / ylabel / title live in margin space; drop when that margin
-    # is collapsed flush against a neighbor.
+    # is collapsed against a joined neighbor.
     if st["xlabel"] and not hide_b:
         parts.append(_text_path(st["xlabel"], iw / 2, ih + M["bottom"] - 8,
                                 label_size, anchor="middle"))
