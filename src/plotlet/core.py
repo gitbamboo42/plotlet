@@ -166,7 +166,22 @@ def _resolve_domain(lo, hi, user_lim, scale_kind, force_zero=False):
 def _render(st, W, H, M):
     iw = W - M["left"] - M["right"]
     ih = H - M["top"] - M["bottom"]
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
+        f'viewBox="0 0 {W} {H}" font-family="{_FONT}" font-size="11" '
+        f'style="background:#fff">'
+        f'<g transform="translate({M["left"]},{M["top"]})">'
+        + _render_inner(st, iw, ih, M)
+        + '</g></svg>'
+    )
 
+
+def _render_inner(st, iw, ih, M):
+    """Emit the body fragment for one panel — everything inside the outer
+    `<svg>` and the outer translate-by-margin `<g>`. The caller provides the
+    inner-rect dimensions (iw, ih) and the surrounding margin dict M (used
+    for ylabel/xlabel placement, which sit in margin space).
+    """
     # pre-bin histograms so they participate in y-domain
     # (kept here because hist's binning depends on user-supplied `bins` opt
     # and the result is reused by both domain and draw)
@@ -198,13 +213,8 @@ def _render(st, W, H, M):
     y_scale = (_LogScale if st["yscale"] == "log" else _LinearScale)(y_min, y_max, ih, 0)
     y_ticks = y_scale.ticks(8)
 
-    # ---- emit SVG ----
-    parts = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
-        f'viewBox="0 0 {W} {H}" font-family="{_FONT}" font-size="11" '
-        f'style="background:#fff">'
-    ]
-    parts.append(f'<g transform="translate({M["left"]},{M["top"]})">')
+    # ---- emit body fragment ----
+    parts = []
 
     # grid
     if st["grid"]:
@@ -318,5 +328,4 @@ def _render(st, W, H, M):
                                         tick_size, anchor="start"))
             parts.append('</g>')
 
-    parts.append('</g></svg>')
     return "".join(parts)

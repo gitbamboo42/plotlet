@@ -77,5 +77,8 @@
     "background": "#ffffff",
     "opacity": 0.92,
     "border_offset": 6
+  },
+  "layout": {
+    "gutter": 20
   }
 }
