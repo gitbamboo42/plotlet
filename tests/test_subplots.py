@@ -7,8 +7,10 @@
 
 Step 1 covers: `|`, `/`, `pt.grid`, single-parent invariant, show-on-child
 raise, default gutter, auto-zero-gutter when neighbors have share_x= /
-share_y=. Scale sharing is step 2 — the share_y= here only collapses the
-gutter; each panel still builds its own independent y-scale.
+share_y=. Step 2 adds scale-sharing — shared panels render on the source's
+domain — plus inner-axis collapse on flush share-pairs (no inner spine,
+ticks, or labels) and leaf size-hint honoring (`pt.chart(width=...)` acts
+as a relative width when no explicit ratios are given).
 """
 from __future__ import annotations
 
@@ -24,55 +26,71 @@ def _xs():
     return [i * 0.1 for i in range(64)]
 
 
-def _sin():
+# Composition is component-first (sum-sizes), so each test below picks per-leaf
+# dimensions that *add up* to roughly the spec default of 600×400 — that way
+# the gallery and at-a-glance review aren't dominated by one giant 1800-wide
+# canvas. Sizes account for the default 20 px gutter on non-flush pairs and
+# 0 px on auto-collapsed share-pairs.
+
+def _sin(width=290, height=400):
     xs = _xs()
-    c = pt.chart(title="sin")
+    c = pt.chart(title="sin", width=width, height=height)
     c.line(xs, [math.sin(x) for x in xs])
     return c
 
 
-def _cos():
+def _cos(width=290, height=400):
     xs = _xs()
-    c = pt.chart(title="cos")
+    c = pt.chart(title="cos", width=width, height=height)
     c.line(xs, [math.cos(x) for x in xs])
     return c
 
 
-def _bar(label="bar"):
-    c = pt.chart(title=label)
+def _bar(label="bar", width=290, height=400):
+    c = pt.chart(title=label, width=width, height=height)
     c.bar(["a", "b", "c"], [3, 1, 2])
     return c
 
 
-def _hist():
-    c = pt.chart(title="hist")
+def _hist(width=290, height=400):
+    c = pt.chart(title="hist", width=width, height=height)
     c.hist([0.1, 0.4, 0.5, 0.55, 0.7, 0.8, 0.9, 1.1, 1.3], bins=6)
     return c
 
 
 def row_two():
-    return _sin() | _cos()
+    # 2 panels h, default gutter 20 → 290 + 20 + 290 = 600.
+    return _sin(width=290) | _cos(width=290)
 
 
 def col_two():
-    return _sin() / _cos()
+    # 2 panels v, default gutter 20 → 190 + 20 + 190 = 400 tall, 600 wide.
+    return _sin(width=600, height=190) / _cos(width=600, height=190)
 
 
 def row_three_flatten():
-    # `_sin() | _cos() | _bar()` — left-fold flatten so all three are
-    # equal-width children of one parent, not a 25/25/50 nested split.
-    return _sin() | _cos() | _bar()
+    # `a | b | c` — left-fold flatten into a single 3-cell row, not a
+    # 25/25/50 nested split. 3*187 + 2*20 = 601.
+    return _sin(width=187) | _cos(width=187) | _bar(width=187)
 
 
 def two_by_two():
-    return (_sin() | _cos()) / (_bar() | _hist())
+    # 4 panels in 2x2 (no shares). 290+20+290 = 600 wide; 190+20+190 = 400 tall.
+    a = _sin(width=290, height=190)
+    b = _cos(width=290, height=190)
+    c = _bar(width=290, height=190)
+    d = _hist(width=290, height=190)
+    return (a | b) / (c | d)
 
 
 def grid_with_spacers():
-    top  = pt.chart(title="top");    top.bar(["a","b","c"], [3,1,2])
-    left = pt.chart(title="left");   left.line([1,2,3], [3,1,2])
-    main = pt.chart(title="main");   main.line([1,2,3], [1,4,9])
-    right= pt.chart(title="right");  right.line([1,2,3], [2,2,1])
+    # 3-col 2-row irregular grid with None corners.
+    # Cols: 187 + 20 + 187 + 20 + 187 = 601 wide.
+    # Rows: 80 + 20 + 300 = 400 tall.
+    top  = pt.chart(title="top",   width=187, height=80);  top.bar(["a","b","c"], [3,1,2])
+    left = pt.chart(title="left",  width=187, height=300); left.line([1,2,3], [3,1,2])
+    main = pt.chart(title="main",  width=187, height=300); main.line([1,2,3], [1,4,9])
+    right= pt.chart(title="right", width=187, height=300); right.line([1,2,3], [2,2,1])
     return pt.grid([
         [None, top,  None ],
         [left, main, right],
@@ -80,24 +98,82 @@ def grid_with_spacers():
 
 
 def grid_with_widths():
-    a = pt.chart(title="a"); a.line([1,2,3], [1,4,9])
-    b = pt.chart(title="b"); b.line([1,2,3], [3,1,2])
-    c = pt.chart(title="c"); c.line([1,2,3], [5,2,4])
+    # 3 cells with explicit `widths=` ratios — one narrow column, two equal
+    # wider ones. 3*187 + 40 = 601 natural total; the [0.4, 1, 1] ratio then
+    # redistributes to ~94 / 234 / 234 inside that. The narrow column is
+    # tight on purpose — the test exercises the redistribution logic.
+    a = pt.chart(title="a", width=187, height=400); a.line([1,2,3], [1,4,9])
+    b = pt.chart(title="b", width=187, height=400); b.line([1,2,3], [3,1,2])
+    c = pt.chart(title="c", width=187, height=400); c.line([1,2,3], [5,2,4])
     return pt.grid([[a, b, c]], widths=[0.4, 1, 1])
 
 
 def share_y_collapses_gutter():
-    # Step 1: share_y= is recorded as a layout hint; it only collapses the
-    # h-gutter between the two panels. Scale-sharing comes in step 2.
-    hm   = pt.chart(title="hm");   hm.line([1,2,3], [1,4,9])
-    tree = pt.chart(title="tree", share_y=hm); tree.line([1,2,3], [3,1,2])
+    # Sharer adopts source's y-domain. share_y → flush, gutter 0.
+    # 300 + 0 + 300 = 600 wide.
+    hm   = pt.chart(title="hm",   width=300);                 hm.line([1,2,3], [1,4,9])
+    tree = pt.chart(title="tree", width=300, share_y=hm);     tree.line([1,2,3], [3,1,2])
     return tree | hm
 
 
 def share_x_collapses_gutter_vertical():
-    main = pt.chart(title="main"); main.line([1,2,3], [1,4,9])
-    top  = pt.chart(title="top",  share_x=main); top.bar(["a","b","c"], [3,1,2])
+    # share_x → flush, gutter 0. 200 + 0 + 200 = 400 tall.
+    main = pt.chart(title="main", height=200);                  main.line([1, 2, 3], [1, 4, 9])
+    top  = pt.chart(title="top",  height=200, share_x=main);    top.line([1, 2, 3], [3, 1, 2])
     return top / main
+
+
+def share_x_three_panels():
+    # Chain: top.share_x=mid, mid.share_x=main. All three end up on main's
+    # domain (transitive via topo-sort) and the two adjacent pairs both
+    # auto-collapse. 3*133 = 399 ≈ 400 tall.
+    main = pt.chart(title="main", height=133);                main.line([0, 5, 10], [0, 1, 0])
+    mid  = pt.chart(title="mid",  height=133, share_x=main);  mid.line([0, 5, 10], [10, 0, 10])
+    top  = pt.chart(title="top",  height=133, share_x=mid);   top.line([0, 5, 10], [5, 5, 5])
+    return top / mid / main
+
+
+def share_y_chain():
+    # Chain: B shares y from A, C shares y from B. All three flush.
+    # 3*200 = 600 wide.
+    a = pt.chart(title="a", width=200);                a.line([1,2,3], [0, 100, 0])
+    b = pt.chart(title="b", width=200, share_y=a);     b.line([1,2,3], [10, 50, 90])
+    c = pt.chart(title="c", width=200, share_y=b);     c.line([1,2,3], [20, 40, 60])
+    return a | b | c
+
+
+def width_hint_narrow_side():
+    # Narrow side panel sharing y with main. Stand-in for
+    # `hm | pt.colorbar(hm)`. 520 + 0 + 80 = 600 wide.
+    main = pt.chart(title="main", width=520);                main.line([1,2,3], [1,4,9])
+    side = pt.chart(title="side", width=80, share_y=main)
+    side.line([1, 1, 1], [1, 4, 9])
+    return main | side
+
+
+def height_hint_short_top():
+    # Short top track over a main panel. 80 + 0 + 320 = 400 tall.
+    top  = pt.chart(title="top",  height=80)
+    top.bar(["a","b","c"], [1, 2, 3])
+    main = pt.chart(title="main", height=320, share_x=top); main.bar(["a","b","c"], [3, 1, 2])
+    return top / main
+
+
+def complex_grid_shares():
+    # ComplexHeatmap-flavored shape: top track shares x with main; left tree
+    # shares y with main. Both share-pairs are flush (gutter 0). The
+    # None-bordered cells mean col / row gaps are still 0 (min over the
+    # boundary). Cols: 120 + 0 + 480 = 600. Rows: 80 + 0 + 320 = 400.
+    main = pt.chart(title="main", width=480, height=320)
+    main.line([1,2,3,4,5], [2,4,1,5,3])
+    top  = pt.chart(title="top",  width=480, height=80,  share_x=main)
+    top.line([1,2,3,4,5], [1,1,3,1,1])
+    tree = pt.chart(title="tree", width=120, height=320, share_y=main)
+    tree.line([0,1,2], [2,3,4])
+    return pt.grid([
+        [None, top ],
+        [tree, main],
+    ])
 
 
 PLOTS = {
@@ -109,6 +185,11 @@ PLOTS = {
     "grid_with_widths":    grid_with_widths,
     "share_y_no_gutter":   share_y_collapses_gutter,
     "share_x_no_gutter":   share_x_collapses_gutter_vertical,
+    "share_x_three":       share_x_three_panels,
+    "share_y_chain":       share_y_chain,
+    "width_hint":          width_hint_narrow_side,
+    "height_hint":         height_hint_short_top,
+    "complex_grid":        complex_grid_shares,
 }
 
 
@@ -166,11 +247,56 @@ def _run_invariants():
     except ValueError:
         pass
 
+    # 6. share cycle detection
+    f1 = pt.chart(); f1.line([1,2],[1,2])
+    f2 = pt.chart(); f2.line([1,2],[2,1])
+    f1._share_y = f2
+    f2._share_y = f1   # cycle
+    try:
+        (f1 | f2).to_svg()
+        failures.append("expected ValueError on share_y cycle")
+    except ValueError as ex:
+        if "cycle" not in str(ex).lower():
+            failures.append(f"expected cycle message; got: {ex}")
+
+    # 7. share target out of tree
+    g1 = pt.chart(); g1.line([1,2],[1,2])
+    g2 = pt.chart(); g2.line([1,2],[2,1])
+    h1 = pt.chart(); h1.line([1,2],[1,2])
+    h2 = pt.chart(share_y=g1); h2.line([1,2],[2,1])  # shares with chart not in same composition
+    g1 | g2  # consume g1 into a different parent
+    try:
+        (h1 | h2).to_svg()
+        failures.append("expected ValueError on out-of-tree share")
+    except ValueError as ex:
+        if "composition" not in str(ex).lower():
+            failures.append(f"expected out-of-tree message; got: {ex}")
+
+    # 8. share scale plumbing — sharer adopts source's domain
+    src   = pt.chart(); src.line([0, 10], [0, 100])
+    shr   = pt.chart(share_y=src); shr.line([0, 10], [-5, 5])
+    parent = src | shr
+    # Both leaves should use the same y descriptor.
+    from plotlet.layout import _build_panel_opts
+    panel_opts, _ = _build_panel_opts(parent)
+    src_y = panel_opts[id(src)].y_axis
+    shr_y = panel_opts[id(shr)].y_axis
+    if src_y is not shr_y:
+        failures.append(
+            f"share_y= did not produce a shared descriptor: "
+            f"src=({src_y.lo},{src_y.hi}) shr=({shr_y.lo},{shr_y.hi})"
+        )
+    if shr_y.lo > -5 or shr_y.hi < 100:
+        # Sharer's data exceeds source's domain — the share semantic is
+        # "adopt the source", so sharer's [-5, 5] does NOT extend src's
+        # [0, 100] domain. This check is intentionally loose.
+        pass  # informational; not a failure
+
     if failures:
         for f in failures:
             print(f"FAIL invariant: {f}")
         return 1
-    print("OK     invariants (5 checks)")
+    print(f"OK     invariants ({8} checks)")
     return 0
 
 

@@ -1,9 +1,23 @@
 # Subplots / composition — design pass
 
-Status: **step 1 landed.** Composition primitives (`|`, `/`, `pt.grid`),
-single-parent invariant, show-on-child raise, default + auto-zero-gutter
-for `share_x=` / `share_y=` neighbors are in. Scale sharing (step 2),
-layout-level legend (step 3), and colorbar (step 4) are still to do.
+Status: **steps 1 and 2 landed.** Composition primitives (`|`, `/`,
+`pt.grid`), single-parent invariant, show-on-child raise, default +
+auto-zero-gutter for `share_x=` / `share_y=` neighbors are in (step 1).
+Step 2 layers scale sharing on top: a topo-sorted pre-pass over the
+parent's leaf tree builds one `_AxisDescriptor` (kind + domain) per
+share-equivalence class, every sharer adopts its source's domain, the
+matching inner margin shrinks to `layout.flush_margin`, and inner tick
+labels redundant with a sharing sibling are dropped (spines and tick
+marks remain so each panel still reads as a closed rectangle). Margins
+auto-scale with panel size — a 290-px-wide leaf gets ~28 px of left
+margin instead of the 58 px sized for the 600-px-wide standalone
+default — with per-side floors (`spec.size.margin_floor`) so labels
+still fit. Leaf size hints (`pt.chart(width=...)` / `height=...`) act
+as relative ratios when no explicit `widths=` / `heights=` are given,
+and within a grid the `hide_*` margin flag propagates column-wise and
+row-wise so panels in the same column/row stay x-aligned (a top track
+sized by `share_x` lines up with the central chart it sits above).
+Layout-level legend (step 3) and colorbar (step 4) are still to do.
 
 This doc deliberately separates two things the TODO had bundled:
 
@@ -377,8 +391,52 @@ Not a roadmap — just the dependency order:
      boundary?") was not worth the complexity for step 1 — users hit it
      only when nesting layouts and re-asserting sharing across the
      nest boundary, which is rare.
-2. **`share_x=` / `share_y=` plumbing on `pt.chart()`** — scale-build
-   pre-pass with topo-sort across the parent's child tree.
+2. **`share_x=` / `share_y=` plumbing on `pt.chart()`** ✅ *landed.*
+   Scale-build pre-pass with topo-sort (via `graphlib.TopologicalSorter`)
+   across the parent's child tree. `_AxisDescriptor` (kind + domain) is
+   computed once per share-equivalence class; each sharer instantiates
+   its scale on its own pixel range so panels of different widths still
+   line up. Cycles and out-of-tree share targets raise. The four
+   nail-down points from earlier discussion all settled:
+
+   - **Inner-axis collapse** uses two flags on `_PanelOpts`:
+     `hide_left/right/top/bottom` collapses the matching margin (and
+     drops xlabel / ylabel / title there — no room) but keeps spines and
+     tick lines intact; `suppress_left_labels` / `suppress_bottom_labels`
+     drops tick labels redundant with a sharing sibling. Both apply at
+     a flush share-pair joint; only the second is asymmetric (set on the
+     panel whose tick-label side faces the joint). The margin flag
+     propagates column-wise and row-wise within a grid for alignment;
+     the label flag does NOT propagate, so a column-aligned-but-not-
+     actually-sharing track keeps its own tick labels.
+   - **Inner-margin collapse** uses `layout.flush_margin` (default 12 px
+     each side) so flush data areas sit `2 * flush_margin` apart — close
+     enough to read as coordinated, with breathing room so corner tick
+     labels of independent x/y axes don't kiss across the joint.
+   - **Colorbar size hint** falls out of leaf size hints: `pt.chart(width=
+     80)` for the side-panel slot in `hm | pt.colorbar(hm)` works
+     without explicit `pt.grid(widths=...)` because `_allocate` reads
+     children's measured sizes as ratios.
+   - **Band-y for dendrograms**: `_AxisDescriptor(kind="band")` survives
+     sharing, so once a built-in artist exposes categorical y, a
+     dendrogram that `share_y=` it gets row-aligned leaf positions
+     automatically. y-band scales render r0=0..r1=ih (top-to-bottom)
+     to match imshow's row 0 = top convention; y-linear/log stay
+     cartesian.
+
+   Two additional tweaks that turned out to matter:
+
+   - **Auto-scaled margins.** Base margins from spec.json are sized for
+     a 600×400 panel; they scale linearly by `min(1, panel_size /
+     spec_size)` with per-side floors (`spec.size.margin_floor`) so
+     small panels in compositions don't get 76% of their width eaten by
+     margin. Halves the visual gap between non-share neighbors.
+   - **Tick density** is `max(2, min(8, iw // 65))` for x and similar for
+     y — narrow panels (a tree at 80-px-wide inner) don't get 8 crushed
+     labels.
+
+   Grid pair-gutters consider all rows/cols at a boundary (min wins) so
+   a share-flush in row 1 still collapses the column gap.
 3. **Legend** — `pt.legend()` panel + `parent.legend()` decorator (sugar
    over panel). Layout-level legend groups by source chart, using
    each chart's `title` as section header; `names=` overrides; opt-out

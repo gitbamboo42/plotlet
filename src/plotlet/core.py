@@ -1,22 +1,27 @@
 """Figure class and render orchestrator — registry-driven version.
 
-The deferred-render pipeline is unchanged in spirit:
+The deferred-render pipeline:
   1. `figure()` returns a `Figure` whose methods record into `_calls`.
   2. `Figure.to_svg()` calls `_render(_replay(), ...)`.
   3. `_render` does: pre-process → domain → scales → grid → artists → spines/ticks
      → labels/title → legend.
 
-The difference from the original: every artist-specific branch is now a
-registry lookup. Adding a new plot type means calling `add_artist(...)` —
-no monkey-patching, no editing this file.
+Every artist-specific branch is a registry lookup. Adding a new plot type
+means calling `add_artist(...)` — no monkey-patching, no editing this file.
+
+`_render_inner` accepts an optional `_PanelOpts` so the layout pre-pass in
+`layout.py` can supply pre-computed axis descriptors (for share_x/share_y)
+and side-suppression flags. Standalone Figure rendering passes None and
+behaves as before.
 """
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from pathlib import Path
 
 from ._spec import (
-    SPEC, _SIZESPEC, _FRAME, _GRIDSPEC, _FONTSPEC, _LEGSPEC, _D, _DASH,
+    SPEC, _SIZESPEC, _MARGIN_FLOOR, _FRAME, _GRIDSPEC, _FONTSPEC, _LEGSPEC, _D, _DASH,
 )
 from .colors import _resolve_color, TAB10
 from .scales import _LinearScale, _LogScale, _BandScale, _nice_domain, _fmt_tick
@@ -39,6 +44,48 @@ _FRAME_METHODS = {
     "title", "xlabel", "ylabel", "xlim", "ylim",
     "xscale", "yscale", "grid", "legend",
 }
+
+
+# ---------------------------------------------------------------------------
+# Scale-share types — used by the layout pre-pass.
+# ---------------------------------------------------------------------------
+
+@dataclass
+class _AxisDescriptor:
+    """Domain for one axis, decoupled from any pixel range. The layout
+    pre-pass builds one per share-equivalence class; each panel calls
+    `build(r0, r1)` with its own pixel range to instantiate a scale."""
+    kind: str           # "linear" | "log" | "band"
+    lo: float = 0.0
+    hi: float = 1.0
+    cats: list | None = None
+
+    def build(self, r0, r1):
+        if self.kind == "log":
+            return _LogScale(self.lo, self.hi, r0, r1)
+        if self.kind == "band":
+            return _BandScale(self.cats or [], r0, r1)
+        return _LinearScale(self.lo, self.hi, r0, r1)
+
+
+@dataclass
+class _PanelOpts:
+    """Layout-supplied render options for one leaf panel.
+
+    `hide_*` collapses the matching margin (axis labels and title in that
+    margin get dropped — they don't fit; spines and tick lines remain).
+    `suppress_*_labels` drops tick labels on a side whose axis is shared
+    with a neighbor that already labels it; set only on the panel that
+    actually shares, never propagated by grid alignment.
+    """
+    x_axis: _AxisDescriptor | None = None
+    y_axis: _AxisDescriptor | None = None
+    hide_left:   bool = False
+    hide_right:  bool = False
+    hide_top:    bool = False
+    hide_bottom: bool = False
+    suppress_left_labels:   bool = False
+    suppress_bottom_labels: bool = False
 
 
 class Figure:
@@ -123,7 +170,7 @@ def figure(width: int | None = None, height: int | None = None, **opts) -> Figur
 
 
 # ---------------------------------------------------------------------------
-# render orchestrator — now generic over the registry
+# Domain helpers — shared by the panel renderer and the layout pre-pass.
 # ---------------------------------------------------------------------------
 
 def _scan_domain(artists, axis):
@@ -163,7 +210,75 @@ def _resolve_domain(lo, hi, user_lim, scale_kind, force_zero=False):
     return _nice_domain(lo, hi)
 
 
+def _scaled_margin(M, W, H):
+    """Shrink margins for small panels, with a per-side floor so tick labels
+    and titles still fit. Floors live in `spec.size.margin_floor`; base
+    margins (defaulted from spec, overridable via `pt.chart(margin=...)`)
+    scale by `min(1, panel_size / spec_size)` per axis."""
+    fw = min(1.0, W / _SIZESPEC["width"])
+    fh = min(1.0, H / _SIZESPEC["height"])
+    return {
+        "top":    max(_MARGIN_FLOOR["top"],    int(round(M["top"]    * fh))),
+        "bottom": max(_MARGIN_FLOOR["bottom"], int(round(M["bottom"] * fh))),
+        "left":   max(_MARGIN_FLOOR["left"],   int(round(M["left"]   * fw))),
+        "right":  max(_MARGIN_FLOOR["right"],  int(round(M["right"]  * fw))),
+    }
+
+
+def _prebin_hist(st):
+    """Compute hist bins on `st["artists"]` so they participate in domain
+    scanning. Idempotent (guarded by `_bins` presence)."""
+    for a in st["artists"]:
+        if a["type"] == "hist" and "_bins" not in a:
+            a["_bins"] = _histogram(a["data"], a["opts"].get("bins", 10))
+
+
+def _x_descriptor(st) -> _AxisDescriptor:
+    """Compute this panel's natural x-axis descriptor from its own state."""
+    _prebin_hist(st)
+    artists = st["artists"]
+    if any(a["type"] == "bar" for a in artists):
+        cats: list = []
+        for a in artists:
+            if a["type"] == "bar":
+                for c in a["cats"]:
+                    if c not in cats: cats.append(c)
+        return _AxisDescriptor(kind="band", cats=cats)
+    x_lo, x_hi = _scan_domain(artists, "x")
+    x_min, x_max = _resolve_domain(x_lo, x_hi, st["xlim"], st["xscale"])
+    return _AxisDescriptor(kind=st["xscale"], lo=x_min, hi=x_max)
+
+
+def _y_descriptor(st) -> _AxisDescriptor:
+    """Compute this panel's natural y-axis descriptor from its own state."""
+    _prebin_hist(st)
+    artists = st["artists"]
+    has_bar = any(a["type"] == "bar" for a in artists)
+    force_zero = has_bar or any(a["type"] == "hist" for a in artists)
+    y_lo, y_hi = _scan_domain(artists, "y")
+    y_min, y_max = _resolve_domain(y_lo, y_hi, st["ylim"], st["yscale"], force_zero=force_zero)
+    return _AxisDescriptor(kind=st["yscale"], lo=y_min, hi=y_max)
+
+
+def _build_xy_scales(st, iw, ih, panel_opts: _PanelOpts):
+    """Instantiate pixel-bound scales. `panel_opts.x_axis` / `y_axis` come
+    from the layout pre-pass when set; otherwise we compute them from the
+    panel's own state. y-band runs top-to-bottom (cats on rows); y-linear/log
+    runs cartesian."""
+    x_axis = panel_opts.x_axis or _x_descriptor(st)
+    y_axis = panel_opts.y_axis or _y_descriptor(st)
+    x_scale = x_axis.build(0, iw)
+    y_scale = y_axis.build(0, ih) if y_axis.kind == "band" else y_axis.build(ih, 0)
+    has_bar = (x_axis.kind == "band")
+    return x_scale, y_scale, y_axis, has_bar
+
+
+# ---------------------------------------------------------------------------
+# render orchestrator — now generic over the registry
+# ---------------------------------------------------------------------------
+
 def _render(st, W, H, M):
+    M = _scaled_margin(M, W, H)
     iw = W - M["left"] - M["right"]
     ih = H - M["top"] - M["bottom"]
     return (
@@ -176,42 +291,26 @@ def _render(st, W, H, M):
     )
 
 
-def _render_inner(st, iw, ih, M):
-    """Emit the body fragment for one panel — everything inside the outer
-    `<svg>` and the outer translate-by-margin `<g>`. The caller provides the
-    inner-rect dimensions (iw, ih) and the surrounding margin dict M (used
-    for ylabel/xlabel placement, which sit in margin space).
-    """
-    # pre-bin histograms so they participate in y-domain
-    # (kept here because hist's binning depends on user-supplied `bins` opt
-    # and the result is reused by both domain and draw)
-    for a in st["artists"]:
-        if a["type"] == "hist":
-            a["_bins"] = _histogram(a["data"], a["opts"].get("bins", 10))
+def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
+    """Body fragment for one panel — everything inside the outer `<svg>` and
+    the outer translate-by-margin `<g>`. `panel_opts` carries layout-supplied
+    axis descriptors and side flags; `None` is the standalone path."""
+    _prebin_hist(st)
+    if panel_opts is None:
+        panel_opts = _PanelOpts()
 
-    # ---- x scale ----
-    has_bar = any(a["type"] == "bar" for a in st["artists"])
-    if has_bar:
-        cats = []
-        for a in st["artists"]:
-            if a["type"] == "bar":
-                for c in a["cats"]:
-                    if c not in cats: cats.append(c)
-        x_scale = _BandScale(cats, 0, iw)
-        x_ticks = cats
-    else:
-        x_lo, x_hi = _scan_domain(st["artists"], "x")
-        x_min, x_max = _resolve_domain(x_lo, x_hi, st["xlim"], st["xscale"])
-        x_scale = (_LogScale if st["xscale"] == "log" else _LinearScale)(x_min, x_max, 0, iw)
-        x_ticks = x_scale.ticks(8)
+    x_scale, y_scale, y_axis, has_bar = _build_xy_scales(st, iw, ih, panel_opts)
+    # Tick density scales with panel size: 8 looks fine on the 600×400
+    # default but turns into a label crush on a 80-px-wide colorbar.
+    x_n = max(2, min(8, int(iw // 65)))
+    y_n = max(2, min(8, int(ih // 40)))
+    x_ticks = x_scale.ticks(x_n)
+    y_ticks = y_scale.ticks(y_n)
 
-    # ---- y scale ----
-    y_lo, y_hi = _scan_domain(st["artists"], "y")
-    force_zero = has_bar or any(a["type"] == "hist" for a in st["artists"])
-    y_min, y_max = _resolve_domain(y_lo, y_hi, st["ylim"], st["yscale"],
-                                    force_zero=force_zero)
-    y_scale = (_LogScale if st["yscale"] == "log" else _LinearScale)(y_min, y_max, ih, 0)
-    y_ticks = y_scale.ticks(8)
+    hide_l, hide_r = panel_opts.hide_left, panel_opts.hide_right
+    hide_t, hide_b = panel_opts.hide_top, panel_opts.hide_bottom
+    suppress_yt = panel_opts.suppress_left_labels
+    suppress_xt = panel_opts.suppress_bottom_labels
 
     # ---- emit body fragment ----
     parts = []
@@ -260,12 +359,13 @@ def _render_inner(st, iw, ih, M):
             spec = get_artist(a["type"])
             parts.append(spec.draw(a, _ctx_for(a)))
 
-    # spines (4 sides)
-    for x1, y1, x2, y2 in [(0, 0, iw, 0), (0, ih, iw, ih), (0, 0, 0, ih), (iw, 0, iw, ih)]:
+    # All four spines always render — flush share-pairs show two parallel
+    # spines (one per panel) `flush_margin` pixels apart, by design.
+    for x1, y1, x2, y2 in [(0, 0, iw, 0), (0, ih, iw, ih),
+                            (0, 0, 0, ih),  (iw, 0, iw, ih)]:
         parts.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" '
                      f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
 
-    # x ticks + labels
     tick_size = _FONTSPEC["tick_size"]
     label_size = _FONTSPEC["label_size"]
     title_size = _FONTSPEC["title_size"]
@@ -276,27 +376,32 @@ def _render_inner(st, iw, ih, M):
                      f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
         parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="0" y2="{_TICK_LEN}" '
                      f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
-        parts.append(_text_path(_fmt_tick(t), x, ih + _TICK_LEN + _TICK_PAD + 8,
-                                tick_size, anchor="middle"))
+        # Drop only labels redundant with a sharing sibling. A small label
+        # overflow into a flush neighbor's collapsed margin is acceptable.
+        if not suppress_xt:
+            parts.append(_text_path(_fmt_tick(t), x, ih + _TICK_LEN + _TICK_PAD + 8,
+                                    tick_size, anchor="middle"))
 
     # y ticks + labels
     for t in y_ticks:
-        y = y_scale(t)
+        y = y_scale(t) + (y_scale.bandwidth / 2 if y_axis.kind == "band" else 0)
         parts.append(f'<line x1="0" x2="{_TICK_LEN}" y1="{y:.2f}" y2="{y:.2f}" '
                      f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
         parts.append(f'<line x1="{iw}" x2="{iw - _TICK_LEN}" y1="{y:.2f}" y2="{y:.2f}" '
                      f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
-        parts.append(_text_path(_fmt_tick(t), -_TICK_PAD, y + 4, tick_size, anchor="end"))
+        if not suppress_yt:
+            parts.append(_text_path(_fmt_tick(t), -_TICK_PAD, y + 4, tick_size, anchor="end"))
 
-    # axis labels + title
-    if st["xlabel"]:
+    # xlabel / ylabel / title live in margin space; drop when that margin
+    # is collapsed flush against a neighbor.
+    if st["xlabel"] and not hide_b:
         parts.append(_text_path(st["xlabel"], iw / 2, ih + M["bottom"] - 8,
                                 label_size, anchor="middle"))
-    if st["ylabel"]:
+    if st["ylabel"] and not hide_l:
         ylabel_path = _text_path(st["ylabel"], 0, 0, label_size, anchor="middle")
         parts.append(f'<g transform="translate({-(M["left"] - 12)},{ih/2}) rotate(-90)">'
                      f'{ylabel_path}</g>')
-    if st["title"]:
+    if st["title"] and not hide_t:
         parts.append(_text_path(st["title"], iw / 2, -10, title_size, anchor="middle"))
 
     # legend — each artist's spec supplies its own swatch via legend_swatch.
