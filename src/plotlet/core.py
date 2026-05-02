@@ -21,7 +21,7 @@ from ._spec import (
 from .colors import _resolve_color, TAB10
 from .scales import _LinearScale, _LogScale, _BandScale, _nice_domain, _fmt_tick
 from .font import _measure_text, _text_path
-from .artists import _histogram, _marker_at
+from .artists import _histogram
 from .registry import RenderContext, get_artist, all_artist_names
 from . import builtin_artists  # noqa: F401  — registers built-ins on import
 
@@ -289,8 +289,8 @@ def _render(st, W, H, M):
     if st["title"]:
         parts.append(_text_path(st["title"], iw / 2, -10, title_size, anchor="middle"))
 
-    # legend — supports custom swatches via spec.legend_swatch, falls back to
-    # built-in handling for the standard types
+    # legend — each artist's spec supplies its own swatch via legend_swatch.
+    # Custom artists that don't define one fall back to a colored line.
     if st["legend"]:
         labeled = [a for a in st["artists"] if a["opts"].get("label")]
         if labeled:
@@ -311,29 +311,9 @@ def _render(st, W, H, M):
                 spec = get_artist(a["type"])
                 if spec is not None and spec.legend_swatch is not None:
                     parts.append(spec.legend_swatch(a, _ctx_for(a), pad_x, ry))
-                elif a["type"] in ("plot", "fill_between", "axhline", "axvline"):
-                    ls = a["opts"].get("linestyle")
-                    da = f' stroke-dasharray="{_DASH[ls]}"' if ls and _DASH.get(ls) else ""
-                    is_refline = a["type"] in ("axhline", "axvline")
-                    default_lw = _D["refline_width"] if is_refline else _D["linewidth"]
-                    parts.append(f'<line x1="{pad_x}" x2="{pad_x + sw}" y1="{ry}" y2="{ry}" '
-                                 f'stroke="{a["_color"]}" '
-                                 f'stroke-width="{a["opts"].get("linewidth", default_lw)}"{da}/>')
-                    if a["opts"].get("marker"):
-                        parts.append(_marker_at(a["opts"]["marker"], pad_x + sw / 2, ry,
-                                                a["opts"].get("markersize", _D["markersize"]),
-                                                a["_color"], 1))
-                elif a["type"] == "scatter":
-                    s_size = math.sqrt(a["opts"].get("s", _D["scatter_s"])) / 2
-                    parts.append(_marker_at(a["opts"].get("marker", "o"),
-                                            pad_x + sw / 2, ry, s_size, a["_color"],
-                                            a["opts"].get("alpha", _D["scatter_alpha"])))
                 else:
-                    is_refspan = a["type"] in ("axhspan", "axvspan")
-                    default_alpha = _D["refspan_alpha"] if is_refspan else 1
-                    parts.append(f'<rect x="{pad_x}" y="{ry - 5}" width="{sw}" height="10" '
-                                 f'fill="{a["_color"]}" '
-                                 f'opacity="{a["opts"].get("alpha", default_alpha)}"/>')
+                    parts.append(f'<line x1="{pad_x}" x2="{pad_x + sw}" y1="{ry}" y2="{ry}" '
+                                 f'stroke="{a["_color"]}" stroke-width="{_D["linewidth"]}"/>')
                 parts.append(_text_path(a["opts"]["label"], pad_x + sw + 6, ry + 4,
                                         tick_size, anchor="start"))
             parts.append('</g>')

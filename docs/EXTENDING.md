@@ -102,7 +102,7 @@ ArtistSpec(
 | `xdomain` / `ydomain` | `None` | Set when your artist's data should drive axis limits. Return `None` for decorative artists that just sit on the frame (axhline, axvline). |
 | `layer` | `"data"` | `"background"` for fills and shaded spans (drawn first), `"foreground"` for reference lines (drawn last, on top). Same artist within a layer keeps insertion order. |
 | `uses_color_cycle` | `True` | Set `False` for artists that shouldn't consume a tab10 slot — reflines, image-based artists, anything that picks its own color. Set `default_color` to give it a fallback. |
-| `legend_swatch` | `None` | Provide when the built-in line / marker / rect swatches don't represent your artist well. Signature: `(a, ctx, x0, y_mid) -> svg_fragment`. |
+| `legend_swatch` | `None` | Provide to draw your own legend entry. Without it, the legend falls back to a colored line in the artist's color. Signature: `(a, ctx, x0, y_mid) -> svg_fragment`. |
 
 ---
 

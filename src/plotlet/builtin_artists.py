@@ -16,7 +16,7 @@ from .artists import (
     _artist_imshow,
     _marker_at,
 )
-from ._spec import _D
+from ._spec import _D, _LEGSPEC
 
 
 # --- domain helpers ---------------------------------------------------------
@@ -29,6 +29,56 @@ def _bin_xs(a): return [b["x0"] for b in a["_bins"]] + [b["x1"] for b in a["_bin
 def _bin_ys(a): return [b["count"] for b in a["_bins"]] + [0]
 
 
+# --- legend swatch helpers --------------------------------------------------
+# Each built-in artist registers one of these so the legend dispatch in
+# `_render` can stay generic — no type-string matching.
+
+def _line_swatch(a, ctx, x0, y_mid, default_lw):
+    sw = _LEGSPEC["swatch_width"]
+    ls = a["opts"].get("linestyle")
+    da = f' stroke-dasharray="{ctx.dash[ls]}"' if ls and ctx.dash.get(ls) else ""
+    return (f'<line x1="{x0}" x2="{x0 + sw}" y1="{y_mid}" y2="{y_mid}" '
+            f'stroke="{a["_color"]}" '
+            f'stroke-width="{a["opts"].get("linewidth", default_lw)}"{da}/>')
+
+
+def _plot_legend_swatch(a, ctx, x0, y_mid):
+    out = _line_swatch(a, ctx, x0, y_mid, ctx.defaults["linewidth"])
+    if a["opts"].get("marker"):
+        sw = _LEGSPEC["swatch_width"]
+        out += _marker_at(a["opts"]["marker"], x0 + sw / 2, y_mid,
+                          a["opts"].get("markersize", ctx.defaults["markersize"]),
+                          a["_color"], 1)
+    return out
+
+
+def _refline_legend_swatch(a, ctx, x0, y_mid):
+    return _line_swatch(a, ctx, x0, y_mid, ctx.defaults["refline_width"])
+
+
+def _scatter_legend_swatch(a, ctx, x0, y_mid):
+    sw = _LEGSPEC["swatch_width"]
+    s_size = math.sqrt(a["opts"].get("s", ctx.defaults["scatter_s"])) / 2
+    return _marker_at(a["opts"].get("marker", "o"),
+                      x0 + sw / 2, y_mid, s_size, a["_color"],
+                      a["opts"].get("alpha", ctx.defaults["scatter_alpha"]))
+
+
+def _rect_swatch(a, x0, y_mid, default_alpha):
+    sw = _LEGSPEC["swatch_width"]
+    return (f'<rect x="{x0}" y="{y_mid - 5}" width="{sw}" height="10" '
+            f'fill="{a["_color"]}" '
+            f'opacity="{a["opts"].get("alpha", default_alpha)}"/>')
+
+
+def _bar_legend_swatch(a, ctx, x0, y_mid):
+    return _rect_swatch(a, x0, y_mid, 1)
+
+
+def _refspan_legend_swatch(a, ctx, x0, y_mid):
+    return _rect_swatch(a, x0, y_mid, ctx.defaults["refspan_alpha"])
+
+
 # --- plot (line) ------------------------------------------------------------
 
 add_artist(ArtistSpec(
@@ -38,6 +88,7 @@ add_artist(ArtistSpec(
     xdomain=_xs_of,
     ydomain=_ys_of,
     draw=lambda a, ctx: _artist_plot(a, ctx.x_scale, ctx.y_scale, ctx.color),
+    legend_swatch=_plot_legend_swatch,
 ))
 
 
@@ -50,6 +101,7 @@ add_artist(ArtistSpec(
     xdomain=_xs_of,
     ydomain=_ys_of,
     draw=lambda a, ctx: _artist_scatter(a, ctx.x_scale, ctx.y_scale, ctx.color),
+    legend_swatch=_scatter_legend_swatch,
 ))
 
 
@@ -64,6 +116,7 @@ add_artist(ArtistSpec(
     xdomain=lambda a: None,  # categorical, handled by has_bar branch
     ydomain=_vals_of,
     draw=lambda a, ctx: _artist_bar(a, ctx.x_scale, ctx.y_scale, ctx.color),
+    legend_swatch=_bar_legend_swatch,
 ))
 
 
@@ -75,6 +128,7 @@ add_artist(ArtistSpec(
     xdomain=_bin_xs,
     ydomain=_bin_ys,
     draw=lambda a, ctx: _artist_hist(a, ctx.x_scale, ctx.y_scale, ctx.ih, ctx.color),
+    legend_swatch=_bar_legend_swatch,
 ))
 
 
@@ -90,6 +144,7 @@ add_artist(ArtistSpec(
     xdomain=_xs_of,
     ydomain=_y1y2_of,
     draw=lambda a, ctx: _artist_fill_between(a, ctx.x_scale, ctx.y_scale, ctx.color),
+    legend_swatch=_plot_legend_swatch,
 ))
 
 
@@ -104,6 +159,7 @@ add_artist(ArtistSpec(
     layer="foreground",
     uses_color_cycle=False,
     default_color=_D["refline_color"],
+    legend_swatch=_refline_legend_swatch,
 ))
 
 add_artist(ArtistSpec(
@@ -114,6 +170,7 @@ add_artist(ArtistSpec(
     layer="foreground",
     uses_color_cycle=False,
     default_color=_D["refline_color"],
+    legend_swatch=_refline_legend_swatch,
 ))
 
 add_artist(ArtistSpec(
@@ -124,6 +181,7 @@ add_artist(ArtistSpec(
     layer="background",
     uses_color_cycle=False,
     default_color=_D["refspan_color"],
+    legend_swatch=_refspan_legend_swatch,
 ))
 
 add_artist(ArtistSpec(
@@ -134,6 +192,7 @@ add_artist(ArtistSpec(
     layer="background",
     uses_color_cycle=False,
     default_color=_D["refspan_color"],
+    legend_swatch=_refspan_legend_swatch,
 ))
 
 

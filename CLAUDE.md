@@ -138,6 +138,7 @@ When suggesting changes or adding features:
 - **Visual constants live in `spec.json`.** If you find yourself typing a number into render code, ask whether it should be there instead.
 - **Test with baselines.** Core changes get added to `tests/test_chart.py` with a committed SVG; cookbook examples are reference, not regression-tested.
 - **Mention matplotlib quirks that aren't replicated** and why, when relevant.
+- **Layout / multi-panel code lives in its own module** (`layout.py` / `panels.py` when the time comes), not in `core.py`. The "small core readable in an afternoon" property is preserved by keeping `core.py` / `artists.py` / `registry.py` / `scales.py` unchanged in scope — anyone who wants the minimal mental model reads just those.
 
 The actual mechanics of adding an artist (`ArtistSpec`, `add_artist`, `RenderContext`) are in [docs/EXTENDING.md](docs/EXTENDING.md).
 
@@ -149,3 +150,23 @@ User-facing non-goals (no interactivity, no 3D, no production dashboard, not a m
 
 - **Interactivity is out forever, not deferred.** Hover, zoom, pan, click, animation are *not* "maybe later" — they kill the byte-identical reproducibility that makes baseline-image testing possible. Don't soften this in code review.
 - **Not aiming for 100% matplotlib coverage.** Just the parts the author actually uses, plus whatever shared infrastructure is forced by core artists. Reject "we should add this for parity" arguments.
+
+---
+
+## Long-term direction (collaborator-internal)
+
+Where plotlet is heading once subplots and coordinated multi-panel land: **a lightweight, reproducibility-first alternative for library authors and scientists who don't need 1,000 plot types**, with a specific foothold in the annotated-heatmap niche currently held by ComplexHeatmap (R, aging) and marsilea (Python, heavy + opinionated).
+
+Subplots is the **essential prerequisite, not just one item among others**. Without it plotlet is toy-shaped — any real workflow produces multiple charts, and "assemble in Inkscape" is not a viable path; it kills the reproducibility pillar. Subplots is table stakes for the lightweight identity itself; coordinated multi-panel is the strategic differentiator on top.
+
+Two pillars:
+
+1. **Reproducibility-first.** Byte-identical SVG with text-as-paths; every output renders identically across machines without a font install dance. matplotlib's SVG drifts subtly across machines; this doesn't.
+2. **Annotated-heatmap niche after coordinated panels.** ComplexHeatmap is R-only; marsilea is heavy. A small Python library with a clean composition algebra and a `share_x=` / `share_y=` hook fills a real gap. Sequence: subplots first, then the shared-scale hook, then ComplexHeatmap-style layouts as cookbook recipes (not core).
+
+Use this as a razor for gray-area requests:
+
+- **Strengthens the goal** → say yes: shared-scale ergonomics, layout composition, colormap quality, reproducibility guarantees, easier annotated-track recipes in cookbook.
+- **Drifts from it** → say no, even if tempting: another standard plot type "for parity," interactivity, animation, dashboarding features, or anything that pushes plotlet toward "generic plotting library."
+
+This positioning is collaborator-internal because the prerequisites (subplots, shared scales) aren't built yet — premature to put it in [README.md](README.md) or [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md). Promote it to public-facing once subplots lands.
