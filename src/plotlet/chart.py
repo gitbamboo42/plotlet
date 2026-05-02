@@ -65,7 +65,9 @@ class Chart:
 
     @classmethod
     def _new_parent(cls, kind: str, children: list["Chart"]) -> "Chart":
-        """Construct a parent Chart with no Figure of its own."""
+        """Construct a parent Chart with no Figure of its own. The parent's
+        total size is derived from its children at render time (sum-sizes;
+        see `docs/SUBPLOTS.md`)."""
         p = cls.__new__(cls)
         p._fig = None
         p._data = None
