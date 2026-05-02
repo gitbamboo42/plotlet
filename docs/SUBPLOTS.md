@@ -1,8 +1,9 @@
 # Subplots / composition — design pass
 
-Status: **design complete; ready for implementation.** Goal was to
-pick a panel-identity and arrangement model so the implementation
-pass has a target — see the Decisions section.
+Status: **step 1 landed.** Composition primitives (`|`, `/`, `pt.grid`),
+single-parent invariant, show-on-child raise, default + auto-zero-gutter
+for `share_x=` / `share_y=` neighbors are in. Scale sharing (step 2),
+layout-level legend (step 3), and colorbar (step 4) are still to do.
 
 This doc deliberately separates two things the TODO had bundled:
 
@@ -356,13 +357,26 @@ Recommended:
 
 Not a roadmap — just the dependency order:
 
-1. **Parent-Chart layout + rect computation.** Single `Chart` class,
-   leaf vs. parent flag (or two classes behind one name). Children
-   list + layout direction (h / v / grid). `|` / `/` on `Chart`, plus
-   `pt.grid([[...]])`. Single-parent invariant + show-on-child raise.
-   Default gutter from spec.json; auto-zero-gutter rule for
-   coordinated neighbors goes in here too (the rect computer reads
-   `share_x` / `share_y` to collapse gutters).
+1. **Parent-Chart layout + rect computation.** ✅ *landed.* Single
+   `Chart` class, leaf vs. parent flag. Children list + layout direction
+   (h / v / grid). `|` / `/` on `Chart`, plus `pt.grid([[...]])`.
+   Single-parent invariant + show-on-child raise. Default gutter from
+   spec.json (`layout.gutter`); auto-zero-gutter rule for coordinated
+   neighbors (the rect computer reads `share_x` / `share_y` to collapse
+   gutters). Two implementation details worth recording:
+   - **Operators flatten same-direction LHS in place.** `a | b | c` is
+     one parent with three equal children, not a 25/25/50 nested
+     `(a|b)|c`. Reusing the LHS variable after composition isn't
+     supported — patchwork-style mutating semantics. Cross-direction
+     composition (`(a|b)/c`) nests, as expected.
+   - **Sub-layout gutter is unconditional.** The auto-zero-gutter rule
+     only fires when *both* sides of a pair are leaves with a
+     `share_x=` / `share_y=` link. If either side is itself a parent
+     (h / v / grid), the gutter is the default. More precise inspection
+     ("would the leaf at this edge share with the leaf across the
+     boundary?") was not worth the complexity for step 1 — users hit it
+     only when nesting layouts and re-asserting sharing across the
+     nest boundary, which is rare.
 2. **`share_x=` / `share_y=` plumbing on `pt.chart()`** — scale-build
    pre-pass with topo-sort across the parent's child tree.
 3. **Legend** — `pt.legend()` panel + `parent.legend()` decorator (sugar
