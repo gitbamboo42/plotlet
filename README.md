@@ -4,7 +4,7 @@ A small, hackable Python library that emits matplotlib-style SVG plots.
 
 ## Why
 
-matplotlib is the right tool when you want the kitchen sink. plotlet's niche is **custom plot types** — genome tracks, Manhattan plots, phylogenetic trees, anything matplotlib's extension API makes painful. The whole library is ~700 lines of Python with a deliberately tiny, exposed core: adding a new plot type is a 3-step recipe, not an architecture project.
+matplotlib is the right tool when you want the kitchen sink. plotlet's niche is **custom plot types** — genome tracks, Manhattan plots, phylogenetic trees, anything matplotlib's extension API makes painful. The whole library has a deliberately tiny, exposed core: adding a new plot type is a 3-step recipe, not an architecture project.
 
 It's a **scaffold, not a feature catalog**: the core ships ~5 standard plots and the infrastructure for extending. Custom plot types live in your own project (or [`cookbook/`](cookbook/)), not upstream. See [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) for the full framing.
 
@@ -35,6 +35,7 @@ pip install plotlet
 - **Cross-machine reproducible.** Bundled DejaVu Sans + text-as-paths means rendering is identical on Linux, macOS, Windows, headless CI.
 - **Jupyter-native.** `Figure._repr_html_` auto-renders the last expression in a cell.
 - **Tiny output.** Each plot is ~50 KB SVG, self-contained.
+- **Compositional.** Multi-panel layouts via `|`, `/`, `pt.grid`; share scales with `share_x=` / `share_y=`.
 
 ## API
 
@@ -63,6 +64,27 @@ Pass at construction (`pt.chart(data, title=..., grid=True, ...)`) or as chained
 
 `.imshow(data)` renders a 2-D array as a colored grid. Small grids (`nrows × ncols ≤ 10000`) emit one `<rect>` per cell and stay vector-clean at any zoom; larger grids encode as a single base64 PNG and quantize to 256 levels. Image row 0 is rendered at the top of its rectangle; the y axis stays Cartesian (small at bottom). All ~180 matplotlib colormaps are vendored — see `pt.list_colormaps()`.
 
+### Subplots
+
+Compose multi-panel layouts with operators on `Chart`:
+
+```python
+a | b                  # side-by-side
+a / b                  # stacked
+a | b | c              # left-fold flatten — one row of three, not nested
+
+pt.grid([[a, b],       # 2-D grid; cells may be `None`
+         [c, d]])
+
+# Share x or y across panels — collapses the gap between them
+# and forces both onto the source's scale.
+top  = pt.chart()
+main = pt.chart(share_x=top)
+top / main             # vertically stacked, x-axis joined
+```
+
+A composed chart owns its children; render the parent (`(a | b).show()` or `.to_svg()` / `.save_svg(...)`). Calling `.show()` on a child raises. See [`docs/SUBPLOTS.md`](docs/SUBPLOTS.md) for the design rationale.
+
 ### Render / save
 
 ```python
@@ -89,6 +111,7 @@ plotlet's central hackability claim: a custom plot type is a 3-step recipe (~50�
 python tests/test_chart.py            # check vs. committed baselines
 python tests/test_chart.py --update   # regenerate (review the diff!)
 python tests/test_chart.py --gallery  # build tests/baseline_images/chart/index.html
+python tests/test_subplots.py         # subplot baselines + composition invariants
 ```
 
 ## Non-goals
