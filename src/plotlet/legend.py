@@ -138,27 +138,18 @@ def _build_groups(sources: list[Chart], states: dict[int, dict],
     return raw
 
 
-def _gradient_stops(cmap_name: str, n: int) -> str:
-    """SVG <stop> list for a vertical top→bottom strip running vmax→vmin."""
-    cm = colormap(cmap_name)
-    stops = []
-    for i in range(n + 1):
-        offset = i / n
-        # offset 0 = top of strip = vmax color; offset 1 = bottom = vmin
-        r, g, b = cm(1.0 - offset)
-        stops.append(f'<stop offset="{offset*100:.2f}%" '
-                     f'stop-color="rgb({r},{g},{b})"/>')
-    return "".join(stops)
-
-
-def _render_continuous_entry(entry: dict, x: float, y: float, gid: str) -> str:
+def _render_continuous_entry(entry: dict, x: float, y: float) -> str:
     """One continuous entry: optional label above, then a gradient strip
     of fixed height (`legend.gradient_height`) with right-side ticks.
-    Tick count adapts to strip height so labels don't crowd."""
-    parts = [f'<defs><linearGradient id="{gid}" x1="0" y1="0" x2="0" y2="1">'
-             f'{_gradient_stops(entry["cmap"], _GRAD_N)}'
-             f'</linearGradient></defs>']
+    Tick count adapts to strip height so labels don't crowd.
 
+    The strip is drawn as `_GRAD_N + 1` solid-fill rect bands rather than
+    a `<linearGradient>` — no `<defs>`, no `id`, no `url(#…)`, so the SVG
+    has nothing that can collide when multiple plotlet SVGs are inlined
+    into the same HTML document. Bands are sub-pixel at the spec strip
+    height (60 px / 33 stops ≈ 1.8 px each); rasterizer AA on rect edges
+    makes the result visually identical to a native gradient."""
+    parts = []
     tick_size = _FONTSPEC["tick_size"]
     label_text = entry.get("label")
     label_h = tick_size + 4 if label_text else 0
@@ -168,8 +159,20 @@ def _render_continuous_entry(entry: dict, x: float, y: float, gid: str) -> str:
 
     strip_y = y + label_h
     strip_h = float(_GRAD_H)
+    cm = colormap(entry["cmap"])
+    n_bands = _GRAD_N + 1
+    band_h = strip_h / n_bands
+    for i in range(n_bands):
+        # i=0 at top → vmax color; i=n-1 at bottom → vmin color.
+        # Each band but the last extends 1 px into the next so AA seams
+        # don't show as hairline white lines between sub-pixel rects.
+        r, g, b = cm(1.0 - i / _GRAD_N)
+        h = band_h + (1.0 if i < n_bands - 1 else 0.0)
+        parts.append(f'<rect x="{x:.2f}" y="{strip_y + i*band_h:.4f}" '
+                     f'width="{_GRAD_W}" height="{h:.4f}" '
+                     f'fill="rgb({r},{g},{b})"/>')
     parts.append(f'<rect x="{x:.2f}" y="{strip_y:.2f}" width="{_GRAD_W}" '
-                 f'height="{strip_h:.2f}" fill="url(#{gid})" '
+                 f'height="{strip_h:.2f}" fill="none" '
                  f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
 
     vmin, vmax = entry["vmin"], entry["vmax"]
@@ -264,8 +267,7 @@ def _size_legends(root: Chart, states: dict[int, dict]) -> None:
 
 def _render_legend(leaf: Chart, w: float, h: float,
                    states: dict[int, dict],
-                   data_leaves: list[Chart],
-                   legend_idx: int = 0) -> str:
+                   data_leaves: list[Chart]) -> str:
     """Render the legend leaf's content into its allocated rect.
 
     Sources default to all data leaves in the layout; explicit
@@ -295,17 +297,14 @@ def _render_legend(leaf: Chart, w: float, h: float,
 
     parts = []
     cy = pad_y
-    cont_global_idx = 0
     for gi, g in enumerate(groups):
         if g["header"]:
             parts.append(_text_path(g["header"], pad_x, cy + label_size,
                                     label_size, anchor="start"))
             cy += header_h
         for entry in g["cont"]:
-            gid = f"plotlet-grad-{legend_idx}-{cont_global_idx}"
-            cont_global_idx += 1
             entry_label_h = (tick_size + 4) if entry.get("label") else 0
-            parts.append(_render_continuous_entry(entry, pad_x, cy, gid))
+            parts.append(_render_continuous_entry(entry, pad_x, cy))
             cy += entry_label_h + _GRAD_H
         if g["cont"] and g["disc"]:
             cy += _SECTION_GAP

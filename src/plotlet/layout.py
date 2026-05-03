@@ -519,14 +519,12 @@ def _render_layout(root: Chart) -> str:
         parts.append(_render_inner(st, iw, ih, M_eff, po))
         parts.append('</g>')
         data_leaves.append(leaf)
-    legend_idx = 0
     for leaf, (x, y, w, h) in placements:
         if not leaf._legend_kind:
             continue
         from .legend import _render_legend
         parts.append(f'<g transform="translate({x:.2f},{y:.2f})">')
-        parts.append(_render_legend(leaf, w, h, states, data_leaves, legend_idx))
+        parts.append(_render_legend(leaf, w, h, states, data_leaves))
         parts.append('</g>')
-        legend_idx += 1
     parts.append('</svg>')
     return "".join(parts)
