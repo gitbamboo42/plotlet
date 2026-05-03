@@ -43,6 +43,7 @@ class ArtistSpec:
     uses_color_cycle: bool = True
     default_color: str | None = None  # used when uses_color_cycle is False
     legend_swatch: Callable[[dict, "RenderContext", float, float], str] | None = None
+    legend_gradient: Callable[[dict], dict | None] | None = None
 
 
 @dataclass
