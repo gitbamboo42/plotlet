@@ -230,11 +230,25 @@ def _imshow_ydomain(a):
     return [ext[2], ext[3]]
 
 
+def _imshow_legend_gradient(a):
+    """Describe imshow's continuous mapping (cmap + range + user overrides) for legend rendering."""
+    legend_opts = a["opts"].get("legend") or {}
+    return {
+        "kind": "continuous",
+        "cmap": a["opts"].get("cmap", _D["default_cmap"]),
+        "vmin": a["_vmin"],
+        "vmax": a["_vmax"],
+        "label": legend_opts.get("label"),
+        "ticks": legend_opts.get("ticks"),
+    }
+
+
 add_artist(ArtistSpec(
     name="imshow",
     record=_imshow_record,
     xdomain=_imshow_xdomain,
     ydomain=_imshow_ydomain,
     draw=lambda a, ctx: _artist_imshow(a, ctx.x_scale, ctx.y_scale, None),
+    legend_gradient=_imshow_legend_gradient,
     uses_color_cycle=False,
 ))
