@@ -484,12 +484,12 @@ def _render_layout(root: Chart) -> str:
         f'viewBox="0 0 {W} {H}" font-family="{_FONT}" font-size="11" '
         f'style="background:#fff">'
     ]
+    # Two passes so legends can read color-cycle assignments off data
+    # artists. _render_inner mutates each artist dict's `_color`; legends
+    # then harvest those for their swatches.
+    data_leaves: list[Chart] = []
     for leaf, (x, y, w, h) in placements:
         if leaf._legend_kind:
-            from .legend import _render_legend
-            parts.append(f'<g transform="translate({x:.2f},{y:.2f})">')
-            parts.append(_render_legend(leaf, w, h))
-            parts.append('</g>')
             continue
         po = panel_opts[id(leaf)]
         M_eff = _effective_margin(leaf._fig._margin, po, w, h)
@@ -498,6 +498,14 @@ def _render_layout(root: Chart) -> str:
         st = states[id(leaf)]
         parts.append(f'<g transform="translate({x + M_eff["left"]:.2f},{y + M_eff["top"]:.2f})">')
         parts.append(_render_inner(st, iw, ih, M_eff, po))
+        parts.append('</g>')
+        data_leaves.append(leaf)
+    for leaf, (x, y, w, h) in placements:
+        if not leaf._legend_kind:
+            continue
+        from .legend import _render_legend
+        parts.append(f'<g transform="translate({x:.2f},{y:.2f})">')
+        parts.append(_render_legend(leaf, w, h, states, data_leaves))
         parts.append('</g>')
     parts.append('</svg>')
     return "".join(parts)
