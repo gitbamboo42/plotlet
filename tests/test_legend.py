@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+"""Baseline SVG regression tests for the layout-level legend.
+
+    python tests/test_legend.py            # check vs. baselines, exit 1 on mismatch
+    python tests/test_legend.py --update   # regenerate baselines (review the diff!)
+    python tests/test_legend.py --gallery  # write baseline_images/legend/index.html
+
+The in-frame overlay (`chart.legend(True)` / `legend=True`) is exercised
+incidentally inside `tests/test_chart.py`. This file is dedicated to the
+layout-level renderer in `plotlet/legend.py` — `pt.legend()` panel form,
+`parent.legend()` decorator, grouping by source `title`, continuous
+gradient strips for sources with `legend_gradient` (today: `imshow`),
+and content-driven sizing.
+
+Each plot below bundles several features so the suite isn't dominated by
+near-duplicate baselines:
+
+  legend_auto_grouped — parent.legend() decorator, no-source auto-harvest,
+                        default grouping with chart `title` headers,
+                        content-driven auto-sizing.
+  legend_continuous   — pt.legend(hm) panel form with a continuous source;
+                        per-imshow legend={"label", "ticks"} override.
+  legend_mixed        — pt.legend() panel form harvesting both an imshow
+                        (gradient strip) and a labeled line panel (swatch
+                        row) — continuous stacks above discrete in-section.
+  legend_overrides    — three sources with names={a: "Custom", b: None}
+                        exercising the rename + hide-header paths.
+  legend_flat_fixed   — group_by_chart=False flatten + explicit width=/
+                        height= override of the auto-sized rect.
+  legend_joined_grid  — ComplexHeatmap-shaped grid where the legend cell
+                        sits next to a join-pair-collapsed assembly. Tests
+                        that legend_gap (6 px) coexists with share-pair
+                        zero-gaps in the same grid, and that the legend
+                        cell is excluded from `_propagate_grid_joins` so
+                        its row/column neighbors keep their own margins.
+"""
+from __future__ import annotations
+
+import math
+import sys
+
+import plotlet as pt
+
+import _runner
+
+
+def _xs():
+    return [i * 0.1 for i in range(64)]
+
+
+def _matrix():
+    """Smooth 6x8 gradient — legible heatmap baseline for legend tests."""
+    return [[(r + c) / 12.0 for c in range(8)] for r in range(6)]
+
+
+def legend_auto_grouped():
+    xs = _xs()
+    a = pt.chart(title="alpha", width=240, height=200)
+    a.line(xs, [math.sin(x) for x in xs], label="sin")
+    b = pt.chart(title="beta", width=240, height=200)
+    b.line(xs, [math.cos(x) for x in xs], label="cos")
+    return (a | b).legend()
+
+
+def legend_continuous():
+    hm = pt.chart(title="heat", width=380, height=240)
+    hm.imshow(_matrix(), cmap="viridis",
+              legend={"label": "intensity", "ticks": [0.0, 0.5, 1.0]})
+    return hm | pt.legend(hm)
+
+
+def legend_mixed():
+    xs = _xs()
+    im = pt.chart(title="heat", width=240, height=200)
+    im.imshow(_matrix(), cmap="plasma")
+    lines = pt.chart(title="trace", width=240, height=200)
+    lines.line(xs, [math.sin(x) for x in xs], label="sin")
+    lines.line(xs, [math.cos(x) for x in xs], label="cos")
+    return im | lines | pt.legend()
+
+
+def legend_overrides():
+    xs = _xs()
+    a = pt.chart(title="alpha", width=160, height=200)
+    a.line(xs, [math.sin(x) for x in xs], label="sin")
+    b = pt.chart(title="beta", width=160, height=200)
+    b.line(xs, [math.cos(x) for x in xs], label="cos")
+    c = pt.chart(title="gamma", width=160, height=200)
+    c.line(xs, [math.sin(x) + 0.5 for x in xs], label="sin+0.5")
+    return a | b | c | pt.legend(a, b, c, names={a: "Custom", b: None})
+
+
+def legend_flat_fixed():
+    xs = _xs()
+    a = pt.chart(title="alpha", width=220, height=200)
+    a.line(xs, [math.sin(x) for x in xs], label="sin")
+    b = pt.chart(title="beta", width=220, height=200)
+    b.line(xs, [math.cos(x) for x in xs], label="cos")
+    return a | b | pt.legend(a, b, group_by_chart=False,
+                             width=140, height=160)
+
+
+def legend_joined_grid():
+    # Top track shares x with main; left tree shares y with main. Both
+    # share-pairs are gap-collapsed (0 px). Legend sits to the right of
+    # main with legend_gap (6 px) — distinct from the share-pair joint.
+    main = pt.chart(title="main", width=380, height=240)
+    main.imshow(_matrix(), cmap="viridis", legend={"label": "value"})
+    top  = pt.chart(title="top",  width=380, height=60, share_x=main)
+    top.line([0, 1, 2, 3, 4, 5, 6, 7],
+             [3, 1, 2, 4, 1, 2, 3, 1], label="counts")
+    tree = pt.chart(title="tree", width=80,  height=240, share_y=main)
+    tree.line([0, 1, 2], [2, 3, 4])
+    return pt.grid([
+        [None, top,  None        ],
+        [tree, main, pt.legend() ],
+    ])
+
+
+PLOTS = {
+    "legend_auto_grouped": legend_auto_grouped,
+    "legend_continuous":   legend_continuous,
+    "legend_mixed":        legend_mixed,
+    "legend_overrides":    legend_overrides,
+    "legend_flat_fixed":   legend_flat_fixed,
+    "legend_joined_grid":  legend_joined_grid,
+}
+
+
+if __name__ == "__main__":
+    sys.exit(_runner.run("legend", PLOTS))

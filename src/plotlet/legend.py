@@ -101,8 +101,10 @@ def _build_groups(sources: list[Chart], states: dict[int, dict],
 
     Each returned dict is `{"header": str|None, "cont": [...], "disc": [...]}`.
     `header` is `None` either because the user explicitly hid it via
-    `names[src] = None`, the source has no `title`, or grouping is off.
-    Sources contributing zero entries are skipped entirely."""
+    `names[src] = None`, the source has no `title`, grouping is off, or
+    a continuous entry already carries its own `legend["label"]` (the
+    chart title would just stack a second redundant caption above the
+    gradient). Sources contributing zero entries are skipped entirely."""
     raw = []
     for src in sources:
         st = states.get(id(src))
@@ -124,7 +126,9 @@ def _build_groups(sources: list[Chart], states: dict[int, dict],
         if not group_by_chart:
             header = None
         elif src in names:
-            header = names[src]
+            header = names[src]   # user-overridden — keep verbatim
+        elif any(c.get("label") for c in cont):
+            header = None         # entry's own label already names the gradient
         else:
             header = st.get("title")
         raw.append({"header": header, "cont": cont, "disc": disc})
@@ -183,12 +187,19 @@ def _render_continuous_entry(entry: dict, x: float, y: float) -> str:
     tx0 = x + _GRAD_W
     tx1 = tx0 + _TICK_LEN
     label_x = tx1 + _TICK_PAD
+    # Bias each tick-label baseline toward the strip's vertical center —
+    # top tick shifts down so it doesn't crowd whatever sits above the
+    # strip (entry label / chart title), bottom tick shifts up by the
+    # same amount, middle ticks unchanged. The tick line still points
+    # at the exact value position; only the text shifts.
+    strip_mid = strip_y + strip_h / 2
     for t in ticks:
         ty = scale(t)
         parts.append(f'<line x1="{tx0}" x2="{tx1}" '
                      f'y1="{ty:.2f}" y2="{ty:.2f}" '
                      f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
-        parts.append(_text_path(_fmt_tick(t), label_x, ty + 4,
+        bias = 4 * (strip_mid - ty) / (strip_h / 2) if strip_h > 0 else 0
+        parts.append(_text_path(_fmt_tick(t), label_x, ty + 4 + bias,
                                 tick_size, anchor="start"))
     return "".join(parts)
 
