@@ -1,6 +1,6 @@
 # Subplots / composition — design pass
 
-Status: **steps 1 and 2 landed.** Composition primitives (`|`, `/`,
+Status: **steps 1, 2, and 3 landed.** Composition primitives (`|`, `/`,
 `pt.grid`), single-parent invariant, show-on-child raise, default +
 auto-zero-gap for `share_x=` / `share_y=` neighbors are in (step 1).
 Step 2 layers scale sharing on top: a topo-sorted pre-pass over the
@@ -17,10 +17,16 @@ as relative ratios when no explicit `widths=` / `heights=` are given,
 and within a grid the `hide_*` margin flag propagates column-wise and
 row-wise so panels in the same column/row stay x-aligned (a top track
 sized by `share_x` lines up with the central chart it sits above).
-Layout-level legend (step 3) is still to do — unified to cover both
-discrete swatches and continuous gradients (a "colorbar" is just a
-legend whose source is a continuous color mapping; same constructor,
-geometry chosen from the source).
+Step 3 ships the layout-level legend (unified — covers both discrete
+swatches and continuous gradients): `pt.legend(*sources, names=,
+group_by_chart=)` constructor, `parent.legend(...)` decorator (sugar
+over the panel form), grouping by source chart with each chart's
+`title` as section header, content-driven width / height, fixed
+60-px gradient strips, adaptive tick count, and a `layout.legend_gap`
+that sits between a legend and its source separate from the share-pair
+joint detection. A "colorbar" is just `pt.legend(hm)` where `hm` has
+a continuous color mapping — geometry follows from the source, not
+the constructor name.
 
 This doc deliberately separates two things the TODO had bundled:
 
@@ -445,16 +451,35 @@ Not a roadmap — just the dependency order:
 
    Grid pair-gaps consider all rows/cols at a boundary (min wins) so
    a joined pair in row 1 still collapses the column gap.
-3. **Legend (covers colorbar)** — `pt.legend()` panel +
+3. **Legend (covers colorbar)** ✅ *landed.* `pt.legend()` panel +
    `parent.legend()` decorator (sugar over panel). One constructor
-   handles both discrete swatches (today's `chart.legend()` already
-   harvests these via `spec.legend_swatch`) and continuous gradients
-   (a new `spec.legend_gradient` hook on `ArtistSpec` that imshow
-   implements). Geometry is chosen per source. Layout-level legend
-   groups by source chart, using each chart's `title` as section
-   header; `names=` overrides; opt-out via `group_by_chart=False`.
-   Per-source override via `imshow(..., legend={"label": ...,
-   "ticks": ...})`.
+   handles both discrete swatches (via `spec.legend_swatch`, the same
+   hook today's in-frame `chart.legend()` already uses) and continuous
+   gradients (new `spec.legend_gradient` hook on `ArtistSpec`,
+   implemented for imshow). Geometry chosen per source — gradient strip
+   for continuous, swatch list for discrete, both stacked when mixed.
+   Layout-level legend groups by source chart, using each chart's
+   `title` as section header; `names={chart: "Override"}` replaces
+   the header text, `names={chart: None}` hides it, and
+   `group_by_chart=False` flattens everything into one unsectioned
+   list. Per-imshow override via `imshow(..., legend={"label": ...,
+   "ticks": [...]})`.
+
+   Two sizing details that turned out to matter:
+   - **Strip height is fixed** (`legend.gradient_height = 60`) per
+     continuous entry — independent of source plot height. Pre-render
+     pass `_size_legends` overrides each legend leaf's intrinsic
+     `_fig` size with its content-driven (width, height) before
+     `_measure` runs (unless the user passed explicit `width=` /
+     `height=`).
+   - **Tick count adapts** to strip height (`max(2, min(5, h // 18))`),
+     mirroring the axis-tick-density rule in `core._render_inner`,
+     so labels don't crowd at small sizes.
+
+   `layout.legend_gap` (6 px) sits between a legend and its source
+   neighbor — distinct from the share-pair zero-gap rule, since a
+   legend isn't a share joint and shouldn't trigger spine/label
+   suppression on either side.
 4. **Cookbook recipes:** `heatmap_with_tree`, ComplexHeatmap-style.
 
 Item 4 lands once item 3 is in. The legacy

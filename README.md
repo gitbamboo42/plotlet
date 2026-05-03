@@ -35,7 +35,7 @@ pip install plotlet
 - **Cross-machine reproducible.** Bundled DejaVu Sans + text-as-paths means rendering is identical on Linux, macOS, Windows, headless CI.
 - **Jupyter-native.** `Figure._repr_html_` auto-renders the last expression in a cell.
 - **Tiny output.** Each plot is ~50 KB SVG, self-contained.
-- **Compositional.** Multi-panel layouts via `|`, `/`, `pt.grid`; share scales with `share_x=` / `share_y=`.
+- **Compositional.** Multi-panel layouts via `|`, `/`, `pt.grid`; share scales with `share_x=` / `share_y=`; layout-level legend with `pt.legend()` covering both discrete swatches and continuous gradients (the colorbar).
 
 ## API
 
@@ -81,6 +81,17 @@ pt.grid([[a, b],       # 2-D grid; cells may be `None`
 top  = pt.chart()
 main = pt.chart(share_x=top)
 top / main             # vertically stacked, x-axis joined
+
+# Layout-level legend (covers colorbar and discrete swatches in
+# one constructor — geometry follows from the source's color mapping).
+hm = pt.chart(); hm.imshow(matrix, cmap="viridis")
+hm | pt.legend(hm)             # heatmap + colorbar (gradient strip)
+
+# Multi-source: groups by chart, using each chart's title as
+# section header. `names={chart: "Override"}` renames a header,
+# `names={chart: None}` hides it, `group_by_chart=False` flattens.
+(hm | top) | pt.legend()       # auto-collects from siblings
+parent = a | b; parent.legend()  # sugar for parent | pt.legend()
 ```
 
 A composed chart owns its children; render the parent (`(a | b).show()` or `.to_svg()` / `.save_svg(...)`). Calling `.show()` on a child raises. See [`docs/SUBPLOTS.md`](docs/SUBPLOTS.md) for the design rationale.
