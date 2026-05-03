@@ -26,6 +26,7 @@ from .chart import Chart
 
 _GAP = _LAYOUTSPEC["gap"]
 _INNER_GAP = _LAYOUTSPEC["inner_gap"]
+_LEGEND_GAP = _LAYOUTSPEC["legend_gap"]
 _FONT = _FONTSPEC["family"]
 
 
@@ -84,10 +85,24 @@ def grid(cells: list[list], *, widths: list[float] | None = None,
 # ---------------------------------------------------------------------------
 
 def _pair_gap(a: Chart | None, b: Chart | None, *, axis: str) -> float:
-    """Gap between two adjacent cells. Collapses to 0 only when both are
-    leaves and one of them shares the orthogonal axis with the other —
-    horizontal pairs check `_share_y`, vertical pairs check `_share_x`."""
+    """Gap between two adjacent cells.
+
+    Three regimes:
+      - Share-pair joint (one leaf shares the orthogonal axis with the
+        other) → 0, panels butt up to read as coordinated.
+      - Legend ↔ its source (or any data sibling, if the legend has no
+        explicit source) → `legend_gap`, a small intentional separation
+        that's not a share-pair joint and doesn't trigger spine/label
+        suppression.
+      - Anything else → default `gap`.
+    """
     if a is None or b is None or a._is_parent or b._is_parent:
+        return _GAP
+    if a._legend_kind ^ b._legend_kind:
+        leg = a if a._legend_kind else b
+        other = b if a._legend_kind else a
+        if not leg._legend_sources or other in leg._legend_sources:
+            return _LEGEND_GAP
         return _GAP
     share = "_share_y" if axis == "h" else "_share_x"
     if getattr(b, share, None) is a or getattr(a, share, None) is b:

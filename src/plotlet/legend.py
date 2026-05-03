@@ -36,12 +36,21 @@ _GRAD_N = _LEGSPEC["gradient_n_stops"]
 _SECTION_GAP = _LEGSPEC["section_gap"]
 
 
-def legend(*sources: Chart, width: int | None = None,
+def legend(*sources: Chart, names: dict | None = None,
+           group_by_chart: bool = True,
+           width: int | None = None,
            height: int | None = None) -> Chart:
     """Create a layout-level legend.
 
     With no `sources`, the legend harvests entries from every leaf in
     its parent layout. With sources, it harvests only from those.
+
+    Multiple sources are grouped by source chart, with each chart's
+    `title` rendered as a section header. `names={chart: "Override"}`
+    replaces a header text; `names={chart: None}` hides the header
+    while keeping the entries. `group_by_chart=False` flattens all
+    entries into a single unsectioned list (useful when small-multiples
+    genuinely share a series).
     """
     for src in sources:
         if not isinstance(src, Chart):
@@ -62,6 +71,8 @@ def legend(*sources: Chart, width: int | None = None,
     leaf._share_y = None
     leaf._legend_kind = True
     leaf._legend_sources = list(sources)
+    leaf._legend_names = dict(names) if names else {}
+    leaf._legend_group_by_chart = group_by_chart
     return leaf
 
 
@@ -74,39 +85,47 @@ def _swatch_ctx(a: dict) -> RenderContext:
     )
 
 
-def _harvest_discrete(sources: list[Chart], states: dict[int, dict]) -> list[dict]:
-    """Collect labeled artists across `sources`, in order. Each source's
-    state must already have `_color` assigned (which `_render_inner` does
-    during the data-leaf render pass)."""
-    out = []
+def _build_groups(sources: list[Chart], states: dict[int, dict],
+                  names: dict, group_by_chart: bool) -> list[dict]:
+    """Collect entries per source and decide each section's header.
+
+    Each returned dict is `{"header": str|None, "cont": [...], "disc": [...]}`.
+    `header` is `None` either because the user explicitly hid it via
+    `names[src] = None`, the source has no `title`, or grouping is off.
+    Sources contributing zero entries are skipped entirely."""
+    raw = []
     for src in sources:
         st = states.get(id(src))
         if st is None:
             continue
-        for a in st["artists"]:
-            if a["opts"].get("label"):
-                out.append(a)
-    return out
-
-
-def _harvest_continuous(sources: list[Chart], states: dict[int, dict]) -> list[dict]:
-    """Collect continuous-mapping descriptors across `sources`. Each
-    artist with a `spec.legend_gradient` is asked to describe its mapping;
-    a None return means "no continuous entry to show" (e.g. categorical
-    imshow once that lands)."""
-    out = []
-    for src in sources:
-        st = states.get(id(src))
-        if st is None:
-            continue
+        cont, disc = [], []
         for a in st["artists"]:
             spec = get_artist(a["type"])
-            if spec is None or spec.legend_gradient is None:
+            if spec is None:
                 continue
-            desc = spec.legend_gradient(a)
-            if desc is not None:
-                out.append(desc)
-    return out
+            if spec.legend_gradient is not None:
+                desc = spec.legend_gradient(a)
+                if desc is not None:
+                    cont.append(desc)
+            if a["opts"].get("label") and spec.legend_swatch is not None:
+                disc.append(a)
+        if not cont and not disc:
+            continue
+        if not group_by_chart:
+            header = None
+        elif src in names:
+            header = names[src]
+        else:
+            header = st.get("title")
+        raw.append({"header": header, "cont": cont, "disc": disc})
+
+    if not group_by_chart and raw:
+        return [{
+            "header": None,
+            "cont": [c for g in raw for c in g["cont"]],
+            "disc": [d for g in raw for d in g["disc"]],
+        }]
+    return raw
 
 
 def _gradient_stops(cmap_name: str, n: int) -> str:
@@ -167,12 +186,16 @@ def _render_legend(leaf: Chart, w: float, h: float,
     """Render the legend leaf's content into its allocated rect.
 
     Sources default to all data leaves in the layout; explicit
-    `pt.legend(a, b)` narrows to those. Continuous entries (gradient
-    strips) stack above discrete entries (swatch + label rows)."""
+    `pt.legend(a, b)` narrows to those. With grouping on (the default),
+    each source becomes a section with its `title` as header; continuous
+    entries (gradient strips) stack above discrete entries (swatch +
+    label rows) within each section."""
     sources = leaf._legend_sources or data_leaves
-    cont_entries = _harvest_continuous(sources, states)
-    disc_entries = _harvest_discrete(sources, states)
-    if not cont_entries and not disc_entries:
+    names = getattr(leaf, "_legend_names", {}) or {}
+    group_by_chart = getattr(leaf, "_legend_group_by_chart", True)
+
+    groups = _build_groups(sources, states, names, group_by_chart)
+    if not groups:
         return ''
 
     pad_x = _LEGSPEC["pad_x"]
@@ -180,36 +203,55 @@ def _render_legend(leaf: Chart, w: float, h: float,
     row_h = _LEGSPEC["row_height"]
     sw    = _LEGSPEC["swatch_width"]
     tick_size = _FONTSPEC["tick_size"]
+    label_size = _FONTSPEC["label_size"]
+    header_h = label_size + 4
 
-    n_cont = len(cont_entries)
-    n_disc = len(disc_entries)
-    # Discrete block sized by its row count; continuous block divides
-    # the rest of the height equally across continuous entries.
-    disc_h = n_disc * row_h
-    section_gap = _SECTION_GAP if n_cont and n_disc else 0
-    cont_total_h = max(0.0, h - 2 * pad_y - disc_h - section_gap)
-    per_cont_h = cont_total_h / n_cont if n_cont else 0
+    # Fixed-height contributions: section headers, discrete rows, and
+    # the gap between cont/disc within a section. Continuous entries
+    # then split whatever vertical space remains, equally.
+    fixed_h = 0.0
+    for g in groups:
+        if g["header"]:
+            fixed_h += header_h
+        fixed_h += len(g["disc"]) * row_h
+        if g["cont"] and g["disc"]:
+            fixed_h += _SECTION_GAP
+    fixed_h += _SECTION_GAP * max(0, len(groups) - 1)
+
+    n_cont_total = sum(len(g["cont"]) for g in groups)
+    avail_for_cont = max(0.0, h - 2 * pad_y - fixed_h)
+    per_cont_h = avail_for_cont / n_cont_total if n_cont_total else 0
 
     parts = []
     cy = pad_y
-    for i, entry in enumerate(cont_entries):
-        gid = f"plotlet-grad-{legend_idx}-{i}"
-        parts.append(_render_continuous_entry(
-            entry, pad_x, cy, per_cont_h, gid))
-        cy += per_cont_h
-    if n_cont and n_disc:
-        cy += section_gap
+    cont_global_idx = 0
+    for gi, g in enumerate(groups):
+        if g["header"]:
+            parts.append(_text_path(g["header"], pad_x, cy + label_size,
+                                    label_size, anchor="start"))
+            cy += header_h
+        for entry in g["cont"]:
+            gid = f"plotlet-grad-{legend_idx}-{cont_global_idx}"
+            cont_global_idx += 1
+            parts.append(_render_continuous_entry(
+                entry, pad_x, cy, per_cont_h, gid))
+            cy += per_cont_h
+        if g["cont"] and g["disc"]:
+            cy += _SECTION_GAP
+        for i, a in enumerate(g["disc"]):
+            ry = cy + i * row_h + row_h / 2
+            spec = get_artist(a["type"])
+            if spec is not None and spec.legend_swatch is not None:
+                parts.append(spec.legend_swatch(a, _swatch_ctx(a), pad_x, ry))
+            else:
+                parts.append(f'<line x1="{pad_x}" x2="{pad_x + sw}" y1="{ry}" y2="{ry}" '
+                             f'stroke="{a["_color"]}" stroke-width="{_D["linewidth"]}"/>')
+            parts.append(_text_path(a["opts"]["label"], pad_x + sw + 6, ry + 4,
+                                    tick_size, anchor="start"))
+        cy += len(g["disc"]) * row_h
+        if gi < len(groups) - 1:
+            cy += _SECTION_GAP
 
-    for i, a in enumerate(disc_entries):
-        ry = cy + i * row_h + row_h / 2
-        spec = get_artist(a["type"])
-        if spec is not None and spec.legend_swatch is not None:
-            parts.append(spec.legend_swatch(a, _swatch_ctx(a), pad_x, ry))
-        else:
-            parts.append(f'<line x1="{pad_x}" x2="{pad_x + sw}" y1="{ry}" y2="{ry}" '
-                         f'stroke="{a["_color"]}" stroke-width="{_D["linewidth"]}"/>')
-        parts.append(_text_path(a["opts"]["label"], pad_x + sw + 6, ry + 4,
-                                tick_size, anchor="start"))
     return ''.join(parts)
 
 

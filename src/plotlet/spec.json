@@ -84,6 +84,7 @@
   },
   "layout": {
     "gap": 20,
-    "inner_gap": 12
+    "inner_gap": 12,
+    "legend_gap": 6
   }
 }
