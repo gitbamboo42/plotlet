@@ -17,7 +17,10 @@ as relative ratios when no explicit `widths=` / `heights=` are given,
 and within a grid the `hide_*` margin flag propagates column-wise and
 row-wise so panels in the same column/row stay x-aligned (a top track
 sized by `share_x` lines up with the central chart it sits above).
-Layout-level legend (step 3) and colorbar (step 4) are still to do.
+Layout-level legend (step 3) is still to do — unified to cover both
+discrete swatches and continuous gradients (a "colorbar" is just a
+legend whose source is a continuous color mapping; same constructor,
+geometry chosen from the source).
 
 This doc deliberately separates two things the TODO had bundled:
 
@@ -86,14 +89,18 @@ candidate to evaluate them:
   (useful when small-multiples genuinely share a series).
   *Implication:* grouping makes dedupe a non-issue — same label in
   different charts sits in different sections naturally.
-- **Colorbar attaches to one chart.** `pt.colorbar(hm)` reads cmap +
-  norm from `hm`'s imshow call. To make one colorbar serve multiple
-  heatmaps, the user passes matching `cmap` / `vmin` / `vmax` to each
-  imshow; the colorbar reads from one of them. **No `share_color=`
-  mechanism** — color isn't position-critical the way axes are, so
-  user-managed kwargs are enough. If the user gives mismatched
-  kwargs and uses one shared colorbar, the bar legitimately
-  represents the chart it was given; others look off (user's call).
+- **One legend constructor for both discrete and continuous.**
+  `pt.legend(hm)` (or `chart.legend()`) renders a gradient strip with
+  ticks if `hm`'s color mapping is continuous (e.g. imshow with a
+  continuous cmap), a swatch list if discrete (plot/scatter labels,
+  categorical imshow), or both stacked if the source mixes them.
+  Saying "colorbar" is shorthand for "legend with a continuous source";
+  there is no separate `pt.colorbar()` call. To share one gradient
+  across heatmaps, pass matching `cmap` / `vmin` / `vmax` to each
+  imshow and point the legend at one of them — **no `share_color=`
+  mechanism**, color isn't position-critical the way axes are, so
+  user-managed kwargs are enough. Per-source overrides via
+  `imshow(..., legend={"label": ..., "ticks": ...})`.
 - **Dendrograms use the band scale.** A dendrogram on the left of a
   heatmap uses the heatmap's row band scale for leaf positions. This
   is just `share_y=hm` over a categorical scale — no new mechanism.
@@ -116,9 +123,9 @@ import plotlet as pt
 # Single panel = pt.chart(), the existing recommended surface.
 # Composing charts produces a layout (name TBD — see "Open questions").
 
-# ---- 1. Heatmap + colorbar
+# ---- 1. Heatmap + colorbar (a continuous-source legend)
 hm = pt.chart(); hm.imshow(matrix, cmap="viridis")
-out = hm | pt.colorbar(hm)
+out = hm | pt.legend(hm)
 out.show()
 
 # ---- 2. Heatmap + left dendrogram (shared y)
@@ -131,7 +138,7 @@ out.show()
 hm   = pt.chart();             hm.imshow(matrix)
 top  = pt.chart(share_x=hm);   top.bar(scores)
 tree = pt.chart(share_y=hm);   tree.dendrogram(linkage)
-legend = pt.legend()           # auto-collects from siblings, grouped by chart title
+legend = pt.legend()           # auto-collects from siblings — hm's gradient + top's swatches, grouped by title
 
 out = pt.grid([
     [None, top, None  ],
@@ -184,10 +191,10 @@ a `chart` already wired into the layout.
 ```python
 import plotlet as pt
 
-# ---- 1. Heatmap + colorbar
+# ---- 1. Heatmap + colorbar (a continuous-source legend)
 out = pt.layout(rows=1, cols=2, widths=[1, 0.05])
 hm = out[0, 0]; hm.imshow(matrix, cmap="viridis")
-out.colorbar(hm, at=(0, 1))
+out.legend(hm, at=(0, 1))
 out.show()
 
 # ---- 2. Heatmap + left dendrogram
@@ -243,7 +250,7 @@ familiar.
 
 | example | A: operators | B: grid | winner |
 |---|---|---|---|
-| 1. heatmap + colorbar | `hm \| pt.colorbar(hm)` | `pt.layout(1,2,widths=[1,0.05])` + index | **A** — colorbar self-sizes |
+| 1. heatmap + colorbar | `hm \| pt.legend(hm)` | `pt.layout(1,2,widths=[1,0.05])` + index | **A** — legend self-sizes |
 | 2. heatmap + left tree | `tree \| hm` | layout + `share_y=hm` | **A** — terser |
 | 3. ComplexHeatmap | `pt.grid([[None,top,None],[tree,hm,legend]])` | `pt.layout(2,3,...)` + 4 assignments | **B** slightly — sizes co-located |
 | 4. two heatmaps + 1 tree | `tree \| hm1 \| hm2` | `pt.layout(1,3,...)` + indexing | **A** — composable, hands off cleanly |
@@ -294,29 +301,30 @@ Recommended:
      user-facing `Chart` name. Implementation detail; doesn't change
      the API.
 
-2. **Where do guides (legend, colorbar) live?** *Resolved: support both
-   panel and decorator forms; treat legend and colorbar uniformly.*
+2. **Where do guides live?** *Resolved: one constructor (`legend`),
+   support both panel and decorator forms.*
 
-   Guides are data → glyph mappings (legend: discrete; colorbar:
-   continuous). They get the same placement options:
+   Guides are data → glyph mappings. Geometry — gradient strip
+   (continuous source) vs. swatch list (discrete source) — is decided
+   by the source's color mapping, not by the constructor name. Saying
+   "colorbar" is shorthand for "legend with a continuous source"; it
+   has no separate API. Placement options:
 
    - **Per-chart, inside-frame** — `chart.legend()` overlays the data
-     area (today's default). `chart.colorbar(loc="inside")` allowed
-     too if someone really wants it; not a special-cased forbid.
-   - **Per-chart, in margin** — `chart.legend(loc="outside right")` /
-     `chart.colorbar(loc="right")` reserves space in the chart's own
-     margin. Same `loc=` machinery for both. Future work; not yet
-     built for either.
-   - **Layout-level decorator** — `parent.legend()` / `parent.colorbar(hm)`
-     attaches a guide to a parent chart, auto-sized in reserved
+     area (today's default).
+   - **Per-chart, in margin** — `chart.legend(loc="outside right")`
+     reserves space in the chart's own margin. Future work; not yet
+     built.
+   - **Layout-level decorator** — `parent.legend()` / `parent.legend(hm)`
+     attaches a legend to a parent chart, auto-sized in reserved
      margin. Use when the guide "comes with" a sub-assembly:
 
      ```python
-     x = (A | B); x.legend()        # legend attached to x
-     y = (C | D); y.colorbar(D)     # colorbar attached to y
-     out = x | y                    # each carries its own guide
+     x = (A | B); x.legend()        # legend attached to x (collects from A, B)
+     y = (C | D); y.legend(D)       # gradient legend for D, attached to y
+     out = x | y                    # each carries its own legend
      ```
-   - **Layout-level panel** — `pt.legend()` / `pt.colorbar(hm)` is a
+   - **Layout-level panel** — `pt.legend()` / `pt.legend(hm)` is a
      chart-shaped object you place explicitly:
 
      ```python
@@ -437,15 +445,19 @@ Not a roadmap — just the dependency order:
 
    Grid pair-gaps consider all rows/cols at a boundary (min wins) so
    a joined pair in row 1 still collapses the column gap.
-3. **Legend** — `pt.legend()` panel + `parent.legend()` decorator (sugar
-   over panel). Layout-level legend groups by source chart, using
-   each chart's `title` as section header; `names=` overrides; opt-out
-   via `group_by_chart=False`.
-4. **Colorbar** — `pt.colorbar(chart)` panel + `parent.colorbar(chart)`
-   decorator. Reads cmap+norm from the referenced chart's imshow.
-5. **Cookbook recipes:** `heatmap_with_tree`, ComplexHeatmap-style.
+3. **Legend (covers colorbar)** — `pt.legend()` panel +
+   `parent.legend()` decorator (sugar over panel). One constructor
+   handles both discrete swatches (today's `chart.legend()` already
+   harvests these via `spec.legend_swatch`) and continuous gradients
+   (a new `spec.legend_gradient` hook on `ArtistSpec` that imshow
+   implements). Geometry is chosen per source. Layout-level legend
+   groups by source chart, using each chart's `title` as section
+   header; `names=` overrides; opt-out via `group_by_chart=False`.
+   Per-source override via `imshow(..., legend={"label": ...,
+   "ticks": ...})`.
+4. **Cookbook recipes:** `heatmap_with_tree`, ComplexHeatmap-style.
 
-Items 3–5 are independently mergeable once 1–2 are in. The legacy
+Item 4 lands once item 3 is in. The legacy
 `pt.figure()` / `pt.Figure` chained API stays as-is — `Chart` is the
 surface that gets the subplots treatment; `Figure` remains the
 internal plumbing it already is.
