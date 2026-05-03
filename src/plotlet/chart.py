@@ -55,6 +55,8 @@ class Chart:
         # and bypass the normal frame+artists render path. See `legend.py`.
         self._legend_kind: bool = False
         self._legend_sources: list[Chart] = []
+        self._legend_names: dict = {}
+        self._legend_group_by_chart: bool = True
         if title  is not None: self._fig.title(title)
         if xlabel is not None: self._fig.xlabel(xlabel)
         if ylabel is not None: self._fig.ylabel(ylabel)
@@ -82,6 +84,8 @@ class Chart:
         p._share_y = None
         p._legend_kind = False
         p._legend_sources = []
+        p._legend_names = {}
+        p._legend_group_by_chart = True
         return p
 
     @property
@@ -93,6 +97,51 @@ class Chart:
 
     def __truediv__(self, other: "Chart") -> "Chart":
         return _compose(self, other, "v")
+
+    def legend(self, *args, names: dict | None = None,
+               group_by_chart: bool | None = None,
+               width: int | None = None, height: int | None = None) -> "Chart":
+        """Toggle the in-frame overlay (leaf) or attach a layout-level legend (parent).
+
+        On a leaf, this is the existing `chart.legend([bool])` toggle for
+        the in-frame overlay — args must be a single optional bool.
+
+        On a parent, this is sugar for the panel form: `parent.legend(*sources)`
+        is equivalent to `parent | pt.legend(*sources)` (or `parent / ...` for
+        a vertical parent), with `names=` / `group_by_chart=` / `width=` /
+        `height=` forwarded to the constructor. Grids raise — place
+        `pt.legend(...)` in an explicit cell instead. Returns `self` for
+        chaining; remember that further composition (`|` / `/`) appends
+        children *after* the legend, so decorate last."""
+        if self._is_parent:
+            if self._layout_kind == "grid":
+                raise ValueError(
+                    "parent.legend() doesn't apply to grid layouts; "
+                    "place pt.legend() in a grid cell explicitly."
+                )
+            from .legend import legend as _make_legend
+            gbc = True if group_by_chart is None else group_by_chart
+            leg = _make_legend(*args, names=names, group_by_chart=gbc,
+                               width=width, height=height)
+            self._children.append(leg)
+            leg._parent = self
+            return self
+        # Leaf: today's in-frame overlay toggle. Reject parent-only kwargs.
+        if (names is not None or group_by_chart is not None
+                or width is not None or height is not None):
+            raise TypeError(
+                "names=, group_by_chart=, width=, height= are layout-level "
+                "options for parent.legend(); on a leaf, chart.legend() takes "
+                "an optional bool. To attach a layout-level legend to a single "
+                "chart, compose first: (chart | pt.legend()).show()."
+            )
+        if args and not isinstance(args[0], bool):
+            raise TypeError(
+                f"chart.legend() (leaf in-frame overlay) takes an optional bool; "
+                f"got {type(args[0]).__name__}."
+            )
+        self._fig.legend(*args)
+        return self
 
     # ---------- recording (leaf only) ----------
 
