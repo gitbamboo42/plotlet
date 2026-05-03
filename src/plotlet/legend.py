@@ -20,20 +20,25 @@ from .core import Figure
 from .chart import Chart
 from .colormaps import colormap
 from .registry import RenderContext, get_artist
-from .font import _text_path
+from .font import _measure_text, _text_path
 from .scales import _LinearScale, _fmt_tick
 from ._spec import _D, _DASH, _FONTSPEC, _FRAME, _LEGSPEC
 
-_DEFAULT_W = 100
-_DEFAULT_H = 300
 _FONT = _FONTSPEC["family"]
 _SPINE = _FRAME["color"]
 _SPW = _FRAME["width"]
 _TICK_LEN = _FRAME["tick_length"]
 _TICK_PAD = _FRAME["tick_pad"]
 _GRAD_W = _LEGSPEC["gradient_width"]
+_GRAD_H = _LEGSPEC["gradient_height"]
 _GRAD_N = _LEGSPEC["gradient_n_stops"]
 _SECTION_GAP = _LEGSPEC["section_gap"]
+
+
+def _adaptive_n_ticks(strip_h: float) -> int:
+    """Cap tick count for short strips so labels (~11 px tall each) don't
+    crowd. Mirrors the axis-tick-density rule in core._render_inner."""
+    return max(2, min(5, int(strip_h // 18)))
 
 
 def legend(*sources: Chart, names: dict | None = None,
@@ -62,7 +67,10 @@ def legend(*sources: Chart, names: dict | None = None,
                 "pt.legend() sources must be leaf charts, not composed parents."
             )
     leaf = Chart.__new__(Chart)
-    leaf._fig = Figure(width=width or _DEFAULT_W, height=height or _DEFAULT_H)
+    # Width/height start as placeholders; `_size_legends` overrides them
+    # from harvested content during render unless the user specified.
+    leaf._fig = Figure(width=width if width is not None else 1,
+                       height=height if height is not None else 1)
     leaf._data = None
     leaf._parent = None
     leaf._layout_kind = None
@@ -73,6 +81,8 @@ def legend(*sources: Chart, names: dict | None = None,
     leaf._legend_sources = list(sources)
     leaf._legend_names = dict(names) if names else {}
     leaf._legend_group_by_chart = group_by_chart
+    leaf._legend_user_width = width
+    leaf._legend_user_height = height
     return leaf
 
 
@@ -141,10 +151,10 @@ def _gradient_stops(cmap_name: str, n: int) -> str:
     return "".join(stops)
 
 
-def _render_continuous_entry(entry: dict, x: float, y: float, h: float, gid: str) -> str:
-    """One continuous entry: optional label above, gradient strip with
-    right-side ticks below. Labels and ticks scale with the entry's
-    allocated height; sizing-from-content lands in commit 5."""
+def _render_continuous_entry(entry: dict, x: float, y: float, gid: str) -> str:
+    """One continuous entry: optional label above, then a gradient strip
+    of fixed height (`legend.gradient_height`) with right-side ticks.
+    Tick count adapts to strip height so labels don't crowd."""
     parts = [f'<defs><linearGradient id="{gid}" x1="0" y1="0" x2="0" y2="1">'
              f'{_gradient_stops(entry["cmap"], _GRAD_N)}'
              f'</linearGradient></defs>']
@@ -157,14 +167,15 @@ def _render_continuous_entry(entry: dict, x: float, y: float, h: float, gid: str
                                 tick_size, anchor="start"))
 
     strip_y = y + label_h
-    strip_h = max(0.0, h - label_h)
+    strip_h = float(_GRAD_H)
     parts.append(f'<rect x="{x:.2f}" y="{strip_y:.2f}" width="{_GRAD_W}" '
                  f'height="{strip_h:.2f}" fill="url(#{gid})" '
                  f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
 
     vmin, vmax = entry["vmin"], entry["vmax"]
     scale = _LinearScale(vmin, vmax, strip_y + strip_h, strip_y)
-    ticks = list(entry["ticks"]) if entry.get("ticks") is not None else scale.ticks(5)
+    ticks = (list(entry["ticks"]) if entry.get("ticks") is not None
+             else scale.ticks(_adaptive_n_ticks(strip_h)))
 
     tx0 = x + _GRAD_W
     tx1 = tx0 + _TICK_LEN
@@ -179,6 +190,78 @@ def _render_continuous_entry(entry: dict, x: float, y: float, h: float, gid: str
     return "".join(parts)
 
 
+def _legend_content_size(leaf: Chart, sources: list[Chart],
+                         states: dict[int, dict]) -> tuple[float, float]:
+    """Compute the legend leaf's content-driven (width, height).
+
+    Width = max content width across sections (gradient column +
+    ticks/labels for continuous, swatch + label for discrete, plus
+    headers and any per-entry above-strip label) + side padding.
+
+    Height = sum of section heights + inter-section gaps + top/bottom
+    padding. Strip height is fixed at `legend.gradient_height` per
+    continuous entry — independent of source plot height."""
+    names = leaf._legend_names or {}
+    group_by_chart = leaf._legend_group_by_chart
+    groups = _build_groups(sources, states, names, group_by_chart)
+    if not groups:
+        return 1.0, 1.0
+
+    pad_x = _LEGSPEC["pad_x"]
+    pad_y = _LEGSPEC["pad_y"]
+    row_h = _LEGSPEC["row_height"]
+    sw = _LEGSPEC["swatch_width"]
+    tick_size = _FONTSPEC["tick_size"]
+    label_size = _FONTSPEC["label_size"]
+    header_h = label_size + 4
+    n_ticks = _adaptive_n_ticks(_GRAD_H)
+
+    max_w = 0.0
+    total_h = 2 * pad_y
+    for gi, g in enumerate(groups):
+        if g["header"]:
+            max_w = max(max_w, _measure_text(g["header"], label_size))
+            total_h += header_h
+        for entry in g["cont"]:
+            label = entry.get("label")
+            if label:
+                max_w = max(max_w, _measure_text(label, tick_size))
+                total_h += tick_size + 4
+            ticks = (list(entry["ticks"]) if entry.get("ticks") is not None
+                     else _LinearScale(entry["vmin"], entry["vmax"], 0, 1).ticks(n_ticks))
+            max_tw = max((_measure_text(_fmt_tick(t), tick_size) for t in ticks), default=0.0)
+            strip_col_w = _GRAD_W + _TICK_LEN + _TICK_PAD + max_tw
+            max_w = max(max_w, strip_col_w)
+            total_h += _GRAD_H
+        if g["cont"] and g["disc"]:
+            total_h += _SECTION_GAP
+        for a in g["disc"]:
+            disc_w = sw + 6 + _measure_text(a["opts"]["label"], tick_size)
+            max_w = max(max_w, disc_w)
+        total_h += len(g["disc"]) * row_h
+        if gi < len(groups) - 1:
+            total_h += _SECTION_GAP
+
+    return max_w + 2 * pad_x, total_h
+
+
+def _size_legends(root: Chart, states: dict[int, dict]) -> None:
+    """Pre-render pass: override each legend leaf's intrinsic _fig size
+    with its content-driven size, except where the user passed explicit
+    `width=` / `height=` to `pt.legend(...)`."""
+    from .layout import _iter_leaves  # avoid circular import at module load
+    data_leaves = [l for l in _iter_leaves(root) if not l._legend_kind]
+    for leaf in _iter_leaves(root):
+        if not leaf._legend_kind:
+            continue
+        sources = leaf._legend_sources or data_leaves
+        cw, ch = _legend_content_size(leaf, sources, states)
+        if leaf._legend_user_width is None:
+            leaf._fig._width = max(1, int(round(cw)))
+        if leaf._legend_user_height is None:
+            leaf._fig._height = max(1, int(round(ch)))
+
+
 def _render_legend(leaf: Chart, w: float, h: float,
                    states: dict[int, dict],
                    data_leaves: list[Chart],
@@ -189,7 +272,11 @@ def _render_legend(leaf: Chart, w: float, h: float,
     `pt.legend(a, b)` narrows to those. With grouping on (the default),
     each source becomes a section with its `title` as header; continuous
     entries (gradient strips) stack above discrete entries (swatch +
-    label rows) within each section."""
+    label rows) within each section.
+
+    Strip height is fixed at `legend.gradient_height` (independent of
+    `h`); when the parent allocates more vertical space than the content
+    needs, the content is top-aligned and the surplus sits below."""
     sources = leaf._legend_sources or data_leaves
     names = getattr(leaf, "_legend_names", {}) or {}
     group_by_chart = getattr(leaf, "_legend_group_by_chart", True)
@@ -206,22 +293,6 @@ def _render_legend(leaf: Chart, w: float, h: float,
     label_size = _FONTSPEC["label_size"]
     header_h = label_size + 4
 
-    # Fixed-height contributions: section headers, discrete rows, and
-    # the gap between cont/disc within a section. Continuous entries
-    # then split whatever vertical space remains, equally.
-    fixed_h = 0.0
-    for g in groups:
-        if g["header"]:
-            fixed_h += header_h
-        fixed_h += len(g["disc"]) * row_h
-        if g["cont"] and g["disc"]:
-            fixed_h += _SECTION_GAP
-    fixed_h += _SECTION_GAP * max(0, len(groups) - 1)
-
-    n_cont_total = sum(len(g["cont"]) for g in groups)
-    avail_for_cont = max(0.0, h - 2 * pad_y - fixed_h)
-    per_cont_h = avail_for_cont / n_cont_total if n_cont_total else 0
-
     parts = []
     cy = pad_y
     cont_global_idx = 0
@@ -233,9 +304,9 @@ def _render_legend(leaf: Chart, w: float, h: float,
         for entry in g["cont"]:
             gid = f"plotlet-grad-{legend_idx}-{cont_global_idx}"
             cont_global_idx += 1
-            parts.append(_render_continuous_entry(
-                entry, pad_x, cy, per_cont_h, gid))
-            cy += per_cont_h
+            entry_label_h = (tick_size + 4) if entry.get("label") else 0
+            parts.append(_render_continuous_entry(entry, pad_x, cy, gid))
+            cy += entry_label_h + _GRAD_H
         if g["cont"] and g["disc"]:
             cy += _SECTION_GAP
         for i, a in enumerate(g["disc"]):

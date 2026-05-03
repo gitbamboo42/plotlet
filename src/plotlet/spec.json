@@ -79,6 +79,7 @@
     "opacity": 0.92,
     "border_offset": 6,
     "gradient_width": 14,
+    "gradient_height": 60,
     "gradient_n_stops": 32,
     "section_gap": 8
   },
