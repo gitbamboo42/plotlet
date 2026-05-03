@@ -44,7 +44,9 @@ plotlet/
 │       ├── registry.py          # ArtistSpec + add_artist — the extension API
 │       ├── builtin_artists.py   # registers the 11 built-in artists at import
 │       ├── core.py              # Figure class + _render orchestrator
-│       ├── chart.py             # Chart facade for tabular data
+│       ├── chart.py             # Chart facade (leaf + parent + composition)
+│       ├── layout.py            # subplot rect computation + multi-panel SVG assembly
+│       ├── legend.py            # layout-level legend (pt.legend / parent.legend)
 │       ├── colormaps.py         # 180 vendored matplotlib colormaps (continuous, value→RGB)
 │       ├── _cm_data.py          # generated LUT data — do not edit by hand
 │       ├── _png.py              # tiny stdlib-only PNG encoder for imshow's large-image path
@@ -93,7 +95,7 @@ Then `to_svg()` does five phases:
 2. **Domain compute** — `_scan_domain` walks the artists and calls each one's `spec.xdomain(a)` / `spec.ydomain(a)` to gather autoscale values. A handful of cases still leak through (categorical x for bars, hist pre-binning, `force_zero` for hist/bar).
 3. **Scale build** — `_LinearScale`, `_LogScale`, `_BandScale` (bar charts). Ticks come from the standard 1/2/5 × 10ⁿ "nice numbers" algorithm.
 4. **Render artists** — three layers (`background` → `data` → `foreground`); each artist's `spec.draw(a, ctx)` emits SVG. `RenderContext` carries the scales, dimensions, color, and defaults.
-5. **Frame, ticks, labels, legend** — spines, tick lines, text-as-paths labels, then the legend box. Custom artists can supply `spec.legend_swatch` for the legend marker.
+5. **Frame, ticks, labels, legend** — spines, tick lines, text-as-paths labels, then the in-frame legend box (today's `chart.legend()` overlay). Custom artists can supply `spec.legend_swatch` (discrete entries) and/or `spec.legend_gradient` (continuous color mapping → gradient strip in the layout-level legend). Layout-level multi-panel rendering in `layout.py` does a separate two-pass walk (data leaves first to assign `_color`, then legend leaves harvest those colors), with `legend.py` owning the legend renderer.
 
 ### Adding a new plot type
 
@@ -138,7 +140,7 @@ When suggesting changes or adding features:
 - **Visual constants live in `spec.json`.** If you find yourself typing a number into render code, ask whether it should be there instead.
 - **Test with baselines.** Core changes get added to `tests/test_chart.py` with a committed SVG; cookbook examples are reference, not regression-tested.
 - **Mention matplotlib quirks that aren't replicated** and why, when relevant.
-- **Layout / multi-panel code lives in its own module** (`layout.py` / `panels.py` when the time comes), not in `core.py`. The "small core readable in an afternoon" property is preserved by keeping `core.py` / `artists.py` / `registry.py` / `scales.py` unchanged in scope — anyone who wants the minimal mental model reads just those.
+- **Layout / multi-panel code lives in its own module** (`layout.py` for rect computation + multi-panel assembly; `legend.py` for the layout-level legend), not in `core.py`. The "small core readable in an afternoon" property is preserved by keeping `core.py` / `artists.py` / `registry.py` / `scales.py` unchanged in scope — anyone who wants the minimal mental model reads just those.
 
 The actual mechanics of adding an artist (`ArtistSpec`, `add_artist`, `RenderContext`) are in [docs/EXTENDING.md](docs/EXTENDING.md).
 
