@@ -6,20 +6,34 @@ instead of the standard frame+artists pipeline. Geometry (gradient strip
 vs. swatch list) is decided at render time from the source's color
 mapping, not by the constructor name. See `docs/SUBPLOTS.md`.
 
-This module currently ships the constructor and the discrete swatch-list
-render. The continuous gradient strip lands in the next commit.
+Two render paths share one panel:
+  - Continuous: each source artist's `spec.legend_gradient` returns a
+    {cmap, vmin, vmax, label, ticks} descriptor; the legend draws a
+    vertical gradient strip with ticks (vmax at top).
+  - Discrete: each labeled artist's `spec.legend_swatch` paints its own
+    swatch (today's behavior, factored out of the in-frame overlay).
+Mixed sources stack continuous-first, discrete-second.
 """
 from __future__ import annotations
 
 from .core import Figure
 from .chart import Chart
+from .colormaps import colormap
 from .registry import RenderContext, get_artist
 from .font import _text_path
-from ._spec import _D, _DASH, _FONTSPEC, _LEGSPEC
+from .scales import _LinearScale, _fmt_tick
+from ._spec import _D, _DASH, _FONTSPEC, _FRAME, _LEGSPEC
 
 _DEFAULT_W = 100
 _DEFAULT_H = 300
 _FONT = _FONTSPEC["family"]
+_SPINE = _FRAME["color"]
+_SPW = _FRAME["width"]
+_TICK_LEN = _FRAME["tick_length"]
+_TICK_PAD = _FRAME["tick_pad"]
+_GRAD_W = _LEGSPEC["gradient_width"]
+_GRAD_N = _LEGSPEC["gradient_n_stops"]
+_SECTION_GAP = _LEGSPEC["section_gap"]
 
 
 def legend(*sources: Chart, width: int | None = None,
@@ -75,29 +89,119 @@ def _harvest_discrete(sources: list[Chart], states: dict[int, dict]) -> list[dic
     return out
 
 
+def _harvest_continuous(sources: list[Chart], states: dict[int, dict]) -> list[dict]:
+    """Collect continuous-mapping descriptors across `sources`. Each
+    artist with a `spec.legend_gradient` is asked to describe its mapping;
+    a None return means "no continuous entry to show" (e.g. categorical
+    imshow once that lands)."""
+    out = []
+    for src in sources:
+        st = states.get(id(src))
+        if st is None:
+            continue
+        for a in st["artists"]:
+            spec = get_artist(a["type"])
+            if spec is None or spec.legend_gradient is None:
+                continue
+            desc = spec.legend_gradient(a)
+            if desc is not None:
+                out.append(desc)
+    return out
+
+
+def _gradient_stops(cmap_name: str, n: int) -> str:
+    """SVG <stop> list for a vertical top→bottom strip running vmax→vmin."""
+    cm = colormap(cmap_name)
+    stops = []
+    for i in range(n + 1):
+        offset = i / n
+        # offset 0 = top of strip = vmax color; offset 1 = bottom = vmin
+        r, g, b = cm(1.0 - offset)
+        stops.append(f'<stop offset="{offset*100:.2f}%" '
+                     f'stop-color="rgb({r},{g},{b})"/>')
+    return "".join(stops)
+
+
+def _render_continuous_entry(entry: dict, x: float, y: float, h: float, gid: str) -> str:
+    """One continuous entry: optional label above, gradient strip with
+    right-side ticks below. Labels and ticks scale with the entry's
+    allocated height; sizing-from-content lands in commit 5."""
+    parts = [f'<defs><linearGradient id="{gid}" x1="0" y1="0" x2="0" y2="1">'
+             f'{_gradient_stops(entry["cmap"], _GRAD_N)}'
+             f'</linearGradient></defs>']
+
+    tick_size = _FONTSPEC["tick_size"]
+    label_text = entry.get("label")
+    label_h = tick_size + 4 if label_text else 0
+    if label_text:
+        parts.append(_text_path(label_text, x, y + tick_size,
+                                tick_size, anchor="start"))
+
+    strip_y = y + label_h
+    strip_h = max(0.0, h - label_h)
+    parts.append(f'<rect x="{x:.2f}" y="{strip_y:.2f}" width="{_GRAD_W}" '
+                 f'height="{strip_h:.2f}" fill="url(#{gid})" '
+                 f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
+
+    vmin, vmax = entry["vmin"], entry["vmax"]
+    scale = _LinearScale(vmin, vmax, strip_y + strip_h, strip_y)
+    ticks = list(entry["ticks"]) if entry.get("ticks") is not None else scale.ticks(5)
+
+    tx0 = x + _GRAD_W
+    tx1 = tx0 + _TICK_LEN
+    label_x = tx1 + _TICK_PAD
+    for t in ticks:
+        ty = scale(t)
+        parts.append(f'<line x1="{tx0}" x2="{tx1}" '
+                     f'y1="{ty:.2f}" y2="{ty:.2f}" '
+                     f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
+        parts.append(_text_path(_fmt_tick(t), label_x, ty + 4,
+                                tick_size, anchor="start"))
+    return "".join(parts)
+
+
 def _render_legend(leaf: Chart, w: float, h: float,
                    states: dict[int, dict],
-                   data_leaves: list[Chart]) -> str:
+                   data_leaves: list[Chart],
+                   legend_idx: int = 0) -> str:
     """Render the legend leaf's content into its allocated rect.
 
     Sources default to all data leaves in the layout; explicit
-    `pt.legend(a, b)` narrows to those. Currently emits the discrete
-    swatch list only; gradient strips for continuous-color sources land
-    in the next commit."""
+    `pt.legend(a, b)` narrows to those. Continuous entries (gradient
+    strips) stack above discrete entries (swatch + label rows)."""
     sources = leaf._legend_sources or data_leaves
-    entries = _harvest_discrete(sources, states)
-    if not entries:
+    cont_entries = _harvest_continuous(sources, states)
+    disc_entries = _harvest_discrete(sources, states)
+    if not cont_entries and not disc_entries:
         return ''
 
-    row_h = _LEGSPEC["row_height"]
     pad_x = _LEGSPEC["pad_x"]
     pad_y = _LEGSPEC["pad_y"]
+    row_h = _LEGSPEC["row_height"]
     sw    = _LEGSPEC["swatch_width"]
     tick_size = _FONTSPEC["tick_size"]
 
+    n_cont = len(cont_entries)
+    n_disc = len(disc_entries)
+    # Discrete block sized by its row count; continuous block divides
+    # the rest of the height equally across continuous entries.
+    disc_h = n_disc * row_h
+    section_gap = _SECTION_GAP if n_cont and n_disc else 0
+    cont_total_h = max(0.0, h - 2 * pad_y - disc_h - section_gap)
+    per_cont_h = cont_total_h / n_cont if n_cont else 0
+
     parts = []
-    for i, a in enumerate(entries):
-        ry = pad_y + i * row_h + row_h / 2
+    cy = pad_y
+    for i, entry in enumerate(cont_entries):
+        gid = f"plotlet-grad-{legend_idx}-{i}"
+        parts.append(_render_continuous_entry(
+            entry, pad_x, cy, per_cont_h, gid))
+        cy += per_cont_h
+    if n_cont and n_disc:
+        cy += section_gap
+
+    for i, a in enumerate(disc_entries):
+        ry = cy + i * row_h + row_h / 2
         spec = get_artist(a["type"])
         if spec is not None and spec.legend_swatch is not None:
             parts.append(spec.legend_swatch(a, _swatch_ctx(a), pad_x, ry))

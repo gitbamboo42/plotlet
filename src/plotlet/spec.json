@@ -77,7 +77,10 @@
     "swatch_width": 22,
     "background": "#ffffff",
     "opacity": 0.92,
-    "border_offset": 6
+    "border_offset": 6,
+    "gradient_width": 14,
+    "gradient_n_stops": 32,
+    "section_gap": 8
   },
   "layout": {
     "gap": 20,
