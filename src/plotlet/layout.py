@@ -489,6 +489,10 @@ def _effective_margin(M: dict, po: _PanelOpts, w: float, h: float) -> dict:
 
 def _render_layout(root: Chart) -> str:
     panel_opts, states = _build_panel_opts(root)
+    # Override each legend leaf's intrinsic _fig size with its
+    # content-driven size before measure runs.
+    from .legend import _size_legends
+    _size_legends(root, states)
     W, H = _measure(root)
     W, H = int(round(W)), int(round(H))
     placements: list = []
