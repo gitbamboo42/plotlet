@@ -418,9 +418,13 @@ def _propagate_grid_joins(node: Chart, out: dict[int, _PanelOpts]) -> None:
     if node._layout_kind == "grid":
         rows, cols = node._grid_rows, node._grid_cols
         children = node._children
+        # Legend leaves are excluded from margin propagation — they have
+        # their own internal margin model and aren't in `out` at all.
+        def _data_cells(idxs):
+            return [children[i] for i in idxs
+                    if children[i] is not None and not children[i]._legend_kind]
         for c in range(cols):
-            cells = [children[r * cols + c] for r in range(rows)
-                     if children[r * cols + c] is not None]
+            cells = _data_cells([r * cols + c for r in range(rows)])
             if not cells: continue
             any_l = any(out[id(cell)].hide_left  for cell in cells)
             any_r = any(out[id(cell)].hide_right for cell in cells)
@@ -428,8 +432,7 @@ def _propagate_grid_joins(node: Chart, out: dict[int, _PanelOpts]) -> None:
                 if any_l: out[id(cell)].hide_left  = True
                 if any_r: out[id(cell)].hide_right = True
         for r in range(rows):
-            cells = [children[r * cols + c] for c in range(cols)
-                     if children[r * cols + c] is not None]
+            cells = _data_cells([r * cols + c for c in range(cols)])
             if not cells: continue
             any_t = any(out[id(cell)].hide_top    for cell in cells)
             any_b = any(out[id(cell)].hide_bottom for cell in cells)
@@ -442,8 +445,11 @@ def _propagate_grid_joins(node: Chart, out: dict[int, _PanelOpts]) -> None:
 
 
 def _build_panel_opts(root: Chart) -> tuple[dict[int, _PanelOpts], dict[int, dict]]:
-    """One pass over the tree that produces (panel_opts, replayed states)."""
-    leaves = list(_iter_leaves(root))
+    """One pass over the tree that produces (panel_opts, replayed states).
+
+    Legend leaves are skipped — they have no x/y axes, no artists, and
+    render through their own pipeline (see `legend.py`)."""
+    leaves = [l for l in _iter_leaves(root) if not l._legend_kind]
     states = {id(l): l._fig._replay() for l in leaves}
     x_desc, y_desc = _build_axis_descriptors(leaves, states)
     panel_opts = {
@@ -479,6 +485,12 @@ def _render_layout(root: Chart) -> str:
         f'style="background:#fff">'
     ]
     for leaf, (x, y, w, h) in placements:
+        if leaf._legend_kind:
+            from .legend import _render_legend
+            parts.append(f'<g transform="translate({x:.2f},{y:.2f})">')
+            parts.append(_render_legend(leaf, w, h))
+            parts.append('</g>')
+            continue
         po = panel_opts[id(leaf)]
         M_eff = _effective_margin(leaf._fig._margin, po, w, h)
         iw = w - M_eff["left"] - M_eff["right"]

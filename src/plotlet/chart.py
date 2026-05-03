@@ -51,6 +51,10 @@ class Chart:
         # Step 2 will plumb these through to scale-build.
         self._share_x: Chart | None = share_x
         self._share_y: Chart | None = share_y
+        # Legend-leaf flag — leaves built by `pt.legend(...)` set this to True
+        # and bypass the normal frame+artists render path. See `legend.py`.
+        self._legend_kind: bool = False
+        self._legend_sources: list[Chart] = []
         if title  is not None: self._fig.title(title)
         if xlabel is not None: self._fig.xlabel(xlabel)
         if ylabel is not None: self._fig.ylabel(ylabel)
@@ -76,6 +80,8 @@ class Chart:
         p._children = list(children)
         p._share_x = None
         p._share_y = None
+        p._legend_kind = False
+        p._legend_sources = []
         return p
 
     @property
@@ -206,6 +212,9 @@ class Chart:
         if self._is_parent:
             from .layout import _render_layout
             return _render_layout(self)
+        if self._legend_kind:
+            from .legend import _render_standalone_legend
+            return _render_standalone_legend(self)
         return self._fig.to_svg()
 
     def to_html(self, full_page: bool = False) -> str:
@@ -221,7 +230,7 @@ class Chart:
 
     def show(self):
         self._require_render_root()
-        if self._is_parent:
+        if self._is_parent or self._legend_kind:
             svg = self.to_svg()
             try:
                 from IPython.display import HTML, display
