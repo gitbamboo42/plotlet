@@ -45,7 +45,9 @@ pip install plotlet
 
 Pass at construction (`pt.chart(data, title=..., grid=True, ...)`) or as chained setters (`c.title(...)`, etc.):
 
-`title`, `xlabel`, `ylabel`, `xlim=(a, b)`, `ylim=(a, b)`, `xscale="log"|"linear"`, `yscale=...`, `grid=True/False`, `legend=True/False`, `width`, `height`
+`title`, `xlabel`, `ylabel`, `xlim=(a, b)`, `ylim=(a, b)`, `xscale="linear"|"log"|"category"` (with optional `order=[...]` via the chained `c.xscale(...)`), `yscale=...`, `grid=True/False`, `legend=True/False`, `width`, `height`
+
+String-valued data on either axis (`scatter(["a","b","c"], ...)`, `bar`, …) auto-switches to a categorical scale, alphabetical by default.
 
 ### Mark methods
 

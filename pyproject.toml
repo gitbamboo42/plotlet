@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "plotlet"
-version = "0.1.1"
+version = "0.1.2"
 description = "Small, hackable Python library that emits matplotlib-style SVG plots."
 readme = "README.md"
 license = "MIT"

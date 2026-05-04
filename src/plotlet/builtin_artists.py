@@ -105,15 +105,15 @@ add_artist(ArtistSpec(
 ))
 
 
-# --- bar (categorical x) ----------------------------------------------------
-# Bars are special: they drive the categorical x-axis, which is handled
-# separately in _render. We still register a spec so the dispatch is uniform.
+# --- bar --------------------------------------------------------------------
+# Bar contributes its categories on x; the descriptor's auto-categorical
+# detection picks them up the same way it would for any string-valued x.
 
 add_artist(ArtistSpec(
     name="bar",
     record=lambda args, kw: {"type": "bar", "cats": _to_pylist(args[0]),
                               "vals": _to_pylist(args[1]), "opts": kw},
-    xdomain=lambda a: None,  # categorical, handled by has_bar branch
+    xdomain=lambda a: a["cats"],
     ydomain=_vals_of,
     draw=lambda a, ctx: _artist_bar(a, ctx.x_scale, ctx.y_scale, ctx.color),
     legend_swatch=_bar_legend_swatch,

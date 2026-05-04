@@ -38,7 +38,7 @@ plotlet/
 │       ├── __init__.py          # public API
 │       ├── _spec.py             # loads spec.json
 │       ├── colors.py
-│       ├── scales.py            # _LinearScale, _LogScale, _BandScale, nice ticks
+│       ├── scales.py            # _LinearScale, _LogScale, _CategoryScale, nice ticks
 │       ├── font.py              # _measure_text, _text_path (DejaVu Sans)
 │       ├── artists.py           # SVG-emitting helpers for the built-in plot types
 │       ├── registry.py          # ArtistSpec + add_artist — the extension API
@@ -92,8 +92,8 @@ def __getattr__(self, name):
 Then `to_svg()` does five phases:
 
 1. **Replay** — walks `_calls` to build a state dict (`artists`, `title`, `xlim`, …). Each artist call goes through its registered `spec.record(args, kwargs)`.
-2. **Domain compute** — `_scan_domain` walks the artists and calls each one's `spec.xdomain(a)` / `spec.ydomain(a)` to gather autoscale values. A handful of cases still leak through (categorical x for bars, hist pre-binning, `force_zero` for hist/bar).
-3. **Scale build** — `_LinearScale`, `_LogScale`, `_BandScale` (bar charts). Ticks come from the standard 1/2/5 × 10ⁿ "nice numbers" algorithm.
+2. **Domain compute** — `_scan_domain` walks the artists and calls each one's `spec.xdomain(a)` / `spec.ydomain(a)` to gather autoscale values. Each axis first asks `_is_categorical_axis`: if any artist's `xdomain`/`ydomain` returns a string, the axis is categorical and we collect alphabetical unique values via `_collect_categories` instead of a numeric scan. Two remaining wrinkles: hist pre-binning, and `force_zero` for hist/bar so numeric y anchors at zero.
+3. **Scale build** — `_LinearScale`, `_LogScale`, `_CategoryScale`. The category scale fires whenever the axis is categorical (auto-detected from string data, or via explicit `xscale="category"` / `yscale="category"`); `order=[...]` picks an explicit layout, alphabetical otherwise. Ticks come from the standard 1/2/5 × 10ⁿ "nice numbers" algorithm.
 4. **Render artists** — three layers (`background` → `data` → `foreground`); each artist's `spec.draw(a, ctx)` emits SVG. `RenderContext` carries the scales, dimensions, color, and defaults.
 5. **Frame, ticks, labels, legend** — spines, tick lines, text-as-paths labels, then the in-frame legend box (today's `chart.legend()` overlay). Custom artists can supply `spec.legend_swatch` (discrete entries) and/or `spec.legend_gradient` (continuous color mapping → gradient strip in the layout-level legend). Layout-level multi-panel rendering in `layout.py` does a separate two-pass walk (data leaves first to assign `_color`, then legend leaves harvest those colors), with `legend.py` owning the legend renderer.
 

@@ -114,7 +114,7 @@ stay short:
 
 | Field | Type | Notes |
 |---|---|---|
-| `x_scale`, `y_scale` | callable | `scale(value) -> pixel`. For bar charts `x_scale` is a `_BandScale` with `.bandwidth`. |
+| `x_scale`, `y_scale` | callable | `scale(value) -> pixel`. On a categorical axis (bar, or `xscale="category"`/`yscale="category"`) the scale is a `_CategoryScale` returning the band *center*, with `.bandwidth` available — bars subtract `bandwidth/2` for the rect's left edge. |
 | `iw`, `ih` | float | Inner figure width and height in pixels (after margins). |
 | `color` | `str \| None` | The resolved color for this artist. `None` if `uses_color_cycle=False` *and* no `default_color` was set (e.g. `imshow`, which uses a colormap). |
 | `defaults` | dict | The `spec.json` defaults — `linewidth`, `markersize`, `scatter_s`, `refspan_alpha`, etc. Use these instead of hardcoded numbers. |
@@ -128,8 +128,8 @@ Whatever you return from `record(args, kwargs)` ends up in `Figure._calls`
 and is passed to `xdomain`, `ydomain`, and `draw` as `a`. Two conventions:
 
 - **Always set `"type"` to your artist name.** The render layer uses it for
-  the registry lookup and a few special-cases (categorical x for bars,
-  histogram pre-binning).
+  the registry lookup and a couple of small special-cases (`force_zero`
+  for bar/hist y-axes, histogram pre-binning).
 - **Always set `"opts"` to the kwargs dict.** Color resolution, label
   collection (for the legend), `linestyle`, `linewidth`, `alpha`, `marker`,
   and the rest of plotlet's matplotlib-flavored kwargs all live there.

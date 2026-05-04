@@ -111,7 +111,7 @@ def _artist_bar(a, xs_, ys_, col):
     y0 = ys_(0)
     alpha = opts.get("alpha", _D["bar_alpha"])
     for c, v in zip(a["cats"], a["vals"]):
-        x = xs_(c)
+        x = xs_(c) - bw / 2
         y = ys_(v)
         out.append(f'<rect x="{x:.2f}" y="{min(y0, y):.2f}" width="{bw:.2f}" '
                    f'height="{abs(y - y0):.2f}" fill="{col}" opacity="{alpha}"/>')

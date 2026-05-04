@@ -107,9 +107,9 @@ candidate to evaluate them:
   mechanism**, color isn't position-critical the way axes are, so
   user-managed kwargs are enough. Per-source overrides via
   `imshow(..., legend={"label": ..., "ticks": ...})`.
-- **Dendrograms use the band scale.** A dendrogram on the left of a
-  heatmap uses the heatmap's row band scale for leaf positions. This
-  is just `share_y=hm` over a categorical scale — no new mechanism.
+- **Dendrograms use the category scale.** A dendrogram on the left of
+  a heatmap uses the heatmap's row category scale for leaf positions.
+  This is just `share_y=hm` over a categorical scale — no new mechanism.
 
 What's left to decide: how panels are **constructed** (free-standing or
 figure-first) and how they're **arranged** (operator algebra or grid
@@ -431,12 +431,12 @@ Not a roadmap — just the dependency order:
      80)` for the side-panel slot in `hm | pt.colorbar(hm)` works
      without explicit `pt.grid(widths=...)` because `_allocate` reads
      children's measured sizes as ratios.
-   - **Band-y for dendrograms**: `_AxisDescriptor(kind="band")` survives
-     sharing, so once a built-in artist exposes categorical y, a
+   - **Category-y for dendrograms**: `_AxisDescriptor(kind="category")`
+     survives sharing, so once a built-in artist exposes categorical y, a
      dendrogram that `share_y=` it gets row-aligned leaf positions
-     automatically. y-band scales render r0=0..r1=ih (top-to-bottom)
+     automatically. y-category scales render r0=0..r1=ih (top-to-bottom)
      to match imshow's row 0 = top convention; y-linear/log stay
-     cartesian.
+     cartesian. Public access: `yscale="category", order=[...]`.
 
    Two additional tweaks that turned out to matter:
 

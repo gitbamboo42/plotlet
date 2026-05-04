@@ -24,7 +24,7 @@ from ._spec import (
     SPEC, _SIZESPEC, _MARGIN_FLOOR, _FRAME, _GRIDSPEC, _FONTSPEC, _LEGSPEC, _D, _DASH,
 )
 from .colors import _resolve_color, TAB10
-from .scales import _LinearScale, _LogScale, _BandScale, _nice_domain, _fmt_tick
+from .scales import _LinearScale, _LogScale, _CategoryScale, _nice_domain, _fmt_tick
 from .font import _measure_text, _text_path
 from .artists import _histogram
 from .registry import RenderContext, get_artist, all_artist_names
@@ -55,7 +55,7 @@ class _AxisDescriptor:
     """Domain for one axis, decoupled from any pixel range. The layout
     pre-pass builds one per share-equivalence class; each panel calls
     `build(r0, r1)` with its own pixel range to instantiate a scale."""
-    kind: str           # "linear" | "log" | "band"
+    kind: str           # "linear" | "log" | "category"
     lo: float = 0.0
     hi: float = 1.0
     cats: list | None = None
@@ -63,8 +63,8 @@ class _AxisDescriptor:
     def build(self, r0, r1):
         if self.kind == "log":
             return _LogScale(self.lo, self.hi, r0, r1)
-        if self.kind == "band":
-            return _BandScale(self.cats or [], r0, r1)
+        if self.kind == "category":
+            return _CategoryScale(self.cats or [], r0, r1)
         return _LinearScale(self.lo, self.hi, r0, r1)
 
 
@@ -116,6 +116,7 @@ class Figure:
         st = {
             "artists": [], "title": "", "xlabel": "", "ylabel": "",
             "xlim": None, "ylim": None, "xscale": "linear", "yscale": "linear",
+            "x_order": None, "y_order": None,
             "grid": False, "legend": False,
         }
         for name, args, kw in self._calls:
@@ -127,8 +128,12 @@ class Figure:
             elif name == "ylabel": st["ylabel"] = args[0]
             elif name == "xlim":   st["xlim"] = (args[0], args[1])
             elif name == "ylim":   st["ylim"] = (args[0], args[1])
-            elif name == "xscale": st["xscale"] = args[0]
-            elif name == "yscale": st["yscale"] = args[0]
+            elif name == "xscale":
+                st["xscale"] = args[0]
+                if "order" in kw: st["x_order"] = list(kw["order"])
+            elif name == "yscale":
+                st["yscale"] = args[0]
+                if "order" in kw: st["y_order"] = list(kw["order"])
             elif name == "grid":   st["grid"] = (args[0] if args else True)
             elif name == "legend": st["legend"] = (args[0] if args else True)
         return st
@@ -233,26 +238,79 @@ def _prebin_hist(st):
             a["_bins"] = _histogram(a["data"], a["opts"].get("bins", 10))
 
 
+def _collect_categories(artists, axis):
+    """Unique values an artist contributes on `axis`, alphabetically sorted."""
+    seen = set()
+    out = []
+    for a in artists:
+        spec = get_artist(a["type"])
+        if spec is None: continue
+        fn = spec.xdomain if axis == "x" else spec.ydomain
+        vals = fn(a)
+        if vals is None: continue
+        for v in vals:
+            if v is None: continue
+            if v not in seen:
+                seen.add(v); out.append(v)
+    return sorted(out, key=str)
+
+
+def _is_categorical_axis(artists, axis):
+    """An axis is categorical when any artist contributes a string value
+    (and no numeric value before it). First non-None value decides."""
+    for a in artists:
+        spec = get_artist(a["type"])
+        if spec is None: continue
+        fn = spec.xdomain if axis == "x" else spec.ydomain
+        vals = fn(a)
+        if vals is None: continue
+        for v in vals:
+            if v is None: continue
+            return isinstance(v, str)
+    return False
+
+
 def _x_descriptor(st) -> _AxisDescriptor:
-    """Compute this panel's natural x-axis descriptor from its own state."""
+    """Compute this panel's natural x-axis descriptor from its own state.
+
+    Categorical precedence:
+      1. explicit `xscale("category", order=[...])` → that exact order
+      2. `xscale("category")` with no order → alphabetical of unique x values
+      3. any artist contributes string-valued x (bar, scatter on strings,
+         …) → alphabetical of unique x values
+      4. otherwise → linear/log path
+    """
     _prebin_hist(st)
     artists = st["artists"]
-    if any(a["type"] == "bar" for a in artists):
-        cats: list = []
-        for a in artists:
-            if a["type"] == "bar":
-                for c in a["cats"]:
-                    if c not in cats: cats.append(c)
-        return _AxisDescriptor(kind="band", cats=cats)
+    explicit_cat = st["xscale"] == "category"
+    auto_cat = _is_categorical_axis(artists, "x")
+
+    if explicit_cat or auto_cat:
+        cats = (list(st["x_order"]) if st["x_order"] is not None
+                else _collect_categories(artists, "x"))
+        return _AxisDescriptor(kind="category", cats=cats)
+
     x_lo, x_hi = _scan_domain(artists, "x")
     x_min, x_max = _resolve_domain(x_lo, x_hi, st["xlim"], st["xscale"])
     return _AxisDescriptor(kind=st["xscale"], lo=x_min, hi=x_max)
 
 
 def _y_descriptor(st) -> _AxisDescriptor:
-    """Compute this panel's natural y-axis descriptor from its own state."""
+    """Compute this panel's natural y-axis descriptor from its own state.
+
+    Categorical precedence mirrors `_x_descriptor`. `force_zero` still
+    fires for bar/hist so numeric y-axes anchor at 0.
+    """
     _prebin_hist(st)
     artists = st["artists"]
+    explicit_cat = st["yscale"] == "category"
+    auto_cat = _is_categorical_axis(artists, "y")
+
+    if explicit_cat or auto_cat:
+        cats = (list(st["y_order"]) if st["y_order"] is not None
+                else _collect_categories(artists, "y"))
+        return _AxisDescriptor(kind="category", cats=cats)
+
     has_bar = any(a["type"] == "bar" for a in artists)
     force_zero = has_bar or any(a["type"] == "hist" for a in artists)
     y_lo, y_hi = _scan_domain(artists, "y")
@@ -263,14 +321,14 @@ def _y_descriptor(st) -> _AxisDescriptor:
 def _build_xy_scales(st, iw, ih, panel_opts: _PanelOpts):
     """Instantiate pixel-bound scales. `panel_opts.x_axis` / `y_axis` come
     from the layout pre-pass when set; otherwise we compute them from the
-    panel's own state. y-band runs top-to-bottom (cats on rows); y-linear/log
-    runs cartesian."""
+    panel's own state. y-category runs top-to-bottom (cats on rows);
+    y-linear/log runs cartesian."""
     x_axis = panel_opts.x_axis or _x_descriptor(st)
     y_axis = panel_opts.y_axis or _y_descriptor(st)
     x_scale = x_axis.build(0, iw)
-    y_scale = y_axis.build(0, ih) if y_axis.kind == "band" else y_axis.build(ih, 0)
-    has_bar = (x_axis.kind == "band")
-    return x_scale, y_scale, y_axis, has_bar
+    y_scale = y_axis.build(0, ih) if y_axis.kind == "category" else y_axis.build(ih, 0)
+    x_is_cat = (x_axis.kind == "category")
+    return x_scale, y_scale, x_is_cat
 
 
 # ---------------------------------------------------------------------------
@@ -299,7 +357,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     if panel_opts is None:
         panel_opts = _PanelOpts()
 
-    x_scale, y_scale, y_axis, has_bar = _build_xy_scales(st, iw, ih, panel_opts)
+    x_scale, y_scale, x_is_cat = _build_xy_scales(st, iw, ih, panel_opts)
     # Tick density scales with panel size: 8 looks fine on the 600×400
     # default but turns into a label crush on a 80-px-wide colorbar.
     x_n = max(2, min(8, int(iw // 65)))
@@ -318,7 +376,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     # grid
     if st["grid"]:
         gw = _GRIDSPEC["width"]; gd = _GRIDSPEC["dasharray"]
-        if not has_bar:
+        if not x_is_cat:
             for t in x_ticks:
                 x = x_scale(t)
                 parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="0" y2="{ih}" '
@@ -371,7 +429,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     title_size = _FONTSPEC["title_size"]
 
     for t in x_ticks:
-        x = (x_scale(t) + x_scale.bandwidth / 2) if has_bar else x_scale(t)
+        x = x_scale(t)
         parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{ih}" y2="{ih - _TICK_LEN}" '
                      f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
         parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="0" y2="{_TICK_LEN}" '
@@ -384,7 +442,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
 
     # y ticks + labels
     for t in y_ticks:
-        y = y_scale(t) + (y_scale.bandwidth / 2 if y_axis.kind == "band" else 0)
+        y = y_scale(t)
         parts.append(f'<line x1="0" x2="{_TICK_LEN}" y1="{y:.2f}" y2="{y:.2f}" '
                      f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
         parts.append(f'<line x1="{iw}" x2="{iw - _TICK_LEN}" y1="{y:.2f}" y2="{y:.2f}" '

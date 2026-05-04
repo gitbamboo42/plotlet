@@ -1,7 +1,9 @@
-"""Coordinate scales: linear, log, band — mirroring d3's scale types.
+"""Coordinate scales: linear, log, category.
 
 Each scale is a callable: `scale(data_value) -> pixel_position`. Each also
-exposes `.ticks(n)` for axis tick generation.
+exposes `.ticks(n)` for axis tick generation. `_CategoryScale` returns the
+band *center* for a category, with `.bandwidth` giving the band width — bar
+artists subtract `bandwidth/2` to get the rect's left edge.
 """
 import math
 
@@ -77,8 +79,12 @@ class _LogScale:
         return [10 ** k for k in range(int(a), int(b) + 1) if self.d0 <= 10 ** k <= self.d1]
 
 
-class _BandScale:
-    """Categorical scale — mirrors d3.scaleBand().padding(p) (inner = outer = p)."""
+class _CategoryScale:
+    """Categorical scale — mirrors d3.scaleBand().padding(p) (inner = outer = p).
+
+    Returns the *center* of the band for each category. Bar artists fetch
+    `.bandwidth` and subtract half to get the rect's left edge.
+    """
 
     def __init__(self, cats, r0, r1, padding=0.2):
         self.cats = list(cats)
@@ -87,14 +93,14 @@ class _BandScale:
         total = r1 - r0
         self.step = total / (n + padding)
         self.bandwidth = self.step * (1 - padding)
-        self._start = self.r0 + padding * self.step
+        self._center = self.r0 + padding * self.step + self.bandwidth / 2
 
     def __call__(self, cat):
         try:
             i = self.cats.index(cat)
         except ValueError:
             return float("nan")
-        return self._start + i * self.step
+        return self._center + i * self.step
 
     def ticks(self, n=None):
         return list(self.cats)
