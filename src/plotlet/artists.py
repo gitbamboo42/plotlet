@@ -110,11 +110,17 @@ def _artist_bar(a, xs_, ys_, col):
     bw = xs_.bandwidth
     y0 = ys_(0)
     alpha = opts.get("alpha", _D["bar_alpha"])
+    # padding=0 produces contiguous bands (heatmap track look). Adjacent
+    # rects in SVG anti-alias their shared edge into a hairline gap;
+    # shape-rendering="crispEdges" pixel-aligns the borders so the cells
+    # really butt up. Skip it for normal bars where the visible inner
+    # padding makes anti-aliased edges look smoother.
+    crisp = ' shape-rendering="crispEdges"' if getattr(xs_, "padding", 0.2) == 0 else ''
     for c, v in zip(a["cats"], a["vals"]):
         x = xs_(c) - bw / 2
         y = ys_(v)
         out.append(f'<rect x="{x:.2f}" y="{min(y0, y):.2f}" width="{bw:.2f}" '
-                   f'height="{abs(y - y0):.2f}" fill="{col}" opacity="{alpha}"/>')
+                   f'height="{abs(y - y0):.2f}" fill="{col}" opacity="{alpha}"{crisp}/>')
     return "".join(out)
 
 

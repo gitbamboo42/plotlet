@@ -173,6 +173,70 @@ def chart_category_y_order():
     return c
 
 
+def chart_hide_yticks():
+    # Metadata-strip pattern: numeric y for positioning, but ticks suppressed
+    # via the matplotlib idiom yticks([]).
+    df = {"sample": ["S1", "S2", "S3", "S4"], "stage": [0.5] * 4}
+    c = pt.chart(df, width=400, height=80, title="metadata strip",
+                 ylabel="stage")
+    c.bar(x="sample", y="stage", color="C1")
+    c.ylim(0, 1)
+    c.yticks([])
+    return c
+
+
+def chart_xticks_rotation():
+    # Rotate category labels that would crowd horizontally.
+    df = {"month": ["Jan", "Feb", "Mar", "Apr", "May"],
+          "count": [12, 7, 19, 14, 9]}
+    c = pt.chart(df, width=400, height=260,
+                 title="rotated x labels", ylabel="count")
+    c.bar(x="month", y="count", color="C0")
+    c.xticks(rotation=45)
+    return c
+
+
+def chart_xticks_outward():
+    # Tick marks point outward (matplotlib direction='out').
+    xs = [i * 0.1 for i in range(64)]
+    df = {"x": xs, "y": [math.sin(t) for t in xs]}
+    c = pt.chart(df, title="outward tick marks", xlabel="x", ylabel="y")
+    c.line(x="x", y="y")
+    c.xticks(direction="out")
+    c.yticks(direction="out")
+    return c
+
+
+def chart_xticks_marks_off():
+    # Hide tick marks but keep labels (compare to xticks([]) which hides both).
+    xs = [i * 0.1 for i in range(64)]
+    df = {"x": xs, "y": [math.sin(t) for t in xs]}
+    c = pt.chart(df, title="labels only, no tick marks", xlabel="x", ylabel="y")
+    c.line(x="x", y="y")
+    c.xticks(marks=False)
+    c.yticks(marks=False)
+    return c
+
+
+def chart_xticks_explicit():
+    # Explicit positions and labels, plus a fontsize override.
+    xs = [i * 0.1 for i in range(64)]
+    df = {"x": xs, "y": [math.sin(t) for t in xs]}
+    c = pt.chart(df, title="explicit ticks", xlabel="x", ylabel="y")
+    c.line(x="x", y="y")
+    c.xticks([0, math.pi, 2 * math.pi], ["0", "π", "2π"], fontsize=14)
+    return c
+
+
+def chart_category_padding_zero():
+    # Contiguous track: cells butt up with no inner gap.
+    df = {"x": ["a", "b", "c", "d", "e"], "v": [1, 2, 3, 2, 1]}
+    c = pt.chart(df, width=400, height=120, title="padding=0 (contiguous)")
+    c.xscale("category", padding=0)
+    c.bar(x="x", y="v", color="C0")
+    return c
+
+
 def chart_reflines():
     xs = _xs()
     df = {"t": xs, "v": [math.sin(x) for x in xs]}
@@ -188,20 +252,26 @@ def chart_reflines():
 
 
 PLOTS = {
-    "table":              chart_table,
-    "hue":                chart_hue,
-    "scatter_hue":        chart_scatter_hue,
-    "bar":                chart_bar,
-    "hist":               chart_hist,
-    "fill_between":       chart_fill_between,
-    "reflines":           chart_reflines,
-    "category_x_scatter": chart_category_x_scatter,
-    "category_x_order":   chart_category_x_order,
-    "category_y_scatter": chart_category_y_scatter,
-    "category_y_order":   chart_category_y_order,
-    "imshow_rect":        chart_imshow_rect,
-    "imshow_png":         chart_imshow_png,
-    "imshow_diverging":   chart_imshow_diverging,
+    "table":               chart_table,
+    "hue":                 chart_hue,
+    "scatter_hue":         chart_scatter_hue,
+    "bar":                 chart_bar,
+    "hist":                chart_hist,
+    "fill_between":        chart_fill_between,
+    "reflines":            chart_reflines,
+    "category_x_scatter":  chart_category_x_scatter,
+    "category_x_order":    chart_category_x_order,
+    "category_y_scatter":  chart_category_y_scatter,
+    "category_y_order":    chart_category_y_order,
+    "hide_yticks":         chart_hide_yticks,
+    "xticks_rotation":     chart_xticks_rotation,
+    "xticks_outward":      chart_xticks_outward,
+    "xticks_marks_off":    chart_xticks_marks_off,
+    "xticks_explicit":     chart_xticks_explicit,
+    "category_padding_0":  chart_category_padding_zero,
+    "imshow_rect":         chart_imshow_rect,
+    "imshow_png":          chart_imshow_png,
+    "imshow_diverging":    chart_imshow_diverging,
 }
 
 

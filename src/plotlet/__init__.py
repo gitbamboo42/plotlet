@@ -26,4 +26,4 @@ from .registry import ArtistSpec, add_artist
 __all__ = ["chart", "Chart", "figure", "Figure", "SPEC", "TAB10", "colors",
            "colormap", "list_colormaps", "grid", "legend",
            "ArtistSpec", "add_artist"]
-__version__ = "0.1.2"
+__version__ = "0.1.3"

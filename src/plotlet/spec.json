@@ -61,7 +61,7 @@
     "fill_alpha": 0.3,
     "bar_alpha": 1,
     "hist_alpha": 1,
-    "bar_padding": 0.2,
+    "category_padding": 0.2,
     "hist_gap": 1.0,
     "refline_color": "#000000",
     "refline_width": 0.8,

@@ -45,9 +45,11 @@ pip install plotlet
 
 Pass at construction (`pt.chart(data, title=..., grid=True, ...)`) or as chained setters (`c.title(...)`, etc.):
 
-`title`, `xlabel`, `ylabel`, `xlim=(a, b)`, `ylim=(a, b)`, `xscale="linear"|"log"|"category"` (with optional `order=[...]` via the chained `c.xscale(...)`), `yscale=...`, `grid=True/False`, `legend=True/False`, `width`, `height`
+`title`, `xlabel`, `ylabel`, `xlim=(a, b)`, `ylim=(a, b)`, `xscale="linear"|"log"|"category"` (chained: `c.xscale("category", order=[...], padding=0)`), `yscale=...`, `grid=True/False`, `legend=True/False`, `width`, `height`
 
-String-valued data on either axis (`scatter(["a","b","c"], ...)`, `bar`, …) auto-switches to a categorical scale, alphabetical by default.
+String-valued data on either axis (`scatter(["a","b","c"], ...)`, `bar`, …) auto-switches to a categorical scale, alphabetical by default. `padding=0` makes category bands contiguous (heatmap-track look).
+
+Tick customization: `c.xticks([0, 5, 10], ["A","B","C"], rotation=45, fontsize=12, direction="out", marks=False)`. Pass `[]` to hide. `yticks(...)` works the same way.
 
 ### Mark methods
 

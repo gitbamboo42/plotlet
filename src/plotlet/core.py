@@ -17,7 +17,7 @@ behaves as before.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from ._spec import (
@@ -43,6 +43,7 @@ _FONT = _FONTSPEC["family"]
 _FRAME_METHODS = {
     "title", "xlabel", "ylabel", "xlim", "ylim",
     "xscale", "yscale", "grid", "legend",
+    "xticks", "yticks",
 }
 
 
@@ -59,12 +60,13 @@ class _AxisDescriptor:
     lo: float = 0.0
     hi: float = 1.0
     cats: list | None = None
+    padding: float = field(default_factory=lambda: _D["category_padding"])  # category only; 0 = contiguous bands
 
     def build(self, r0, r1):
         if self.kind == "log":
             return _LogScale(self.lo, self.hi, r0, r1)
         if self.kind == "category":
-            return _CategoryScale(self.cats or [], r0, r1)
+            return _CategoryScale(self.cats or [], r0, r1, padding=self.padding)
         return _LinearScale(self.lo, self.hi, r0, r1)
 
 
@@ -86,6 +88,47 @@ class _PanelOpts:
     hide_bottom: bool = False
     suppress_left_labels:   bool = False
     suppress_bottom_labels: bool = False
+
+
+def _rotated_text(s, x, y, size, angle, axis):
+    """Tick label as text-as-paths, optionally rotated.
+
+    `angle=0` is a passthrough to `_text_path` with the unrotated anchor —
+    keeps existing SVG output byte-identical when no rotation is set.
+    Otherwise emits the glyph paths at origin with anchor="end", then
+    wraps in `<g transform="translate(x,y) rotate(-angle)">` so the
+    rotation pivots at the call-site's (x, y). The negation matches
+    matplotlib's convention (positive angle = counterclockwise on screen)
+    against SVG's positive-clockwise rotation."""
+    if not angle:
+        anchor = "middle" if axis == "x" else "end"
+        return _text_path(s, x, y, size, anchor=anchor)
+    text = _text_path(s, 0, 0, size, anchor="end")
+    return f'<g transform="translate({x:.2f},{y:.2f}) rotate({-angle})">{text}</g>'
+
+
+def _record_ticks(st, axis, args, kw):
+    """Decode the matplotlib-style xticks()/yticks() call into state.
+
+    Signature: xticks(ticks=None, labels=None, *, rotation=0, fontsize=None).
+    Accepts the first arg positionally (matches `plt.xticks`); pass `[]`
+    to hide. Omitted kwargs leave the corresponding state alone, so
+    `c.xticks(rotation=45)` rotates without disturbing auto positions.
+    """
+    if args:
+        st[f"{axis}_ticks"] = list(args[0]) if args[0] is not None else None
+        if len(args) > 1 and args[1] is not None:
+            st[f"{axis}_labels"] = list(args[1])
+    if "ticks" in kw:
+        v = kw["ticks"]
+        st[f"{axis}_ticks"] = list(v) if v is not None else None
+    if "labels" in kw:
+        v = kw["labels"]
+        st[f"{axis}_labels"] = list(v) if v is not None else None
+    if "rotation" in kw:  st[f"{axis}_rotation"]  = kw["rotation"]
+    if "fontsize" in kw:  st[f"{axis}_fontsize"]  = kw["fontsize"]
+    if "direction" in kw: st[f"{axis}_direction"] = kw["direction"]
+    if "marks" in kw:     st[f"{axis}_marks"]     = bool(kw["marks"])
 
 
 class Figure:
@@ -117,6 +160,12 @@ class Figure:
             "artists": [], "title": "", "xlabel": "", "ylabel": "",
             "xlim": None, "ylim": None, "xscale": "linear", "yscale": "linear",
             "x_order": None, "y_order": None,
+            "x_padding": None, "y_padding": None,
+            # xticks/yticks overrides (None = auto, [] = hide):
+            "x_ticks": None, "x_labels": None, "x_rotation": 0, "x_fontsize": None,
+            "x_direction": "in", "x_marks": True,
+            "y_ticks": None, "y_labels": None, "y_rotation": 0, "y_fontsize": None,
+            "y_direction": "in", "y_marks": True,
             "grid": False, "legend": False,
         }
         for name, args, kw in self._calls:
@@ -130,10 +179,14 @@ class Figure:
             elif name == "ylim":   st["ylim"] = (args[0], args[1])
             elif name == "xscale":
                 st["xscale"] = args[0]
-                if "order" in kw: st["x_order"] = list(kw["order"])
+                if "order" in kw:   st["x_order"] = list(kw["order"])
+                if "padding" in kw: st["x_padding"] = kw["padding"]
             elif name == "yscale":
                 st["yscale"] = args[0]
-                if "order" in kw: st["y_order"] = list(kw["order"])
+                if "order" in kw:   st["y_order"] = list(kw["order"])
+                if "padding" in kw: st["y_padding"] = kw["padding"]
+            elif name == "xticks": _record_ticks(st, "x", args, kw)
+            elif name == "yticks": _record_ticks(st, "y", args, kw)
             elif name == "grid":   st["grid"] = (args[0] if args else True)
             elif name == "legend": st["legend"] = (args[0] if args else True)
         return st
@@ -288,7 +341,8 @@ def _x_descriptor(st) -> _AxisDescriptor:
     if explicit_cat or auto_cat:
         cats = (list(st["x_order"]) if st["x_order"] is not None
                 else _collect_categories(artists, "x"))
-        return _AxisDescriptor(kind="category", cats=cats)
+        padding = _D["category_padding"] if st["x_padding"] is None else st["x_padding"]
+        return _AxisDescriptor(kind="category", cats=cats, padding=padding)
 
     x_lo, x_hi = _scan_domain(artists, "x")
     x_min, x_max = _resolve_domain(x_lo, x_hi, st["xlim"], st["xscale"])
@@ -309,7 +363,8 @@ def _y_descriptor(st) -> _AxisDescriptor:
     if explicit_cat or auto_cat:
         cats = (list(st["y_order"]) if st["y_order"] is not None
                 else _collect_categories(artists, "y"))
-        return _AxisDescriptor(kind="category", cats=cats)
+        padding = _D["category_padding"] if st["y_padding"] is None else st["y_padding"]
+        return _AxisDescriptor(kind="category", cats=cats, padding=padding)
 
     has_bar = any(a["type"] == "bar" for a in artists)
     force_zero = has_bar or any(a["type"] == "hist" for a in artists)
@@ -362,8 +417,10 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     # default but turns into a label crush on a 80-px-wide colorbar.
     x_n = max(2, min(8, int(iw // 65)))
     y_n = max(2, min(8, int(ih // 40)))
-    x_ticks = x_scale.ticks(x_n)
-    y_ticks = y_scale.ticks(y_n)
+    x_ticks = st["x_ticks"] if st["x_ticks"] is not None else x_scale.ticks(x_n)
+    y_ticks = st["y_ticks"] if st["y_ticks"] is not None else y_scale.ticks(y_n)
+    x_labels = st["x_labels"] if st["x_labels"] is not None else [_fmt_tick(t) for t in x_ticks]
+    y_labels = st["y_labels"] if st["y_labels"] is not None else [_fmt_tick(t) for t in y_ticks]
 
     hide_l, hide_r = panel_opts.hide_left, panel_opts.hide_right
     hide_t, hide_b = panel_opts.hide_top, panel_opts.hide_bottom
@@ -428,27 +485,57 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     label_size = _FONTSPEC["label_size"]
     title_size = _FONTSPEC["title_size"]
 
-    for t in x_ticks:
+    x_size = st["x_fontsize"] if st["x_fontsize"] is not None else tick_size
+    y_size = st["y_fontsize"] if st["y_fontsize"] is not None else tick_size
+    x_rot = st["x_rotation"] or 0
+    y_rot = st["y_rotation"] or 0
+    x_dir, y_dir = st["x_direction"], st["y_direction"]
+    x_marks, y_marks = st["x_marks"], st["y_marks"]
+
+    # Tick-mark endpoints relative to the spine. "in" goes inside the data
+    # area, "out" goes outside, "inout" spans both sides at full length each.
+    bot_in, bot_out = ih - _TICK_LEN, ih + _TICK_LEN  # bottom spine offsets
+    top_in, top_out = _TICK_LEN, -_TICK_LEN           # top spine offsets
+    if x_dir == "in":      x_bot_endpoints, x_top_endpoints = (ih, bot_in),  (0, top_in)
+    elif x_dir == "out":   x_bot_endpoints, x_top_endpoints = (ih, bot_out), (0, top_out)
+    else:                  x_bot_endpoints, x_top_endpoints = (bot_out, bot_in), (top_out, top_in)
+    left_in, left_out  = _TICK_LEN, -_TICK_LEN        # left spine offsets (x = 0)
+    right_in, right_out = iw - _TICK_LEN, iw + _TICK_LEN
+    if y_dir == "in":      y_left_endpoints, y_right_endpoints = (0, left_in),  (iw, right_in)
+    elif y_dir == "out":   y_left_endpoints, y_right_endpoints = (0, left_out), (iw, right_out)
+    else:                  y_left_endpoints, y_right_endpoints = (left_out, left_in), (right_out, right_in)
+
+    # y-axis labels need to clear an outward/inout tick mark; x-axis labels
+    # already sit far enough below the spine to clear all three modes.
+    y_label_x = -_TICK_PAD if y_dir == "in" else -(_TICK_LEN + _TICK_PAD)
+
+    for t, lbl in zip(x_ticks, x_labels):
         x = x_scale(t)
-        parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{ih}" y2="{ih - _TICK_LEN}" '
-                     f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
-        parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="0" y2="{_TICK_LEN}" '
-                     f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
+        if x_marks:
+            y1, y2 = x_bot_endpoints
+            parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{y1}" y2="{y2}" '
+                         f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
+            y1, y2 = x_top_endpoints
+            parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{y1}" y2="{y2}" '
+                         f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
         # Drop only labels redundant with a sharing sibling. A small label
         # overflow into a joined neighbor's collapsed margin is acceptable.
         if not suppress_xt:
-            parts.append(_text_path(_fmt_tick(t), x, ih + _TICK_LEN + _TICK_PAD + 8,
-                                    tick_size, anchor="middle"))
+            parts.append(_rotated_text(str(lbl), x, ih + _TICK_LEN + _TICK_PAD + 8,
+                                       x_size, x_rot, axis="x"))
 
     # y ticks + labels
-    for t in y_ticks:
+    for t, lbl in zip(y_ticks, y_labels):
         y = y_scale(t)
-        parts.append(f'<line x1="0" x2="{_TICK_LEN}" y1="{y:.2f}" y2="{y:.2f}" '
-                     f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
-        parts.append(f'<line x1="{iw}" x2="{iw - _TICK_LEN}" y1="{y:.2f}" y2="{y:.2f}" '
-                     f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
+        if y_marks:
+            x1, x2 = y_left_endpoints
+            parts.append(f'<line x1="{x1}" x2="{x2}" y1="{y:.2f}" y2="{y:.2f}" '
+                         f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
+            x1, x2 = y_right_endpoints
+            parts.append(f'<line x1="{x1}" x2="{x2}" y1="{y:.2f}" y2="{y:.2f}" '
+                         f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
         if not suppress_yt:
-            parts.append(_text_path(_fmt_tick(t), -_TICK_PAD, y + 4, tick_size, anchor="end"))
+            parts.append(_rotated_text(str(lbl), y_label_x, y + 4, y_size, y_rot, axis="y"))
 
     # xlabel / ylabel / title live in margin space; drop when that margin
     # is collapsed against a joined neighbor.

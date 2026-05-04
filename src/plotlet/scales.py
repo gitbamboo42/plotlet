@@ -86,9 +86,10 @@ class _CategoryScale:
     `.bandwidth` and subtract half to get the rect's left edge.
     """
 
-    def __init__(self, cats, r0, r1, padding=0.2):
+    def __init__(self, cats, r0, r1, padding):
         self.cats = list(cats)
         self.r0, self.r1 = r0, r1
+        self.padding = padding
         n = len(self.cats) or 1
         total = r1 - r0
         self.step = total / (n + padding)
