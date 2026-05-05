@@ -99,7 +99,7 @@ Then `to_svg()` does five phases:
 
 ### Adding a new plot type
 
-The three-step recipe (`record`, `xdomain`/`ydomain`, `draw`, all bundled in an `ArtistSpec` and handed to `add_artist(...)`) is plotlet's central hackability claim — no edits to `core.py`, no monkey-patching. **For most custom plots, the right home is your own project (or [`cookbook/`](cookbook/)) — not the core.** Full guide: [docs/EXTENDING.md](docs/EXTENDING.md); worked recipe: [`cookbook/lollipop.py`](cookbook/lollipop.py).
+The three-step recipe (`record`, `xdomain`/`ydomain`, `draw`, all bundled in an `ArtistSpec` and handed to `add_artist(...)`) is plotlet's central hackability claim — no edits to `core.py`, no monkey-patching. **For most custom plots, the right home is your own project (or [`cookbook/`](cookbook/)) — not the core.** Full guide: [docs/EXTENDING.md](docs/EXTENDING.md); worked recipe: [`cookbook/lollipop/lollipop.py`](cookbook/lollipop/lollipop.py).
 
 ### Text rendering — text-as-paths via fontTools
 

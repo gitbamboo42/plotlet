@@ -75,7 +75,7 @@ fig.title("Lollipop chart").grid(True).legend(True)
 fig.save_svg("out.svg")
 ```
 
-Worked example: [`cookbook/lollipop.py`](../cookbook/lollipop.py) — basic
+Worked example: [`cookbook/lollipop/lollipop.py`](../cookbook/lollipop/lollipop.py) — basic
 artist plus an optional `legend_swatch` so the legend entry actually
 looks like a tiny lollipop.
 

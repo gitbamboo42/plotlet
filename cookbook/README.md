@@ -14,9 +14,28 @@ deliberately does not grow a long list of built-in plot types.** Instead:
 - For your custom needs, copy a cookbook example, modify it for your data, and
   use it in your project. AI assistance makes this fast.
 
+## Layout
+
+Each recipe lives in its own folder so it can carry whatever it needs —
+script, sample data, baseline output, per-recipe notes — without bleeding
+into the others:
+
+```
+cookbook/
+└── <name>/
+    ├── <name>.py     # the recipe
+    └── <name>.svg    # generated output (gitignored)
+```
+
+## Recipes
+
+- [`lollipop/`](lollipop/) — stem-and-circle chart for sparse comparisons,
+  plus an optional `legend_swatch` so the legend entry looks like a mini
+  lollipop.
+
 ## How to use a recipe
 
-1. Copy the file into your own project.
+1. Copy the recipe file (or its whole folder) into your own project.
 2. Register your artist with `pt.add_artist(pt.ArtistSpec(...))` — see
    [`docs/EXTENDING.md`](../docs/EXTENDING.md) for the full API.
 3. Adjust styling, data shape, and details for your specific use case.
