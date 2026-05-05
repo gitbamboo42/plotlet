@@ -8,15 +8,19 @@ parent's leaf tree builds one `_AxisDescriptor` (kind + domain) per
 share-equivalence class, every sharer adopts its source's domain, the
 matching inner margin shrinks to `layout.inner_gap`, and inner tick
 labels redundant with a sharing sibling are dropped (spines and tick
-marks remain so each panel still reads as a closed rectangle). Margins
-auto-scale with panel size — a 290-px-wide leaf gets ~28 px of left
-margin instead of the 58 px sized for the 600-px-wide standalone
-default — with per-side floors (`spec.size.margin_floor`) so labels
-still fit. Leaf size hints (`pt.chart(width=...)` / `height=...`) act
-as relative ratios when no explicit `widths=` / `heights=` are given,
-and within a grid the `hide_*` margin flag propagates column-wise and
-row-wise so panels in the same column/row stay x-aligned (a top track
-sized by `share_x` lines up with the central chart it sits above).
+marks remain so each panel still reads as a closed rectangle). Body-
+first leaves (`pt.chart(data_width=...)`, the recommended form) honor
+their data region exactly — margins are floored at `spec.size.
+margin_floor` and grow to fit content (long titles, wide y-tick
+labels) via measure-driven margin computation, so the data region
+never gets squeezed by overflowing text. Canvas-first leaves
+(`canvas_width=...`) keep the legacy 0.1.x behavior — margins scale
+by panel-canvas/spec-canvas, text overflow is the user's call. Within
+a grid, the `hide_*` margin flag propagates column-wise and row-wise
+so panels in the same column/row stay x-aligned (a top track sized
+by `share_x` lines up with the central chart it sits above), and a
+parallel coordination pass aligns body-first cells' measured margins
+per column/row so data regions stay aligned across rows and columns.
 Step 3 ships the layout-level legend (unified — covers both discrete
 swatches and continuous gradients): `pt.legend(*sources, names=,
 group_by_chart=)` constructor, `parent.legend(...)` decorator (sugar
@@ -170,9 +174,10 @@ out.show()
 
 **Operator semantics.** `a | b` returns a horizontal layout node;
 `a / b` a vertical one. Layout nodes themselves render and compose, so
-`(a | b) / c` works for free. Width/height ratios via a `widths=`
-kwarg on `pt.grid` (or a future per-chart size hint); the operator
-form defaults to equal sizing.
+`(a | b) / c` works for free. Per-leaf size hints (`pt.chart(data_width=…)`,
+the body-first form) drive both natural sizing and the equivalent of
+ratios — to make a column 2× wider than another, just set the
+data widths. Sum-sizes composition takes it from there.
 
 **Where this shines.** #1, #2, #4, #5. Composition is local; a
 function that returns a `chart` (or a layout of charts) drops cleanly
@@ -277,10 +282,13 @@ Recommended:
   the full SVG. Children of a parent can't `.show()` themselves
   (raises); each chart has at most one parent (single-parent
   invariant, enforced at composition time).
-- **Sizing.** Default equal sizing. `pt.grid(..., widths=[...],
-  heights=[...])` for explicit ratios. A future per-chart size hint
-  (`pt.chart(width=0.2)`) covers the colorbar-width case without
-  forcing every layout to declare ratios up front.
+- **Sizing.** Body-first per-leaf sizing: `pt.chart(data_width=…,
+  data_height=…)` (or `canvas_width=`/`canvas_height=` for the legacy
+  fixed-canvas form). Sum-sizes composition derives the parent's
+  total canvas; ratios are expressed by setting per-leaf data widths.
+  Margins grow to fit content (measure-driven), and within a grid the
+  per-column/row coordination keeps body-first cells' data regions
+  aligned across rows and columns.
 
 ---
 
@@ -427,10 +435,10 @@ Not a roadmap — just the dependency order:
      each side) so joined data areas sit `2 * inner_gap` apart — close
      enough to read as coordinated, with breathing room so corner tick
      labels of independent x/y axes don't kiss across the joint.
-   - **Colorbar size hint** falls out of leaf size hints: `pt.chart(width=
-     80)` for the side-panel slot in `hm | pt.colorbar(hm)` works
-     without explicit `pt.grid(widths=...)` because `_allocate` reads
-     children's measured sizes as ratios.
+   - **Colorbar size hint** falls out of leaf size hints: `pt.chart(
+     data_width=80)` for the side-panel slot in `hm | pt.colorbar(hm)`
+     works because `_allocate` reads children's natural canvases as
+     proportional sizes; sum-sizes composition just adds them up.
    - **Category-y for dendrograms**: `_AxisDescriptor(kind="category")`
      survives sharing, so once a built-in artist exposes categorical y, a
      dendrogram that `share_y=` it gets row-aligned leaf positions
@@ -440,11 +448,16 @@ Not a roadmap — just the dependency order:
 
    Two additional tweaks that turned out to matter:
 
-   - **Auto-scaled margins.** Base margins from spec.json are sized for
-     a 600×400 panel; they scale linearly by `min(1, panel_size /
-     spec_size)` with per-side floors (`spec.size.margin_floor`) so
-     small panels in compositions don't get 76% of their width eaten by
-     margin. Halves the visual gap between non-share neighbors.
+   - **Margin policy depends on path.** Body-first leaves
+     (`data_width=…`) keep margins unscaled (only floored at
+     `spec.size.margin_floor`) and grow them to fit content via
+     measure-driven computation, so the data region is preserved
+     exactly. Canvas-first leaves (`canvas_width=…`) scale margins
+     linearly by `min(1, panel_canvas / spec_canvas)` (legacy 0.1.x
+     behavior) so small fixed-canvas panels don't get most of their
+     width eaten by margin. Within a grid, body-first cells in the
+     same column/row coordinate to share the wider measured margin so
+     their data regions stay aligned across rows and columns.
    - **Tick density** is `max(2, min(8, iw // 65))` for x and similar for
      y — narrow panels (a tree at 80-px-wide inner) don't get 8 crushed
      labels.
@@ -470,8 +483,8 @@ Not a roadmap — just the dependency order:
      continuous entry — independent of source plot height. Pre-render
      pass `_size_legends` overrides each legend leaf's intrinsic
      `_fig` size with its content-driven (width, height) before
-     `_measure` runs (unless the user passed explicit `width=` /
-     `height=`).
+     `_measure` runs (unless the user passed explicit `canvas_width=` /
+     `canvas_height=`).
    - **Tick count adapts** to strip height (`max(2, min(5, h // 18))`),
      mirroring the axis-tick-density rule in `core._render_inner`,
      so labels don't crowd at small sizes.

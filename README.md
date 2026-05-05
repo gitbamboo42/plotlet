@@ -45,7 +45,7 @@ pip install plotlet
 
 Pass at construction (`pt.chart(data, title=..., grid=True, ...)`) or as chained setters (`c.title(...)`, etc.):
 
-`title`, `xlabel`, `ylabel`, `xlim=(a, b)`, `ylim=(a, b)`, `xscale="linear"|"log"|"category"` (chained: `c.xscale("category", order=[...], padding=0)`), `yscale=...`, `grid=True/False`, `legend=True/False`, `width`, `height`
+`title`, `xlabel`, `ylabel`, `xlim=(a, b)`, `ylim=(a, b)`, `xscale="linear"|"log"|"category"` (chained: `c.xscale("category", order=[...], padding=0)`), `yscale=...`, `grid=True/False`, `legend=True/False`, `data_width`, `data_height` (the data region — preferred), or `canvas_width`, `canvas_height` (the full SVG canvas — mutually exclusive with the data form). Sizes accept bare pixels (`400`) or unit-suffixed strings (`"4in"`, `"10cm"`, `"100mm"`, `"72pt"`).
 
 String-valued data on either axis (`scatter(["a","b","c"], ...)`, `bar`, …) auto-switches to a categorical scale, alphabetical by default. `padding=0` makes category bands contiguous (heatmap-track look).
 

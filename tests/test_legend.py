@@ -25,8 +25,9 @@ near-duplicate baselines:
                         row) — continuous stacks above discrete in-section.
   legend_overrides    — three sources with names={a: "Custom", b: None}
                         exercising the rename + hide-header paths.
-  legend_flat_fixed   — group_by_chart=False flatten + explicit width=/
-                        height= override of the auto-sized rect.
+  legend_flat_fixed   — group_by_chart=False flatten + explicit
+                        `canvas_width=` / `canvas_height=` override of
+                        the auto-sized rect.
   legend_joined_grid  — ComplexHeatmap-shaped grid where the legend cell
                         sits next to a join-pair-collapsed assembly. Tests
                         that legend_gap (6 px) coexists with share-pair
@@ -55,15 +56,15 @@ def _matrix():
 
 def legend_auto_grouped():
     xs = _xs()
-    a = pt.chart(title="alpha", width=240, height=200)
+    a = pt.chart(title="alpha", canvas_width=240, canvas_height=200)
     a.line(xs, [math.sin(x) for x in xs], label="sin")
-    b = pt.chart(title="beta", width=240, height=200)
+    b = pt.chart(title="beta", canvas_width=240, canvas_height=200)
     b.line(xs, [math.cos(x) for x in xs], label="cos")
     return (a | b).legend()
 
 
 def legend_continuous():
-    hm = pt.chart(title="heat", width=380, height=240)
+    hm = pt.chart(title="heat", canvas_width=380, canvas_height=240)
     hm.imshow(_matrix(), cmap="viridis",
               legend={"label": "intensity", "ticks": [0.0, 0.5, 1.0]})
     return hm | pt.legend(hm)
@@ -71,9 +72,9 @@ def legend_continuous():
 
 def legend_mixed():
     xs = _xs()
-    im = pt.chart(title="heat", width=240, height=200)
+    im = pt.chart(title="heat", canvas_width=240, canvas_height=200)
     im.imshow(_matrix(), cmap="plasma")
-    lines = pt.chart(title="trace", width=240, height=200)
+    lines = pt.chart(title="trace", canvas_width=240, canvas_height=200)
     lines.line(xs, [math.sin(x) for x in xs], label="sin")
     lines.line(xs, [math.cos(x) for x in xs], label="cos")
     return im | lines | pt.legend()
@@ -81,35 +82,35 @@ def legend_mixed():
 
 def legend_overrides():
     xs = _xs()
-    a = pt.chart(title="alpha", width=160, height=200)
+    a = pt.chart(title="alpha", canvas_width=160, canvas_height=200)
     a.line(xs, [math.sin(x) for x in xs], label="sin")
-    b = pt.chart(title="beta", width=160, height=200)
+    b = pt.chart(title="beta", canvas_width=160, canvas_height=200)
     b.line(xs, [math.cos(x) for x in xs], label="cos")
-    c = pt.chart(title="gamma", width=160, height=200)
+    c = pt.chart(title="gamma", canvas_width=160, canvas_height=200)
     c.line(xs, [math.sin(x) + 0.5 for x in xs], label="sin+0.5")
     return a | b | c | pt.legend(a, b, c, names={a: "Custom", b: None})
 
 
 def legend_flat_fixed():
     xs = _xs()
-    a = pt.chart(title="alpha", width=220, height=200)
+    a = pt.chart(title="alpha", canvas_width=220, canvas_height=200)
     a.line(xs, [math.sin(x) for x in xs], label="sin")
-    b = pt.chart(title="beta", width=220, height=200)
+    b = pt.chart(title="beta", canvas_width=220, canvas_height=200)
     b.line(xs, [math.cos(x) for x in xs], label="cos")
     return a | b | pt.legend(a, b, group_by_chart=False,
-                             width=140, height=160)
+                             canvas_width=140, canvas_height=160)
 
 
 def legend_joined_grid():
     # Top track shares x with main; left tree shares y with main. Both
     # share-pairs are gap-collapsed (0 px). Legend sits to the right of
     # main with legend_gap (6 px) — distinct from the share-pair joint.
-    main = pt.chart(title="main", width=380, height=240)
+    main = pt.chart(title="main", canvas_width=380, canvas_height=240)
     main.imshow(_matrix(), cmap="viridis", legend={"label": "value"})
-    top  = pt.chart(title="top",  width=380, height=60, share_x=main)
+    top  = pt.chart(title="top",  canvas_width=380, canvas_height=60, share_x=main)
     top.line([0, 1, 2, 3, 4, 5, 6, 7],
              [3, 1, 2, 4, 1, 2, 3, 1], label="counts")
-    tree = pt.chart(title="tree", width=80,  height=240, share_y=main)
+    tree = pt.chart(title="tree", canvas_width=80,  canvas_height=240, share_y=main)
     tree.line([0, 1, 2], [2, 3, 4])
     return pt.grid([
         [None, top,  None        ],

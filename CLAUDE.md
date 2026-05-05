@@ -120,9 +120,9 @@ All visual constants — colors, font sizes, spine widths, default alphas, legen
 Each `Figure` instance accumulates:
 
 - `_calls` — list of recorded artist + styling calls
-- `_width`, `_height`, `_margin` — figure dimensions
+- `_data_width`, `_data_height`, `_canvas_width`, `_canvas_height`, `_margin`, `_canvas_explicit` — figure dimensions. The user-facing primitive is the *data region* (`data_width=` / `data_height=`); canvas is derived from data + margin. The legacy canvas-first form (`canvas_width=` / `canvas_height=`) sets `_canvas_explicit=True` and triggers margin scaling at render time. The two are mutually exclusive.
 
-The replay function reconstructs `title`, `xlabel`, `ylabel`, `xlim`, `ylim`, `xscale`, `yscale`, `grid`, `legend`, `artists` from `_calls` each render. Stateless rendering = same output every time.
+The replay function reconstructs `title`, `xlabel`, `ylabel`, `xlim`, `ylim`, `xscale`, `yscale`, `grid`, `legend`, `artists` from `_calls` each render. Stateless rendering = same output every time. For body-first leaves, `Figure._effective_margin(st)` combines the floor-applied user margin with `_required_margin(st, dw, dh)` (measured from actual title / axis labels / tick labels) so the canvas grows to fit content rather than letting it overflow.
 
 ---
 
