@@ -9,7 +9,7 @@ Step 1 covers: `|`, `/`, `pt.grid`, single-parent invariant, show-on-child
 raise, default gap, auto-zero-gap when neighbors have share_x= /
 share_y=. Step 2 adds scale-sharing — shared panels render on the source's
 domain — plus inner-axis collapse on joined share-pairs (no inner spine,
-ticks, or labels) and leaf size-hint honoring (`pt.chart(width=...)` acts
+ticks, or labels) and leaf size-hint honoring (`pt.chart(canvas_width=...)` acts
 as a relative width when no explicit ratios are given).
 """
 from __future__ import annotations
@@ -32,54 +32,54 @@ def _xs():
 # canvas. Sizes account for the default 20 px gap on non-joined pairs and
 # 0 px on auto-collapsed share-pairs.
 
-def _sin(width=290, height=400):
+def _sin(canvas_width=290, canvas_height=400):
     xs = _xs()
-    c = pt.chart(title="sin", width=width, height=height)
+    c = pt.chart(title="sin", canvas_width=canvas_width, canvas_height=canvas_height)
     c.line(xs, [math.sin(x) for x in xs])
     return c
 
 
-def _cos(width=290, height=400):
+def _cos(canvas_width=290, canvas_height=400):
     xs = _xs()
-    c = pt.chart(title="cos", width=width, height=height)
+    c = pt.chart(title="cos", canvas_width=canvas_width, canvas_height=canvas_height)
     c.line(xs, [math.cos(x) for x in xs])
     return c
 
 
-def _bar(label="bar", width=290, height=400):
-    c = pt.chart(title=label, width=width, height=height)
+def _bar(label="bar", canvas_width=290, canvas_height=400):
+    c = pt.chart(title=label, canvas_width=canvas_width, canvas_height=canvas_height)
     c.bar(["a", "b", "c"], [3, 1, 2])
     return c
 
 
-def _hist(width=290, height=400):
-    c = pt.chart(title="hist", width=width, height=height)
+def _hist(canvas_width=290, canvas_height=400):
+    c = pt.chart(title="hist", canvas_width=canvas_width, canvas_height=canvas_height)
     c.hist([0.1, 0.4, 0.5, 0.55, 0.7, 0.8, 0.9, 1.1, 1.3], bins=6)
     return c
 
 
 def row_two():
     # 2 panels h, default gap 20 → 290 + 20 + 290 = 600.
-    return _sin(width=290) | _cos(width=290)
+    return _sin(canvas_width=290) | _cos(canvas_width=290)
 
 
 def col_two():
     # 2 panels v, default gap 20 → 190 + 20 + 190 = 400 tall, 600 wide.
-    return _sin(width=600, height=190) / _cos(width=600, height=190)
+    return _sin(canvas_width=600, canvas_height=190) / _cos(canvas_width=600, canvas_height=190)
 
 
 def row_three_flatten():
     # `a | b | c` — left-fold flatten into a single 3-cell row, not a
     # 25/25/50 nested split. 3*187 + 2*20 = 601.
-    return _sin(width=187) | _cos(width=187) | _bar(width=187)
+    return _sin(canvas_width=187) | _cos(canvas_width=187) | _bar(canvas_width=187)
 
 
 def two_by_two():
     # 4 panels in 2x2 (no shares). 290+20+290 = 600 wide; 190+20+190 = 400 tall.
-    a = _sin(width=290, height=190)
-    b = _cos(width=290, height=190)
-    c = _bar(width=290, height=190)
-    d = _hist(width=290, height=190)
+    a = _sin(canvas_width=290, canvas_height=190)
+    b = _cos(canvas_width=290, canvas_height=190)
+    c = _bar(canvas_width=290, canvas_height=190)
+    d = _hist(canvas_width=290, canvas_height=190)
     return (a | b) / (c | d)
 
 
@@ -87,10 +87,10 @@ def grid_with_spacers():
     # 3-col 2-row irregular grid with None corners.
     # Cols: 187 + 20 + 187 + 20 + 187 = 601 wide.
     # Rows: 80 + 20 + 300 = 400 tall.
-    top  = pt.chart(title="top",   width=187, height=80);  top.bar(["a","b","c"], [3,1,2])
-    left = pt.chart(title="left",  width=187, height=300); left.line([1,2,3], [3,1,2])
-    main = pt.chart(title="main",  width=187, height=300); main.line([1,2,3], [1,4,9])
-    right= pt.chart(title="right", width=187, height=300); right.line([1,2,3], [2,2,1])
+    top  = pt.chart(title="top",   canvas_width=187, canvas_height=80);  top.bar(["a","b","c"], [3,1,2])
+    left = pt.chart(title="left",  canvas_width=187, canvas_height=300); left.line([1,2,3], [3,1,2])
+    main = pt.chart(title="main",  canvas_width=187, canvas_height=300); main.line([1,2,3], [1,4,9])
+    right= pt.chart(title="right", canvas_width=187, canvas_height=300); right.line([1,2,3], [2,2,1])
     return pt.grid([
         [None, top,  None ],
         [left, main, right],
@@ -102,24 +102,24 @@ def grid_with_widths():
     # wider ones. 3*187 + 40 = 601 natural total; the [0.4, 1, 1] ratio then
     # redistributes to ~94 / 234 / 234 inside that. The narrow column is
     # tight on purpose — the test exercises the redistribution logic.
-    a = pt.chart(title="a", width=187, height=400); a.line([1,2,3], [1,4,9])
-    b = pt.chart(title="b", width=187, height=400); b.line([1,2,3], [3,1,2])
-    c = pt.chart(title="c", width=187, height=400); c.line([1,2,3], [5,2,4])
+    a = pt.chart(title="a", canvas_width=187, canvas_height=400); a.line([1,2,3], [1,4,9])
+    b = pt.chart(title="b", canvas_width=187, canvas_height=400); b.line([1,2,3], [3,1,2])
+    c = pt.chart(title="c", canvas_width=187, canvas_height=400); c.line([1,2,3], [5,2,4])
     return pt.grid([[a, b, c]], widths=[0.4, 1, 1])
 
 
 def share_y_collapses_gap():
     # Sharer adopts source's y-domain. share_y → joined, gap 0.
     # 300 + 0 + 300 = 600 wide.
-    hm   = pt.chart(title="hm",   width=300);                 hm.line([1,2,3], [1,4,9])
-    tree = pt.chart(title="tree", width=300, share_y=hm);     tree.line([1,2,3], [3,1,2])
+    hm   = pt.chart(title="hm",   canvas_width=300);                 hm.line([1,2,3], [1,4,9])
+    tree = pt.chart(title="tree", canvas_width=300, share_y=hm);     tree.line([1,2,3], [3,1,2])
     return tree | hm
 
 
 def share_x_collapses_gap_vertical():
     # share_x → joined, gap 0. 200 + 0 + 200 = 400 tall.
-    main = pt.chart(title="main", height=200);                  main.line([1, 2, 3], [1, 4, 9])
-    top  = pt.chart(title="top",  height=200, share_x=main);    top.line([1, 2, 3], [3, 1, 2])
+    main = pt.chart(title="main", canvas_height=200);                  main.line([1, 2, 3], [1, 4, 9])
+    top  = pt.chart(title="top",  canvas_height=200, share_x=main);    top.line([1, 2, 3], [3, 1, 2])
     return top / main
 
 
@@ -127,35 +127,35 @@ def share_x_three_panels():
     # Chain: top.share_x=mid, mid.share_x=main. All three end up on main's
     # domain (transitive via topo-sort) and the two adjacent pairs both
     # auto-collapse. 3*133 = 399 ≈ 400 tall.
-    main = pt.chart(title="main", height=133);                main.line([0, 5, 10], [0, 1, 0])
-    mid  = pt.chart(title="mid",  height=133, share_x=main);  mid.line([0, 5, 10], [10, 0, 10])
-    top  = pt.chart(title="top",  height=133, share_x=mid);   top.line([0, 5, 10], [5, 5, 5])
+    main = pt.chart(title="main", canvas_height=133);                main.line([0, 5, 10], [0, 1, 0])
+    mid  = pt.chart(title="mid",  canvas_height=133, share_x=main);  mid.line([0, 5, 10], [10, 0, 10])
+    top  = pt.chart(title="top",  canvas_height=133, share_x=mid);   top.line([0, 5, 10], [5, 5, 5])
     return top / mid / main
 
 
 def share_y_chain():
     # Chain: B shares y from A, C shares y from B. All three joined.
     # 3*200 = 600 wide.
-    a = pt.chart(title="a", width=200);                a.line([1,2,3], [0, 100, 0])
-    b = pt.chart(title="b", width=200, share_y=a);     b.line([1,2,3], [10, 50, 90])
-    c = pt.chart(title="c", width=200, share_y=b);     c.line([1,2,3], [20, 40, 60])
+    a = pt.chart(title="a", canvas_width=200);                a.line([1,2,3], [0, 100, 0])
+    b = pt.chart(title="b", canvas_width=200, share_y=a);     b.line([1,2,3], [10, 50, 90])
+    c = pt.chart(title="c", canvas_width=200, share_y=b);     c.line([1,2,3], [20, 40, 60])
     return a | b | c
 
 
 def width_hint_narrow_side():
     # Narrow side panel sharing y with main. Stand-in for
     # `hm | pt.colorbar(hm)`. 520 + 0 + 80 = 600 wide.
-    main = pt.chart(title="main", width=520);                main.line([1,2,3], [1,4,9])
-    side = pt.chart(title="side", width=80, share_y=main)
+    main = pt.chart(title="main", canvas_width=520);                main.line([1,2,3], [1,4,9])
+    side = pt.chart(title="side", canvas_width=80, share_y=main)
     side.line([1, 1, 1], [1, 4, 9])
     return main | side
 
 
 def height_hint_short_top():
     # Short top track over a main panel. 80 + 0 + 320 = 400 tall.
-    top  = pt.chart(title="top",  height=80)
+    top  = pt.chart(title="top",  canvas_height=80)
     top.bar(["a","b","c"], [1, 2, 3])
-    main = pt.chart(title="main", height=320, share_x=top); main.bar(["a","b","c"], [3, 1, 2])
+    main = pt.chart(title="main", canvas_height=320, share_x=top); main.bar(["a","b","c"], [3, 1, 2])
     return top / main
 
 
@@ -164,11 +164,11 @@ def complex_grid_shares():
     # shares y with main. Both share-pairs are joined (gap 0). The
     # None-bordered cells mean col / row gaps are still 0 (min over the
     # boundary). Cols: 120 + 0 + 480 = 600. Rows: 80 + 0 + 320 = 400.
-    main = pt.chart(title="main", width=480, height=320)
+    main = pt.chart(title="main", canvas_width=480, canvas_height=320)
     main.line([1,2,3,4,5], [2,4,1,5,3])
-    top  = pt.chart(title="top",  width=480, height=80,  share_x=main)
+    top  = pt.chart(title="top",  canvas_width=480, canvas_height=80,  share_x=main)
     top.line([1,2,3,4,5], [1,1,3,1,1])
-    tree = pt.chart(title="tree", width=120, height=320, share_y=main)
+    tree = pt.chart(title="tree", canvas_width=120, canvas_height=320, share_y=main)
     tree.line([0,1,2], [2,3,4])
     return pt.grid([
         [None, top ],

@@ -1,8 +1,8 @@
 {
   "version": "0.1.0",
   "size": {
-    "width": 600,
-    "height": 400,
+    "data_width": 524,
+    "data_height": 322,
     "margin": {"top": 30, "right": 18, "bottom": 48, "left": 58},
     "margin_floor": {"top": 24, "right": 4, "bottom": 20, "left": 20}
   },

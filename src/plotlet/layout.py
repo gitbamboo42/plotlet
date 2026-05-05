@@ -5,8 +5,9 @@ allocates a pixel rect to each leaf, and emits one outer `<svg>` containing
 one `<g transform>` per leaf — each calling `_render_inner` from `core.py`.
 
 Composition is component-first: a parent's total size is the sum of its
-children plus gaps; leaf size hints (`pt.chart(width=…)`) act as
-relative ratios when a parent allocates space. The auto-zero-gap rule
+children plus gaps; leaf size hints (`pt.chart(data_width=…)` —
+preferred — or `canvas_width=…`) act as relative ratios when a parent
+allocates space. The auto-zero-gap rule
 collapses the gap between two leaves connected by `share_x=` / `share_y=`,
 and the share pre-pass forces both panels onto a single shared scale so
 domains line up. Inner-edge tick labels and axis labels on the joined
@@ -142,10 +143,12 @@ def _grid_row_gap(children: list[Chart | None], rows: int, cols: int, r: int) ->
 # ---------------------------------------------------------------------------
 
 def _leaf_rect_size(leaf: Chart) -> tuple[int, int]:
-    """The leaf's intrinsic size — set via `pt.chart(width=, height=)` or
-    falling back to spec defaults. Doubles as the relative size hint when
-    a parent allocates space without explicit widths/heights ratios."""
-    return leaf._fig._width, leaf._fig._height
+    """The leaf's intrinsic canvas size — derived from
+    `pt.chart(data_width=…)` (data + spec margin) or set directly via
+    `canvas_width=…`, falling back to spec defaults. Doubles as the
+    relative size hint when a parent allocates space without explicit
+    widths/heights ratios."""
+    return leaf._fig._canvas_width, leaf._fig._canvas_height
 
 
 def _measure(node: Chart) -> tuple[int, int]:
@@ -231,9 +234,10 @@ def _iter_leaves(node: Chart):
 
 def _allocate(node: Chart, x: float, y: float, w: float, h: float, out: list):
     """Walk the tree, recording (leaf, rect) pairs into `out`. Leaf size hints
-    (set via `pt.chart(width=, height=)`) act as relative ratios — so a
-    narrow colorbar leaf in `hm | pt.colorbar(hm)` self-sizes without forcing
-    the user to declare explicit widths."""
+    (set via `pt.chart(data_width=, data_height=)` or the canvas_* form)
+    act as relative ratios — so a narrow colorbar leaf in
+    `hm | pt.colorbar(hm)` self-sizes without forcing the user to declare
+    explicit widths."""
     if not node._is_parent:
         out.append((node, (x, y, w, h)))
         return

@@ -33,15 +33,29 @@ from .registry import get_artist, all_artist_names
 
 
 class Chart:
-    def __init__(self, data=None, *, width: int | None = None, height: int | None = None,
+    def __init__(self, data=None, *,
+                 data_width: int | None = None, data_height: int | None = None,
+                 canvas_width: int | None = None, canvas_height: int | None = None,
                  margin: dict | None = None,
                  title: str | None = None,
                  xlabel: str | None = None, ylabel: str | None = None,
                  xlim: tuple | None = None, ylim: tuple | None = None,
                  xscale: str | None = None, yscale: str | None = None,
                  legend: bool | None = None, grid: bool | None = None,
-                 share_x: "Chart | None" = None, share_y: "Chart | None" = None):
-        self._fig = Figure(width=width, height=height, margin=margin)
+                 share_x: "Chart | None" = None, share_y: "Chart | None" = None,
+                 **kwargs):
+        # Migration error — see Figure.__init__ for the rationale.
+        if "width" in kwargs or "height" in kwargs:
+            raise TypeError(
+                "pt.chart() no longer accepts `width=` / `height=` (changed in 0.2.0). "
+                "Pass `data_width=` / `data_height=` for the data region (preferred) "
+                "or `canvas_width=` / `canvas_height=` for the full SVG canvas."
+            )
+        if kwargs:
+            raise TypeError(f"Chart() got unexpected keyword arguments: {list(kwargs)!r}")
+        self._fig = Figure(data_width=data_width, data_height=data_height,
+                           canvas_width=canvas_width, canvas_height=canvas_height,
+                           margin=margin)
         self._data = data
         # Composition state. Leaves: _layout_kind is None, _children is empty.
         self._parent: Chart | None = None
@@ -100,7 +114,8 @@ class Chart:
 
     def legend(self, *args, names: dict | None = None,
                group_by_chart: bool | None = None,
-               width: int | None = None, height: int | None = None) -> "Chart":
+               canvas_width: int | None = None, canvas_height: int | None = None,
+               **kwargs) -> "Chart":
         """Toggle the in-frame overlay (leaf) or attach a layout-level legend (parent).
 
         On a leaf, this is the existing `chart.legend([bool])` toggle for
@@ -108,11 +123,22 @@ class Chart:
 
         On a parent, this is sugar for the panel form: `parent.legend(*sources)`
         is equivalent to `parent | pt.legend(*sources)` (or `parent / ...` for
-        a vertical parent), with `names=` / `group_by_chart=` / `width=` /
-        `height=` forwarded to the constructor. Grids raise — place
+        a vertical parent), with `names=` / `group_by_chart=` / `canvas_width=` /
+        `canvas_height=` forwarded to the constructor. Grids raise — place
         `pt.legend(...)` in an explicit cell instead. Returns `self` for
         chaining; remember that further composition (`|` / `/`) appends
         children *after* the legend, so decorate last."""
+        if "width" in kwargs or "height" in kwargs:
+            raise TypeError(
+                "Chart.legend() no longer accepts `width=` / `height=` "
+                "(changed in 0.2.0). Use `canvas_width=` / `canvas_height=` "
+                "instead — legend leaves have no data axes, so the canvas "
+                "is the only meaningful dimension."
+            )
+        if kwargs:
+            raise TypeError(
+                f"Chart.legend() got unexpected keyword arguments: {list(kwargs)!r}"
+            )
         if self._is_parent:
             if self._layout_kind == "grid":
                 raise ValueError(
@@ -122,18 +148,19 @@ class Chart:
             from .legend import legend as _make_legend
             gbc = True if group_by_chart is None else group_by_chart
             leg = _make_legend(*args, names=names, group_by_chart=gbc,
-                               width=width, height=height)
+                               canvas_width=canvas_width, canvas_height=canvas_height)
             self._children.append(leg)
             leg._parent = self
             return self
         # Leaf: today's in-frame overlay toggle. Reject parent-only kwargs.
         if (names is not None or group_by_chart is not None
-                or width is not None or height is not None):
+                or canvas_width is not None or canvas_height is not None):
             raise TypeError(
-                "names=, group_by_chart=, width=, height= are layout-level "
-                "options for parent.legend(); on a leaf, chart.legend() takes "
-                "an optional bool. To attach a layout-level legend to a single "
-                "chart, compose first: (chart | pt.legend()).show()."
+                "names=, group_by_chart=, canvas_width=, canvas_height= are "
+                "layout-level options for parent.legend(); on a leaf, "
+                "chart.legend() takes an optional bool. To attach a "
+                "layout-level legend to a single chart, compose first: "
+                "(chart | pt.legend()).show()."
             )
         if args and not isinstance(args[0], bool):
             raise TypeError(

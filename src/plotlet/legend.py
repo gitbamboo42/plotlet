@@ -43,8 +43,9 @@ def _adaptive_n_ticks(strip_h: float) -> int:
 
 def legend(*sources: Chart, names: dict | None = None,
            group_by_chart: bool = True,
-           width: int | None = None,
-           height: int | None = None) -> Chart:
+           canvas_width: int | None = None,
+           canvas_height: int | None = None,
+           **kwargs) -> Chart:
     """Create a layout-level legend.
 
     With no `sources`, the legend harvests entries from every leaf in
@@ -56,7 +57,19 @@ def legend(*sources: Chart, names: dict | None = None,
     while keeping the entries. `group_by_chart=False` flattens all
     entries into a single unsectioned list (useful when small-multiples
     genuinely share a series).
+
+    Legend leaves have no data axes, so the dimensional surface is
+    canvas-only: pass `canvas_width=` / `canvas_height=` to override the
+    content-driven auto-size.
     """
+    if "width" in kwargs or "height" in kwargs:
+        raise TypeError(
+            "pt.legend() no longer accepts `width=` / `height=` (changed in 0.2.0). "
+            "Use `canvas_width=` / `canvas_height=` instead — legend leaves "
+            "have no data axes, so the canvas is the only meaningful dimension."
+        )
+    if kwargs:
+        raise TypeError(f"pt.legend() got unexpected keyword arguments: {list(kwargs)!r}")
     for src in sources:
         if not isinstance(src, Chart):
             raise TypeError(
@@ -67,10 +80,11 @@ def legend(*sources: Chart, names: dict | None = None,
                 "pt.legend() sources must be leaf charts, not composed parents."
             )
     leaf = Chart.__new__(Chart)
-    # Width/height start as placeholders; `_size_legends` overrides them
-    # from harvested content during render unless the user specified.
-    leaf._fig = Figure(width=width if width is not None else 1,
-                       height=height if height is not None else 1)
+    # Canvas size starts as a 1×1 placeholder; `_size_legends` overrides
+    # it from harvested content at render time, unless the user passed
+    # an explicit canvas_*.
+    leaf._fig = Figure(canvas_width=canvas_width if canvas_width is not None else 1,
+                       canvas_height=canvas_height if canvas_height is not None else 1)
     leaf._data = None
     leaf._parent = None
     leaf._layout_kind = None
@@ -81,8 +95,8 @@ def legend(*sources: Chart, names: dict | None = None,
     leaf._legend_sources = list(sources)
     leaf._legend_names = dict(names) if names else {}
     leaf._legend_group_by_chart = group_by_chart
-    leaf._legend_user_width = width
-    leaf._legend_user_height = height
+    leaf._legend_user_width = canvas_width
+    leaf._legend_user_height = canvas_height
     return leaf
 
 
@@ -260,9 +274,9 @@ def _legend_content_size(leaf: Chart, sources: list[Chart],
 
 
 def _size_legends(root: Chart, states: dict[int, dict]) -> None:
-    """Pre-render pass: override each legend leaf's intrinsic _fig size
-    with its content-driven size, except where the user passed explicit
-    `width=` / `height=` to `pt.legend(...)`."""
+    """Pre-render pass: override each legend leaf's intrinsic _fig canvas
+    size with its content-driven size, except where the user passed
+    explicit `canvas_width=` / `canvas_height=` to `pt.legend(...)`."""
     from .layout import _iter_leaves  # avoid circular import at module load
     data_leaves = [l for l in _iter_leaves(root) if not l._legend_kind]
     for leaf in _iter_leaves(root):
@@ -271,9 +285,9 @@ def _size_legends(root: Chart, states: dict[int, dict]) -> None:
         sources = leaf._legend_sources or data_leaves
         cw, ch = _legend_content_size(leaf, sources, states)
         if leaf._legend_user_width is None:
-            leaf._fig._width = max(1, int(round(cw)))
+            leaf._fig._canvas_width = max(1, int(round(cw)))
         if leaf._legend_user_height is None:
-            leaf._fig._height = max(1, int(round(ch)))
+            leaf._fig._canvas_height = max(1, int(round(ch)))
 
 
 def _render_legend(leaf: Chart, w: float, h: float,
@@ -341,7 +355,7 @@ def _render_standalone_legend(leaf: Chart) -> str:
     an outer <svg>. Standalone with explicit sources requires replaying
     + color-assigning those sources, which lands when grouping does
     (commit 5). For now this draws an empty placeholder rect."""
-    w, h = leaf._fig._width, leaf._fig._height
+    w, h = leaf._fig._canvas_width, leaf._fig._canvas_height
     inner = (f'<rect x="0.5" y="0.5" width="{w-1:.2f}" height="{h-1:.2f}" '
              f'fill="none" stroke="#bbb" stroke-dasharray="4,3"/>')
     return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '

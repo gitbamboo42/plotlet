@@ -131,13 +131,66 @@ def _record_ticks(st, axis, args, kw):
     if "marks" in kw:     st[f"{axis}_marks"]     = bool(kw["marks"])
 
 
+def _spec_canvas_dims() -> tuple[int, int]:
+    """Spec-default canvas size, derived from data region + spec margin.
+
+    The dimensional primitive is the data region (`spec.size.data_width` /
+    `data_height`); this helper rebuilds the implied canvas size so legacy
+    canvas-based math (`_scaled_margin`, layout allocation) keeps a single
+    well-defined reference point."""
+    M = _SIZESPEC["margin"]
+    return (_SIZESPEC["data_width"]  + M["left"] + M["right"],
+            _SIZESPEC["data_height"] + M["top"]  + M["bottom"])
+
+
 class Figure:
-    def __init__(self, width: int | None = None, height: int | None = None,
-                 margin: dict | None = None):
+    def __init__(self, data_width: int | None = None, data_height: int | None = None,
+                 *,
+                 canvas_width: int | None = None, canvas_height: int | None = None,
+                 margin: dict | None = None,
+                 **kwargs):
+        # Migration error: 0.1.x accepted `width=`/`height=` (canvas dims).
+        # 0.2.0 splits this into data_* (data region — the new primitive) and
+        # canvas_* (full SVG). Surface the rename loudly rather than silently
+        # accepting and producing a different-sized figure.
+        if "width" in kwargs or "height" in kwargs:
+            raise TypeError(
+                "Figure no longer accepts `width=` / `height=` (changed in 0.2.0). "
+                "For the data region (the new dimensional primitive), pass "
+                "`data_width=` / `data_height=` — positional also works: "
+                "`Figure(400, 300)`. For the full SVG canvas, pass "
+                "`canvas_width=` / `canvas_height=`."
+            )
+        if kwargs:
+            raise TypeError(f"Figure() got unexpected keyword arguments: {list(kwargs)!r}")
+
+        data_set   = (data_width   is not None) or (data_height   is not None)
+        canvas_set = (canvas_width is not None) or (canvas_height is not None)
+        if data_set and canvas_set:
+            raise ValueError(
+                "Pass either data_width/data_height (the data region — preferred) "
+                "or canvas_width/canvas_height (the full SVG canvas), not both."
+            )
+
         self._calls: list[tuple[str, list, dict]] = []
-        self._width = width if width is not None else _SIZESPEC["width"]
-        self._height = height if height is not None else _SIZESPEC["height"]
-        self._margin = margin if margin is not None else dict(_SIZESPEC["margin"])
+        self._margin = dict(margin) if margin is not None else dict(_SIZESPEC["margin"])
+
+        if canvas_set:
+            # Canvas path: user picked the SVG canvas; effective margin scales
+            # by canvas/spec_canvas (legacy 0.1.x behavior). Data region falls
+            # out as canvas - effective margin.
+            spec_cw, spec_ch = _spec_canvas_dims()
+            self._canvas_width  = canvas_width  if canvas_width  is not None else spec_cw
+            self._canvas_height = canvas_height if canvas_height is not None else spec_ch
+            self._canvas_explicit = True
+        else:
+            # Data path (default): user picked the data region exactly. Margin
+            # is used unscaled (only floored). Canvas falls out as data + margin.
+            dw = data_width  if data_width  is not None else _SIZESPEC["data_width"]
+            dh = data_height if data_height is not None else _SIZESPEC["data_height"]
+            self._canvas_width  = dw + self._margin["left"] + self._margin["right"]
+            self._canvas_height = dh + self._margin["top"]  + self._margin["bottom"]
+            self._canvas_explicit = False
 
     def __getattr__(self, name):
         # Recordable if it's a frame method or a registered artist
@@ -192,8 +245,17 @@ class Figure:
         return st
 
     # ------------------------------------------------------------- render
+    def _effective_margin(self) -> dict:
+        """Margin actually used at render time. Canvas path scales by canvas
+        dims (legacy 0.1.x behavior); data path uses the spec/user margin
+        as-is, only enforcing per-side floors."""
+        if self._canvas_explicit:
+            return _scaled_margin(self._margin, self._canvas_width, self._canvas_height)
+        return _enforce_floors(self._margin)
+
     def to_svg(self) -> str:
-        return _render(self._replay(), self._width, self._height, self._margin)
+        return _render(self._replay(), self._canvas_width, self._canvas_height,
+                       self._effective_margin())
 
     def to_html(self, full_page: bool = False) -> str:
         svg = self.to_svg()
@@ -223,8 +285,13 @@ class Figure:
         return self
 
 
-def figure(width: int | None = None, height: int | None = None, **opts) -> Figure:
-    return Figure(width=width, height=height, **opts)
+def figure(data_width: int | None = None, data_height: int | None = None,
+           *,
+           canvas_width: int | None = None, canvas_height: int | None = None,
+           **opts) -> Figure:
+    return Figure(data_width, data_height,
+                  canvas_width=canvas_width, canvas_height=canvas_height,
+                  **opts)
 
 
 # ---------------------------------------------------------------------------
@@ -268,13 +335,28 @@ def _resolve_domain(lo, hi, user_lim, scale_kind, force_zero=False):
     return _nice_domain(lo, hi)
 
 
+def _enforce_floors(M):
+    """Apply per-side margin floors without any scaling. Used by the
+    data-region path: the user (or spec) declared the margin in absolute
+    pixels, so we just round and floor — never shrink."""
+    return {
+        "top":    max(_MARGIN_FLOOR["top"],    int(round(M["top"]))),
+        "bottom": max(_MARGIN_FLOOR["bottom"], int(round(M["bottom"]))),
+        "left":   max(_MARGIN_FLOOR["left"],   int(round(M["left"]))),
+        "right":  max(_MARGIN_FLOOR["right"],  int(round(M["right"]))),
+    }
+
+
 def _scaled_margin(M, W, H):
-    """Shrink margins for small panels, with a per-side floor so tick labels
-    and titles still fit. Floors live in `spec.size.margin_floor`; base
-    margins (defaulted from spec, overridable via `pt.chart(margin=...)`)
-    scale by `min(1, panel_size / spec_size)` per axis."""
-    fw = min(1.0, W / _SIZESPEC["width"])
-    fh = min(1.0, H / _SIZESPEC["height"])
+    """Shrink margins for small canvases, with a per-side floor so tick
+    labels and titles still fit. Used by the canvas-explicit path
+    (`Figure(canvas_width=…)` and the layout's per-panel allocation),
+    where the canvas size is fixed and margins must scale to fit. Floors
+    live in `spec.size.margin_floor`; the reference canvas is derived
+    from `spec.size.data_width/height + spec margin`."""
+    spec_W, spec_H = _spec_canvas_dims()
+    fw = min(1.0, W / spec_W)
+    fh = min(1.0, H / spec_H)
     return {
         "top":    max(_MARGIN_FLOOR["top"],    int(round(M["top"]    * fh))),
         "bottom": max(_MARGIN_FLOOR["bottom"], int(round(M["bottom"] * fh))),
@@ -391,7 +473,10 @@ def _build_xy_scales(st, iw, ih, panel_opts: _PanelOpts):
 # ---------------------------------------------------------------------------
 
 def _render(st, W, H, M):
-    M = _scaled_margin(M, W, H)
+    """Emit one SVG. (W, H) = canvas dims; M = effective margin already
+    resolved by the caller (`Figure._effective_margin` or layout's
+    `_effective_margin`). Splitting margin resolution out of `_render` is
+    what lets the data-path skip canvas-based scaling."""
     iw = W - M["left"] - M["right"]
     ih = H - M["top"] - M["bottom"]
     return (
