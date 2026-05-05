@@ -97,15 +97,17 @@ def grid_with_spacers():
     ])
 
 
-def grid_with_widths():
-    # 3 cells with explicit `widths=` ratios — one narrow column, two equal
-    # wider ones. 3*187 + 40 = 601 natural total; the [0.4, 1, 1] ratio then
-    # redistributes to ~94 / 234 / 234 inside that. The narrow column is
-    # tight on purpose — the test exercises the redistribution logic.
-    a = pt.chart(title="a", canvas_width=187, canvas_height=400); a.line([1,2,3], [1,4,9])
-    b = pt.chart(title="b", canvas_width=187, canvas_height=400); b.line([1,2,3], [3,1,2])
-    c = pt.chart(title="c", canvas_width=187, canvas_height=400); c.line([1,2,3], [5,2,4])
-    return pt.grid([[a, b, c]], widths=[0.4, 1, 1])
+def body_first_unequal_columns():
+    # Body-first per-cell data widths in 1:2:2 proportion (one narrow
+    # column, two equal wider ones). Each leaf renders its data region at
+    # exactly the requested pixel count — no ratio override needed; the
+    # composition just sums them. With 0.2.0 there's no widths=/heights=
+    # parameter on pt.grid: per-leaf data_width IS the way to express
+    # "make this column twice as wide as that one."
+    a = pt.chart(title="a", data_width=80,  data_height=300); a.line([1,2,3], [1,4,9])
+    b = pt.chart(title="b", data_width=160, data_height=300); b.line([1,2,3], [3,1,2])
+    c = pt.chart(title="c", data_width=160, data_height=300); c.line([1,2,3], [5,2,4])
+    return pt.grid([[a, b, c]])
 
 
 def share_y_collapses_gap():
@@ -182,7 +184,7 @@ PLOTS = {
     "row_three_flatten":   row_three_flatten,
     "two_by_two":          two_by_two,
     "grid_with_spacers":   grid_with_spacers,
-    "grid_with_widths":    grid_with_widths,
+    "body_first_columns":  body_first_unequal_columns,
     "share_y_no_gap":      share_y_collapses_gap,
     "share_x_no_gap":      share_x_collapses_gap_vertical,
     "share_x_three":       share_x_three_panels,

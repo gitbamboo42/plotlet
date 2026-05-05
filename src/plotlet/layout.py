@@ -20,7 +20,8 @@ from graphlib import CycleError, TopologicalSorter
 
 from ._spec import _LAYOUTSPEC, _FONTSPEC
 from .core import (
-    _render_inner, _scaled_margin, _x_descriptor, _y_descriptor,
+    _render_inner, _scaled_margin, _enforce_floors,
+    _x_descriptor, _y_descriptor,
     _AxisDescriptor, _PanelOpts,
 )
 from .chart import Chart
@@ -35,24 +36,39 @@ _FONT = _FONTSPEC["family"]
 # pt.grid — irregular grid constructor
 # ---------------------------------------------------------------------------
 
-def grid(cells: list[list], *, widths: list[float] | None = None,
-         heights: list[float] | None = None) -> Chart:
+def grid(cells: list[list], **kwargs) -> Chart:
     """Build a grid-layout parent Chart from a list-of-lists of cells.
 
-    Each cell is either a `Chart` or `None` (empty). All rows must have the
-    same number of columns. `widths` / `heights` give per-column / per-row
-    relative ratios; default is equal sizing.
+    Each cell is either a `Chart` or `None` (empty). All rows must have
+    the same number of columns. The grid does **no proportional
+    redistribution** — each column's width is the max natural canvas
+    width across cells in that column; each row's height is the max
+    natural canvas height across cells in that row. To make a column
+    twice as wide as another, set `data_width=` (or `canvas_width=`)
+    directly on the leaf charts; the grid then sums their natural
+    canvases plus per-boundary gaps.
     """
+    # Migration error — `widths=` / `heights=` were canvas-ratio overrides
+    # in 0.1.x. With body-size-first composition there's no longer a
+    # well-defined "redistribute the canvas" operation: leaves carry data,
+    # parents derive canvas. Set per-leaf `data_width=` to control sizing.
+    if "widths" in kwargs or "heights" in kwargs:
+        raise TypeError(
+            "pt.grid() no longer accepts `widths=` / `heights=` (changed "
+            "in 0.2.0). To make a column 2× wider than another, set "
+            "`data_width=` on each leaf — e.g. "
+            "`pt.chart(data_width=200) | pt.chart(data_width=100)`. The grid "
+            "sums each cell's natural canvas; per-leaf data sizes give you "
+            "all the control ratios used to."
+        )
+    if kwargs:
+        raise TypeError(f"pt.grid() got unexpected keyword arguments: {list(kwargs)!r}")
     if not cells or not isinstance(cells, list):
         raise ValueError("pt.grid expects a non-empty list of rows.")
     rows = len(cells)
     cols = len(cells[0])
     if any(len(row) != cols for row in cells):
         raise ValueError("pt.grid rows must all have the same number of columns.")
-    if widths is not None and len(widths) != cols:
-        raise ValueError(f"widths must have {cols} entries; got {len(widths)}.")
-    if heights is not None and len(heights) != rows:
-        raise ValueError(f"heights must have {rows} entries; got {len(heights)}.")
 
     flat: list[Chart | None] = []
     for row in cells:
@@ -72,8 +88,6 @@ def grid(cells: list[list], *, widths: list[float] | None = None,
     parent._children = flat            # row-major; may contain None
     parent._grid_rows = rows
     parent._grid_cols = cols
-    parent._grid_widths = widths       # None means equal
-    parent._grid_heights = heights
     for cell in flat:
         if cell is not None:
             cell._parent = parent
@@ -144,10 +158,10 @@ def _grid_row_gap(children: list[Chart | None], rows: int, cols: int, r: int) ->
 
 def _leaf_rect_size(leaf: Chart) -> tuple[int, int]:
     """The leaf's intrinsic canvas size — derived from
-    `pt.chart(data_width=…)` (data + spec margin) or set directly via
-    `canvas_width=…`, falling back to spec defaults. Doubles as the
-    relative size hint when a parent allocates space without explicit
-    widths/heights ratios."""
+    `pt.chart(data_width=…)` (data + unscaled margin) or set directly
+    via `canvas_width=…` (which carries scaled margin baked in),
+    falling back to spec defaults. Doubles as the relative size hint
+    when the parent allocates space."""
     return leaf._fig._canvas_width, leaf._fig._canvas_height
 
 
@@ -173,7 +187,8 @@ def _measure(node: Chart) -> tuple[int, int]:
         W = max(w for w, _ in sizes)
         H = sum(h for _, h in sizes) + sum(gaps)
         return W, H
-    # grid
+    # grid — each column's width is the max natural canvas across cells
+    # in that column; each row's height likewise.
     rows, cols = node._grid_rows, node._grid_cols
     children = node._children
     col_widths = [0.0] * cols
@@ -186,27 +201,11 @@ def _measure(node: Chart) -> tuple[int, int]:
             cw, ch = _measure(cell)
             if cw > col_widths[c]: col_widths[c] = cw
             if ch > row_heights[r]: row_heights[r] = ch
-    if node._grid_widths is not None:
-        total = sum(col_widths) or sum(_ratios(node._grid_widths, cols)) * cols
-        col_widths = [r * total for r in _ratios(node._grid_widths, cols)]
-    if node._grid_heights is not None:
-        total = sum(row_heights) or sum(_ratios(node._grid_heights, rows)) * rows
-        row_heights = [r * total for r in _ratios(node._grid_heights, rows)]
     h_gaps = [_grid_col_gap(children, rows, cols, c) for c in range(cols - 1)]
     v_gaps = [_grid_row_gap(children, rows, cols, r) for r in range(rows - 1)]
     W = int(round(sum(col_widths) + sum(h_gaps)))
     H = int(round(sum(row_heights) + sum(v_gaps)))
     return W, H
-
-
-def _ratios(spec: list[float] | None, n: int) -> list[float]:
-    """Return per-cell sizes as fractions of allocation (sums to 1)."""
-    if spec is None:
-        return [1.0 / n] * n
-    total = float(sum(spec))
-    if total <= 0:
-        raise ValueError("ratios must sum to a positive value.")
-    return [s / total for s in spec]
 
 
 def _hint_ratios(sizes: list[float], n: int) -> list[float]:
@@ -274,28 +273,17 @@ def _allocate(node: Chart, x: float, y: float, w: float, h: float, out: list):
     v_gaps = [_grid_row_gap(children, rows, cols, r) for r in range(rows - 1)]
     rem_w = w - sum(h_gaps)
     rem_h = h - sum(v_gaps)
-    if node._grid_widths is not None:
-        col_ws = [r * rem_w for r in _ratios(node._grid_widths, cols)]
-    else:
-        col_meas = [0.0] * cols
-        for r in range(rows):
-            for c in range(cols):
-                cell = children[r * cols + c]
-                if cell is None: continue
-                cw, _ = _measure(cell)
-                if cw > col_meas[c]: col_meas[c] = cw
-        col_ws = [rem_w * r for r in _hint_ratios(col_meas, cols)]
-    if node._grid_heights is not None:
-        row_hs = [r * rem_h for r in _ratios(node._grid_heights, rows)]
-    else:
-        row_meas = [0.0] * rows
-        for r in range(rows):
-            for c in range(cols):
-                cell = children[r * cols + c]
-                if cell is None: continue
-                _, ch = _measure(cell)
-                if ch > row_meas[r]: row_meas[r] = ch
-        row_hs = [rem_h * r for r in _hint_ratios(row_meas, rows)]
+    col_meas = [0.0] * cols
+    row_meas = [0.0] * rows
+    for r in range(rows):
+        for c in range(cols):
+            cell = children[r * cols + c]
+            if cell is None: continue
+            cw, ch = _measure(cell)
+            if cw > col_meas[c]: col_meas[c] = cw
+            if ch > row_meas[r]: row_meas[r] = ch
+    col_ws = [rem_w * r for r in _hint_ratios(col_meas, cols)]
+    row_hs = [rem_h * r for r in _hint_ratios(row_meas, rows)]
     cy = y
     for r in range(rows):
         cx = x
@@ -480,10 +468,17 @@ def _build_panel_opts(root: Chart) -> tuple[dict[int, _PanelOpts], dict[int, dic
     return panel_opts, states
 
 
-def _effective_margin(M: dict, po: _PanelOpts, w: float, h: float) -> dict:
-    """Margin used at render time: scale by panel size, then force joined
-    sides to `inner_gap` so share-pairs have a tight, predictable joint."""
-    M_eff = _scaled_margin(M, w, h)
+def _effective_margin(leaf: Chart, po: _PanelOpts, w: float, h: float) -> dict:
+    """Margin used at render time. Body-first leaves (`data_width=`) keep
+    their margins unscaled (only floored) so the rendered data region
+    matches the user's request exactly; canvas-first leaves (`canvas_width=`)
+    scale margins by panel-canvas/spec-canvas (legacy 0.1.x behavior).
+    Joined sides collapse to `inner_gap` either way."""
+    M = leaf._fig._margin
+    if leaf._fig._canvas_explicit:
+        M_eff = _scaled_margin(M, w, h)
+    else:
+        M_eff = _enforce_floors(M)
     if po.hide_left:   M_eff["left"]   = _INNER_GAP
     if po.hide_right:  M_eff["right"]  = _INNER_GAP
     if po.hide_top:    M_eff["top"]    = _INNER_GAP
@@ -515,7 +510,7 @@ def _render_layout(root: Chart) -> str:
         if leaf._legend_kind:
             continue
         po = panel_opts[id(leaf)]
-        M_eff = _effective_margin(leaf._fig._margin, po, w, h)
+        M_eff = _effective_margin(leaf, po, w, h)
         iw = w - M_eff["left"] - M_eff["right"]
         ih = h - M_eff["top"] - M_eff["bottom"]
         st = states[id(leaf)]
