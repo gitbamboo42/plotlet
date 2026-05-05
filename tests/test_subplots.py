@@ -97,6 +97,24 @@ def grid_with_spacers():
     ])
 
 
+def measure_driven_alignment():
+    # 2x2 body-first grid demonstrating measure-driven margin + per-column
+    # coordination. Cell `c` has a categorical y with long group names
+    # ("measurement_alpha", …) plus an explicit ylabel — its content-
+    # required left margin exceeds the 58 px spec, so left grows. The
+    # coordination pre-pass then propagates the same widened left to
+    # cell `a` (column 0) so the data regions stay vertically aligned
+    # across rows. Cells in column 1 (`b`, `d`) keep their default
+    # narrower left margin since neither has a long label requirement.
+    a = pt.chart(title="a", data_width=180, data_height=140); a.line([1,2,3], [1,2,3])
+    b = pt.chart(title="b", data_width=180, data_height=140); b.line([1,2,3], [3,2,1])
+    c = pt.chart(data_width=180, data_height=140, ylabel="categories")
+    c.scatter([1,2,3,4,5], ["measurement_alpha", "measurement_beta", "measurement_gamma",
+                              "measurement_delta", "measurement_epsilon"])
+    d = pt.chart(data_width=180, data_height=140); d.line([1,2,3], [1,2,3])
+    return pt.grid([[a, b], [c, d]])
+
+
 def body_first_unequal_columns():
     # Body-first per-cell data widths in 1:2:2 proportion (one narrow
     # column, two equal wider ones). Each leaf renders its data region at
@@ -185,6 +203,7 @@ PLOTS = {
     "two_by_two":          two_by_two,
     "grid_with_spacers":   grid_with_spacers,
     "body_first_columns":  body_first_unequal_columns,
+    "measure_alignment":   measure_driven_alignment,
     "share_y_no_gap":      share_y_collapses_gap,
     "share_x_no_gap":      share_x_collapses_gap_vertical,
     "share_x_three":       share_x_three_panels,

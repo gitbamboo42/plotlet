@@ -20,7 +20,7 @@ from graphlib import CycleError, TopologicalSorter
 
 from ._spec import _LAYOUTSPEC, _FONTSPEC
 from .core import (
-    _render_inner, _scaled_margin, _enforce_floors,
+    _render_inner, _scaled_margin, _enforce_floors, _required_margin,
     _x_descriptor, _y_descriptor,
     _AxisDescriptor, _PanelOpts,
 )
@@ -454,6 +454,13 @@ def _propagate_grid_joins(node: Chart, out: dict[int, _PanelOpts]) -> None:
 def _build_panel_opts(root: Chart) -> tuple[dict[int, _PanelOpts], dict[int, dict]]:
     """One pass over the tree that produces (panel_opts, replayed states).
 
+    For body-first leaves, also computes a measure-driven effective
+    margin (per-leaf measurement, then per-column/row coordination so
+    cells in the same grid column/row align), and mutates each leaf's
+    `_canvas_width`/`_canvas_height` to match — `_measure` reads those
+    when summing the parent's natural canvas, so layout sees the final
+    grown-to-fit dimensions on the first walk.
+
     Legend leaves are skipped — they have no x/y axes, no artists, and
     render through their own pipeline (see `legend.py`)."""
     leaves = [l for l in _iter_leaves(root) if not l._legend_kind]
@@ -465,20 +472,129 @@ def _build_panel_opts(root: Chart) -> tuple[dict[int, _PanelOpts], dict[int, dic
     }
     _annotate_collapses(root, panel_opts)
     _propagate_grid_joins(root, panel_opts)
+    _compute_measured_margins(leaves, states, panel_opts)
+    _coordinate_margins(root, panel_opts)
+    _update_canvases_for_margins(leaves, panel_opts)
     return panel_opts, states
 
 
+def _compute_measured_margins(leaves: list[Chart],
+                              states: dict[int, dict],
+                              panel_opts: dict[int, _PanelOpts]) -> None:
+    """Per-leaf preliminary effective margin = max(floor, content-required).
+    Body-first leaves only; canvas-first leaves keep `M_eff = None` so
+    they fall through to `_scaled_margin` at render time (legacy)."""
+    for leaf in leaves:
+        if leaf._fig._canvas_explicit:
+            continue
+        po = panel_opts[id(leaf)]
+        M_floor = _enforce_floors(leaf._fig._margin)
+        M_req = _required_margin(states[id(leaf)],
+                                 leaf._fig._data_width,
+                                 leaf._fig._data_height)
+        po.M_eff = {side: max(M_floor[side], M_req[side]) for side in M_floor}
+
+
+def _body_cell(cell: Chart | None, panel_opts: dict[int, _PanelOpts]) -> bool:
+    """Cells eligible for per-column/row margin coordination — body-first
+    data leaves whose preliminary margin has been computed."""
+    return (cell is not None
+            and not cell._is_parent
+            and not cell._legend_kind
+            and not cell._fig._canvas_explicit
+            and panel_opts.get(id(cell)) is not None
+            and panel_opts[id(cell)].M_eff is not None)
+
+
+def _coordinate_pair(cells: list[Chart], panel_opts: dict[int, _PanelOpts],
+                     sides: tuple[str, str]) -> None:
+    """Take max per side across `cells`, write back to each cell's M_eff.
+    `sides` is e.g. ("left", "right") for column-coordination or
+    ("top", "bottom") for row-coordination."""
+    if not cells:
+        return
+    s1, s2 = sides
+    m1 = max(panel_opts[id(c)].M_eff[s1] for c in cells)
+    m2 = max(panel_opts[id(c)].M_eff[s2] for c in cells)
+    for c in cells:
+        po = panel_opts[id(c)]
+        po.M_eff = {**po.M_eff, s1: m1, s2: m2}
+
+
+def _coordinate_margins(node: Chart, panel_opts: dict[int, _PanelOpts]) -> None:
+    """Walk the tree; at each parent, push body-first cells in the same
+    column/row to share the wider margin so their data regions align.
+
+    Horizontal parents share top/bottom across all children (one row).
+    Vertical parents share left/right (one column). Grids share
+    left/right per column and top/bottom per row.
+
+    Canvas-first cells, parents, and legend leaves are excluded — they
+    have their own margin policy and shouldn't pull body-first siblings
+    around. After coordination the hide_* collapse (applied in
+    `_effective_margin`) still wins, so joined share-pair sides become
+    `inner_gap` regardless of the coordinated value."""
+    if not node._is_parent:
+        return
+    if node._layout_kind == "h":
+        cells = [c for c in node._children if _body_cell(c, panel_opts)]
+        _coordinate_pair(cells, panel_opts, ("top", "bottom"))
+        for c in node._children:
+            if c is not None:
+                _coordinate_margins(c, panel_opts)
+        return
+    if node._layout_kind == "v":
+        cells = [c for c in node._children if _body_cell(c, panel_opts)]
+        _coordinate_pair(cells, panel_opts, ("left", "right"))
+        for c in node._children:
+            if c is not None:
+                _coordinate_margins(c, panel_opts)
+        return
+    # grid
+    rows, cols = node._grid_rows, node._grid_cols
+    children = node._children
+    for c in range(cols):
+        col_cells = [children[r * cols + c] for r in range(rows)]
+        _coordinate_pair([cell for cell in col_cells if _body_cell(cell, panel_opts)],
+                         panel_opts, ("left", "right"))
+    for r in range(rows):
+        row_cells = [children[r * cols + c] for c in range(cols)]
+        _coordinate_pair([cell for cell in row_cells if _body_cell(cell, panel_opts)],
+                         panel_opts, ("top", "bottom"))
+    for cell in children:
+        if cell is not None:
+            _coordinate_margins(cell, panel_opts)
+
+
+def _update_canvases_for_margins(leaves: list[Chart],
+                                 panel_opts: dict[int, _PanelOpts]) -> None:
+    """Mutate each body-first leaf's `_canvas_width` / `_canvas_height`
+    to match the coordinated effective margin. Layout's `_measure` reads
+    the canvas, so this is what makes max-per-column/row see the
+    grown-to-fit dimensions."""
+    for leaf in leaves:
+        if leaf._fig._canvas_explicit:
+            continue
+        po = panel_opts[id(leaf)]
+        if po.M_eff is None:
+            continue
+        M = po.M_eff
+        leaf._fig._canvas_width  = leaf._fig._data_width  + M["left"] + M["right"]
+        leaf._fig._canvas_height = leaf._fig._data_height + M["top"]  + M["bottom"]
+
+
 def _effective_margin(leaf: Chart, po: _PanelOpts, w: float, h: float) -> dict:
-    """Margin used at render time. Body-first leaves (`data_width=`) keep
-    their margins unscaled (only floored) so the rendered data region
-    matches the user's request exactly; canvas-first leaves (`canvas_width=`)
-    scale margins by panel-canvas/spec-canvas (legacy 0.1.x behavior).
-    Joined sides collapse to `inner_gap` either way."""
-    M = leaf._fig._margin
-    if leaf._fig._canvas_explicit:
-        M_eff = _scaled_margin(M, w, h)
+    """Margin used at render time. Body-first leaves read the
+    coordinated margin from `po.M_eff` (computed by `_build_panel_opts`'s
+    measure-driven + per-column/row coordination pre-pass); canvas-first
+    leaves scale margins by panel-canvas/spec-canvas (legacy 0.1.x
+    behavior). Joined sides collapse to `inner_gap` either way."""
+    if po.M_eff is not None:
+        M_eff = dict(po.M_eff)
+    elif leaf._fig._canvas_explicit:
+        M_eff = _scaled_margin(leaf._fig._margin, w, h)
     else:
-        M_eff = _enforce_floors(M)
+        M_eff = _enforce_floors(leaf._fig._margin)
     if po.hide_left:   M_eff["left"]   = _INNER_GAP
     if po.hide_right:  M_eff["right"]  = _INNER_GAP
     if po.hide_top:    M_eff["top"]    = _INNER_GAP

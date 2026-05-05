@@ -80,6 +80,10 @@ class _PanelOpts:
     `suppress_*_labels` drops tick labels on a side whose axis is shared
     with a neighbor that already labels it; set only on the panel that
     actually shares, never propagated by grid alignment.
+    `M_eff`, when set, is the layout-pre-pass-resolved effective margin
+    for a body-first leaf — it has already incorporated measure-driven
+    growth and per-column/row coordination. Canvas-first leaves leave
+    this `None` and fall through to `_scaled_margin` at render time.
     """
     x_axis: _AxisDescriptor | None = None
     y_axis: _AxisDescriptor | None = None
@@ -89,6 +93,7 @@ class _PanelOpts:
     hide_bottom: bool = False
     suppress_left_labels:   bool = False
     suppress_bottom_labels: bool = False
+    M_eff:       dict | None = None
 
 
 def _rotated_text(s, x, y, size, angle, axis):
@@ -311,17 +316,38 @@ class Figure:
         return st
 
     # ------------------------------------------------------------- render
-    def _effective_margin(self) -> dict:
-        """Margin actually used at render time. Canvas path scales by canvas
-        dims (legacy 0.1.x behavior); data path uses the spec/user margin
-        as-is, only enforcing per-side floors."""
+    def _effective_margin(self, st: dict | None = None) -> dict:
+        """Margin actually used at render time.
+
+        Canvas path: scales by canvas dims (legacy 0.1.x behavior); text
+        overflow is the user's responsibility because canvas size is
+        promised exactly.
+
+        Data path: combines `_enforce_floors(spec/user margin)` with the
+        content-driven `_required_margin(st, data_w, data_h)` by taking
+        the per-side max — so the canvas grows as needed to fit long tick
+        labels, titles, and axis labels rather than letting them overflow.
+        Caller passes the replayed `st`; callers without one (legacy code
+        paths) get only the floor-applied spec margin."""
         if self._canvas_explicit:
             return _scaled_margin(self._margin, self._canvas_width, self._canvas_height)
-        return _enforce_floors(self._margin)
+        M_floor = _enforce_floors(self._margin)
+        if st is None:
+            return M_floor
+        M_req = _required_margin(st, self._data_width, self._data_height)
+        return {side: max(M_floor[side], M_req[side]) for side in M_floor}
 
     def to_svg(self) -> str:
-        return _render(self._replay(), self._canvas_width, self._canvas_height,
-                       self._effective_margin())
+        st = self._replay()
+        M_eff = self._effective_margin(st)
+        # Canvas-path keeps its promised canvas; data-path canvas grows
+        # to fit the (possibly measure-driven-expanded) margin.
+        if self._canvas_explicit:
+            W, H = self._canvas_width, self._canvas_height
+        else:
+            W = self._data_width  + M_eff["left"] + M_eff["right"]
+            H = self._data_height + M_eff["top"]  + M_eff["bottom"]
+        return _render(st, W, H, M_eff)
 
     def to_html(self, full_page: bool = False) -> str:
         svg = self.to_svg()
@@ -521,6 +547,127 @@ def _y_descriptor(st) -> _AxisDescriptor:
     y_lo, y_hi = _scan_domain(artists, "y")
     y_min, y_max = _resolve_domain(y_lo, y_hi, st["ylim"], st["yscale"], force_zero=force_zero)
     return _AxisDescriptor(kind=st["yscale"], lo=y_min, hi=y_max)
+
+
+def _rotated_label_bbox(label_w: float, label_h: float, rot_deg: float) -> tuple[float, float]:
+    """Bounding-box (width, height) of a rotated text label. Conservative —
+    uses the simple `|cos|·w + |sin|·h` envelope, which is exact for the
+    AABB of an axis-aligned rectangle rotated by any angle."""
+    if rot_deg == 0:
+        return label_w, label_h
+    rad = math.radians(abs(rot_deg))
+    sin_r = math.sin(rad)
+    cos_r = math.cos(rad)
+    return (label_w * cos_r + label_h * sin_r,
+            label_w * sin_r + label_h * cos_r)
+
+
+def _required_margin(st, dw, dh) -> dict:
+    """Margin a body-first leaf actually needs to fit its title, axis
+    labels, and tick labels without overflow.
+
+    Returns a plain dict with the same keys as `_margin` — the caller
+    combines this with the user/spec margin (and the per-side floor) by
+    taking max per side. Body-first specifically: data dims are fixed,
+    so tick density and labels are deterministic and the computation is
+    a single pass (no chicken-and-egg with margin).
+
+    The geometry mirrors `_render_inner`'s placement formulas — keep them
+    in sync if either changes."""
+    tick_size  = _FONTSPEC["tick_size"]
+    label_size = _FONTSPEC["label_size"]
+    title_size = _FONTSPEC["title_size"]
+
+    # Title sits at y = -10 from the data top (see _render_inner), so it
+    # needs ≥ title_size + ~4 px of top margin to clear.
+    top = title_size + 6 if st["title"] else 0
+
+    # Provisional scales at the fixed data dims — body-first means iw/ih
+    # are decided up front, no iteration needed.
+    x_axis = _x_descriptor(st)
+    y_axis = _y_descriptor(st)
+    x_scale = x_axis.build(0, dw)
+    y_scale = y_axis.build(0, dh) if y_axis.kind == "category" else y_axis.build(dh, 0)
+
+    # Same tick-density rule as `_render_inner`.
+    x_n = max(2, min(8, int(dw // 65)))
+    y_n = max(2, min(8, int(dh // 40)))
+    x_ticks  = st["x_ticks"]  if st["x_ticks"]  is not None else x_scale.ticks(x_n)
+    y_ticks  = st["y_ticks"]  if st["y_ticks"]  is not None else y_scale.ticks(y_n)
+    x_labels = (st["x_labels"] if st["x_labels"] is not None
+                else [_fmt_tick(t) for t in x_ticks])
+    y_labels = (st["y_labels"] if st["y_labels"] is not None
+                else [_fmt_tick(t) for t in y_ticks])
+
+    x_size = st["x_fontsize"] if st["x_fontsize"] is not None else tick_size
+    y_size = st["y_fontsize"] if st["y_fontsize"] is not None else tick_size
+    x_rot  = st["x_rotation"] or 0
+    y_rot  = st["y_rotation"] or 0
+    x_dir, y_dir = st["x_direction"], st["y_direction"]
+    x_marks, y_marks = st["x_marks"], st["y_marks"]
+
+    # Outward / inout tick marks reach past the spine; "in" is internal only.
+    out_x = _TICK_LEN if x_marks and x_dir != "in" else 0
+    out_y = _TICK_LEN if y_marks and y_dir != "in" else 0
+
+    # X-tick label bbox (after rotation).
+    if x_labels:
+        max_xtl_w = max((_measure_text(str(l), x_size) for l in x_labels), default=0.0)
+        last_xtl_w = _measure_text(str(x_labels[-1]), x_size)
+        _, xtl_bbox_h = _rotated_label_bbox(max_xtl_w, x_size, x_rot)
+        last_bbox_w, _ = _rotated_label_bbox(last_xtl_w, x_size, x_rot)
+    else:
+        xtl_bbox_h = 0.0
+        last_bbox_w = 0.0
+
+    # Y-tick label width (after rotation).
+    if y_labels:
+        max_ytl_w = max((_measure_text(str(l), y_size) for l in y_labels), default=0.0)
+        ytl_bbox_w, _ = _rotated_label_bbox(max_ytl_w, y_size, y_rot)
+    else:
+        ytl_bbox_w = 0.0
+
+    # Bottom: outward tick + tick_pad + 8 px buffer + tick label bbox + xlabel.
+    # The "+8" mirrors the literal in _render_inner's tick-label baseline y.
+    bottom = out_x + _TICK_PAD + 8 + xtl_bbox_h
+    if st["xlabel"]:
+        bottom += label_size + 8
+
+    # Left: outward tick + tick_pad + tick label bbox + ylabel allowance.
+    # ylabel sits at canvas-left + 12 px (rotated -90), so it occupies
+    # roughly `label_size` in the horizontal direction.
+    left = out_y + _TICK_PAD + ytl_bbox_w
+    if st["ylabel"]:
+        left += label_size + 8
+
+    # Right: outward tick OR the rightmost x-tick label's overhang past
+    # the spine (centered text extends half its width past the tick).
+    right_overhang = last_bbox_w / 2.0
+    right = max(out_y, right_overhang)
+
+    # Long-text overflow: a title / xlabel longer than `dw` is centered on
+    # `iw/2`, so it sticks out past the data area on both left and right
+    # by `(text_w - dw) / 2`. A ylabel (rotated -90, centered on `ih/2`)
+    # is the same story but vertical: text longer than `dh` spills past
+    # top and bottom equally. Margins grow by the overhang amount so the
+    # rendered text fits inside the canvas.
+    if st["title"]:
+        title_overhang = max(0.0, (_measure_text(st["title"], title_size) - dw) / 2.0)
+        left  = max(left,  title_overhang)
+        right = max(right, title_overhang)
+    if st["xlabel"]:
+        xlabel_overhang = max(0.0, (_measure_text(st["xlabel"], label_size) - dw) / 2.0)
+        left  = max(left,  xlabel_overhang)
+        right = max(right, xlabel_overhang)
+    if st["ylabel"]:
+        ylabel_overhang = max(0.0, (_measure_text(st["ylabel"], label_size) - dh) / 2.0)
+        top    = max(top,    ylabel_overhang)
+        bottom = max(bottom, ylabel_overhang)
+
+    return {"top":    int(round(top)),
+            "right":  int(round(right)),
+            "bottom": int(round(bottom)),
+            "left":   int(round(left))}
 
 
 def _build_xy_scales(st, iw, ih, panel_opts: _PanelOpts):

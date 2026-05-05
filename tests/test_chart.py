@@ -251,6 +251,43 @@ def chart_reflines():
     return c
 
 
+def chart_long_title():
+    # Title text wider than the data region: measure-driven margin grows
+    # left and right so the centered title doesn't spill off-canvas.
+    # data_width=180 is small; title is ~360 px wide → ~90 px overhang each side.
+    c = pt.chart(data_width=180, data_height=140,
+                 title="A very wide title that exceeds the data region width",
+                 xlabel="x", ylabel="y")
+    c.line([1, 2, 3, 4, 5], [1, 2, 4, 8, 16])
+    return c
+
+
+def chart_long_ylabel():
+    # ylabel rendered rotated -90 around the data area's vertical center;
+    # text longer than data_height spills past top and bottom. Margin
+    # should grow on top *and* bottom by half the overhang.
+    c = pt.chart(data_width=200, data_height=120,
+                 ylabel="Gene expression (log10 normalized counts per million)",
+                 xlabel="time")
+    c.line([0, 1, 2, 3], [3.2, 4.1, 4.9, 5.5])
+    return c
+
+
+def chart_long_rotated_xticks():
+    # Long x-tick labels rotated 45° — the rotated bbox height grows the
+    # bottom margin so labels don't overflow the canvas. Without rotation
+    # they'd crowd horizontally; without measure-driven they'd spill past
+    # the bottom edge.
+    df = {"sample": ["sample_alpha_2024", "sample_beta_2024", "sample_gamma_2024",
+                      "sample_delta_2024", "sample_epsilon_2024"],
+          "count":  [12, 7, 19, 14, 9]}
+    c = pt.chart(df, data_width=300, data_height=180,
+                 title="long rotated x-tick labels", ylabel="count")
+    c.bar(x="sample", y="count", color="C0")
+    c.xticks(rotation=45)
+    return c
+
+
 PLOTS = {
     "table":               chart_table,
     "hue":                 chart_hue,
@@ -272,6 +309,9 @@ PLOTS = {
     "imshow_rect":         chart_imshow_rect,
     "imshow_png":          chart_imshow_png,
     "imshow_diverging":    chart_imshow_diverging,
+    "long_title":          chart_long_title,
+    "long_ylabel":         chart_long_ylabel,
+    "long_rotated_xticks": chart_long_rotated_xticks,
 }
 
 
