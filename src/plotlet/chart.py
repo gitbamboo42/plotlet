@@ -34,8 +34,10 @@ from .registry import get_artist, all_artist_names
 
 class Chart:
     def __init__(self, data=None, *,
-                 data_width: int | None = None, data_height: int | None = None,
-                 canvas_width: int | None = None, canvas_height: int | None = None,
+                 data_width: int | float | str | None = None,
+                 data_height: int | float | str | None = None,
+                 canvas_width: int | float | str | None = None,
+                 canvas_height: int | float | str | None = None,
                  margin: dict | None = None,
                  title: str | None = None,
                  xlabel: str | None = None, ylabel: str | None = None,
@@ -114,7 +116,8 @@ class Chart:
 
     def legend(self, *args, names: dict | None = None,
                group_by_chart: bool | None = None,
-               canvas_width: int | None = None, canvas_height: int | None = None,
+               canvas_width: int | float | str | None = None,
+               canvas_height: int | float | str | None = None,
                **kwargs) -> "Chart":
         """Toggle the in-frame overlay (leaf) or attach a layout-level legend (parent).
 

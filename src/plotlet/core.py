@@ -17,6 +17,7 @@ behaves as before.
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -131,6 +132,58 @@ def _record_ticks(st, axis, args, kw):
     if "marks" in kw:     st[f"{axis}_marks"]     = bool(kw["marks"])
 
 
+# Conversion factors to pixels, CSS standard: 1 in = 96 px, 1 in = 2.54 cm,
+# 1 in = 72 pt. Internal layout math is always pixels — string units are
+# parsed once at the constructor boundary and stored as ints, so SVG output
+# stays byte-identical regardless of input form.
+_UNIT_PX = {
+    "px": 1.0,
+    "in": 96.0,
+    "cm": 96.0 / 2.54,
+    "mm": 96.0 / 25.4,
+    "pt": 96.0 / 72.0,
+}
+_DIM_RE = re.compile(r"^\s*([+-]?\d*\.?\d+)\s*([a-zA-Z]*)\s*$")
+
+
+def _to_px(value):
+    """Resolve a dim value to integer pixels.
+
+    Accepts:
+      - `int` / `float`: bare pixels.
+      - `str`: a number with an optional unit suffix
+        (`"4in"`, `"10cm"`, `"100mm"`, `"72pt"`, `"30px"` or `"30"`).
+        Whitespace and case insensitive (`"5 IN"` works).
+      - `None`: passthrough (constructors interpret as "use default").
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        # Guard against `True`/`False` slipping through `int` — almost never
+        # what the user meant for a dimension.
+        raise TypeError(f"dim value cannot be bool; got {value!r}")
+    if isinstance(value, (int, float)):
+        return int(round(value))
+    if not isinstance(value, str):
+        raise TypeError(
+            f"dim value must be int, float, or str; got {type(value).__name__}"
+        )
+    m = _DIM_RE.match(value)
+    if not m:
+        raise ValueError(
+            f"could not parse dim value {value!r}; expected '<number>[unit]' "
+            f"where unit is one of: {', '.join(sorted(_UNIT_PX))}"
+        )
+    num = float(m.group(1))
+    unit = m.group(2).lower() or "px"
+    if unit not in _UNIT_PX:
+        raise ValueError(
+            f"unknown unit {unit!r} in {value!r}; expected one of: "
+            f"{', '.join(sorted(_UNIT_PX))}"
+        )
+    return int(round(num * _UNIT_PX[unit]))
+
+
 def _spec_canvas_dims() -> tuple[int, int]:
     """Spec-default canvas size, derived from data region + spec margin.
 
@@ -144,9 +197,12 @@ def _spec_canvas_dims() -> tuple[int, int]:
 
 
 class Figure:
-    def __init__(self, data_width: int | None = None, data_height: int | None = None,
+    def __init__(self,
+                 data_width: int | float | str | None = None,
+                 data_height: int | float | str | None = None,
                  *,
-                 canvas_width: int | None = None, canvas_height: int | None = None,
+                 canvas_width: int | float | str | None = None,
+                 canvas_height: int | float | str | None = None,
                  margin: dict | None = None,
                  **kwargs):
         # Migration error: 0.1.x accepted `width=`/`height=` (canvas dims).
@@ -172,6 +228,13 @@ class Figure:
                 "or canvas_width/canvas_height (the full SVG canvas), not both."
             )
 
+        # Resolve unit-suffixed strings (`"4in"`, `"10cm"`, …) once at the
+        # boundary so internal math stays in pixels.
+        data_width    = _to_px(data_width)
+        data_height   = _to_px(data_height)
+        canvas_width  = _to_px(canvas_width)
+        canvas_height = _to_px(canvas_height)
+
         self._calls: list[tuple[str, list, dict]] = []
         self._margin = dict(margin) if margin is not None else dict(_SIZESPEC["margin"])
 
@@ -183,13 +246,16 @@ class Figure:
             self._canvas_width  = canvas_width  if canvas_width  is not None else spec_cw
             self._canvas_height = canvas_height if canvas_height is not None else spec_ch
             self._canvas_explicit = True
+            M_eff = _scaled_margin(self._margin, self._canvas_width, self._canvas_height)
+            self._data_width  = self._canvas_width  - M_eff["left"] - M_eff["right"]
+            self._data_height = self._canvas_height - M_eff["top"]  - M_eff["bottom"]
         else:
             # Data path (default): user picked the data region exactly. Margin
             # is used unscaled (only floored). Canvas falls out as data + margin.
-            dw = data_width  if data_width  is not None else _SIZESPEC["data_width"]
-            dh = data_height if data_height is not None else _SIZESPEC["data_height"]
-            self._canvas_width  = dw + self._margin["left"] + self._margin["right"]
-            self._canvas_height = dh + self._margin["top"]  + self._margin["bottom"]
+            self._data_width  = data_width  if data_width  is not None else _SIZESPEC["data_width"]
+            self._data_height = data_height if data_height is not None else _SIZESPEC["data_height"]
+            self._canvas_width  = self._data_width  + self._margin["left"] + self._margin["right"]
+            self._canvas_height = self._data_height + self._margin["top"]  + self._margin["bottom"]
             self._canvas_explicit = False
 
     def __getattr__(self, name):
@@ -285,9 +351,11 @@ class Figure:
         return self
 
 
-def figure(data_width: int | None = None, data_height: int | None = None,
+def figure(data_width: int | float | str | None = None,
+           data_height: int | float | str | None = None,
            *,
-           canvas_width: int | None = None, canvas_height: int | None = None,
+           canvas_width: int | float | str | None = None,
+           canvas_height: int | float | str | None = None,
            **opts) -> Figure:
     return Figure(data_width, data_height,
                   canvas_width=canvas_width, canvas_height=canvas_height,

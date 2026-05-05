@@ -43,8 +43,8 @@ def _adaptive_n_ticks(strip_h: float) -> int:
 
 def legend(*sources: Chart, names: dict | None = None,
            group_by_chart: bool = True,
-           canvas_width: int | None = None,
-           canvas_height: int | None = None,
+           canvas_width: int | float | str | None = None,
+           canvas_height: int | float | str | None = None,
            **kwargs) -> Chart:
     """Create a layout-level legend.
 
