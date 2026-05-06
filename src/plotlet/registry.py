@@ -23,6 +23,12 @@ A spec bundles the four things `_render` needs to know about a plot type:
         Whether this artist consumes the next tab10 color (True for
         plot/scatter/bar/etc, False for axhline/axvline/imshow).
 
+  - `data_attrs(artist) -> dict | None` (optional, 0.3.0+)
+        Type-specific structural attrs for the AI-readable schema. Returned
+        keys land on the artist's wrapper `<g>` as `data-plotlet-<key>`.
+        Common attrs (type, index, label, color) are added by the wrapper —
+        each artist contributes only its own fields (n, x-min, marker, …).
+
 `add_artist(name, ...)` is the public extension API. After calling it, users
 can do `fig.<name>(...)` and it Just Works.
 """
@@ -44,6 +50,7 @@ class ArtistSpec:
     default_color: str | None = None  # used when uses_color_cycle is False
     legend_swatch: Callable[[dict, "RenderContext", float, float], str] | None = None
     legend_gradient: Callable[[dict], dict | None] | None = None
+    data_attrs: Callable[[dict], dict | None] | None = None
 
 
 @dataclass

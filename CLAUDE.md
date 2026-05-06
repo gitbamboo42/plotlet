@@ -8,7 +8,7 @@ This file gives Claude (or any collaborator) the context needed to be useful fro
 
 ## What this project is
 
-plotlet is a ~700-line Python library that produces matplotlib-flavored SVG plots. The architecture is a deferred-rendering pipeline: artist methods record into a list, then `show()` walks the list and emits one self-contained SVG string. Output is rendered by the consumer's browser/viewer; plotlet has no rendering engine of its own.
+plotlet is a Python library that produces matplotlib-flavored SVG plots. The architecture is a deferred-rendering pipeline: artist methods record into a list, then `show()` walks the list and emits one self-contained SVG string. Output is rendered by the consumer's browser/viewer; plotlet has no rendering engine of its own.
 
 Product positioning — "scaffold, not catalog", why-not-matplotlib, custom plots in user projects — lives in [README.md](README.md) and [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md). This file focuses on *how plotlet is built and changed*.
 
@@ -60,7 +60,9 @@ plotlet/
 │   └── test_chart.py            # plot defs for the pt.chart() API
 └── docs/
     ├── PHILOSOPHY.md
-    └── EXTENDING.md
+    ├── EXTENDING.md
+    ├── SUBPLOTS.md
+    └── AI_ATTRS.md
 ```
 
 ### Running tests / notebooks
@@ -96,6 +98,10 @@ Then `to_svg()` does five phases:
 3. **Scale build** — `_LinearScale`, `_LogScale`, `_CategoryScale`. The category scale fires whenever the axis is categorical (auto-detected from string data, or via explicit `xscale="category"` / `yscale="category"`); `order=[...]` picks an explicit layout, alphabetical otherwise. Ticks come from the standard 1/2/5 × 10ⁿ "nice numbers" algorithm.
 4. **Render artists** — three layers (`background` → `data` → `foreground`); each artist's `spec.draw(a, ctx)` emits SVG. `RenderContext` carries the scales, dimensions, color, and defaults.
 5. **Frame, ticks, labels, legend** — spines, tick lines, text-as-paths labels, then the in-frame legend box (today's `chart.legend()` overlay). Tick rendering honors the matplotlib-style `xticks(positions, labels, *, rotation, fontsize, direction, marks)` / `yticks(...)` overrides — `[]` hides, `marks=False` keeps labels but skips the lines, `direction="out"|"inout"` flips the inward default. Custom artists can supply `spec.legend_swatch` (discrete entries) and/or `spec.legend_gradient` (continuous color mapping → gradient strip in the layout-level legend). Layout-level multi-panel rendering in `layout.py` does a separate two-pass walk (data leaves first to assign `_color`, then legend leaves harvest those colors), with `legend.py` owning the legend renderer.
+
+### AI-readable SVG attributes (0.3.0)
+
+Every plotlet SVG carries `data-plotlet-*` attributes describing plot type, axes, scales, ranges, and series labels. The root `<svg>` gets `data-plotlet-version` / `-schema` / `-kind`, each panel `<g>` gets title / xlabel / ylabel / xscale / yscale / xlim / ylim / data-area, each artist `<g class="plotlet-artist">` gets type / index / label / color plus type-specific extras (n, x-min/max, marker, …). Categorical axes emit a child `<metadata data-plotlet-payload="xcategories">` JSON blob with the labels. The schema (`data-plotlet-schema="1"`) is semver-stable from 0.3.0 forward. Custom artists hook in by declaring an optional `data_attrs=` callback on their `ArtistSpec` for type-specific attrs; common attrs (type, index, label, color) come automatically. Full schema reference: [docs/AI_ATTRS.md](docs/AI_ATTRS.md).
 
 ### Adding a new plot type
 
@@ -140,7 +146,7 @@ When suggesting changes or adding features:
 - **Visual constants live in `spec.json`.** If you find yourself typing a number into render code, ask whether it should be there instead.
 - **Test with baselines.** Core changes get added to `tests/test_chart.py` with a committed SVG; cookbook examples are reference, not regression-tested.
 - **Mention matplotlib quirks that aren't replicated** and why, when relevant.
-- **Layout / multi-panel code lives in its own module** (`layout.py` for rect computation + multi-panel assembly; `legend.py` for the layout-level legend), not in `core.py`. The "small core readable in an afternoon" property is preserved by keeping `core.py` / `artists.py` / `registry.py` / `scales.py` unchanged in scope — anyone who wants the minimal mental model reads just those.
+- **Layout / multi-panel code lives in its own module** (`layout.py` for rect computation + multi-panel assembly; `legend.py` for the layout-level legend), not in `core.py`. Keep responsibilities split: leaf rendering in `core.py` / `artists.py` / `registry.py` / `scales.py`; composition + multi-panel in `layout.py` / `legend.py`.
 
 The actual mechanics of adding an artist (`ArtistSpec`, `add_artist`, `RenderContext`) are in [docs/EXTENDING.md](docs/EXTENDING.md).
 

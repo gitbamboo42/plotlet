@@ -94,6 +94,8 @@ ArtistSpec(
     uses_color_cycle: bool = True,
     default_color: str | None = None,         # used when uses_color_cycle=False
     legend_swatch: (a, ctx, x0, y_mid) -> str | None = None,
+    legend_gradient: (a) -> dict | None = None,
+    data_attrs: (a) -> dict | None = None,
 )
 ```
 
@@ -103,6 +105,8 @@ ArtistSpec(
 | `layer` | `"data"` | `"background"` for fills and shaded spans (drawn first), `"foreground"` for reference lines (drawn last, on top). Same artist within a layer keeps insertion order. |
 | `uses_color_cycle` | `True` | Set `False` for artists that shouldn't consume a tab10 slot — reflines, image-based artists, anything that picks its own color. Set `default_color` to give it a fallback. |
 | `legend_swatch` | `None` | Provide to draw your own legend entry. Without it, the legend falls back to a colored line in the artist's color. Signature: `(a, ctx, x0, y_mid) -> svg_fragment`. |
+| `legend_gradient` | `None` | Provide for artists with a continuous color mapping (heatmap-style). Returns `{"kind": "continuous", "cmap": ..., "vmin": ..., "vmax": ...}` so the layout-level legend can render a colorbar. |
+| `data_attrs` | `None` | AI-readable structural attrs. Returned dict keys land on the artist's `<g>` as `data-plotlet-<key>`. Common attrs (type, index, label, color) are added automatically without this field — declare it if you want type-specific attrs (`n`, ranges, marker, …). See [`AI_ATTRS.md`](AI_ATTRS.md). |
 
 ---
 

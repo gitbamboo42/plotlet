@@ -23,6 +23,7 @@ from .core import (
     _render_inner, _scaled_margin, _enforce_floors, _required_margin,
     _x_descriptor, _y_descriptor,
     _AxisDescriptor, _PanelOpts,
+    _figure_root_attrs, _panel_open,
 )
 from .chart import Chart
 
@@ -616,7 +617,8 @@ def _render_layout(root: Chart) -> str:
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
         f'viewBox="0 0 {W} {H}" font-family="{_FONT}" font-size="11" '
-        f'style="background:#fff">'
+        f'style="background:#fff"'
+        f'{_figure_root_attrs("layout")}>'
     ]
     # Two passes so legends can read color-cycle assignments off data
     # artists. _render_inner mutates each artist dict's `_color`; legends
@@ -630,7 +632,8 @@ def _render_layout(root: Chart) -> str:
         iw = w - M_eff["left"] - M_eff["right"]
         ih = h - M_eff["top"] - M_eff["bottom"]
         st = states[id(leaf)]
-        parts.append(f'<g transform="translate({x + M_eff["left"]:.2f},{y + M_eff["top"]:.2f})">')
+        transform = f'translate({x + M_eff["left"]:.2f},{y + M_eff["top"]:.2f})'
+        parts.append(_panel_open(st, po, transform, M_eff, iw, ih))
         parts.append(_render_inner(st, iw, ih, M_eff, po))
         parts.append('</g>')
         data_leaves.append(leaf)

@@ -16,9 +16,12 @@ behaves as before.
 """
 from __future__ import annotations
 
+import html
+import json
 import math
 import re
 from dataclasses import dataclass, field
+from importlib.metadata import version as _pkg_version
 from pathlib import Path
 
 from ._spec import (
@@ -30,6 +33,16 @@ from .font import _measure_text, _text_path
 from .artists import _histogram
 from .registry import RenderContext, get_artist, all_artist_names
 from . import builtin_artists  # noqa: F401  — registers built-ins on import
+
+# AI-readable SVG attrs — see docs/AI_ATTRS.md. Every plotlet SVG carries
+# `data-plotlet-*` attributes describing plot type, axes, scales, ranges,
+# and series labels. Schema is semver-stable from 0.3.0 forward, declared
+# via `data-plotlet-schema` on the root.
+_SCHEMA_VERSION = "1"
+# Read from package metadata (pyproject.toml) so there's a single source
+# of truth for the version. Independent of `__init__.__version__` to
+# avoid a circular import.
+_PLOTLET_VERSION = _pkg_version("plotlet")
 
 _TICK_LEN = _FRAME["tick_length"]
 _TICK_PAD = _FRAME["tick_pad"]
@@ -684,8 +697,121 @@ def _build_xy_scales(st, iw, ih, panel_opts: _PanelOpts):
 
 
 # ---------------------------------------------------------------------------
+# AI-readable SVG attrs — schema and helpers (0.3.0)
+# ---------------------------------------------------------------------------
+# Every plotlet SVG carries `data-plotlet-*` attributes describing plot type,
+# axes, scales, ranges, and series labels. Schema is semver-stable from 0.3.0
+# forward, declared via `data-plotlet-schema="1"` on the root.
+
+def _attr_str(v) -> str:
+    """Stringify a value for a data-plotlet-* attribute. floats use repr()
+    to round-trip exactly; ints, strings stringify naturally; bools are
+    "true"/"false". Lists are not supported here — they go in <metadata>."""
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, float):
+        return repr(v)
+    return str(v)
+
+
+def _attrs_str(d: dict) -> str:
+    """Encode `{"key": val}` as ` data-plotlet-key="val"` pairs, HTML-escaped.
+    Keys with `None` values are skipped. Empty dict -> ''."""
+    out = []
+    for k, v in d.items():
+        if v is None:
+            continue
+        out.append(f' data-plotlet-{k}="{html.escape(_attr_str(v), quote=True)}"')
+    return "".join(out)
+
+
+def _category_metadata(name: str, cats) -> str:
+    """Emit a `<metadata data-plotlet-payload="name">` block carrying a JSON
+    array of category labels. Wrapped in CDATA so labels can contain `<`
+    `>` `&` without XML escaping; `json.dumps` won't produce `]]>`."""
+    body = json.dumps(list(cats), ensure_ascii=False, separators=(",", ":"))
+    return (f'<metadata data-plotlet-payload="{name}">'
+            f'<![CDATA[{body}]]></metadata>')
+
+
+def _figure_root_attrs(kind: str) -> str:
+    """Attrs for the outer `<svg>`. `kind` is "figure" (single panel) or
+    "layout" (multi-panel composition)."""
+    return _attrs_str({
+        "version": _PLOTLET_VERSION,
+        "schema":  _SCHEMA_VERSION,
+        "kind":    kind,
+    })
+
+
+def _panel_attrs_and_meta(st, M, iw, ih, x_axis, y_axis) -> tuple[str, str]:
+    """Build (attrs, metadata) for one panel <g>. `attrs` is the attribute
+    string spliced into the open tag; `metadata` is one or more <metadata>
+    children placed at the start of the <g> body (currently: x/y category
+    lists)."""
+    attrs = {"kind": "panel"}
+    if st["title"]:  attrs["title"]  = st["title"]
+    if st["xlabel"]: attrs["xlabel"] = st["xlabel"]
+    if st["ylabel"]: attrs["ylabel"] = st["ylabel"]
+    attrs["xscale"] = x_axis.kind
+    attrs["yscale"] = y_axis.kind
+
+    if x_axis.kind != "category":
+        attrs["xlim"] = f"{repr(x_axis.lo)},{repr(x_axis.hi)}"
+    if y_axis.kind != "category":
+        attrs["ylim"] = f"{repr(y_axis.lo)},{repr(y_axis.hi)}"
+
+    # Data-area rect in SVG coords (relative to the outer <svg>): the
+    # panel <g> is translated by (M.left, M.top), and the data area runs
+    # 0..iw, 0..ih inside it.
+    attrs["data-area"] = f'{M["left"]},{M["top"]},{int(round(iw))},{int(round(ih))}'
+
+    meta_parts = []
+    if x_axis.kind == "category" and x_axis.cats:
+        meta_parts.append(_category_metadata("xcategories", x_axis.cats))
+    if y_axis.kind == "category" and y_axis.cats:
+        meta_parts.append(_category_metadata("ycategories", y_axis.cats))
+
+    return _attrs_str(attrs), "".join(meta_parts)
+
+
+def _wrap_artist(a, idx: int, body: str) -> str:
+    """Wrap one artist's draw fragment in `<g class="plotlet-artist" ...>`.
+    Common attrs (type, index, label, color) come from the artist record;
+    type-specific attrs come from the registered spec's `data_attrs`
+    callback if it has one."""
+    spec = get_artist(a["type"])
+    attrs = {"type": a["type"], "index": idx}
+    label = a["opts"].get("label")
+    if label:
+        attrs["label"] = label
+    if a.get("_color"):
+        attrs["color"] = a["_color"]
+    if spec is not None and spec.data_attrs is not None:
+        extra = spec.data_attrs(a)
+        if extra:
+            attrs.update(extra)
+    return f'<g class="plotlet-artist"{_attrs_str(attrs)}>{body}</g>'
+
+
+# ---------------------------------------------------------------------------
 # render orchestrator — now generic over the registry
 # ---------------------------------------------------------------------------
+
+def _panel_open(st, panel_opts: _PanelOpts | None, transform: str,
+                M: dict, iw: float, ih: float) -> str:
+    """Open a panel `<g>` with transform + structural data attrs, and emit
+    any panel-level `<metadata>` children (currently x/y category lists).
+    Used by both standalone `_render` and layout's `_render_layout` so the
+    two paths stay in sync. Returns a string ending mid-element — the
+    caller appends `_render_inner(...)` then `</g>`."""
+    x_axis = (panel_opts.x_axis if panel_opts and panel_opts.x_axis
+              else _x_descriptor(st))
+    y_axis = (panel_opts.y_axis if panel_opts and panel_opts.y_axis
+              else _y_descriptor(st))
+    attrs, meta = _panel_attrs_and_meta(st, M, iw, ih, x_axis, y_axis)
+    return f'<g transform="{transform}"{attrs}>{meta}'
+
 
 def _render(st, W, H, M):
     """Emit one SVG. (W, H) = canvas dims; M = effective margin already
@@ -694,11 +820,13 @@ def _render(st, W, H, M):
     what lets the data-path skip canvas-based scaling."""
     iw = W - M["left"] - M["right"]
     ih = H - M["top"] - M["bottom"]
+    transform = f'translate({M["left"]},{M["top"]})'
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
         f'viewBox="0 0 {W} {H}" font-family="{_FONT}" font-size="11" '
-        f'style="background:#fff">'
-        f'<g transform="translate({M["left"]},{M["top"]})">'
+        f'style="background:#fff"'
+        f'{_figure_root_attrs("figure")}>'
+        + _panel_open(st, None, transform, M, iw, ih)
         + _render_inner(st, iw, ih, M)
         + '</g></svg>'
     )
@@ -763,16 +891,20 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             color=a["_color"], defaults=_D, dash=_DASH,
         )
 
-    # three-pass draw: background → data → foreground
+    # three-pass draw: background → data → foreground.
+    # Each artist's body is wrapped in <g class="plotlet-artist" ...> so
+    # AI consumers can read structural attrs (type, label, color, range,
+    # etc.) without parsing geometry.
     by_layer = {"background": [], "data": [], "foreground": []}
-    for a in st["artists"]:
+    for idx, a in enumerate(st["artists"]):
         spec = get_artist(a["type"])
         if spec is None: continue
-        by_layer[spec.layer].append(a)
+        by_layer[spec.layer].append((idx, a))
     for layer in ("background", "data", "foreground"):
-        for a in by_layer[layer]:
+        for idx, a in by_layer[layer]:
             spec = get_artist(a["type"])
-            parts.append(spec.draw(a, _ctx_for(a)))
+            body = spec.draw(a, _ctx_for(a))
+            parts.append(_wrap_artist(a, idx, body))
 
     # All four spines always render — joined share-pairs show two parallel
     # spines (one per panel) `inner_gap` pixels apart, by design.

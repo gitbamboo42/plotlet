@@ -26,4 +26,10 @@ from .registry import ArtistSpec, add_artist
 __all__ = ["chart", "Chart", "figure", "Figure", "SPEC", "TAB10", "colors",
            "colormap", "list_colormaps", "grid", "legend",
            "ArtistSpec", "add_artist"]
-__version__ = "0.2.0"
+
+# Single source of truth: pyproject.toml. importlib.metadata reads it at
+# runtime from the installed package metadata (works for `pip install` and
+# `pip install -e .` alike). Migrating to setuptools_scm later doesn't
+# touch this code — it just changes how pyproject.toml's version is set.
+from importlib.metadata import version as _pkg_version
+__version__ = _pkg_version("plotlet")

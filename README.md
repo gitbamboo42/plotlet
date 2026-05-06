@@ -36,6 +36,7 @@ pip install plotlet
 - **Jupyter-native.** `Figure._repr_html_` auto-renders the last expression in a cell.
 - **Tiny output.** Each plot is ~50 KB SVG, self-contained.
 - **Compositional.** Multi-panel layouts via `|`, `/`, `pt.grid`; share scales with `share_x=` / `share_y=`; layout-level legend with `pt.legend()` covering both discrete swatches and continuous gradients (the colorbar).
+- **AI-readable.** Every figure ships `data-plotlet-*` attributes describing plot type, axes, scales, ranges, and series labels — readable in one XML parse, no glyph-path OCR. Schema: [docs/AI_ATTRS.md](docs/AI_ATTRS.md).
 
 ## API
 

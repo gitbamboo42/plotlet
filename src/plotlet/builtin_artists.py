@@ -79,6 +79,98 @@ def _refspan_legend_swatch(a, ctx, x0, y_mid):
     return _rect_swatch(a, x0, y_mid, ctx.defaults["refspan_alpha"])
 
 
+# --- AI-readable structural attrs + payloads (0.3.0) ------------------------
+# Each helper computes type-specific attrs from the recorded artist dict.
+# The wrapper in core._wrap_artist supplies the common attrs (type, index,
+# label, color); these add the per-artist fields. Returned dict keys map
+# 1:1 to `data-plotlet-<key>` attribute names.
+
+def _xy_minmax(xs, ys):
+    """Min/max for an x/y series, ignoring NaN. Returns dict ready to merge
+    into a data_attrs result."""
+    fxs = [x for x in xs if isinstance(x, (int, float)) and x == x]
+    fys = [y for y in ys if isinstance(y, (int, float)) and y == y]
+    out = {}
+    if fxs:
+        out["x-min"] = min(fxs)
+        out["x-max"] = max(fxs)
+    if fys:
+        out["y-min"] = min(fys)
+        out["y-max"] = max(fys)
+    return out
+
+
+def _plot_data_attrs(a):
+    out = {"n": len(a["xs"])}
+    out.update(_xy_minmax(a["xs"], a["ys"]))
+    if a["opts"].get("linestyle"):
+        out["linestyle"] = a["opts"]["linestyle"]
+    if a["opts"].get("marker"):
+        out["marker"] = a["opts"]["marker"]
+    return out
+
+
+def _scatter_data_attrs(a):
+    out = {"n": len(a["xs"])}
+    out.update(_xy_minmax(a["xs"], a["ys"]))
+    out["marker"] = a["opts"].get("marker", "o")
+    return out
+
+
+def _bar_data_attrs(a):
+    fvals = [v for v in a["vals"] if isinstance(v, (int, float)) and v == v]
+    out = {"n": len(a["cats"])}
+    if fvals:
+        out["y-min"] = min(fvals)
+        out["y-max"] = max(fvals)
+    return out
+
+
+def _hist_data_attrs(a):
+    raw = a["data"]
+    out = {"n": len(raw), "bins": len(a.get("_bins", [])) or a["opts"].get("bins", 10)}
+    bins = a.get("_bins") or []
+    if bins:
+        out["x-min"] = bins[0]["x0"]
+        out["x-max"] = bins[-1]["x1"]
+        out["count-max"] = max(b["count"] for b in bins)
+    return out
+
+
+def _fill_between_data_attrs(a):
+    ys_all = list(a["y1"]) + list(a["y2"])
+    out = {"n": len(a["xs"])}
+    out.update(_xy_minmax(a["xs"], ys_all))
+    return out
+
+
+def _axhline_data_attrs(a):  return {"y": a["y"]}
+def _axvline_data_attrs(a):  return {"x": a["x"]}
+def _axhspan_data_attrs(a):  return {"ymin": a["ymin"], "ymax": a["ymax"]}
+def _axvspan_data_attrs(a):  return {"xmin": a["xmin"], "xmax": a["xmax"]}
+
+
+def _imshow_data_attrs(a):
+    out = {
+        "rows": a["_nrows"],
+        "cols": a["_ncols"],
+        "vmin": a["_vmin"],
+        "vmax": a["_vmax"],
+        "cmap": a["opts"].get("cmap", _D["default_cmap"]),
+        # imshow is always raster (PNG-embedded above the rect threshold,
+        # individual <rect>s below). The flag is here so AI tools know
+        # which decoding strategy they're looking at.
+        "data-encoding": "png-embedded" if (a["_nrows"] * a["_ncols"]
+                                              > _D["imshow_max_rects"]) else "rects",
+    }
+    extent = a["opts"].get("extent")
+    if extent is not None:
+        out["extent"] = ",".join(repr(float(v)) for v in extent)
+    return out
+
+
+
+
 # --- plot (line) ------------------------------------------------------------
 
 add_artist(ArtistSpec(
@@ -89,6 +181,7 @@ add_artist(ArtistSpec(
     ydomain=_ys_of,
     draw=lambda a, ctx: _artist_plot(a, ctx.x_scale, ctx.y_scale, ctx.color),
     legend_swatch=_plot_legend_swatch,
+    data_attrs=_plot_data_attrs,
 ))
 
 
@@ -102,6 +195,7 @@ add_artist(ArtistSpec(
     ydomain=_ys_of,
     draw=lambda a, ctx: _artist_scatter(a, ctx.x_scale, ctx.y_scale, ctx.color),
     legend_swatch=_scatter_legend_swatch,
+    data_attrs=_scatter_data_attrs,
 ))
 
 
@@ -117,6 +211,7 @@ add_artist(ArtistSpec(
     ydomain=_vals_of,
     draw=lambda a, ctx: _artist_bar(a, ctx.x_scale, ctx.y_scale, ctx.color),
     legend_swatch=_bar_legend_swatch,
+    data_attrs=_bar_data_attrs,
 ))
 
 
@@ -129,6 +224,7 @@ add_artist(ArtistSpec(
     ydomain=_bin_ys,
     draw=lambda a, ctx: _artist_hist(a, ctx.x_scale, ctx.y_scale, ctx.ih, ctx.color),
     legend_swatch=_bar_legend_swatch,
+    data_attrs=_hist_data_attrs,
 ))
 
 
@@ -145,6 +241,7 @@ add_artist(ArtistSpec(
     ydomain=_y1y2_of,
     draw=lambda a, ctx: _artist_fill_between(a, ctx.x_scale, ctx.y_scale, ctx.color),
     legend_swatch=_plot_legend_swatch,
+    data_attrs=_fill_between_data_attrs,
 ))
 
 
@@ -160,6 +257,7 @@ add_artist(ArtistSpec(
     uses_color_cycle=False,
     default_color=_D["refline_color"],
     legend_swatch=_refline_legend_swatch,
+    data_attrs=_axhline_data_attrs,
 ))
 
 add_artist(ArtistSpec(
@@ -171,6 +269,7 @@ add_artist(ArtistSpec(
     uses_color_cycle=False,
     default_color=_D["refline_color"],
     legend_swatch=_refline_legend_swatch,
+    data_attrs=_axvline_data_attrs,
 ))
 
 add_artist(ArtistSpec(
@@ -182,6 +281,7 @@ add_artist(ArtistSpec(
     uses_color_cycle=False,
     default_color=_D["refspan_color"],
     legend_swatch=_refspan_legend_swatch,
+    data_attrs=_axhspan_data_attrs,
 ))
 
 add_artist(ArtistSpec(
@@ -193,6 +293,7 @@ add_artist(ArtistSpec(
     uses_color_cycle=False,
     default_color=_D["refspan_color"],
     legend_swatch=_refspan_legend_swatch,
+    data_attrs=_axvspan_data_attrs,
 ))
 
 
@@ -251,4 +352,5 @@ add_artist(ArtistSpec(
     draw=lambda a, ctx: _artist_imshow(a, ctx.x_scale, ctx.y_scale, None),
     legend_gradient=_imshow_legend_gradient,
     uses_color_cycle=False,
+    data_attrs=_imshow_data_attrs,
 ))
