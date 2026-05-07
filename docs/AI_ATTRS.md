@@ -37,11 +37,32 @@ The schema is semver-stable from 0.3.0, declared via
 | `data-plotlet-yscale`    | `"linear"` / `"log"` / `"category"` |                                     |
 | `data-plotlet-xlim`      | `"0,42"`               | resolved limits, post-autoscale; omitted on categorical |
 | `data-plotlet-ylim`      | `"-1.5,1.5"`           | omitted on categorical                           |
-| `data-plotlet-data-area` | `"60,24,500,300"`      | `"x,y,w,h"` in SVG coords                        |
+| `data-plotlet-panel-bbox`| `"0,0,560,348"`        | `"x,y,w,h"` of the full panel rect (margins included) in figure-SVG coords |
+| `data-plotlet-data-area` | `"60,24,500,300"`      | `"x,y,w,h"` of the data region in *panel-local* coords; add the bbox's `(x, y)` for figure-SVG coords |
 
 For categorical axes, the actual category list is emitted as a child
 `<metadata>` with `data-plotlet-payload="xcategories"` or
 `"ycategories"` carrying a JSON array (see "Categorical lists" below).
+
+### Diagram `<g>` (debug visualizer leaves)
+
+`pt.layout_diagram(c)` returns a leaf that, when composed into a
+multi-panel SVG, renders as a `<g>` with `data-plotlet-kind="diagram"`
+carrying a pre-built debug schematic. Consumers can identify and skip
+these `<g>`s when scanning for data panels:
+
+```python
+for g in svg.iter("{http://www.w3.org/2000/svg}g"):
+    if g.get("data-plotlet-kind") == "panel":     # data leaf
+        ...
+    elif g.get("data-plotlet-kind") == "diagram": # debug viz, skip
+        continue
+```
+
+The diagram `<g>` carries no `panel-bbox` / `data-area` / xlim / ylim
+attrs of its own — it isn't a chart panel and has no axes. Its
+contents are just rects, paths, and text laid out in the leaf's
+allocated rect.
 
 ### Artist `<g class="plotlet-artist">` (one per recorded artist)
 
@@ -141,3 +162,21 @@ SVG kind=figure plotlet=0.3.0 schema=1
 
 All of that is recoverable with a single XML parse — no glyph-path OCR,
 no pixel→data inversion.
+
+---
+
+## A schema-only consumer: `pt.layout_diagram`
+
+`pt.layout_diagram(chart)` (in [`src/plotlet/layout_diagram.py`](../src/plotlet/layout_diagram.py))
+is a debug visualizer that *only* reads `data-plotlet-*` attrs — it
+imports nothing from `plotlet.layout` or `plotlet.core`. Pass it a chart
+and it returns a separate SVG showing the panel bboxes (dashed),
+data areas (solid, sized to scale so the colored ring between them
+visually encodes margin proportions), and gaps between adjacent panels
+(hatched slabs labeled with pixel size, recovered by pairwise scan of
+the bboxes — joined share-pair joints filter out automatically).
+
+Worth treating as the canonical worked example: anything `layout_diagram`
+does, your own consumer can do too. Read the source, copy the parsing
+helpers, build whatever debug tool, layout linter, or AI inspection
+script your project needs.

@@ -114,9 +114,11 @@ def _pair_gap(a: Chart | None, b: Chart | None, *, axis: str) -> float:
     """
     if a is None or b is None or a._is_parent or b._is_parent:
         return _GAP
-    if a._legend_kind ^ b._legend_kind:
-        leg = a if a._legend_kind else b
-        other = b if a._legend_kind else a
+    a_leg = a._leaf_kind == "legend"
+    b_leg = b._leaf_kind == "legend"
+    if a_leg ^ b_leg:
+        leg   = a if a_leg else b
+        other = b if a_leg else a
         if not leg._legend_sources or other in leg._legend_sources:
             return _LEGEND_GAP
         return _GAP
@@ -430,7 +432,8 @@ def _propagate_grid_joins(node: Chart, out: dict[int, _PanelOpts]) -> None:
         # their own internal margin model and aren't in `out` at all.
         def _data_cells(idxs):
             return [children[i] for i in idxs
-                    if children[i] is not None and not children[i]._legend_kind]
+                    if children[i] is not None
+                    and children[i]._leaf_kind == "data"]
         for c in range(cols):
             cells = _data_cells([r * cols + c for r in range(rows)])
             if not cells: continue
@@ -464,7 +467,7 @@ def _build_panel_opts(root: Chart) -> tuple[dict[int, _PanelOpts], dict[int, dic
 
     Legend leaves are skipped — they have no x/y axes, no artists, and
     render through their own pipeline (see `legend.py`)."""
-    leaves = [l for l in _iter_leaves(root) if not l._legend_kind]
+    leaves = [l for l in _iter_leaves(root) if l._leaf_kind == "data"]
     states = {id(l): l._fig._replay() for l in leaves}
     x_desc, y_desc = _build_axis_descriptors(leaves, states)
     panel_opts = {
@@ -501,7 +504,7 @@ def _body_cell(cell: Chart | None, panel_opts: dict[int, _PanelOpts]) -> bool:
     data leaves whose preliminary margin has been computed."""
     return (cell is not None
             and not cell._is_parent
-            and not cell._legend_kind
+            and cell._leaf_kind == "data"
             and not cell._fig._canvas_explicit
             and panel_opts.get(id(cell)) is not None
             and panel_opts[id(cell)].M_eff is not None)
@@ -622,10 +625,22 @@ def _render_layout(root: Chart) -> str:
     ]
     # Two passes so legends can read color-cycle assignments off data
     # artists. _render_inner mutates each artist dict's `_color`; legends
-    # then harvest those for their swatches.
+    # then harvest those for their swatches. Diagram leaves render in
+    # pass 1 (no dependency on data artists' colors) but via a separate
+    # path that emits the stored debug SVG verbatim, with no panel
+    # decorations.
     data_leaves: list[Chart] = []
     for leaf, (x, y, w, h) in placements:
-        if leaf._legend_kind:
+        kind = leaf._leaf_kind
+        if kind == "legend":
+            continue
+        if kind == "diagram":
+            parts.append(
+                f'<g transform="translate({x:.2f},{y:.2f})" '
+                f'data-plotlet-kind="diagram">'
+            )
+            parts.append(leaf._diagram_inner)
+            parts.append('</g>')
             continue
         po = panel_opts[id(leaf)]
         M_eff = _effective_margin(leaf, po, w, h)
@@ -633,12 +648,12 @@ def _render_layout(root: Chart) -> str:
         ih = h - M_eff["top"] - M_eff["bottom"]
         st = states[id(leaf)]
         transform = f'translate({x + M_eff["left"]:.2f},{y + M_eff["top"]:.2f})'
-        parts.append(_panel_open(st, po, transform, M_eff, iw, ih))
+        parts.append(_panel_open(st, po, transform, M_eff, iw, ih, (x, y, w, h)))
         parts.append(_render_inner(st, iw, ih, M_eff, po))
         parts.append('</g>')
         data_leaves.append(leaf)
     for leaf, (x, y, w, h) in placements:
-        if not leaf._legend_kind:
+        if leaf._leaf_kind != "legend":
             continue
         from .legend import _render_legend
         parts.append(f'<g transform="translate({x:.2f},{y:.2f})">')

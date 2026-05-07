@@ -91,7 +91,7 @@ def legend(*sources: Chart, names: dict | None = None,
     leaf._children = []
     leaf._share_x = None
     leaf._share_y = None
-    leaf._legend_kind = True
+    leaf._leaf_kind = "legend"
     leaf._legend_sources = list(sources)
     leaf._legend_names = dict(names) if names else {}
     leaf._legend_group_by_chart = group_by_chart
@@ -278,9 +278,9 @@ def _size_legends(root: Chart, states: dict[int, dict]) -> None:
     size with its content-driven size, except where the user passed
     explicit `canvas_width=` / `canvas_height=` to `pt.legend(...)`."""
     from .layout import _iter_leaves  # avoid circular import at module load
-    data_leaves = [l for l in _iter_leaves(root) if not l._legend_kind]
+    data_leaves = [l for l in _iter_leaves(root) if l._leaf_kind == "data"]
     for leaf in _iter_leaves(root):
-        if not leaf._legend_kind:
+        if leaf._leaf_kind != "legend":
             continue
         sources = leaf._legend_sources or data_leaves
         cw, ch = _legend_content_size(leaf, sources, states)

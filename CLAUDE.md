@@ -50,6 +50,7 @@ plotlet/
 │       ├── colormaps.py         # 180 vendored matplotlib colormaps (continuous, value→RGB)
 │       ├── _cm_data.py          # generated LUT data — do not edit by hand
 │       ├── _png.py              # tiny stdlib-only PNG encoder for imshow's large-image path
+│       ├── layout_diagram.py    # pt.layout_diagram — schema-only debug visualizer
 │       ├── spec.json            # locked visual constants — package data
 │       └── fonts/DejaVuSans.ttf # bundled font (~700 KB)
 ├── cookbook/                    # reference implementations of custom plot types
@@ -101,7 +102,7 @@ Then `to_svg()` does five phases:
 
 ### AI-readable SVG attributes (0.3.0)
 
-Every plotlet SVG carries `data-plotlet-*` attributes describing plot type, axes, scales, ranges, and series labels. The root `<svg>` gets `data-plotlet-version` / `-schema` / `-kind`, each panel `<g>` gets title / xlabel / ylabel / xscale / yscale / xlim / ylim / data-area, each artist `<g class="plotlet-artist">` gets type / index / label / color plus type-specific extras (n, x-min/max, marker, …). Categorical axes emit a child `<metadata data-plotlet-payload="xcategories">` JSON blob with the labels. The schema (`data-plotlet-schema="1"`) is semver-stable from 0.3.0 forward. Custom artists hook in by declaring an optional `data_attrs=` callback on their `ArtistSpec` for type-specific attrs; common attrs (type, index, label, color) come automatically. Full schema reference: [docs/AI_ATTRS.md](docs/AI_ATTRS.md).
+Every plotlet SVG carries `data-plotlet-*` attributes describing plot type, axes, scales, ranges, and series labels. The root `<svg>` gets `data-plotlet-version` / `-schema` / `-kind`, each panel `<g>` gets title / xlabel / ylabel / xscale / yscale / xlim / ylim / panel-bbox / data-area (where `panel-bbox` is the full-rect figure-coords placement and `data-area` is the data region in panel-local coords), each artist `<g class="plotlet-artist">` gets type / index / label / color plus type-specific extras (n, x-min/max, marker, …). Categorical axes emit a child `<metadata data-plotlet-payload="xcategories">` JSON blob with the labels. The schema (`data-plotlet-schema="1"`) is semver-stable from 0.3.0 forward — additive changes only. Custom artists hook in by declaring an optional `data_attrs=` callback on their `ArtistSpec` for type-specific attrs; common attrs (type, index, label, color) come automatically. Full schema reference: [docs/AI_ATTRS.md](docs/AI_ATTRS.md). The schema's value-added is concrete: [`pt.layout_diagram`](src/plotlet/layout_diagram.py) is a debug visualizer that imports nothing private — it only reads `data-plotlet-*` — so it doubles as a worked example of what a schema consumer looks like.
 
 ### Adding a new plot type
 

@@ -744,7 +744,9 @@ def _figure_root_attrs(kind: str) -> str:
     })
 
 
-def _panel_attrs_and_meta(st, M, iw, ih, x_axis, y_axis) -> tuple[str, str]:
+def _panel_attrs_and_meta(st, M, iw, ih, x_axis, y_axis,
+                          panel_bbox: tuple[float, float, float, float]
+                          ) -> tuple[str, str]:
     """Build (attrs, metadata) for one panel <g>. `attrs` is the attribute
     string spliced into the open tag; `metadata` is one or more <metadata>
     children placed at the start of the <g> body (currently: x/y category
@@ -761,9 +763,17 @@ def _panel_attrs_and_meta(st, M, iw, ih, x_axis, y_axis) -> tuple[str, str]:
     if y_axis.kind != "category":
         attrs["ylim"] = f"{repr(y_axis.lo)},{repr(y_axis.hi)}"
 
-    # Data-area rect in SVG coords (relative to the outer <svg>): the
-    # panel <g> is translated by (M.left, M.top), and the data area runs
-    # 0..iw, 0..ih inside it.
+    # Panel bbox in figure-SVG coords: the full rect this panel occupies,
+    # margins included. Standalone figures: (0, 0, W, H). Multi-panel
+    # layouts: the (x, y, w, h) the parent allocated.
+    px, py, pw, ph = panel_bbox
+    attrs["panel-bbox"] = (
+        f'{int(round(px))},{int(round(py))},'
+        f'{int(round(pw))},{int(round(ph))}'
+    )
+    # Data-area rect in panel-local coords: (M.left, M.top) within the
+    # panel bbox, with size (iw, ih). To get figure-SVG coords, add the
+    # panel bbox's (px, py).
     attrs["data-area"] = f'{M["left"]},{M["top"]},{int(round(iw))},{int(round(ih))}'
 
     meta_parts = []
@@ -799,7 +809,8 @@ def _wrap_artist(a, idx: int, body: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _panel_open(st, panel_opts: _PanelOpts | None, transform: str,
-                M: dict, iw: float, ih: float) -> str:
+                M: dict, iw: float, ih: float,
+                panel_bbox: tuple[float, float, float, float]) -> str:
     """Open a panel `<g>` with transform + structural data attrs, and emit
     any panel-level `<metadata>` children (currently x/y category lists).
     Used by both standalone `_render` and layout's `_render_layout` so the
@@ -809,7 +820,7 @@ def _panel_open(st, panel_opts: _PanelOpts | None, transform: str,
               else _x_descriptor(st))
     y_axis = (panel_opts.y_axis if panel_opts and panel_opts.y_axis
               else _y_descriptor(st))
-    attrs, meta = _panel_attrs_and_meta(st, M, iw, ih, x_axis, y_axis)
+    attrs, meta = _panel_attrs_and_meta(st, M, iw, ih, x_axis, y_axis, panel_bbox)
     return f'<g transform="{transform}"{attrs}>{meta}'
 
 
@@ -826,7 +837,7 @@ def _render(st, W, H, M):
         f'viewBox="0 0 {W} {H}" font-family="{_FONT}" font-size="11" '
         f'style="background:#fff"'
         f'{_figure_root_attrs("figure")}>'
-        + _panel_open(st, None, transform, M, iw, ih)
+        + _panel_open(st, None, transform, M, iw, ih, (0, 0, W, H))
         + _render_inner(st, iw, ih, M)
         + '</g></svg>'
     )

@@ -22,10 +22,11 @@ from .chart import Chart, chart
 from .layout import grid
 from .legend import legend
 from .registry import ArtistSpec, add_artist
+from .layout_diagram import layout_diagram
 
 __all__ = ["chart", "Chart", "figure", "Figure", "SPEC", "TAB10", "colors",
            "colormap", "list_colormaps", "grid", "legend",
-           "ArtistSpec", "add_artist"]
+           "ArtistSpec", "add_artist", "layout_diagram"]
 
 # Single source of truth: pyproject.toml. importlib.metadata reads it at
 # runtime from the installed package metadata (works for `pip install` and
