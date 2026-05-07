@@ -102,20 +102,21 @@ def legend_flat_fixed():
 
 
 def legend_joined_grid():
-    # Top track shares x with main; left tree shares y with main. Both
-    # share-pairs are gap-collapsed (0 px). Legend sits to the right of
-    # main with legend_gap (6 px) — distinct from the share-pair joint.
+    # Top track shares x with main (column 1); left tree shares y with main
+    # (row 1). Both share-pairs are gap-collapsed (0 px). Legend sits to
+    # the right of main with legend_gap (6 px) — distinct from the
+    # share-pair joint.
     main = pt.chart(title="main", canvas_width=380, canvas_height=240)
     main.imshow(_matrix(), cmap="viridis", legend={"label": "value"})
-    top  = pt.chart(title="top",  canvas_width=380, canvas_height=60, share_x=main)
+    top  = pt.chart(title="top",  canvas_width=380, canvas_height=60)
     top.line([0, 1, 2, 3, 4, 5, 6, 7],
              [3, 1, 2, 4, 1, 2, 3, 1], label="counts")
-    tree = pt.chart(title="tree", canvas_width=80,  canvas_height=240, share_y=main)
+    tree = pt.chart(title="tree", canvas_width=80,  canvas_height=240)
     tree.line([0, 1, 2], [2, 3, 4])
     return pt.grid([
         [None, top,  None        ],
         [tree, main, pt.legend() ],
-    ])
+    ], share_x="col", share_y="row")
 
 
 PLOTS = {

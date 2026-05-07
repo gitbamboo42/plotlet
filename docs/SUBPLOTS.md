@@ -1,8 +1,27 @@
 # Subplots / composition — design pass
 
+> **Update (subplots-2.0):** the per-leaf `share_x=A` / `share_y=A`
+> kwargs that appear throughout the historical examples below have been
+> replaced by parent-level methods and `pt.grid` kwargs. Modern usage:
+>
+> ```python
+> (a | b | c).share_y()                         # all share y; one anchor
+> pt.grid([[A, B], [C, D]], share_x="col")     # column-wise sharing
+> pt.grid([[A, B], [C, D]], share_y="row")     # row-wise sharing
+> pt.grid([[A, B]], share_x=True)              # all share x ("all")
+> ```
+>
+> Sharing forces equal anchor-side dimension; orthogonal dimension
+> scales proportionally to preserve aspect ratio. Data range becomes
+> the union across share-class members. The historical descriptions
+> below predate this rewrite — the *mechanism* (auto-zero-gap, inner
+> margin collapse, scale sharing, etc.) is unchanged; only the *API*
+> by which sharing is declared has moved from leaf constructors to
+> the parent.
+
 Status: **steps 1, 2, and 3 landed.** Composition primitives (`|`, `/`,
 `pt.grid`), single-parent invariant, show-on-child raise, default +
-auto-zero-gap for `share_x=` / `share_y=` neighbors are in (step 1).
+auto-zero-gap for share-equivalence-class neighbors are in (step 1).
 Step 2 layers scale sharing on top: a topo-sorted pre-pass over the
 parent's leaf tree builds one `_AxisDescriptor` (kind + domain) per
 share-equivalence class, every sharer adopts its source's domain, the

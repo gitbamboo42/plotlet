@@ -21,7 +21,7 @@ from graphlib import CycleError, TopologicalSorter
 from ._spec import _LAYOUTSPEC, _FONTSPEC
 from .core import (
     _render_inner, _scaled_margin, _enforce_floors, _required_margin,
-    _x_descriptor, _y_descriptor,
+    _x_descriptor_multi, _y_descriptor_multi,
     _AxisDescriptor, _PanelOpts,
     _figure_root_attrs, _panel_open,
 )
@@ -37,7 +37,10 @@ _FONT = _FONTSPEC["family"]
 # pt.grid — irregular grid constructor
 # ---------------------------------------------------------------------------
 
-def grid(cells: list[list], **kwargs) -> Chart:
+def grid(cells: list[list],
+         share_x: bool | str = False,
+         share_y: bool | str = False,
+         **kwargs) -> Chart:
     """Build a grid-layout parent Chart from a list-of-lists of cells.
 
     Each cell is either a `Chart` or `None` (empty). All rows must have
@@ -45,9 +48,22 @@ def grid(cells: list[list], **kwargs) -> Chart:
     redistribution** — each column's width is the max natural canvas
     width across cells in that column; each row's height is the max
     natural canvas height across cells in that row. To make a column
-    twice as wide as another, set `data_width=` (or `canvas_width=`)
-    directly on the leaf charts; the grid then sums their natural
-    canvases plus per-boundary gaps.
+    twice as wide as another, set `data_width=` directly on the leaf
+    charts; the grid then sums their natural canvases plus per-boundary
+    gaps.
+
+    Sharing kwargs (matching matplotlib's `subplots(sharex=...)` semantics):
+
+    * `share_x=True` (or `"all"`) — every leaf in the grid shares x with
+      the first leaf (top-left).
+    * `share_x="col"` — each column is its own share class; the topmost
+      leaf in each column is the anchor.
+    * `share_x="row"` — each row is its own share class.
+    * `share_x=False` (default) or `"none"` — no sharing.
+
+    `share_y=` is symmetric. When sharing is active, non-anchor leaves'
+    aspect ratios are preserved and scaled so the shared dimension matches
+    the anchor's.
     """
     # Migration error — `widths=` / `heights=` were canvas-ratio overrides
     # in 0.1.x. With body-size-first composition there's no longer a
@@ -92,6 +108,8 @@ def grid(cells: list[list], **kwargs) -> Chart:
     for cell in flat:
         if cell is not None:
             cell._parent = parent
+    parent.share_x(share_x)
+    parent.share_y(share_y)
     return parent
 
 
@@ -100,12 +118,31 @@ def grid(cells: list[list], **kwargs) -> Chart:
 # the gap between them collapses to 0.
 # ---------------------------------------------------------------------------
 
+def _share_root(leaf: Chart, axis: str) -> Chart:
+    """Walk the share chain on `axis` ("x" or "y") to its root — the
+    topmost leaf in the chain that shares with no one. Two leaves are in
+    the same share-equivalence class on `axis` iff their roots are the
+    same object. Cycle-safe (the validation pass already rejects cycles,
+    but the `seen` guard makes this safe to call even before validation)."""
+    attr = "_share_x" if axis == "x" else "_share_y"
+    cur = leaf
+    seen: set[int] = set()
+    while True:
+        nxt = getattr(cur, attr, None)
+        if nxt is None or id(nxt) in seen:
+            return cur
+        seen.add(id(cur))
+        cur = nxt
+
+
 def _pair_gap(a: Chart | None, b: Chart | None, *, axis: str) -> float:
     """Gap between two adjacent cells.
 
     Three regimes:
-      - Share-pair joint (one leaf shares the orthogonal axis with the
-        other) → 0, panels butt up to read as coordinated.
+      - Same share-equivalence class on the orthogonal axis (direct
+        share OR shared via a common reference, e.g. `B.share_y=A` and
+        `C.share_y=A` in `A | B | C`) → 0, panels butt up to read as
+        coordinated.
       - Legend ↔ its source (or any data sibling, if the legend has no
         explicit source) → `legend_gap`, a small intentional separation
         that's not a share-pair joint and doesn't trigger spine/label
@@ -122,8 +159,8 @@ def _pair_gap(a: Chart | None, b: Chart | None, *, axis: str) -> float:
         if not leg._legend_sources or other in leg._legend_sources:
             return _LEGEND_GAP
         return _GAP
-    share = "_share_y" if axis == "h" else "_share_x"
-    if getattr(b, share, None) is a or getattr(a, share, None) is b:
+    share_axis = "y" if axis == "h" else "x"
+    if _share_root(a, share_axis) is _share_root(b, share_axis):
         return 0.0
     return _GAP
 
@@ -301,6 +338,54 @@ def _allocate(node: Chart, x: float, y: float, w: float, h: float, out: list):
 
 
 # ---------------------------------------------------------------------------
+# Share-scaling pre-pass — coordinate sibling sizes via aspect-ratio
+# scaling. The shared dimension is forced to the anchor's; the orthogonal
+# dimension preserves the leaf's original aspect ratio (single-axis case)
+# or is forced to the orthogonal anchor's (both-axes case).
+# ---------------------------------------------------------------------------
+
+def _apply_share_scaling(leaves: list[Chart]) -> None:
+    """Mutate non-anchor body-first leaves' `_data_width` / `_data_height`
+    to coordinate with their share anchors. Reads from `_orig_data_*`
+    each call so the operation is idempotent across re-renders."""
+    # Reset to the user's original dims first so scaling is computed from a
+    # clean baseline regardless of prior renders.
+    for leaf in leaves:
+        if leaf._fig._canvas_explicit:
+            continue
+        leaf._fig._data_width  = leaf._fig._orig_data_width
+        leaf._fig._data_height = leaf._fig._orig_data_height
+
+    # Apply scaling in topo order so anchors of chained share-classes
+    # have settled before sharers depend on them.
+    for leaf in _topo_order(leaves):
+        if leaf._fig._canvas_explicit:
+            continue
+        sx = leaf._share_x
+        sy = leaf._share_y
+        if sx is None and sy is None:
+            continue
+        old_w = leaf._fig._data_width
+        old_h = leaf._fig._data_height
+        if sx is not None and sy is not None:
+            # Both axes shared — force both, no aspect preservation
+            new_w = sx._fig._data_width
+            new_h = sy._fig._data_height
+        elif sx is not None:
+            # Width forced to anchor; height scales to preserve aspect
+            new_w = sx._fig._data_width
+            new_h = old_h * (new_w / old_w) if old_w > 0 else old_h
+        else:  # sy is not None
+            new_h = sy._fig._data_height
+            new_w = old_w * (new_h / old_h) if old_h > 0 else old_w
+        leaf._fig._data_width  = new_w
+        leaf._fig._data_height = new_h
+        # Refresh derived canvas dims so downstream `_measure` sees them.
+        leaf._fig._canvas_width  = new_w + leaf._fig._margin["left"]   + leaf._fig._margin["right"]
+        leaf._fig._canvas_height = new_h + leaf._fig._margin["top"]    + leaf._fig._margin["bottom"]
+
+
+# ---------------------------------------------------------------------------
 # Scale-share pre-pass — topo-sort leaves by share_x / share_y, then build
 # one axis descriptor per share-equivalence class.
 # ---------------------------------------------------------------------------
@@ -348,21 +433,29 @@ def _build_axis_descriptors(leaves: list[Chart],
                             states: dict[int, dict]
                             ) -> tuple[dict[int, _AxisDescriptor],
                                        dict[int, _AxisDescriptor]]:
-    """Compute per-leaf x/y axis descriptors. Sharers copy from their source;
-    non-sharers compute from their own state."""
+    """Compute per-leaf x/y axis descriptors. Members of a share class get
+    a single descriptor built from the union of their data; the anchor's
+    scale, xlim/ylim, category order, etc. win for policy."""
     _validate_share_targets(leaves)
-    order = _topo_order(leaves)
     x_desc: dict[int, _AxisDescriptor] = {}
     y_desc: dict[int, _AxisDescriptor] = {}
-    for leaf in order:
-        if leaf._share_x is not None:
-            x_desc[id(leaf)] = x_desc[id(leaf._share_x)]
-        else:
-            x_desc[id(leaf)] = _x_descriptor(states[id(leaf)])
-        if leaf._share_y is not None:
-            y_desc[id(leaf)] = y_desc[id(leaf._share_y)]
-        else:
-            y_desc[id(leaf)] = _y_descriptor(states[id(leaf)])
+    # Group by share-root for each axis; each group gets one descriptor
+    # built from the union of all member states.
+    for axis, attr, multi_fn, out in (
+        ("x", "_share_x", _x_descriptor_multi, x_desc),
+        ("y", "_share_y", _y_descriptor_multi, y_desc),
+    ):
+        classes: dict[int, list[Chart]] = {}
+        for leaf in leaves:
+            root = _share_root(leaf, axis)
+            classes.setdefault(id(root), []).append(leaf)
+        for class_leaves in classes.values():
+            anchor = next((l for l in class_leaves if getattr(l, attr) is None),
+                          class_leaves[0])
+            ordered = [anchor] + [l for l in class_leaves if l is not anchor]
+            desc = multi_fn([states[id(l)] for l in ordered])
+            for l in class_leaves:
+                out[id(l)] = desc
     return x_desc, y_desc
 
 
@@ -468,6 +561,7 @@ def _build_panel_opts(root: Chart) -> tuple[dict[int, _PanelOpts], dict[int, dic
     Legend leaves are skipped — they have no x/y axes, no artists, and
     render through their own pipeline (see `legend.py`)."""
     leaves = [l for l in _iter_leaves(root) if l._leaf_kind == "data"]
+    _apply_share_scaling(leaves)
     states = {id(l): l._fig._replay() for l in leaves}
     x_desc, y_desc = _build_axis_descriptors(leaves, states)
     panel_opts = {
@@ -485,9 +579,19 @@ def _build_panel_opts(root: Chart) -> tuple[dict[int, _PanelOpts], dict[int, dic
 def _compute_measured_margins(leaves: list[Chart],
                               states: dict[int, dict],
                               panel_opts: dict[int, _PanelOpts]) -> None:
-    """Per-leaf preliminary effective margin = max(floor, content-required).
-    Body-first leaves only; canvas-first leaves keep `M_eff = None` so
-    they fall through to `_scaled_margin` at render time (legacy)."""
+    """Per-leaf preliminary effective margin = max(floor, content-required),
+    with `hide_*` collapses applied so the canvas sizing computed downstream
+    matches what gets rendered. Body-first leaves only; canvas-first leaves
+    keep `M_eff = None` so they fall through to `_scaled_margin` at render
+    time (legacy).
+
+    Why apply hide_* here rather than at render time: the canvas-sizing
+    pre-pass writes `canvas = data + M_eff`, and render-time `iw =
+    canvas - M_eff_rendered`. If render collapses sides that the pre-pass
+    didn't, `iw` ends up wider than `data_width` for any joined panel —
+    breaking the user-facing contract that `data_width=N` produces an
+    N-wide data area. Folding the collapse into M_eff before canvas-sizing
+    keeps `iw == data_width` regardless of join state."""
     for leaf in leaves:
         if leaf._fig._canvas_explicit:
             continue
@@ -496,7 +600,12 @@ def _compute_measured_margins(leaves: list[Chart],
         M_req = _required_margin(states[id(leaf)],
                                  leaf._fig._data_width,
                                  leaf._fig._data_height)
-        po.M_eff = {side: max(M_floor[side], M_req[side]) for side in M_floor}
+        M_eff = {side: max(M_floor[side], M_req[side]) for side in M_floor}
+        if po.hide_left:   M_eff["left"]   = _INNER_GAP
+        if po.hide_right:  M_eff["right"]  = _INNER_GAP
+        if po.hide_top:    M_eff["top"]    = _INNER_GAP
+        if po.hide_bottom: M_eff["bottom"] = _INNER_GAP
+        po.M_eff = M_eff
 
 
 def _body_cell(cell: Chart | None, panel_opts: dict[int, _PanelOpts]) -> bool:
@@ -543,6 +652,7 @@ def _coordinate_margins(node: Chart, panel_opts: dict[int, _PanelOpts]) -> None:
     if node._layout_kind == "h":
         cells = [c for c in node._children if _body_cell(c, panel_opts)]
         _coordinate_pair(cells, panel_opts, ("top", "bottom"))
+        _pad_canvases(cells, panel_opts, axis="h")
         for c in node._children:
             if c is not None:
                 _coordinate_margins(c, panel_opts)
@@ -550,6 +660,7 @@ def _coordinate_margins(node: Chart, panel_opts: dict[int, _PanelOpts]) -> None:
     if node._layout_kind == "v":
         cells = [c for c in node._children if _body_cell(c, panel_opts)]
         _coordinate_pair(cells, panel_opts, ("left", "right"))
+        _pad_canvases(cells, panel_opts, axis="v")
         for c in node._children:
             if c is not None:
                 _coordinate_margins(c, panel_opts)
@@ -559,15 +670,44 @@ def _coordinate_margins(node: Chart, panel_opts: dict[int, _PanelOpts]) -> None:
     children = node._children
     for c in range(cols):
         col_cells = [children[r * cols + c] for r in range(rows)]
-        _coordinate_pair([cell for cell in col_cells if _body_cell(cell, panel_opts)],
-                         panel_opts, ("left", "right"))
+        body = [cell for cell in col_cells if _body_cell(cell, panel_opts)]
+        _coordinate_pair(body, panel_opts, ("left", "right"))
+        _pad_canvases(body, panel_opts, axis="v")
     for r in range(rows):
         row_cells = [children[r * cols + c] for c in range(cols)]
-        _coordinate_pair([cell for cell in row_cells if _body_cell(cell, panel_opts)],
-                         panel_opts, ("top", "bottom"))
+        body = [cell for cell in row_cells if _body_cell(cell, panel_opts)]
+        _coordinate_pair(body, panel_opts, ("top", "bottom"))
+        _pad_canvases(body, panel_opts, axis="h")
     for cell in children:
         if cell is not None:
             _coordinate_margins(cell, panel_opts)
+
+
+def _pad_canvases(cells: list[Chart], panel_opts: dict[int, _PanelOpts],
+                  *, axis: str) -> None:
+    """Equalize canvases across `cells` by padding the slack onto one
+    margin side, so every cell ends up with the same canvas dimension
+    along `axis` ('h' = canvas_h via bottom-margin pad; 'v' = canvas_w
+    via right-margin pad). Honors data dimensions per leaf — the user's
+    `data_width=` / `data_height=` is never altered, only the margin
+    that fills the row/column slack."""
+    if not cells:
+        return
+    if axis == "h":
+        side, dim_attr, sides = "bottom", "_data_height", ("top", "bottom")
+    else:
+        side, dim_attr, sides = "right", "_data_width", ("left", "right")
+
+    def canvas_dim(cell):
+        m = panel_opts[id(cell)].M_eff
+        return getattr(cell._fig, dim_attr) + m[sides[0]] + m[sides[1]]
+
+    target = max(canvas_dim(c) for c in cells)
+    for c in cells:
+        m = panel_opts[id(c)].M_eff
+        slack = target - canvas_dim(c)
+        if slack > 0:
+            panel_opts[id(c)].M_eff = {**m, side: m[side] + slack}
 
 
 def _update_canvases_for_margins(leaves: list[Chart],
@@ -588,14 +728,14 @@ def _update_canvases_for_margins(leaves: list[Chart],
 
 
 def _effective_margin(leaf: Chart, po: _PanelOpts, w: float, h: float) -> dict:
-    """Margin used at render time. Body-first leaves read the
-    coordinated margin from `po.M_eff` (computed by `_build_panel_opts`'s
-    measure-driven + per-column/row coordination pre-pass); canvas-first
-    leaves scale margins by panel-canvas/spec-canvas (legacy 0.1.x
-    behavior). Joined sides collapse to `inner_gap` either way."""
+    """Margin used at render time. Body-first leaves read the coordinated
+    margin from `po.M_eff` (already includes hide_* collapse from the
+    pre-pass — see `_compute_measured_margins`); canvas-first leaves scale
+    margins by panel-canvas/spec-canvas (legacy 0.1.x behavior) and apply
+    hide_* collapse here at render time."""
     if po.M_eff is not None:
-        M_eff = dict(po.M_eff)
-    elif leaf._fig._canvas_explicit:
+        return dict(po.M_eff)
+    if leaf._fig._canvas_explicit:
         M_eff = _scaled_margin(leaf._fig._margin, w, h)
     else:
         M_eff = _enforce_floors(leaf._fig._margin)

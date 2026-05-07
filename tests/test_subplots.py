@@ -5,12 +5,13 @@
     python tests/test_subplots.py --update   # regenerate baselines (review diff!)
     python tests/test_subplots.py --gallery  # write baseline_images/subplots/index.html
 
-Step 1 covers: `|`, `/`, `pt.grid`, single-parent invariant, show-on-child
-raise, default gap, auto-zero-gap when neighbors have share_x= /
-share_y=. Step 2 adds scale-sharing — shared panels render on the source's
-domain — plus inner-axis collapse on joined share-pairs (no inner spine,
-ticks, or labels) and leaf size-hint honoring (`pt.chart(canvas_width=...)` acts
-as a relative width when no explicit ratios are given).
+Covers: `|`, `/`, `pt.grid`, single-parent invariant, show-on-child raise,
+default gap, auto-zero-gap when adjacent leaves are in the same
+share-equivalence class, scale-sharing via parent-level `.share_x()` /
+`.share_y()` and `pt.grid(share_x=...)` (with `True`/`"all"`/`"col"`/`"row"`),
+range union across share-class members, inner-axis collapse on joined
+share-pairs, and leaf size-hint honoring (`pt.chart(canvas_width=...)`
+acts as a relative width when no explicit ratios are given).
 """
 from __future__ import annotations
 
@@ -129,71 +130,68 @@ def body_first_unequal_columns():
 
 
 def share_y_collapses_gap():
-    # Sharer adopts source's y-domain. share_y → joined, gap 0.
-    # 300 + 0 + 300 = 600 wide.
-    hm   = pt.chart(title="hm",   canvas_width=300);                 hm.line([1,2,3], [1,4,9])
-    tree = pt.chart(title="tree", canvas_width=300, share_y=hm);     tree.line([1,2,3], [3,1,2])
-    return tree | hm
+    # share_y → joined, gap 0. 300 + 0 + 300 = 600 wide.
+    hm   = pt.chart(title="hm",   canvas_width=300);  hm.line([1,2,3], [1,4,9])
+    tree = pt.chart(title="tree", canvas_width=300); tree.line([1,2,3], [3,1,2])
+    return (tree | hm).share_y()
 
 
 def share_x_collapses_gap_vertical():
     # share_x → joined, gap 0. 200 + 0 + 200 = 400 tall.
-    main = pt.chart(title="main", canvas_height=200);                  main.line([1, 2, 3], [1, 4, 9])
-    top  = pt.chart(title="top",  canvas_height=200, share_x=main);    top.line([1, 2, 3], [3, 1, 2])
-    return top / main
+    main = pt.chart(title="main", canvas_height=200);  main.line([1, 2, 3], [1, 4, 9])
+    top  = pt.chart(title="top",  canvas_height=200);  top.line([1, 2, 3], [3, 1, 2])
+    return (top / main).share_x()
 
 
 def share_x_three_panels():
-    # Chain: top.share_x=mid, mid.share_x=main. All three end up on main's
-    # domain (transitive via topo-sort) and the two adjacent pairs both
-    # auto-collapse. 3*133 = 399 ≈ 400 tall.
-    main = pt.chart(title="main", canvas_height=133);                main.line([0, 5, 10], [0, 1, 0])
-    mid  = pt.chart(title="mid",  canvas_height=133, share_x=main);  mid.line([0, 5, 10], [10, 0, 10])
-    top  = pt.chart(title="top",  canvas_height=133, share_x=mid);   top.line([0, 5, 10], [5, 5, 5])
-    return top / mid / main
+    # Three vertically-stacked panels all share x via parent-level .share_x().
+    # Equivalent to matplotlib's subplots(3, 1, sharex=True). 3*133 = 399 ≈ 400 tall.
+    main = pt.chart(title="main", canvas_height=133); main.line([0, 5, 10], [0, 1, 0])
+    mid  = pt.chart(title="mid",  canvas_height=133); mid.line([0, 5, 10], [10, 0, 10])
+    top  = pt.chart(title="top",  canvas_height=133); top.line([0, 5, 10], [5, 5, 5])
+    return (top / mid / main).share_x()
 
 
 def share_y_chain():
-    # Chain: B shares y from A, C shares y from B. All three joined.
+    # Three side-by-side panels all share y via parent-level .share_y().
     # 3*200 = 600 wide.
-    a = pt.chart(title="a", canvas_width=200);                a.line([1,2,3], [0, 100, 0])
-    b = pt.chart(title="b", canvas_width=200, share_y=a);     b.line([1,2,3], [10, 50, 90])
-    c = pt.chart(title="c", canvas_width=200, share_y=b);     c.line([1,2,3], [20, 40, 60])
-    return a | b | c
+    a = pt.chart(title="a", canvas_width=200); a.line([1,2,3], [0, 100, 0])
+    b = pt.chart(title="b", canvas_width=200); b.line([1,2,3], [10, 50, 90])
+    c = pt.chart(title="c", canvas_width=200); c.line([1,2,3], [20, 40, 60])
+    return (a | b | c).share_y()
 
 
 def width_hint_narrow_side():
     # Narrow side panel sharing y with main. Stand-in for
     # `hm | pt.colorbar(hm)`. 520 + 0 + 80 = 600 wide.
-    main = pt.chart(title="main", canvas_width=520);                main.line([1,2,3], [1,4,9])
-    side = pt.chart(title="side", canvas_width=80, share_y=main)
+    main = pt.chart(title="main", canvas_width=520); main.line([1,2,3], [1,4,9])
+    side = pt.chart(title="side", canvas_width=80)
     side.line([1, 1, 1], [1, 4, 9])
-    return main | side
+    return (main | side).share_y()
 
 
 def height_hint_short_top():
     # Short top track over a main panel. 80 + 0 + 320 = 400 tall.
     top  = pt.chart(title="top",  canvas_height=80)
     top.bar(["a","b","c"], [1, 2, 3])
-    main = pt.chart(title="main", canvas_height=320, share_x=top); main.bar(["a","b","c"], [3, 1, 2])
-    return top / main
+    main = pt.chart(title="main", canvas_height=320); main.bar(["a","b","c"], [3, 1, 2])
+    return (top / main).share_x()
 
 
 def complex_grid_shares():
-    # ComplexHeatmap-flavored shape: top track shares x with main; left tree
-    # shares y with main. Both share-pairs are joined (gap 0). The
-    # None-bordered cells mean col / row gaps are still 0 (min over the
-    # boundary). Cols: 120 + 0 + 480 = 600. Rows: 80 + 0 + 320 = 400.
+    # ComplexHeatmap-flavored shape via grid with column/row sharing:
+    # `share_x="col"` → top↔main share x (column 1); `share_y="row"` →
+    # tree↔main share y (row 1). Cols: 120 + 0 + 480 = 600. Rows: 80 + 0 + 320 = 400.
     main = pt.chart(title="main", canvas_width=480, canvas_height=320)
     main.line([1,2,3,4,5], [2,4,1,5,3])
-    top  = pt.chart(title="top",  canvas_width=480, canvas_height=80,  share_x=main)
+    top  = pt.chart(title="top",  canvas_width=480, canvas_height=80)
     top.line([1,2,3,4,5], [1,1,3,1,1])
-    tree = pt.chart(title="tree", canvas_width=120, canvas_height=320, share_y=main)
+    tree = pt.chart(title="tree", canvas_width=120, canvas_height=320)
     tree.line([0,1,2], [2,3,4])
     return pt.grid([
         [None, top ],
         [tree, main],
-    ])
+    ], share_x="col", share_y="row")
 
 
 PLOTS = {
@@ -280,38 +278,34 @@ def _run_invariants():
         if "cycle" not in str(ex).lower():
             failures.append(f"expected cycle message; got: {ex}")
 
-    # 7. share target out of tree
-    g1 = pt.chart(); g1.line([1,2],[1,2])
-    g2 = pt.chart(); g2.line([1,2],[2,1])
-    h1 = pt.chart(); h1.line([1,2],[1,2])
-    h2 = pt.chart(share_y=g1); h2.line([1,2],[2,1])  # shares with chart not in same composition
-    g1 | g2  # consume g1 into a different parent
+    # 7. parent-level share() rejects on a leaf
+    leaf = pt.chart(); leaf.line([1,2],[1,2])
     try:
-        (h1 | h2).to_svg()
-        failures.append("expected ValueError on out-of-tree share")
-    except ValueError as ex:
-        if "composition" not in str(ex).lower():
-            failures.append(f"expected out-of-tree message; got: {ex}")
+        leaf.share_x()
+        failures.append("expected TypeError calling share_x() on a leaf")
+    except TypeError as ex:
+        if "leaf" not in str(ex).lower():
+            failures.append(f"expected leaf-share message; got: {ex}")
 
-    # 8. share scale plumbing — sharer adopts source's domain
-    src   = pt.chart(); src.line([0, 10], [0, 100])
-    shr   = pt.chart(share_y=src); shr.line([0, 10], [-5, 5])
-    parent = src | shr
-    # Both leaves should use the same y descriptor.
+    # 8. share scale plumbing — leaves in same share class get the same
+    # descriptor, and the y range is the UNION of all leaves' data.
+    src = pt.chart(); src.line([0, 10], [0, 100])
+    shr = pt.chart(); shr.line([0, 10], [-5, 5])
+    parent = (src | shr).share_y()
     from plotlet.layout import _build_panel_opts
     panel_opts, _ = _build_panel_opts(parent)
     src_y = panel_opts[id(src)].y_axis
     shr_y = panel_opts[id(shr)].y_axis
     if src_y is not shr_y:
         failures.append(
-            f"share_y= did not produce a shared descriptor: "
+            f"share_y did not produce a shared descriptor: "
             f"src=({src_y.lo},{src_y.hi}) shr=({shr_y.lo},{shr_y.hi})"
         )
     if shr_y.lo > -5 or shr_y.hi < 100:
-        # Sharer's data exceeds source's domain — the share semantic is
-        # "adopt the source", so sharer's [-5, 5] does NOT extend src's
-        # [0, 100] domain. This check is intentionally loose.
-        pass  # informational; not a failure
+        failures.append(
+            f"share_y did not union ranges: expected to span [-5, 100], "
+            f"got [{shr_y.lo}, {shr_y.hi}]"
+        )
 
     if failures:
         for f in failures:

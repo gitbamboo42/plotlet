@@ -171,7 +171,7 @@ Subplots is the **essential prerequisite, not just one item among others**. With
 Two pillars:
 
 1. **Reproducibility-first.** Byte-identical SVG with text-as-paths; every output renders identically across machines without a font install dance. matplotlib's SVG drifts subtly across machines; this doesn't.
-2. **Annotated-heatmap niche after coordinated panels.** ComplexHeatmap is R-only; marsilea is heavy. A small Python library with a clean composition algebra and a `share_x=` / `share_y=` hook fills a real gap. Sequence: subplots first, then the shared-scale hook, then ComplexHeatmap-style layouts as cookbook recipes (not core).
+2. **Annotated-heatmap niche after coordinated panels.** ComplexHeatmap is R-only; marsilea is heavy. A small Python library with a clean composition algebra and parent-level `.share_x()` / `.share_y()` (or `pt.grid([[...]], share_x="col"/"row"/True)`) fills a real gap. Sharing forces aspect-ratio coordination across the share class — anchor (first leaf in reading order) sets the scale, others scale proportionally — and unions data ranges. Sequence: subplots first, then the shared-scale hook, then ComplexHeatmap-style layouts as cookbook recipes (not core).
 
 Use this as a razor for gray-area requests:
 

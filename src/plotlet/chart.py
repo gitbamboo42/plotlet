@@ -44,7 +44,6 @@ class Chart:
                  xlim: tuple | None = None, ylim: tuple | None = None,
                  xscale: str | None = None, yscale: str | None = None,
                  legend: bool | None = None, grid: bool | None = None,
-                 share_x: "Chart | None" = None, share_y: "Chart | None" = None,
                  **kwargs):
         # Migration error — see Figure.__init__ for the rationale.
         if "width" in kwargs or "height" in kwargs:
@@ -52,6 +51,12 @@ class Chart:
                 "pt.chart() no longer accepts `width=` / `height=` (changed in 0.2.0). "
                 "Pass `data_width=` / `data_height=` for the data region (preferred) "
                 "or `canvas_width=` / `canvas_height=` for the full SVG canvas."
+            )
+        if "share_x" in kwargs or "share_y" in kwargs:
+            raise TypeError(
+                "pt.chart() no longer accepts `share_x=` / `share_y=` "
+                "(moved to compose-time). Use `pt.grid([[...]], share_x=True)` "
+                "or `(a | b).share_x()` instead."
             )
         if kwargs:
             raise TypeError(f"Chart() got unexpected keyword arguments: {list(kwargs)!r}")
@@ -63,10 +68,10 @@ class Chart:
         self._parent: Chart | None = None
         self._layout_kind: str | None = None
         self._children: list[Chart] = []
-        # Layout hints — used in step 1 only for auto-zero-gap.
-        # Step 2 will plumb these through to scale-build.
-        self._share_x: Chart | None = share_x
-        self._share_y: Chart | None = share_y
+        # Share-class membership. Set by parent-level .share_x() / .share_y()
+        # (or pt.grid(share_x=...)); not user-settable on the leaf directly.
+        self._share_x: Chart | None = None
+        self._share_y: Chart | None = None
         # Leaf discriminator. Values: "data" (default — normal chart leaf
         # with axes and artists), "legend" (set by pt.legend(...), bypasses
         # the frame+artists render path; see legend.py), "diagram" (set by
@@ -117,6 +122,67 @@ class Chart:
 
     def __truediv__(self, other: "Chart") -> "Chart":
         return _compose(self, other, "v")
+
+    def share_x(self, mode: bool | str = "all") -> "Chart":
+        """Wire up x-axis sharing across this parent's leaves. Mutates the
+        leaves' private share state so layout's pre-pass coordinates them.
+        Returns self for chaining."""
+        self._apply_share("x", mode)
+        return self
+
+    def share_y(self, mode: bool | str = "all") -> "Chart":
+        """Wire up y-axis sharing across this parent's leaves. See `share_x`."""
+        self._apply_share("y", mode)
+        return self
+
+    def _apply_share(self, axis: str, mode) -> None:
+        norm = _normalize_share_mode(axis, mode)
+        if norm == "none":
+            return
+        if not self._is_parent:
+            raise TypeError(
+                f"share_{axis}() requires a parent Chart, not a leaf. "
+                f"Compose first (e.g. (a | b).share_{axis}()) then call."
+            )
+        if norm in ("col", "row") and self._layout_kind != "grid":
+            raise ValueError(
+                f"share_{axis}={norm!r} requires a pt.grid parent; got "
+                f"{self._layout_kind!r} layout. Use share_{axis}=True for "
+                f"all-leaves sharing on h/v compositions."
+            )
+        classes = self._compute_share_classes(norm)
+        attr = "_share_x" if axis == "x" else "_share_y"
+        for cls in classes:
+            if len(cls) < 2:
+                continue
+            anchor = cls[0]
+            for leaf in cls[1:]:
+                setattr(leaf, attr, anchor)
+
+    def _compute_share_classes(self, mode: str) -> list[list["Chart"]]:
+        from .layout import _iter_leaves
+
+        def cell_leaves(cell):
+            if cell is None:
+                return []
+            if cell._is_parent:
+                return [l for l in _iter_leaves(cell) if l._leaf_kind == "data"]
+            return [cell] if cell._leaf_kind == "data" else []
+
+        if mode == "all":
+            return [[l for l in _iter_leaves(self) if l._leaf_kind == "data"]]
+        rows, cols = self._grid_rows, self._grid_cols
+        children = self._children
+        if mode == "col":
+            return [
+                [l for r in range(rows) for l in cell_leaves(children[r * cols + c])]
+                for c in range(cols)
+            ]
+        # mode == "row"
+        return [
+            [l for c in range(cols) for l in cell_leaves(children[r * cols + c])]
+            for r in range(rows)
+        ]
 
     def legend(self, *args, names: dict | None = None,
                group_by_chart: bool | None = None,
@@ -347,6 +413,22 @@ class Chart:
 def chart(data=None, **opts) -> Chart:
     """Construct a table-bound Chart. See `Chart` for keyword arguments."""
     return Chart(data, **opts)
+
+
+def _normalize_share_mode(axis: str, mode) -> str:
+    """Map share_x / share_y param to one of "all" / "col" / "row" / "none".
+    Accepts True ("all"), False / None ("none"), or the four literal strings.
+    Mirrors matplotlib's `sharex` semantics."""
+    if mode is True:
+        return "all"
+    if mode is False or mode is None:
+        return "none"
+    if isinstance(mode, str) and mode in ("all", "col", "row", "none"):
+        return mode
+    raise ValueError(
+        f"share_{axis}=: expected True, False, or one of "
+        f"'all', 'col', 'row', 'none'; got {mode!r}"
+    )
 
 
 def _compose(left: Chart, right: Chart, kind: str) -> Chart:

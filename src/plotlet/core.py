@@ -275,6 +275,12 @@ class Figure:
             self._canvas_width  = self._data_width  + self._margin["left"] + self._margin["right"]
             self._canvas_height = self._data_height + self._margin["top"]  + self._margin["bottom"]
             self._canvas_explicit = False
+        # Snapshot the user's originally-requested data dims. The render-time
+        # share-scaling pre-pass mutates `_data_width` / `_data_height` to
+        # coordinate sibling sizes; restoring from these on re-render keeps
+        # the operation idempotent across multiple `to_svg()` calls.
+        self._orig_data_width  = self._data_width
+        self._orig_data_height = self._data_height
 
     def __getattr__(self, name):
         # Recordable if it's a frame method or a registered artist
@@ -560,6 +566,53 @@ def _y_descriptor(st) -> _AxisDescriptor:
     y_lo, y_hi = _scan_domain(artists, "y")
     y_min, y_max = _resolve_domain(y_lo, y_hi, st["ylim"], st["yscale"], force_zero=force_zero)
     return _AxisDescriptor(kind=st["yscale"], lo=y_min, hi=y_max)
+
+
+def _x_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
+    """Build an x-axis descriptor for a share-equivalence class.
+
+    The first state in `states` is the anchor — its xscale, xlim, x_order,
+    and x_padding settings win. Auto-scanned data range is the union of
+    artists across all states. Single-state input is equivalent to
+    `_x_descriptor(states[0])`."""
+    if len(states) == 1:
+        return _x_descriptor(states[0])
+    for st in states:
+        _prebin_hist(st)
+    anchor = states[0]
+    all_artists = [a for st in states for a in st["artists"]]
+    explicit_cat = anchor["xscale"] == "category"
+    auto_cat = _is_categorical_axis(all_artists, "x")
+    if explicit_cat or auto_cat:
+        cats = (list(anchor["x_order"]) if anchor["x_order"] is not None
+                else _collect_categories(all_artists, "x"))
+        padding = _D["category_padding"] if anchor["x_padding"] is None else anchor["x_padding"]
+        return _AxisDescriptor(kind="category", cats=cats, padding=padding)
+    x_lo, x_hi = _scan_domain(all_artists, "x")
+    x_min, x_max = _resolve_domain(x_lo, x_hi, anchor["xlim"], anchor["xscale"])
+    return _AxisDescriptor(kind=anchor["xscale"], lo=x_min, hi=x_max)
+
+
+def _y_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
+    """y-axis counterpart to `_x_descriptor_multi`. force_zero fires if any
+    leaf in the share class plots bar or hist artists."""
+    if len(states) == 1:
+        return _y_descriptor(states[0])
+    for st in states:
+        _prebin_hist(st)
+    anchor = states[0]
+    all_artists = [a for st in states for a in st["artists"]]
+    explicit_cat = anchor["yscale"] == "category"
+    auto_cat = _is_categorical_axis(all_artists, "y")
+    if explicit_cat or auto_cat:
+        cats = (list(anchor["y_order"]) if anchor["y_order"] is not None
+                else _collect_categories(all_artists, "y"))
+        padding = _D["category_padding"] if anchor["y_padding"] is None else anchor["y_padding"]
+        return _AxisDescriptor(kind="category", cats=cats, padding=padding)
+    force_zero = any(a["type"] in ("bar", "hist") for a in all_artists)
+    y_lo, y_hi = _scan_domain(all_artists, "y")
+    y_min, y_max = _resolve_domain(y_lo, y_hi, anchor["ylim"], anchor["yscale"], force_zero=force_zero)
+    return _AxisDescriptor(kind=anchor["yscale"], lo=y_min, hi=y_max)
 
 
 def _rotated_label_bbox(label_w: float, label_h: float, rot_deg: float) -> tuple[float, float]:
