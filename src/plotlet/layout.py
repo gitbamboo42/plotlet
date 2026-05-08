@@ -20,7 +20,7 @@ from graphlib import CycleError, TopologicalSorter
 
 from ._spec import _LAYOUTSPEC, _FONTSPEC
 from .core import (
-    _render_inner, _scaled_margin, _enforce_floors, _required_margin,
+    _render_inner, _replay, _scaled_margin, _enforce_floors, _required_margin,
     _x_descriptor_multi, _y_descriptor_multi,
     _AxisDescriptor, _PanelOpts,
     _figure_root_attrs, _panel_open,
@@ -232,7 +232,7 @@ def _leaf_rect_size(leaf: Chart) -> tuple[int, int]:
     via `canvas_width=…` (which carries scaled margin baked in),
     falling back to spec defaults. Doubles as the relative size hint
     when the parent allocates space."""
-    return leaf._fig._canvas_width, leaf._fig._canvas_height
+    return leaf._canvas_width, leaf._canvas_height
 
 
 def _measure(node: Chart) -> tuple[int, int]:
@@ -381,38 +381,38 @@ def _apply_share_scaling(leaves: list[Chart]) -> None:
     # Reset to the user's original dims first so scaling is computed from a
     # clean baseline regardless of prior renders.
     for leaf in leaves:
-        if leaf._fig._canvas_explicit:
+        if leaf._canvas_explicit:
             continue
-        leaf._fig._data_width  = leaf._fig._orig_data_width
-        leaf._fig._data_height = leaf._fig._orig_data_height
+        leaf._data_width  = leaf._orig_data_width
+        leaf._data_height = leaf._orig_data_height
 
     # Apply scaling in topo order so anchors of chained share-classes
     # have settled before sharers depend on them.
     for leaf in _topo_order(leaves):
-        if leaf._fig._canvas_explicit:
+        if leaf._canvas_explicit:
             continue
         sx = leaf._share_x
         sy = leaf._share_y
         if sx is None and sy is None:
             continue
-        old_w = leaf._fig._data_width
-        old_h = leaf._fig._data_height
+        old_w = leaf._data_width
+        old_h = leaf._data_height
         if sx is not None and sy is not None:
             # Both axes shared — force both, no aspect preservation
-            new_w = sx._fig._data_width
-            new_h = sy._fig._data_height
+            new_w = sx._data_width
+            new_h = sy._data_height
         elif sx is not None:
             # Width forced to anchor; height scales to preserve aspect
-            new_w = sx._fig._data_width
+            new_w = sx._data_width
             new_h = old_h * (new_w / old_w) if old_w > 0 else old_h
         else:  # sy is not None
-            new_h = sy._fig._data_height
+            new_h = sy._data_height
             new_w = old_w * (new_h / old_h) if old_h > 0 else old_w
-        leaf._fig._data_width  = new_w
-        leaf._fig._data_height = new_h
+        leaf._data_width  = new_w
+        leaf._data_height = new_h
         # Refresh derived canvas dims so downstream `_measure` sees them.
-        leaf._fig._canvas_width  = new_w + leaf._fig._margin["left"]   + leaf._fig._margin["right"]
-        leaf._fig._canvas_height = new_h + leaf._fig._margin["top"]    + leaf._fig._margin["bottom"]
+        leaf._canvas_width  = new_w + leaf._margin["left"]   + leaf._margin["right"]
+        leaf._canvas_height = new_h + leaf._margin["top"]    + leaf._margin["bottom"]
 
 
 # ---------------------------------------------------------------------------
@@ -592,7 +592,7 @@ def _build_panel_opts(root: Chart) -> tuple[dict[int, _PanelOpts], dict[int, dic
     render through their own pipeline (see `legend.py`)."""
     leaves = [l for l in _iter_leaves(root) if l._leaf_kind == "data"]
     _apply_share_scaling(leaves)
-    states = {id(l): l._fig._replay() for l in leaves}
+    states = {id(l): _replay(l._calls) for l in leaves}
     x_desc, y_desc = _build_axis_descriptors(leaves, states)
     panel_opts = {
         id(l): _PanelOpts(x_axis=x_desc[id(l)], y_axis=y_desc[id(l)])
@@ -623,13 +623,13 @@ def _compute_measured_margins(leaves: list[Chart],
     N-wide data area. Folding the collapse into M_eff before canvas-sizing
     keeps `iw == data_width` regardless of join state."""
     for leaf in leaves:
-        if leaf._fig._canvas_explicit:
+        if leaf._canvas_explicit:
             continue
         po = panel_opts[id(leaf)]
-        M_floor = _enforce_floors(leaf._fig._margin)
+        M_floor = _enforce_floors(leaf._margin)
         M_req = _required_margin(states[id(leaf)],
-                                 leaf._fig._data_width,
-                                 leaf._fig._data_height)
+                                 leaf._data_width,
+                                 leaf._data_height)
         M_eff = {side: max(M_floor[side], M_req[side]) for side in M_floor}
         ig = _resolve_inner_gap(leaf)
         if po.hide_left:   M_eff["left"]   = ig
@@ -645,7 +645,7 @@ def _body_cell(cell: Chart | None, panel_opts: dict[int, _PanelOpts]) -> bool:
     return (cell is not None
             and not cell._is_parent
             and cell._leaf_kind == "data"
-            and not cell._fig._canvas_explicit
+            and not cell._canvas_explicit
             and panel_opts.get(id(cell)) is not None
             and panel_opts[id(cell)].M_eff is not None)
 
@@ -731,7 +731,7 @@ def _pad_canvases(cells: list[Chart], panel_opts: dict[int, _PanelOpts],
 
     def canvas_dim(cell):
         m = panel_opts[id(cell)].M_eff
-        return getattr(cell._fig, dim_attr) + m[sides[0]] + m[sides[1]]
+        return getattr(cell, dim_attr) + m[sides[0]] + m[sides[1]]
 
     target = max(canvas_dim(c) for c in cells)
     for c in cells:
@@ -748,14 +748,14 @@ def _update_canvases_for_margins(leaves: list[Chart],
     the canvas, so this is what makes max-per-column/row see the
     grown-to-fit dimensions."""
     for leaf in leaves:
-        if leaf._fig._canvas_explicit:
+        if leaf._canvas_explicit:
             continue
         po = panel_opts[id(leaf)]
         if po.M_eff is None:
             continue
         M = po.M_eff
-        leaf._fig._canvas_width  = leaf._fig._data_width  + M["left"] + M["right"]
-        leaf._fig._canvas_height = leaf._fig._data_height + M["top"]  + M["bottom"]
+        leaf._canvas_width  = leaf._data_width  + M["left"] + M["right"]
+        leaf._canvas_height = leaf._data_height + M["top"]  + M["bottom"]
 
 
 def _effective_margin(leaf: Chart, po: _PanelOpts, w: float, h: float) -> dict:
@@ -766,10 +766,10 @@ def _effective_margin(leaf: Chart, po: _PanelOpts, w: float, h: float) -> dict:
     hide_* collapse here at render time."""
     if po.M_eff is not None:
         return dict(po.M_eff)
-    if leaf._fig._canvas_explicit:
-        M_eff = _scaled_margin(leaf._fig._margin, w, h)
+    if leaf._canvas_explicit:
+        M_eff = _scaled_margin(leaf._margin, w, h)
     else:
-        M_eff = _enforce_floors(leaf._fig._margin)
+        M_eff = _enforce_floors(leaf._margin)
     ig = _resolve_inner_gap(leaf)
     if po.hide_left:   M_eff["left"]   = ig
     if po.hide_right:  M_eff["right"]  = ig

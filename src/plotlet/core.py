@@ -1,18 +1,19 @@
-"""Figure class and render orchestrator — registry-driven version.
+"""Render engine — pure functions over Chart state.
 
 The deferred-render pipeline:
-  1. `figure()` returns a `Figure` whose methods record into `_calls`.
-  2. `Figure.to_svg()` calls `_render(_replay(), ...)`.
-  3. `_render` does: pre-process → domain → scales → grid → artists → spines/ticks
-     → labels/title → legend.
+  1. A `Chart` (defined in `chart.py`) records user calls into `_calls`.
+  2. `Chart.to_svg()` calls `_render(_replay(calls), W, H, margin)`.
+  3. `_render` does: pre-process → domain → scales → grid → artists →
+     spines/ticks → labels/title → legend.
 
-Every artist-specific branch is a registry lookup. Adding a new plot type
-means calling `add_artist(...)` — no monkey-patching, no editing this file.
+Every function here takes its state explicitly — there's no class to
+hold it. Adding a new plot type means calling `add_artist(...)` from
+outside; no monkey-patching, no editing this file.
 
-`_render_inner` accepts an optional `_PanelOpts` so the layout pre-pass in
-`layout.py` can supply pre-computed axis descriptors (for share_x/share_y)
-and side-suppression flags. Standalone Figure rendering passes None and
-behaves as before.
+`_render_inner` accepts an optional `_PanelOpts` so the layout pre-pass
+in `layout.py` can supply pre-computed axis descriptors (for
+share_x/share_y) and side-suppression flags. Standalone single-panel
+rendering passes None and behaves as before.
 """
 from __future__ import annotations
 
@@ -214,203 +215,75 @@ def _spec_canvas_dims() -> tuple[int, int]:
             _SIZESPEC["data_height"] + M["top"]  + M["bottom"])
 
 
-class Figure:
-    def __init__(self,
-                 data_width: int | float | str | None = None,
-                 data_height: int | float | str | None = None,
-                 *,
-                 canvas_width: int | float | str | None = None,
-                 canvas_height: int | float | str | None = None,
-                 margin: dict | None = None,
-                 **kwargs):
-        # Migration error: 0.1.x accepted `width=`/`height=` (canvas dims).
-        # 0.2.0 splits this into data_* (data region — the new primitive) and
-        # canvas_* (full SVG). Surface the rename loudly rather than silently
-        # accepting and producing a different-sized figure.
-        if "width" in kwargs or "height" in kwargs:
-            raise TypeError(
-                "Figure no longer accepts `width=` / `height=` (changed in 0.2.0). "
-                "For the data region (the new dimensional primitive), pass "
-                "`data_width=` / `data_height=` — positional also works: "
-                "`Figure(400, 300)`. For the full SVG canvas, pass "
-                "`canvas_width=` / `canvas_height=`."
-            )
-        if kwargs:
-            raise TypeError(f"Figure() got unexpected keyword arguments: {list(kwargs)!r}")
-
-        data_set   = (data_width   is not None) or (data_height   is not None)
-        canvas_set = (canvas_width is not None) or (canvas_height is not None)
-        if data_set and canvas_set:
-            raise ValueError(
-                "Pass either data_width/data_height (the data region — preferred) "
-                "or canvas_width/canvas_height (the full SVG canvas), not both."
-            )
-
-        # Resolve unit-suffixed strings (`"4in"`, `"10cm"`, …) once at the
-        # boundary so internal math stays in pixels.
-        data_width    = _to_px(data_width)
-        data_height   = _to_px(data_height)
-        canvas_width  = _to_px(canvas_width)
-        canvas_height = _to_px(canvas_height)
-
-        self._calls: list[tuple[str, list, dict]] = []
-        self._margin = dict(margin) if margin is not None else dict(_SIZESPEC["margin"])
-
-        if canvas_set:
-            # Canvas path: user picked the SVG canvas; effective margin scales
-            # by canvas/spec_canvas (legacy 0.1.x behavior). Data region falls
-            # out as canvas - effective margin.
-            spec_cw, spec_ch = _spec_canvas_dims()
-            self._canvas_width  = canvas_width  if canvas_width  is not None else spec_cw
-            self._canvas_height = canvas_height if canvas_height is not None else spec_ch
-            self._canvas_explicit = True
-            M_eff = _scaled_margin(self._margin, self._canvas_width, self._canvas_height)
-            self._data_width  = self._canvas_width  - M_eff["left"] - M_eff["right"]
-            self._data_height = self._canvas_height - M_eff["top"]  - M_eff["bottom"]
-        else:
-            # Data path (default): user picked the data region exactly. Margin
-            # is used unscaled (only floored). Canvas falls out as data + margin.
-            self._data_width  = data_width  if data_width  is not None else _SIZESPEC["data_width"]
-            self._data_height = data_height if data_height is not None else _SIZESPEC["data_height"]
-            self._canvas_width  = self._data_width  + self._margin["left"] + self._margin["right"]
-            self._canvas_height = self._data_height + self._margin["top"]  + self._margin["bottom"]
-            self._canvas_explicit = False
-        # Snapshot the user's originally-requested data dims. The render-time
-        # share-scaling pre-pass mutates `_data_width` / `_data_height` to
-        # coordinate sibling sizes; restoring from these on re-render keeps
-        # the operation idempotent across multiple `to_svg()` calls.
-        self._orig_data_width  = self._data_width
-        self._orig_data_height = self._data_height
-
-    def __getattr__(self, name):
-        # Recordable if it's a frame method or a registered artist
-        if name in _FRAME_METHODS or get_artist(name) is not None:
-            def recorder(*args, **kwargs):
-                self._calls.append((name, list(args), dict(kwargs)))
-                return self
-            return recorder
-        raise AttributeError(
-            f"Figure has no method {name!r}. "
-            f"Registered artists: {all_artist_names()}"
-        )
-
-    def __dir__(self):
-        return sorted(set(super().__dir__()) | _FRAME_METHODS | set(all_artist_names()))
-
-    # ------------------------------------------------------------- replay
-    def _replay(self):
-        st = {
-            "artists": [], "title": "", "xlabel": "", "ylabel": "",
-            "xlim": None, "ylim": None, "xscale": "linear", "yscale": "linear",
-            "x_order": None, "y_order": None,
-            "x_padding": None, "y_padding": None,
-            # xticks/yticks overrides (None = auto, [] = hide):
-            "x_ticks": None, "x_labels": None, "x_rotation": 0, "x_fontsize": None,
-            "x_direction": "in", "x_marks": True,
-            "y_ticks": None, "y_labels": None, "y_rotation": 0, "y_fontsize": None,
-            "y_direction": "in", "y_marks": True,
-            "spine_top": True, "spine_right": True,
-            "spine_bottom": True, "spine_left": True,
-            "grid": False, "legend": False,
-        }
-        for name, args, kw in self._calls:
-            spec = get_artist(name)
-            if spec is not None:
-                st["artists"].append(spec.record(args, kw))
-            elif name == "title":  st["title"] = args[0]
-            elif name == "xlabel": st["xlabel"] = args[0]
-            elif name == "ylabel": st["ylabel"] = args[0]
-            elif name == "xlim":   st["xlim"] = (args[0], args[1])
-            elif name == "ylim":   st["ylim"] = (args[0], args[1])
-            elif name == "xscale":
-                st["xscale"] = args[0]
-                if "order" in kw:   st["x_order"] = list(kw["order"])
-                if "padding" in kw: st["x_padding"] = kw["padding"]
-            elif name == "yscale":
-                st["yscale"] = args[0]
-                if "order" in kw:   st["y_order"] = list(kw["order"])
-                if "padding" in kw: st["y_padding"] = kw["padding"]
-            elif name == "xticks": _record_ticks(st, "x", args, kw)
-            elif name == "yticks": _record_ticks(st, "y", args, kw)
-            elif name == "spines":
-                for side in ("top", "right", "bottom", "left"):
-                    if side in kw:
-                        st[f"spine_{side}"] = bool(kw[side])
-            elif name == "grid":   st["grid"] = (args[0] if args else True)
-            elif name == "legend": st["legend"] = (args[0] if args else True)
-        return st
-
-    # ------------------------------------------------------------- render
-    def _effective_margin(self, st: dict | None = None) -> dict:
-        """Margin actually used at render time.
-
-        Canvas path: scales by canvas dims (legacy 0.1.x behavior); text
-        overflow is the user's responsibility because canvas size is
-        promised exactly.
-
-        Data path: combines `_enforce_floors(spec/user margin)` with the
-        content-driven `_required_margin(st, data_w, data_h)` by taking
-        the per-side max — so the canvas grows as needed to fit long tick
-        labels, titles, and axis labels rather than letting them overflow.
-        Caller passes the replayed `st`; callers without one (legacy code
-        paths) get only the floor-applied spec margin."""
-        if self._canvas_explicit:
-            return _scaled_margin(self._margin, self._canvas_width, self._canvas_height)
-        M_floor = _enforce_floors(self._margin)
-        if st is None:
-            return M_floor
-        M_req = _required_margin(st, self._data_width, self._data_height)
-        return {side: max(M_floor[side], M_req[side]) for side in M_floor}
-
-    def to_svg(self) -> str:
-        st = self._replay()
-        M_eff = self._effective_margin(st)
-        # Canvas-path keeps its promised canvas; data-path canvas grows
-        # to fit the (possibly measure-driven-expanded) margin.
-        if self._canvas_explicit:
-            W, H = self._canvas_width, self._canvas_height
-        else:
-            W = self._data_width  + M_eff["left"] + M_eff["right"]
-            H = self._data_height + M_eff["top"]  + M_eff["bottom"]
-        return _render(st, W, H, M_eff)
-
-    def to_html(self, full_page: bool = False) -> str:
-        svg = self.to_svg()
-        if full_page:
-            return ('<!doctype html><html><head><meta charset="utf-8">'
-                    '<title>plotlet</title></head>'
-                    f'<body style="margin:24px">{svg}</body></html>')
-        return svg
-
-    def _repr_html_(self) -> str:
-        return self.to_svg()
-
-    def show(self):
-        try:
-            from IPython.display import HTML, display
-        except ImportError:
-            print(self.to_html(full_page=True))
-            return
-        display(HTML(self.to_svg()))
-
-    def write_html(self, filename):
-        Path(filename).write_text(self.to_html(full_page=True))
-        return self
-
-    def save_svg(self, filename):
-        Path(filename).write_text(self.to_svg())
-        return self
+def _replay(calls):
+    """Walk a Chart's recorded calls into a state dict consumed by the
+    renderer. Pure function of `calls` and the artist registry — same input
+    + same registry → same output."""
+    st = {
+        "artists": [], "title": "", "xlabel": "", "ylabel": "",
+        "xlim": None, "ylim": None, "xscale": "linear", "yscale": "linear",
+        "x_order": None, "y_order": None,
+        "x_padding": None, "y_padding": None,
+        # xticks/yticks overrides (None = auto, [] = hide):
+        "x_ticks": None, "x_labels": None, "x_rotation": 0, "x_fontsize": None,
+        "x_direction": "in", "x_marks": True,
+        "y_ticks": None, "y_labels": None, "y_rotation": 0, "y_fontsize": None,
+        "y_direction": "in", "y_marks": True,
+        "spine_top": True, "spine_right": True,
+        "spine_bottom": True, "spine_left": True,
+        "grid": False, "legend": False,
+    }
+    for name, args, kw in calls:
+        spec = get_artist(name)
+        if spec is not None:
+            st["artists"].append(spec.record(args, kw))
+        elif name == "title":  st["title"] = args[0]
+        elif name == "xlabel": st["xlabel"] = args[0]
+        elif name == "ylabel": st["ylabel"] = args[0]
+        elif name == "xlim":   st["xlim"] = (args[0], args[1])
+        elif name == "ylim":   st["ylim"] = (args[0], args[1])
+        elif name == "xscale":
+            st["xscale"] = args[0]
+            if "order" in kw:   st["x_order"] = list(kw["order"])
+            if "padding" in kw: st["x_padding"] = kw["padding"]
+        elif name == "yscale":
+            st["yscale"] = args[0]
+            if "order" in kw:   st["y_order"] = list(kw["order"])
+            if "padding" in kw: st["y_padding"] = kw["padding"]
+        elif name == "xticks": _record_ticks(st, "x", args, kw)
+        elif name == "yticks": _record_ticks(st, "y", args, kw)
+        elif name == "spines":
+            for side in ("top", "right", "bottom", "left"):
+                if side in kw:
+                    st[f"spine_{side}"] = bool(kw[side])
+        elif name == "grid":   st["grid"] = (args[0] if args else True)
+        elif name == "legend": st["legend"] = (args[0] if args else True)
+    return st
 
 
-def figure(data_width: int | float | str | None = None,
-           data_height: int | float | str | None = None,
-           *,
-           canvas_width: int | float | str | None = None,
-           canvas_height: int | float | str | None = None,
-           **opts) -> Figure:
-    return Figure(data_width, data_height,
-                  canvas_width=canvas_width, canvas_height=canvas_height,
-                  **opts)
+def _effective_margin(leaf, st=None) -> dict:
+    """Margin used at render time. Reads dimension state directly off the
+    leaf Chart.
+
+    Canvas path: scales by canvas dims (legacy 0.1.x behavior); text
+    overflow is the user's responsibility because canvas size is promised
+    exactly.
+
+    Data path: combines `_enforce_floors(spec/user margin)` with the
+    content-driven `_required_margin(st, data_w, data_h)` by taking the
+    per-side max — so the canvas grows as needed to fit long tick labels,
+    titles, and axis labels rather than letting them overflow. Caller
+    passes the replayed `st`; callers without one get only the
+    floor-applied spec margin."""
+    if leaf._canvas_explicit:
+        return _scaled_margin(leaf._margin, leaf._canvas_width, leaf._canvas_height)
+    M_floor = _enforce_floors(leaf._margin)
+    if st is None:
+        return M_floor
+    M_req = _required_margin(st, leaf._data_width, leaf._data_height)
+    return {side: max(M_floor[side], M_req[side]) for side in M_floor}
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -469,7 +342,7 @@ def _enforce_floors(M):
 def _scaled_margin(M, W, H):
     """Shrink margins for small canvases, with a per-side floor so tick
     labels and titles still fit. Used by the canvas-explicit path
-    (`Figure(canvas_width=…)` and the layout's per-panel allocation),
+    (`Chart(canvas_width=…)` and the layout's per-panel allocation),
     where the canvas size is fixed and margins must scale to fit. Floors
     live in `spec.size.margin_floor`; the reference canvas is derived
     from `spec.size.data_width/height + spec margin`."""
@@ -885,9 +758,10 @@ def _panel_open(st, panel_opts: _PanelOpts | None, transform: str,
 
 def _render(st, W, H, M):
     """Emit one SVG. (W, H) = canvas dims; M = effective margin already
-    resolved by the caller (`Figure._effective_margin` or layout's
-    `_effective_margin`). Splitting margin resolution out of `_render` is
-    what lets the data-path skip canvas-based scaling."""
+    resolved by the caller (`_effective_margin` for single-panel,
+    `layout._effective_margin` for multi-panel). Splitting margin
+    resolution out of `_render` is what lets the data-path skip
+    canvas-based scaling."""
     iw = W - M["left"] - M["right"]
     ih = H - M["top"] - M["bottom"]
     transform = f'translate({M["left"]},{M["top"]})'

@@ -1,13 +1,14 @@
-"""Tidy-table-friendly facade over Figure, plus subplot composition.
+"""Chart — the user-facing object. Leaf for one panel, parent when composed.
 
 A `Chart` is one of two things:
 
-  * **Leaf** — wraps a `Figure` and records artist calls into it. This is the
-    surface returned by `pt.chart(...)`. `_layout_kind is None`.
+  * **Leaf** — records artist calls into `_calls` and carries the dimensions
+    + margin needed to render one panel. This is the surface returned by
+    `pt.chart(...)`. `_layout_kind is None`.
 
   * **Parent** — composed from other Charts. Holds a list of children and a
-    layout direction ("h" | "v" | "grid"). Has no `_fig` of its own; rendering
-    walks the tree (see `layout.py`).
+    layout direction ("h" | "v" | "grid"). Carries no per-leaf render state;
+    rendering walks the tree (see `layout.py`).
 
 Composition operators:
 
@@ -27,7 +28,13 @@ Invariants:
 """
 from __future__ import annotations
 
-from .core import Figure, _FRAME_METHODS
+from pathlib import Path
+
+from ._spec import _SIZESPEC
+from .core import (
+    _FRAME_METHODS, _replay, _effective_margin, _render,
+    _to_px, _spec_canvas_dims, _scaled_margin,
+)
 from .artists import _to_pylist
 from .registry import get_artist, all_artist_names
 
@@ -45,7 +52,8 @@ class Chart:
                  xscale: str | None = None, yscale: str | None = None,
                  legend: bool | None = None, grid: bool | None = None,
                  **kwargs):
-        # Migration error — see Figure.__init__ for the rationale.
+        # Migration errors — surface the rename loudly rather than silently
+        # accepting and producing a different-sized figure.
         if "width" in kwargs or "height" in kwargs:
             raise TypeError(
                 "pt.chart() no longer accepts `width=` / `height=` (changed in 0.2.0). "
@@ -60,11 +68,55 @@ class Chart:
             )
         if kwargs:
             raise TypeError(f"Chart() got unexpected keyword arguments: {list(kwargs)!r}")
-        self._fig = Figure(data_width=data_width, data_height=data_height,
-                           canvas_width=canvas_width, canvas_height=canvas_height,
-                           margin=margin)
+
+        # ---- Render-state init (leaf-only fields used by core._render) ----
+        # Resolve unit-suffixed strings (`"4in"`, `"10cm"`, …) once at the
+        # boundary so internal math stays in pixels.
+        data_width    = _to_px(data_width)
+        data_height   = _to_px(data_height)
+        canvas_width  = _to_px(canvas_width)
+        canvas_height = _to_px(canvas_height)
+
+        data_set   = (data_width   is not None) or (data_height   is not None)
+        canvas_set = (canvas_width is not None) or (canvas_height is not None)
+        if data_set and canvas_set:
+            raise ValueError(
+                "Pass either data_width/data_height (the data region — preferred) "
+                "or canvas_width/canvas_height (the full SVG canvas), not both."
+            )
+
+        self._calls: list[tuple[str, list, dict]] = []
+        self._margin = dict(margin) if margin is not None else dict(_SIZESPEC["margin"])
+
+        if canvas_set:
+            # Canvas path: user picked the SVG canvas; effective margin scales
+            # by canvas/spec_canvas (legacy 0.1.x behavior). Data region falls
+            # out as canvas - effective margin.
+            spec_cw, spec_ch = _spec_canvas_dims()
+            self._canvas_width  = canvas_width  if canvas_width  is not None else spec_cw
+            self._canvas_height = canvas_height if canvas_height is not None else spec_ch
+            self._canvas_explicit = True
+            M_eff = _scaled_margin(self._margin, self._canvas_width, self._canvas_height)
+            self._data_width  = self._canvas_width  - M_eff["left"] - M_eff["right"]
+            self._data_height = self._canvas_height - M_eff["top"]  - M_eff["bottom"]
+        else:
+            # Data path (default): user picked the data region exactly. Margin
+            # is used unscaled (only floored). Canvas falls out as data + margin.
+            self._data_width  = data_width  if data_width  is not None else _SIZESPEC["data_width"]
+            self._data_height = data_height if data_height is not None else _SIZESPEC["data_height"]
+            self._canvas_width  = self._data_width  + self._margin["left"] + self._margin["right"]
+            self._canvas_height = self._data_height + self._margin["top"]  + self._margin["bottom"]
+            self._canvas_explicit = False
+        # Snapshot the user's originally-requested data dims. The render-time
+        # share-scaling pre-pass mutates `_data_width` / `_data_height` to
+        # coordinate sibling sizes; restoring from these on re-render keeps
+        # the operation idempotent across multiple `to_svg()` calls.
+        self._orig_data_width  = self._data_width
+        self._orig_data_height = self._data_height
+
+        # ---- Composition state ---------------------------------------------
         self._data = data
-        # Composition state. Leaves: _layout_kind is None, _children is empty.
+        # Leaves: _layout_kind is None, _children is empty.
         self._parent: Chart | None = None
         self._layout_kind: str | None = None
         self._children: list[Chart] = []
@@ -88,25 +140,29 @@ class Chart:
         self._legend_sources: list[Chart] = []
         self._legend_names: dict = {}
         self._legend_group_by_chart: bool = True
-        if title  is not None: self._fig.title(title)
-        if xlabel is not None: self._fig.xlabel(xlabel)
-        if ylabel is not None: self._fig.ylabel(ylabel)
-        if xlim   is not None: self._fig.xlim(*xlim)
-        if ylim   is not None: self._fig.ylim(*ylim)
-        if xscale is not None: self._fig.xscale(xscale)
-        if yscale is not None: self._fig.yscale(yscale)
-        if legend is not None: self._fig.legend(legend)
-        if grid   is not None: self._fig.grid(grid)
+
+        # Apply convenience constructor kwargs by recording. `self.title(...)`
+        # etc. fall through __getattr__ → recorder; `self.legend(...)` hits
+        # the special method below (which dispatches leaf vs parent).
+        if title  is not None: self.title(title)
+        if xlabel is not None: self.xlabel(xlabel)
+        if ylabel is not None: self.ylabel(ylabel)
+        if xlim   is not None: self.xlim(*xlim)
+        if ylim   is not None: self.ylim(*ylim)
+        if xscale is not None: self.xscale(xscale)
+        if yscale is not None: self.yscale(yscale)
+        if legend is not None: self.legend(legend)
+        if grid   is not None: self.grid(grid)
 
     # ---------- composition ----------
 
     @classmethod
     def _new_parent(cls, kind: str, children: list["Chart"]) -> "Chart":
-        """Construct a parent Chart with no Figure of its own. The parent's
-        total size is derived from its children at render time (sum-sizes;
-        see `docs/SUBPLOTS.md`)."""
+        """Construct a parent Chart. Parents carry no render-state of their
+        own — `_calls`, `_data_width`, `_margin`, etc. are leaf-only. The
+        parent's total size is derived from its children at render time
+        (sum-sizes; see `docs/SUBPLOTS.md`)."""
         p = cls.__new__(cls)
-        p._fig = None
         p._data = None
         p._parent = None
         p._layout_kind = kind
@@ -275,14 +331,15 @@ class Chart:
                 f"chart.legend() (leaf in-frame overlay) takes an optional bool; "
                 f"got {type(args[0]).__name__}."
             )
-        self._fig.legend(*args)
-        return self
+        # Record directly — `legend` is in _FRAME_METHODS but our specialized
+        # method above shadows __getattr__, so we use `_record` explicitly.
+        return self._record("legend", *args)
 
     # ---------- recording (leaf only) ----------
 
     def __getattr__(self, name):
         # __getattr__ is only called when normal lookup fails, so this won't
-        # interfere with _fig / _layout_kind / _children etc.
+        # interfere with _layout_kind / _children / _calls etc.
         if name.startswith("_"):
             raise AttributeError(name)
         if self._layout_kind is not None:
@@ -291,23 +348,34 @@ class Chart:
                 f"(layout={self._layout_kind!r}). Call it on a leaf chart instead."
             )
         if name in _FRAME_METHODS or get_artist(name) is not None:
-            def call(*args, **kwargs):
-                getattr(self._fig, name)(*args, **kwargs)
+            def recorder(*args, **kwargs):
+                self._calls.append((name, list(args), dict(kwargs)))
                 return self
-            return call
-        raise AttributeError(f"Chart has no method {name!r}")
+            return recorder
+        raise AttributeError(
+            f"Chart has no method {name!r}. "
+            f"Registered artists: {all_artist_names()}"
+        )
 
     def __dir__(self):
         return sorted(set(super().__dir__()) | _FRAME_METHODS | set(all_artist_names()))
 
     # ---------- tabular mark methods ----------
 
+    def _record(self, name, *args, **kwargs):
+        """Append one (name, args, kwargs) tuple to the recording. Used by
+        the tabular methods below and by `legend()`'s leaf branch — both
+        cases shadow `__getattr__`'s recorder closure with a real method,
+        so they need to record explicitly."""
+        self._calls.append((name, list(args), dict(kwargs)))
+        return self
+
     def line(self, *args, x=None, y=None, hue=None, data=None, **opts):
         self._require_leaf("line")
         if x is not None or y is not None:
             self._tabular("line", "plot", data, x, y, hue, opts)
         else:
-            self._fig.plot(*args, **opts)
+            self._record("plot", *args, **opts)
         return self
 
     def scatter(self, *args, x=None, y=None, hue=None, data=None, **opts):
@@ -315,35 +383,36 @@ class Chart:
         if x is not None or y is not None:
             self._tabular("scatter", "scatter", data, x, y, hue, opts)
         else:
-            self._fig.scatter(*args, **opts)
+            self._record("scatter", *args, **opts)
         return self
 
     def bar(self, *args, x=None, y=None, data=None, **opts):
         self._require_leaf("bar")
         if x is not None or y is not None:
             df = self._resolve_data(data, "bar")
-            self._fig.bar(_to_pylist(df[x]), _to_pylist(df[y]), **opts)
+            self._record("bar", _to_pylist(df[x]), _to_pylist(df[y]), **opts)
         else:
-            self._fig.bar(*args, **opts)
+            self._record("bar", *args, **opts)
         return self
 
     def hist(self, *args, x=None, data=None, **opts):
         self._require_leaf("hist")
         if x is not None:
             df = self._resolve_data(data, "hist")
-            self._fig.hist(_to_pylist(df[x]), **opts)
+            self._record("hist", _to_pylist(df[x]), **opts)
         else:
-            self._fig.hist(*args, **opts)
+            self._record("hist", *args, **opts)
         return self
 
     def fill_between(self, *args, x=None, y1=None, y2=None, data=None, **opts):
         self._require_leaf("fill_between")
         if x is not None or y1 is not None or y2 is not None:
             df = self._resolve_data(data, "fill_between")
-            self._fig.fill_between(
-                _to_pylist(df[x]), _to_pylist(df[y1]), _to_pylist(df[y2]), **opts)
+            self._record("fill_between",
+                          _to_pylist(df[x]), _to_pylist(df[y1]), _to_pylist(df[y2]),
+                          **opts)
         else:
-            self._fig.fill_between(*args, **opts)
+            self._record("fill_between", *args, **opts)
         return self
 
     # Reflines, imshow, and any user-registered artist forward through
@@ -369,9 +438,8 @@ class Chart:
 
     def _tabular(self, public_name, kind, data, x_col, y_col, hue, opts):
         df = self._resolve_data(data, public_name)
-        method = getattr(self._fig, kind)
         if hue is None:
-            method(_to_pylist(df[x_col]), _to_pylist(df[y_col]), **opts)
+            self._record(kind, _to_pylist(df[x_col]), _to_pylist(df[y_col]), **opts)
             return
         hue_vals = _to_pylist(df[hue])
         xs_all = _to_pylist(df[x_col])
@@ -384,7 +452,7 @@ class Chart:
         for v in seen:
             xs_g = [xs_all[i] for i, h in enumerate(hue_vals) if h == v]
             ys_g = [ys_all[i] for i, h in enumerate(hue_vals) if h == v]
-            method(xs_g, ys_g, label=str(v), **opts)
+            self._record(kind, xs_g, ys_g, label=str(v), **opts)
 
     # Frame-state methods (title/xlabel/ylabel/xlim/ylim/xscale/yscale/
     # grid/legend) forward through __getattr__ above.
@@ -402,7 +470,16 @@ class Chart:
         if self._leaf_kind == "diagram":
             from .layout_diagram import _render_standalone_diagram
             return _render_standalone_diagram(self)
-        return self._fig.to_svg()
+        # Data leaf. Canvas-path keeps its promised canvas; data-path canvas
+        # grows to fit the (possibly measure-driven-expanded) margin.
+        st = _replay(self._calls)
+        M_eff = _effective_margin(self, st)
+        if self._canvas_explicit:
+            W, H = self._canvas_width, self._canvas_height
+        else:
+            W = self._data_width  + M_eff["left"] + M_eff["right"]
+            H = self._data_height + M_eff["top"]  + M_eff["bottom"]
+        return _render(st, W, H, M_eff)
 
     def to_html(self, full_page: bool = False) -> str:
         svg = self.to_svg()
@@ -417,24 +494,19 @@ class Chart:
 
     def show(self):
         self._require_render_root()
-        if self._is_parent or self._leaf_kind != "data":
-            svg = self.to_svg()
-            try:
-                from IPython.display import HTML, display
-            except ImportError:
-                print(self.to_html(full_page=True))
-                return
-            display(HTML(svg))
+        svg = self.to_svg()
+        try:
+            from IPython.display import HTML, display
+        except ImportError:
+            print(self.to_html(full_page=True))
             return
-        self._fig.show()
+        display(HTML(svg))
 
     def save_svg(self, path):
-        from pathlib import Path
         Path(path).write_text(self.to_svg())
         return self
 
     def write_html(self, path):
-        from pathlib import Path
         Path(path).write_text(self.to_html(full_page=True))
         return self
 

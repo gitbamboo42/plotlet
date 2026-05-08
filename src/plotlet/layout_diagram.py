@@ -72,8 +72,8 @@ def _render_standalone_diagram(leaf: Chart) -> str:
     """Wrap a diagram leaf's inner content in a fresh `<svg>`. Called by
     `Chart.to_svg()` when the diagram leaf is rendered on its own (not
     as part of a composition)."""
-    W = leaf._fig._canvas_width
-    H = leaf._fig._canvas_height
+    W = leaf._canvas_width
+    H = leaf._canvas_height
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
         f'viewBox="0 0 {W} {H}">{leaf._diagram_inner}</svg>'

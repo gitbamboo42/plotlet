@@ -144,10 +144,10 @@ declare them.
 ```python
 import plotlet as pt
 
-fig = pt.figure()
-fig.title("Daily revenue").xlabel("day").ylabel("USD")
-fig.plot([1, 2, 3, 4], [10.5, 12.3, 11.0, 14.7], label="actual")
-print(fig.to_svg())
+c = pt.chart()
+c.title("Daily revenue").xlabel("day").ylabel("USD")
+c.plot([1, 2, 3, 4], [10.5, 12.3, 11.0, 14.7], label="actual")
+print(c.to_svg())
 ```
 
 What an AI sees in the output (skipping geometry):

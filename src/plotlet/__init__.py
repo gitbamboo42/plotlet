@@ -1,30 +1,27 @@
 """plotlet — pure-Python SVG renderer, matplotlib-flavored.
 
-Tabular API (recommended):
-
     import plotlet as pt
     c = pt.chart(df, title="...", xlabel="x", ylabel="y", legend=True, grid=True)
     c.line(x="time", y="value", hue="series")
     c                         # auto-renders in Jupyter
 
-Chained API (legacy, still supported):
+For non-tabular use, the chained form works directly on the same Chart:
 
-    fig = pt.figure()
-    fig.plot([1, 2, 3], [1, 4, 9], label="squares")
-    fig.title("Hello").legend().grid(True)
-    fig
+    c = pt.chart()
+    c.plot([1, 2, 3], [1, 4, 9], label="squares")
+    c.title("Hello").legend().grid(True)
+    c
 """
 from ._spec import SPEC
 from .colors import TAB10, colors
 from .colormaps import colormap, list_colormaps
-from .core import Figure, figure
 from .chart import Chart, chart
 from .layout import grid
 from .legend import legend
 from .registry import ArtistSpec, add_artist
 from .layout_diagram import layout_diagram
 
-__all__ = ["chart", "Chart", "figure", "Figure", "SPEC", "TAB10", "colors",
+__all__ = ["chart", "Chart", "SPEC", "TAB10", "colors",
            "colormap", "list_colormaps", "grid", "legend",
            "ArtistSpec", "add_artist", "layout_diagram"]
 

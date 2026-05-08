@@ -514,7 +514,4 @@ Not a roadmap — just the dependency order:
    suppression on either side.
 4. **Cookbook recipes:** `heatmap_with_tree`, ComplexHeatmap-style.
 
-Item 4 lands once item 3 is in. The legacy
-`pt.figure()` / `pt.Figure` chained API stays as-is — `Chart` is the
-surface that gets the subplots treatment; `Figure` remains the
-internal plumbing it already is.
+Item 4 lands once item 3 is in.

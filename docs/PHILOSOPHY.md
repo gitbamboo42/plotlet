@@ -6,7 +6,7 @@ projects, with AI assistance making the per-extension cost low.
 
 ## What's in the core
 
-- The deferred-render pipeline (Figure, _replay, _render)
+- The deferred-render pipeline (Chart, _replay, _render)
 - Scales: linear, log, category
 - Standard plots: line, scatter, bar, hist, fill_between
 - Font handling and text-as-paths rendering

@@ -2,10 +2,10 @@
 
 Adding a custom plot type is a 3-step recipe. You write three small functions,
 bundle them into an `ArtistSpec`, and hand it to `add_artist(...)`. After
-that, `fig.<your_name>(...)` Just Works — autoscaling, gridlines, color
-cycling, and the legend integrate for free.
+that, `c.<your_name>(...)` Just Works on any `Chart` — autoscaling, gridlines,
+color cycling, and the legend integrate for free.
 
-No edits to `core.py`. No monkey-patching `Figure`. Custom artists live in
+No edits to `core.py`. No monkey-patching of `Chart`. Custom artists live in
 your project (or in [`cookbook/`](../cookbook/) as reference), not upstream.
 
 > If your custom plot is generally useful, **publish it from your own project**;
@@ -22,8 +22,8 @@ from plotlet.artists import _to_pylist
 
 
 # 1. record(args, kwargs) -> dict
-#    Turn the positional/keyword args from fig.<name>(...) into the artist
-#    dict that gets stored in Figure._calls. Pure data — no scales yet.
+#    Turn the positional/keyword args from c.<name>(...) into the artist
+#    dict that gets stored in Chart._calls. Pure data — no scales yet.
 def my_record(args, kw):
     return {"type": "lollipop",
             "xs": _to_pylist(args[0]),
@@ -58,7 +58,7 @@ def my_draw(a, ctx):
     return "".join(out)
 
 
-# Register it. After this line, every Figure has a .lollipop() method.
+# Register it. After this line, every Chart has a .lollipop() method.
 pt.add_artist(pt.ArtistSpec(
     name="lollipop",
     record=my_record,
@@ -69,10 +69,10 @@ pt.add_artist(pt.ArtistSpec(
 
 
 # Use it.
-fig = pt.figure()
-fig.lollipop([1, 2, 3, 4, 5], [3, 7, 2, 9, 4], label="A")
-fig.title("Lollipop chart").grid(True).legend(True)
-fig.save_svg("out.svg")
+c = pt.chart()
+c.lollipop([1, 2, 3, 4, 5], [3, 7, 2, 9, 4], label="A")
+c.title("Lollipop chart").grid(True).legend(True)
+c.save_svg("out.svg")
 ```
 
 Worked example: [`cookbook/lollipop/lollipop.py`](../cookbook/lollipop/lollipop.py) — basic
@@ -128,7 +128,7 @@ stay short:
 
 ## What goes in the artist dict
 
-Whatever you return from `record(args, kwargs)` ends up in `Figure._calls`
+Whatever you return from `record(args, kwargs)` ends up in `Chart._calls`
 and is passed to `xdomain`, `ydomain`, and `draw` as `a`. Two conventions:
 
 - **Always set `"type"` to your artist name.** The render layer uses it for

@@ -6,8 +6,8 @@
 Two layers:
 
 1. `_to_px` string handling (`"4in"`, `"10cm"`, `"100mm"`, `"72pt"`,
-   `"30px"`, bare-number strings) and end-to-end `pt.figure(...)` /
-   `pt.chart(...)` constructor wiring. Internal layout math stays in
+   `"30px"`, bare-number strings) and end-to-end `pt.chart(...)`
+   constructor wiring. Internal layout math stays in
    pixels — these tests assert that string inputs resolve to the same
    pixel dimensions that bare ints would, so SVG output is byte-identical.
    Conversion factors are CSS standard: 96 px/in, 2.54 cm/in, 72 pt/in.
@@ -114,42 +114,33 @@ def main() -> int:
     _check_raises("list rejected",
                   lambda: _to_px([1, 2]), TypeError, failures)
 
-    # ---- end-to-end via Figure / pt.figure / pt.chart ---------------------
-    # `data_width="4in"` should produce the same Figure as `data_width=384`.
-    f_str = pt.figure(data_width="4in", data_height="3in")
-    f_int = pt.figure(data_width=384,   data_height=288)
-    _check("figure data_width via str",  f_str._data_width,  f_int._data_width,  failures)
-    _check("figure data_height via str", f_str._data_height, f_int._data_height, failures)
-    _check("figure canvas_width matches",  f_str._canvas_width,  f_int._canvas_width,  failures)
-    _check("figure canvas_height matches", f_str._canvas_height, f_int._canvas_height, failures)
-
-    # Positional strings.
-    f_pos = pt.figure("4in", "3in")
-    _check("positional str data_width",  f_pos._data_width,  f_int._data_width,  failures)
-    _check("positional str data_height", f_pos._data_height, f_int._data_height, failures)
+    # ---- end-to-end via pt.chart -----------------------------------------
+    # `data_width="4in"` should produce the same Chart as `data_width=384`.
+    f_str = pt.chart(data_width="4in", data_height="3in")
+    f_int = pt.chart(data_width=384,   data_height=288)
+    _check("chart data_width via str",  f_str._data_width,  f_int._data_width,  failures)
+    _check("chart data_height via str", f_str._data_height, f_int._data_height, failures)
+    _check("chart canvas_width matches",  f_str._canvas_width,  f_int._canvas_width,  failures)
+    _check("chart canvas_height matches", f_str._canvas_height, f_int._canvas_height, failures)
 
     # Mixed string / int.
-    f_mix = pt.figure(data_width="4in", data_height=300)
+    f_mix = pt.chart(data_width="4in", data_height=300)
     _check("mixed str/int data_width",  f_mix._data_width,  384, failures)
     _check("mixed str/int data_height", f_mix._data_height, 300, failures)
 
     # canvas_* path with string.
-    f_canv = pt.figure(canvas_width="6in", canvas_height="4in")
+    f_canv = pt.chart(canvas_width="6in", canvas_height="4in")
     _check("canvas_width via str",  f_canv._canvas_width,  576, failures)  # 6 * 96
     _check("canvas_height via str", f_canv._canvas_height, 384, failures)  # 4 * 96
 
-    # pt.chart() forwards correctly.
-    c = pt.chart(data_width="4in", data_height="3in")
-    _check("chart data_width via str",  c._fig._data_width,  384, failures)
-    _check("chart data_height via str", c._fig._data_height, 288, failures)
-
     # Mutual-exclusion still fires with strings.
     _check_raises("data + canvas mutex with strings",
-                  lambda: pt.figure(data_width="4in", canvas_width="6in"),
+                  lambda: pt.chart(data_width="4in", canvas_width="6in"),
                   ValueError, failures)
 
     # SVG byte-identity: string input → same SVG as numeric equivalent.
-    if pt.figure("4in", "3in").to_svg() != pt.figure(384, 288).to_svg():
+    if (pt.chart(data_width="4in", data_height="3in").to_svg()
+            != pt.chart(data_width=384, data_height=288).to_svg()):
         failures.append("FAIL: SVG output for string vs numeric dim differs")
 
     # ---- spine-rect: data region matches data_width / data_height ---------
@@ -166,7 +157,7 @@ def main() -> int:
         ("10cm", "8cm", 378, 302),    # round(10*37.795), round(8*37.795)
     ]
     for dw, dh, exp_iw, exp_ih in spine_cases:
-        svg = pt.figure(data_width=dw, data_height=dh).to_svg()
+        svg = pt.chart(data_width=dw, data_height=dh).to_svg()
         rects = _spine_rects(svg)
         _check(f"spine rect count for ({dw!r},{dh!r})", len(rects), 1, failures)
         if rects:

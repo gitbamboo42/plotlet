@@ -43,8 +43,8 @@ plotlet/
 │       ├── artists.py           # SVG-emitting helpers for the built-in plot types
 │       ├── registry.py          # ArtistSpec + add_artist — the extension API
 │       ├── builtin_artists.py   # registers the 11 built-in artists at import
-│       ├── core.py              # Figure class + _render orchestrator
-│       ├── chart.py             # Chart facade (leaf + parent + composition)
+│       ├── core.py              # render engine — free functions over Chart state
+│       ├── chart.py             # Chart class (leaf + parent + composition + recording)
 │       ├── layout.py            # subplot rect computation + multi-panel SVG assembly
 │       ├── legend.py            # layout-level legend (pt.legend / parent.legend)
 │       ├── colormaps.py         # 180 vendored matplotlib colormaps (continuous, value→RGB)
@@ -81,7 +81,7 @@ The test runner plumbing lives in `tests/_runner.py`. Machine-specific interpret
 
 ### The deferred-rendering pattern (the heart of the library)
 
-Every artist method records a tuple `(name, args, kwargs)` into `Figure._calls`. A name is recordable if it's a frame-state method (`title`, `xlim`, …) or a registered artist:
+Every artist method records a tuple `(name, args, kwargs)` into `Chart._calls`. A name is recordable if it's a frame-state method (`title`, `xlim`, …) or a registered artist:
 
 ```python
 def __getattr__(self, name):
@@ -122,14 +122,16 @@ Tradeoff: text in the output isn't selectable / searchable. matplotlib makes the
 
 All visual constants — colors, font sizes, spine widths, default alphas, legend dimensions — live in `src/plotlet/spec.json`. The package reads it at import via `_spec.py`. Changing a value in `spec.json` is the *only* way to alter the locked visual style. Don't reintroduce hard-coded literals in render code.
 
-### State on a Figure
+### State on a leaf Chart
 
-Each `Figure` instance accumulates:
+Each leaf `Chart` accumulates:
 
 - `_calls` — list of recorded artist + styling calls
 - `_data_width`, `_data_height`, `_canvas_width`, `_canvas_height`, `_margin`, `_canvas_explicit` — figure dimensions. The user-facing primitive is the *data region* (`data_width=` / `data_height=`); canvas is derived from data + margin. The legacy canvas-first form (`canvas_width=` / `canvas_height=`) sets `_canvas_explicit=True` and triggers margin scaling at render time. The two are mutually exclusive.
 
-The replay function reconstructs `title`, `xlabel`, `ylabel`, `xlim`, `ylim`, `xscale`, `yscale`, `grid`, `legend`, `artists` from `_calls` each render. Stateless rendering = same output every time. For body-first leaves, `Figure._effective_margin(st)` combines the floor-applied user margin with `_required_margin(st, dw, dh)` (measured from actual title / axis labels / tick labels) so the canvas grows to fit content rather than letting it overflow.
+Parent Charts (composed via `|`, `/`, `pt.grid`) carry no leaf state — they only hold `_children` and `_layout_kind`. Their dimensions emerge at render time from summing their children plus gaps.
+
+The replay function (`core._replay(calls)`) reconstructs `title`, `xlabel`, `ylabel`, `xlim`, `ylim`, `xscale`, `yscale`, `grid`, `legend`, `artists` from `_calls` each render. Stateless rendering = same output every time. For body-first leaves, `core._effective_margin(leaf, st)` combines the floor-applied user margin with `_required_margin(st, dw, dh)` (measured from actual title / axis labels / tick labels) so the canvas grows to fit content rather than letting it overflow.
 
 ---
 

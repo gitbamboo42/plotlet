@@ -16,7 +16,6 @@ Mixed sources stack continuous-first, discrete-second.
 """
 from __future__ import annotations
 
-from .core import Figure
 from .chart import Chart
 from .colormaps import colormap
 from .registry import RenderContext, get_artist
@@ -82,25 +81,11 @@ def legend(*sources: Chart, names: dict | None = None,
             raise ValueError(
                 "pt.legend() sources must be leaf charts, not composed parents."
             )
-    leaf = Chart.__new__(Chart)
     # Canvas size starts as a 1×1 placeholder; `_size_legends` overrides
     # it from harvested content at render time, unless the user passed
     # an explicit canvas_*.
-    leaf._fig = Figure(canvas_width=canvas_width if canvas_width is not None else 1,
-                       canvas_height=canvas_height if canvas_height is not None else 1)
-    leaf._data = None
-    leaf._parent = None
-    leaf._layout_kind = None
-    leaf._children = []
-    leaf._share_x = None
-    leaf._share_y = None
-    # `__new__` skips Chart.__init__, so the per-parent gap slots that
-    # `__init__` would have set don't exist on this leaf yet. Initialize
-    # them here for shape-symmetry — legend leaves never act as parents,
-    # so these are placeholders, but missing-attr errors elsewhere are
-    # worse than a redundant assignment.
-    leaf._gap = None
-    leaf._inner_gap = None
+    leaf = Chart(canvas_width=canvas_width if canvas_width is not None else 1,
+                 canvas_height=canvas_height if canvas_height is not None else 1)
     leaf._leaf_kind = "legend"
     leaf._legend_sources = list(sources)
     leaf._legend_names = dict(names) if names else {}
@@ -296,9 +281,9 @@ def _size_legends(root: Chart, states: dict[int, dict]) -> None:
         sources = leaf._legend_sources or data_leaves
         cw, ch = _legend_content_size(leaf, sources, states)
         if leaf._legend_user_width is None:
-            leaf._fig._canvas_width = max(1, int(round(cw)))
+            leaf._canvas_width = max(1, int(round(cw)))
         if leaf._legend_user_height is None:
-            leaf._fig._canvas_height = max(1, int(round(ch)))
+            leaf._canvas_height = max(1, int(round(ch)))
 
 
 def _render_legend(leaf: Chart, w: float, h: float,
@@ -366,7 +351,7 @@ def _render_standalone_legend(leaf: Chart) -> str:
     an outer <svg>. Standalone with explicit sources requires replaying
     + color-assigning those sources, which lands when grouping does
     (commit 5). For now this draws an empty placeholder rect."""
-    w, h = leaf._fig._canvas_width, leaf._fig._canvas_height
+    w, h = leaf._canvas_width, leaf._canvas_height
     inner = (f'<rect x="0.5" y="0.5" width="{w-1:.2f}" height="{h-1:.2f}" '
              f'fill="none" stroke="#bbb" stroke-dasharray="4,3"/>')
     return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '

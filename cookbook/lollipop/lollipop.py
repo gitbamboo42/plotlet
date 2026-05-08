@@ -4,10 +4,10 @@ A lollipop is a stem from y=0 to y=value with a circle at the top — useful
 for sparse comparisons (rankings, deltas, GWAS-style hits).
 
 The whole recipe is below: no edits to plotlet's source. After registration,
-`fig.lollipop(xs, ys, ...)` Just Works — autoscaling, gridlines, color
-cycling, and the legend integrate for free. The optional `legend_swatch`
-hook lets the legend entry actually look like a tiny lollipop instead of
-the default colored line.
+`c.lollipop(xs, ys, ...)` Just Works on any `Chart` — autoscaling, gridlines,
+color cycling, and the legend integrate for free. The optional
+`legend_swatch` hook lets the legend entry actually look like a tiny
+lollipop instead of the default colored line.
 """
 from pathlib import Path
 
@@ -15,7 +15,7 @@ import plotlet as pt
 from plotlet.artists import _to_pylist
 
 
-# 1. record(): turn args/kwargs into the artist dict stored in Figure._calls.
+# 1. record(): turn args/kwargs into the artist dict stored in Chart._calls.
 def lollipop_record(args, kw):
     return {
         "type": "lollipop",
@@ -62,7 +62,7 @@ def lollipop_legend_swatch(a, ctx, x0, y_mid):
     )
 
 
-# Register. After this line, every Figure instance has a .lollipop() method.
+# Register. After this line, every Chart has a .lollipop() method.
 pt.add_artist(pt.ArtistSpec(
     name="lollipop",
     record=lollipop_record,
@@ -74,12 +74,12 @@ pt.add_artist(pt.ArtistSpec(
 
 
 if __name__ == "__main__":
-    fig = pt.figure()
-    fig.lollipop([1, 2, 3, 4, 5, 6, 7], [3, 7, 2, 9, 4, 8, 5], label="A")
-    fig.lollipop([1.3, 2.3, 3.3, 4.3, 5.3, 6.3, 7.3], [5, 3, 8, 2, 6, 4, 7],
-                 label="B", size=4)
-    fig.title("Lollipop chart").xlabel("position").ylabel("score")
-    fig.grid(True).legend(True)
+    c = pt.chart()
+    c.lollipop([1, 2, 3, 4, 5, 6, 7], [3, 7, 2, 9, 4, 8, 5], label="A")
+    c.lollipop([1.3, 2.3, 3.3, 4.3, 5.3, 6.3, 7.3], [5, 3, 8, 2, 6, 4, 7],
+               label="B", size=4)
+    c.title("Lollipop chart").xlabel("position").ylabel("score")
+    c.grid(True).legend(True)
     out = Path(__file__).with_suffix(".svg")
-    fig.save_svg(out)
+    c.save_svg(out)
     print(f"wrote {out}")
