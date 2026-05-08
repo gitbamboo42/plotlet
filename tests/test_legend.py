@@ -119,6 +119,15 @@ def legend_joined_grid():
     ], share_x="col", share_y="row")
 
 
+def legend_gap_override():
+    # `pt.legend(..., legend_gap=N)` overrides the default 6 px separation
+    # between legend and source. Here we widen it to 24 — the legend sits
+    # well clear of `hm`, distinct from a share-pair joint (which would be 0).
+    hm = pt.chart(title="hm", canvas_width=300, canvas_height=200)
+    hm.imshow(_matrix(), cmap="viridis")
+    return hm | pt.legend(hm, legend_gap=24)
+
+
 PLOTS = {
     "legend_auto_grouped": legend_auto_grouped,
     "legend_continuous":   legend_continuous,
@@ -126,6 +135,7 @@ PLOTS = {
     "legend_overrides":    legend_overrides,
     "legend_flat_fixed":   legend_flat_fixed,
     "legend_joined_grid":  legend_joined_grid,
+    "legend_gap_override": legend_gap_override,
 }
 
 

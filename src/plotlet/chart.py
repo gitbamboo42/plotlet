@@ -72,6 +72,12 @@ class Chart:
         # (or pt.grid(share_x=...)); not user-settable on the leaf directly.
         self._share_x: Chart | None = None
         self._share_y: Chart | None = None
+        # Per-parent gap overrides. None = use spec.json default. Only read
+        # off parents (read sites are layout.py's gap-resolution helpers);
+        # leaving them on leaves too keeps `_new_parent` and `__init__`
+        # symmetric without a separate slot type.
+        self._gap: float | None = None
+        self._inner_gap: float | None = None
         # Leaf discriminator. Values: "data" (default — normal chart leaf
         # with axes and artists), "legend" (set by pt.legend(...), bypasses
         # the frame+artists render path; see legend.py), "diagram" (set by
@@ -107,6 +113,8 @@ class Chart:
         p._children = list(children)
         p._share_x = None
         p._share_y = None
+        p._gap = None
+        p._inner_gap = None
         p._leaf_kind = "data"
         p._legend_sources = []
         p._legend_names = {}
@@ -133,6 +141,30 @@ class Chart:
     def share_y(self, mode: bool | str = "all") -> "Chart":
         """Wire up y-axis sharing across this parent's leaves. See `share_x`."""
         self._apply_share("y", mode)
+        return self
+
+    def gap(self, value: int | float) -> "Chart":
+        """Override the inter-panel gap for this parent's children. Falls
+        back to `spec.json:layout.gap` (default 20) when unset. Coordinated
+        share-pair joints still collapse to 0 regardless."""
+        if not self._is_parent:
+            raise TypeError(
+                "Chart.gap() requires a parent Chart, not a leaf. "
+                "Compose first (e.g. (a | b).gap(0)) then call."
+            )
+        self._gap = float(value)
+        return self
+
+    def inner_gap(self, value: int | float) -> "Chart":
+        """Override the inner-margin collapse value for share-pair joints
+        among this parent's body-first leaves. Falls back to
+        `spec.json:layout.inner_gap` (default 12) when unset."""
+        if not self._is_parent:
+            raise TypeError(
+                "Chart.inner_gap() requires a parent Chart, not a leaf. "
+                "Compose first (e.g. (a | b).share_x().inner_gap(4)) then call."
+            )
+        self._inner_gap = float(value)
         return self
 
     def _apply_share(self, axis: str, mode) -> None:
@@ -188,6 +220,7 @@ class Chart:
                group_by_chart: bool | None = None,
                canvas_width: int | float | str | None = None,
                canvas_height: int | float | str | None = None,
+               legend_gap: int | float | None = None,
                **kwargs) -> "Chart":
         """Toggle the in-frame overlay (leaf) or attach a layout-level legend (parent).
 
@@ -197,10 +230,10 @@ class Chart:
         On a parent, this is sugar for the panel form: `parent.legend(*sources)`
         is equivalent to `parent | pt.legend(*sources)` (or `parent / ...` for
         a vertical parent), with `names=` / `group_by_chart=` / `canvas_width=` /
-        `canvas_height=` forwarded to the constructor. Grids raise — place
-        `pt.legend(...)` in an explicit cell instead. Returns `self` for
-        chaining; remember that further composition (`|` / `/`) appends
-        children *after* the legend, so decorate last."""
+        `canvas_height=` / `legend_gap=` forwarded to the constructor. Grids
+        raise — place `pt.legend(...)` in an explicit cell instead. Returns
+        `self` for chaining; remember that further composition (`|` / `/`)
+        appends children *after* the legend, so decorate last."""
         if "width" in kwargs or "height" in kwargs:
             raise TypeError(
                 "Chart.legend() no longer accepts `width=` / `height=` "
@@ -221,18 +254,20 @@ class Chart:
             from .legend import legend as _make_legend
             gbc = True if group_by_chart is None else group_by_chart
             leg = _make_legend(*args, names=names, group_by_chart=gbc,
-                               canvas_width=canvas_width, canvas_height=canvas_height)
+                               canvas_width=canvas_width, canvas_height=canvas_height,
+                               legend_gap=legend_gap)
             self._children.append(leg)
             leg._parent = self
             return self
         # Leaf: today's in-frame overlay toggle. Reject parent-only kwargs.
         if (names is not None or group_by_chart is not None
-                or canvas_width is not None or canvas_height is not None):
+                or canvas_width is not None or canvas_height is not None
+                or legend_gap is not None):
             raise TypeError(
-                "names=, group_by_chart=, canvas_width=, canvas_height= are "
-                "layout-level options for parent.legend(); on a leaf, "
-                "chart.legend() takes an optional bool. To attach a "
-                "layout-level legend to a single chart, compose first: "
+                "names=, group_by_chart=, canvas_width=, canvas_height=, "
+                "legend_gap= are layout-level options for parent.legend(); "
+                "on a leaf, chart.legend() takes an optional bool. To attach "
+                "a layout-level legend to a single chart, compose first: "
                 "(chart | pt.legend()).show()."
             )
         if args and not isinstance(args[0], bool):

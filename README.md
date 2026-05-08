@@ -35,7 +35,7 @@ pip install plotlet
 - **Cross-machine reproducible.** Bundled DejaVu Sans + text-as-paths means rendering is identical on Linux, macOS, Windows, headless CI.
 - **Jupyter-native.** `Figure._repr_html_` auto-renders the last expression in a cell.
 - **Tiny output.** Each plot is ~50 KB SVG, self-contained.
-- **Compositional.** Multi-panel layouts via `|`, `/`, `pt.grid`; share scales with `share_x=` / `share_y=`; layout-level legend with `pt.legend()` covering both discrete swatches and continuous gradients (the colorbar).
+- **Compositional.** Multi-panel layouts via `|`, `/`, `pt.grid`; share scales with `(a | b).share_x()` or `pt.grid(..., share_x="col")`; layout-level legend with `pt.legend()` covering both discrete swatches and continuous gradients (the colorbar).
 - **AI-readable.** Every figure ships `data-plotlet-*` attributes describing plot type, axes, scales, ranges, and series labels — readable in one XML parse, no glyph-path OCR. Schema: [docs/AI_ATTRS.md](docs/AI_ATTRS.md).
 
 ## API
@@ -82,10 +82,11 @@ pt.grid([[a, b],       # 2-D grid; cells may be `None`
          [c, d]])
 
 # Share x or y across panels — collapses the gap between them
-# and forces both onto the source's scale.
+# and unions data ranges; the first leaf in reading order anchors
+# the scale, others are aspect-scaled to match.
 top  = pt.chart()
-main = pt.chart(share_x=top)
-top / main             # vertically stacked, x-axis joined
+main = pt.chart()
+(top / main).share_x()         # vertically stacked, x-axis joined
 
 # Layout-level legend (covers colorbar and discrete swatches in
 # one constructor — geometry follows from the source's color mapping).

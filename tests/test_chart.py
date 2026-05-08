@@ -273,6 +273,18 @@ def chart_long_ylabel():
     return c
 
 
+def chart_despined():
+    # `c.spines(top=False, right=False)` mirrors matplotlib's despine. Tick
+    # marks on hidden sides drop too — an unanchored stub reads as a render
+    # bug. Tick labels (left/bottom) are unchanged.
+    xs = _xs()
+    df = {"t": xs, "v": [math.sin(x) for x in xs]}
+    c = pt.chart(df, title="despined frame", xlabel="t", ylabel="v")
+    c.line(x="t", y="v")
+    c.spines(top=False, right=False)
+    return c
+
+
 def chart_long_rotated_xticks():
     # Long x-tick labels rotated 45° — the rotated bbox height grows the
     # bottom margin so labels don't overflow the canvas. Without rotation
@@ -312,6 +324,7 @@ PLOTS = {
     "long_title":          chart_long_title,
     "long_ylabel":         chart_long_ylabel,
     "long_rotated_xticks": chart_long_rotated_xticks,
+    "despined":            chart_despined,
 }
 
 

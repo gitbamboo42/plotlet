@@ -57,7 +57,7 @@ _FONT = _FONTSPEC["family"]
 _FRAME_METHODS = {
     "title", "xlabel", "ylabel", "xlim", "ylim",
     "xscale", "yscale", "grid", "legend",
-    "xticks", "yticks",
+    "xticks", "yticks", "spines",
 }
 
 
@@ -309,6 +309,8 @@ class Figure:
             "x_direction": "in", "x_marks": True,
             "y_ticks": None, "y_labels": None, "y_rotation": 0, "y_fontsize": None,
             "y_direction": "in", "y_marks": True,
+            "spine_top": True, "spine_right": True,
+            "spine_bottom": True, "spine_left": True,
             "grid": False, "legend": False,
         }
         for name, args, kw in self._calls:
@@ -330,6 +332,10 @@ class Figure:
                 if "padding" in kw: st["y_padding"] = kw["padding"]
             elif name == "xticks": _record_ticks(st, "x", args, kw)
             elif name == "yticks": _record_ticks(st, "y", args, kw)
+            elif name == "spines":
+                for side in ("top", "right", "bottom", "left"):
+                    if side in kw:
+                        st[f"spine_{side}"] = bool(kw[side])
             elif name == "grid":   st["grid"] = (args[0] if args else True)
             elif name == "legend": st["legend"] = (args[0] if args else True)
         return st
@@ -970,10 +976,20 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             body = spec.draw(a, _ctx_for(a))
             parts.append(_wrap_artist(a, idx, body))
 
-    # All four spines always render — joined share-pairs show two parallel
-    # spines (one per panel) `inner_gap` pixels apart, by design.
-    for x1, y1, x2, y2 in [(0, 0, iw, 0), (0, ih, iw, ih),
-                            (0, 0, 0, ih),  (iw, 0, iw, ih)]:
+    # Spines — toggleable per side via `c.spines(top=False, right=False, ...)`.
+    # Tick marks on a hidden side are dropped too (an unanchored tick mark
+    # reads as a render bug). Tick *labels* are independent — hiding a
+    # spine doesn't remove the labels that side carries.
+    # Joined share-pairs show two parallel spines (one per panel)
+    # `inner_gap` pixels apart, by design.
+    for side, (x1, y1, x2, y2) in (
+        ("top",    (0, 0, iw, 0)),
+        ("bottom", (0, ih, iw, ih)),
+        ("left",   (0, 0, 0, ih)),
+        ("right",  (iw, 0, iw, ih)),
+    ):
+        if not st[f"spine_{side}"]:
+            continue
         parts.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" '
                      f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
 
@@ -1008,12 +1024,14 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     for t, lbl in zip(x_ticks, x_labels):
         x = x_scale(t)
         if x_marks:
-            y1, y2 = x_bot_endpoints
-            parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{y1}" y2="{y2}" '
-                         f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
-            y1, y2 = x_top_endpoints
-            parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{y1}" y2="{y2}" '
-                         f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
+            if st["spine_bottom"]:
+                y1, y2 = x_bot_endpoints
+                parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{y1}" y2="{y2}" '
+                             f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
+            if st["spine_top"]:
+                y1, y2 = x_top_endpoints
+                parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{y1}" y2="{y2}" '
+                             f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
         # Drop only labels redundant with a sharing sibling. A small label
         # overflow into a joined neighbor's collapsed margin is acceptable.
         if not suppress_xt:
@@ -1024,12 +1042,14 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     for t, lbl in zip(y_ticks, y_labels):
         y = y_scale(t)
         if y_marks:
-            x1, x2 = y_left_endpoints
-            parts.append(f'<line x1="{x1}" x2="{x2}" y1="{y:.2f}" y2="{y:.2f}" '
-                         f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
-            x1, x2 = y_right_endpoints
-            parts.append(f'<line x1="{x1}" x2="{x2}" y1="{y:.2f}" y2="{y:.2f}" '
-                         f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
+            if st["spine_left"]:
+                x1, x2 = y_left_endpoints
+                parts.append(f'<line x1="{x1}" x2="{x2}" y1="{y:.2f}" y2="{y:.2f}" '
+                             f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
+            if st["spine_right"]:
+                x1, x2 = y_right_endpoints
+                parts.append(f'<line x1="{x1}" x2="{x2}" y1="{y:.2f}" y2="{y:.2f}" '
+                             f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
         if not suppress_yt:
             parts.append(_rotated_text(str(lbl), y_label_x, y + 4, y_size, y_rot, axis="y"))
 

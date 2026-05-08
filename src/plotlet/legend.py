@@ -45,6 +45,7 @@ def legend(*sources: Chart, names: dict | None = None,
            group_by_chart: bool = True,
            canvas_width: int | float | str | None = None,
            canvas_height: int | float | str | None = None,
+           legend_gap: int | float | None = None,
            **kwargs) -> Chart:
     """Create a layout-level legend.
 
@@ -60,7 +61,9 @@ def legend(*sources: Chart, names: dict | None = None,
 
     Legend leaves have no data axes, so the dimensional surface is
     canvas-only: pass `canvas_width=` / `canvas_height=` to override the
-    content-driven auto-size.
+    content-driven auto-size. `legend_gap=N` overrides the default 6 px
+    separation between this legend and its source neighbor (falls back
+    to `spec.json:layout.legend_gap` when unset).
     """
     if "width" in kwargs or "height" in kwargs:
         raise TypeError(
@@ -91,12 +94,20 @@ def legend(*sources: Chart, names: dict | None = None,
     leaf._children = []
     leaf._share_x = None
     leaf._share_y = None
+    # `__new__` skips Chart.__init__, so the per-parent gap slots that
+    # `__init__` would have set don't exist on this leaf yet. Initialize
+    # them here for shape-symmetry — legend leaves never act as parents,
+    # so these are placeholders, but missing-attr errors elsewhere are
+    # worse than a redundant assignment.
+    leaf._gap = None
+    leaf._inner_gap = None
     leaf._leaf_kind = "legend"
     leaf._legend_sources = list(sources)
     leaf._legend_names = dict(names) if names else {}
     leaf._legend_group_by_chart = group_by_chart
     leaf._legend_user_width = canvas_width
     leaf._legend_user_height = canvas_height
+    leaf._legend_gap = float(legend_gap) if legend_gap is not None else None
     return leaf
 
 

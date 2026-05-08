@@ -178,6 +178,32 @@ def height_hint_short_top():
     return (top / main).share_x()
 
 
+def custom_gap_method():
+    # `(a | b).gap(N)` overrides the default 20 px inter-panel gap.
+    # 290 + 4 + 290 = 584. Tight pair without sharing.
+    return (_sin(canvas_width=290) | _cos(canvas_width=290)).gap(4)
+
+
+def custom_gap_grid_kwarg():
+    # `pt.grid(..., gap=N)` — same override, declared at construction.
+    # 187 + 8 + 187 + 8 + 187 = 577.
+    a = _sin(canvas_width=187)
+    b = _cos(canvas_width=187)
+    c = _bar(canvas_width=187)
+    return pt.grid([[a, b, c]], gap=8)
+
+
+def custom_inner_gap():
+    # `inner_gap(2)` shrinks the share-pair joint margin from default 12.
+    # Two body-first leaves sharing y; the right leaf's left margin and
+    # the left leaf's right margin both collapse to 2 px (was 12).
+    main = pt.chart(title="main", data_width=240, data_height=180)
+    main.line([1,2,3], [1,4,9])
+    side = pt.chart(title="side", data_width=80,  data_height=180)
+    side.line([1,1,1], [1,4,9])
+    return (main | side).share_y().inner_gap(2)
+
+
 def complex_grid_shares():
     # ComplexHeatmap-flavored shape via grid with column/row sharing:
     # `share_x="col"` → top↔main share x (column 1); `share_y="row"` →
@@ -209,6 +235,9 @@ PLOTS = {
     "width_hint":          width_hint_narrow_side,
     "height_hint":         height_hint_short_top,
     "complex_grid":        complex_grid_shares,
+    "gap_method":          custom_gap_method,
+    "gap_grid_kwarg":      custom_gap_grid_kwarg,
+    "inner_gap_override":  custom_inner_gap,
 }
 
 
@@ -287,6 +316,21 @@ def _run_invariants():
         if "leaf" not in str(ex).lower():
             failures.append(f"expected leaf-share message; got: {ex}")
 
+    # 7b. parent-level gap() / inner_gap() reject on a leaf, same as share().
+    leaf = pt.chart(); leaf.line([1,2],[1,2])
+    try:
+        leaf.gap(0)
+        failures.append("expected TypeError calling gap() on a leaf")
+    except TypeError as ex:
+        if "leaf" not in str(ex).lower():
+            failures.append(f"expected leaf-gap message; got: {ex}")
+    try:
+        leaf.inner_gap(0)
+        failures.append("expected TypeError calling inner_gap() on a leaf")
+    except TypeError as ex:
+        if "leaf" not in str(ex).lower():
+            failures.append(f"expected leaf-inner_gap message; got: {ex}")
+
     # 8. share scale plumbing — leaves in same share class get the same
     # descriptor, and the y range is the UNION of all leaves' data.
     src = pt.chart(); src.line([0, 10], [0, 100])
@@ -311,7 +355,7 @@ def _run_invariants():
         for f in failures:
             print(f"FAIL invariant: {f}")
         return 1
-    print(f"OK     invariants ({8} checks)")
+    print(f"OK     invariants ({10} checks)")
     return 0
 
 

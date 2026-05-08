@@ -40,6 +40,8 @@ _FONT = _FONTSPEC["family"]
 def grid(cells: list[list],
          share_x: bool | str = False,
          share_y: bool | str = False,
+         gap: int | float | None = None,
+         inner_gap: int | float | None = None,
          **kwargs) -> Chart:
     """Build a grid-layout parent Chart from a list-of-lists of cells.
 
@@ -108,6 +110,10 @@ def grid(cells: list[list],
     for cell in flat:
         if cell is not None:
             cell._parent = parent
+    if gap is not None:
+        parent._gap = float(gap)
+    if inner_gap is not None:
+        parent._inner_gap = float(inner_gap)
     parent.share_x(share_x)
     parent.share_y(share_y)
     return parent
@@ -135,6 +141,28 @@ def _share_root(leaf: Chart, axis: str) -> Chart:
         cur = nxt
 
 
+def _resolve_gap(a: Chart | None, b: Chart | None) -> float:
+    """Pull the per-parent `gap` override off whichever cell is non-None;
+    fall back to `spec.json:layout.gap`. Both-None happens when an entire
+    grid boundary is empty cells; spec default is the right answer there."""
+    parent = (a._parent if a is not None else None) \
+          or (b._parent if b is not None else None)
+    if parent is not None and parent._gap is not None:
+        return parent._gap
+    return _GAP
+
+
+def _resolve_inner_gap(leaf: Chart) -> float:
+    """Pull the per-parent `inner_gap` override off the leaf's immediate
+    parent; fall back to `spec.json:layout.inner_gap`. Cross-layout shares
+    (rare) read from each leaf's *own* parent — explicit per-parent setting
+    wins on whichever side it's declared."""
+    parent = leaf._parent
+    if parent is not None and parent._inner_gap is not None:
+        return parent._inner_gap
+    return _INNER_GAP
+
+
 def _pair_gap(a: Chart | None, b: Chart | None, *, axis: str) -> float:
     """Gap between two adjacent cells.
 
@@ -147,22 +175,24 @@ def _pair_gap(a: Chart | None, b: Chart | None, *, axis: str) -> float:
         explicit source) → `legend_gap`, a small intentional separation
         that's not a share-pair joint and doesn't trigger spine/label
         suppression.
-      - Anything else → default `gap`.
+      - Anything else → the parent's gap (set via `(a | b).gap(N)` or
+        `pt.grid(..., gap=N)`), or the spec default if unset.
     """
+    default_gap = _resolve_gap(a, b)
     if a is None or b is None or a._is_parent or b._is_parent:
-        return _GAP
+        return default_gap
     a_leg = a._leaf_kind == "legend"
     b_leg = b._leaf_kind == "legend"
     if a_leg ^ b_leg:
         leg   = a if a_leg else b
         other = b if a_leg else a
         if not leg._legend_sources or other in leg._legend_sources:
-            return _LEGEND_GAP
-        return _GAP
+            return leg._legend_gap if leg._legend_gap is not None else _LEGEND_GAP
+        return default_gap
     share_axis = "y" if axis == "h" else "x"
     if _share_root(a, share_axis) is _share_root(b, share_axis):
         return 0.0
-    return _GAP
+    return default_gap
 
 
 def _gaps_h(children: list[Chart | None]) -> list[float]:
@@ -601,10 +631,11 @@ def _compute_measured_margins(leaves: list[Chart],
                                  leaf._fig._data_width,
                                  leaf._fig._data_height)
         M_eff = {side: max(M_floor[side], M_req[side]) for side in M_floor}
-        if po.hide_left:   M_eff["left"]   = _INNER_GAP
-        if po.hide_right:  M_eff["right"]  = _INNER_GAP
-        if po.hide_top:    M_eff["top"]    = _INNER_GAP
-        if po.hide_bottom: M_eff["bottom"] = _INNER_GAP
+        ig = _resolve_inner_gap(leaf)
+        if po.hide_left:   M_eff["left"]   = ig
+        if po.hide_right:  M_eff["right"]  = ig
+        if po.hide_top:    M_eff["top"]    = ig
+        if po.hide_bottom: M_eff["bottom"] = ig
         po.M_eff = M_eff
 
 
@@ -739,10 +770,11 @@ def _effective_margin(leaf: Chart, po: _PanelOpts, w: float, h: float) -> dict:
         M_eff = _scaled_margin(leaf._fig._margin, w, h)
     else:
         M_eff = _enforce_floors(leaf._fig._margin)
-    if po.hide_left:   M_eff["left"]   = _INNER_GAP
-    if po.hide_right:  M_eff["right"]  = _INNER_GAP
-    if po.hide_top:    M_eff["top"]    = _INNER_GAP
-    if po.hide_bottom: M_eff["bottom"] = _INNER_GAP
+    ig = _resolve_inner_gap(leaf)
+    if po.hide_left:   M_eff["left"]   = ig
+    if po.hide_right:  M_eff["right"]  = ig
+    if po.hide_top:    M_eff["top"]    = ig
+    if po.hide_bottom: M_eff["bottom"] = ig
     return M_eff
 
 
