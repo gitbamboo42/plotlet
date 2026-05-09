@@ -285,6 +285,41 @@ def chart_despined():
     return c
 
 
+def chart_restyled_spines():
+    # Per-side dict syntax: visible by default, color/width override the
+    # spec.json defaults. Tick marks adopt the same side's stroke for
+    # visual consistency.
+    xs = _xs()
+    df = {"t": xs, "v": [math.sin(x) for x in xs]}
+    c = pt.chart(df, title="restyled spines", xlabel="t", ylabel="v")
+    c.line(x="t", y="v")
+    c.spines(top=False, right=False,
+             left={"color": "red", "width": 1.5},
+             bottom={"color": "gray"})
+    return c
+
+
+def chart_hlines_vlines():
+    # Bounded segment artists in data coordinates. Unlike axhline/axvline
+    # they participate in autoscaling and use the color cycle.
+    c = pt.chart(title="hlines / vlines", xlabel="x", ylabel="y", legend=True)
+    c.hlines([1, 2, 3], 0, 5, label="thresholds", linestyle="--")
+    c.vlines([1.5, 3.5], 0.5, 3.5, label="markers", color="C3")
+    return c
+
+
+def chart_plot_alpha():
+    # alpha now propagates to both the stroke and (if present) markers.
+    xs = _xs()
+    df = {"t": xs, "v": [math.sin(x) for x in xs],
+          "w": [math.cos(x) for x in xs]}
+    c = pt.chart(df, title="plot alpha", xlabel="t", ylabel="value",
+                 legend=True)
+    c.line(x="t", y="v", alpha=0.3, label="alpha=0.3")
+    c.line(x="t", y="w", alpha=1.0, label="alpha=1")
+    return c
+
+
 def chart_long_rotated_xticks():
     # Long x-tick labels rotated 45° — the rotated bbox height grows the
     # bottom margin so labels don't overflow the canvas. Without rotation
@@ -325,6 +360,9 @@ PLOTS = {
     "long_ylabel":         chart_long_ylabel,
     "long_rotated_xticks": chart_long_rotated_xticks,
     "despined":            chart_despined,
+    "restyled_spines":     chart_restyled_spines,
+    "hlines_vlines":       chart_hlines_vlines,
+    "plot_alpha":          chart_plot_alpha,
 }
 
 

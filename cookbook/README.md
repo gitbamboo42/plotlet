@@ -32,6 +32,10 @@ cookbook/
 - [`lollipop/`](lollipop/) — stem-and-circle chart for sparse comparisons,
   plus an optional `legend_swatch` so the legend entry looks like a mini
   lollipop.
+- [`numeric_bar/`](numeric_bar/) — bars anchored at *numeric* x positions
+  with an explicit `width=` (data units), for cases where the built-in
+  categorical `bar` doesn't fit (genome coordinates, time-series with
+  numeric x, etc.).
 
 ## How to use a recipe
 

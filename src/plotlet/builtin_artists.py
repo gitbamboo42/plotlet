@@ -10,11 +10,12 @@ import math
 
 from .registry import ArtistSpec, RenderContext, add_artist
 from .artists import (
-    _to_pylist, _to_2d_pylist, _histogram,
+    _to_pylist, _to_2d_pylist, _histogram, _broadcast_three,
     _artist_plot, _artist_scatter, _artist_bar, _artist_hist, _artist_fill_between,
     _artist_axhline, _artist_axvline, _artist_axhspan, _artist_axvspan,
+    _artist_hlines, _artist_vlines,
     _artist_imshow,
-    _marker_at,
+    _marker_at, _op,
 )
 from ._spec import _D, _LEGSPEC
 
@@ -67,8 +68,8 @@ def _scatter_legend_swatch(a, ctx, x0, y_mid):
 def _rect_swatch(a, x0, y_mid, default_alpha):
     sw = _LEGSPEC["swatch_width"]
     return (f'<rect x="{x0}" y="{y_mid - 5}" width="{sw}" height="10" '
-            f'fill="{a["_color"]}" '
-            f'opacity="{a["opts"].get("alpha", default_alpha)}"/>')
+            f'fill="{a["_color"]}"'
+            f'{_op(a["opts"].get("alpha", default_alpha))}/>')
 
 
 def _bar_legend_swatch(a, ctx, x0, y_mid):
@@ -148,6 +149,24 @@ def _axhline_data_attrs(a):  return {"y": a["y"]}
 def _axvline_data_attrs(a):  return {"x": a["x"]}
 def _axhspan_data_attrs(a):  return {"ymin": a["ymin"], "ymax": a["ymax"]}
 def _axvspan_data_attrs(a):  return {"xmin": a["xmin"], "xmax": a["xmax"]}
+
+
+def _hlines_data_attrs(a):
+    out = {"n": len(a["ys"])}
+    if a["ys"]:
+        out["y-min"] = min(a["ys"]); out["y-max"] = max(a["ys"])
+    if a["xmins"] and a["xmaxs"]:
+        out["x-min"] = min(a["xmins"]); out["x-max"] = max(a["xmaxs"])
+    return out
+
+
+def _vlines_data_attrs(a):
+    out = {"n": len(a["xs"])}
+    if a["xs"]:
+        out["x-min"] = min(a["xs"]); out["x-max"] = max(a["xs"])
+    if a["ymins"] and a["ymaxs"]:
+        out["y-min"] = min(a["ymins"]); out["y-max"] = max(a["ymaxs"])
+    return out
 
 
 def _imshow_data_attrs(a):
@@ -294,6 +313,43 @@ add_artist(ArtistSpec(
     default_color=_D["refspan_color"],
     legend_swatch=_refspan_legend_swatch,
     data_attrs=_axvspan_data_attrs,
+))
+
+
+# --- hlines / vlines --------------------------------------------------------
+# Bounded line segments in data coordinates — unlike axhline/axvline (which
+# span the full frame regardless of scale), these participate in autoscaling
+# and use the color cycle so a labeled hlines/vlines acts like a series.
+
+def _hlines_record(args, kw):
+    ys, xmins, xmaxs = _broadcast_three(args[0], args[1], args[2])
+    return {"type": "hlines", "ys": ys, "xmins": xmins, "xmaxs": xmaxs, "opts": kw}
+
+
+def _vlines_record(args, kw):
+    xs, ymins, ymaxs = _broadcast_three(args[0], args[1], args[2])
+    return {"type": "vlines", "xs": xs, "ymins": ymins, "ymaxs": ymaxs, "opts": kw}
+
+
+add_artist(ArtistSpec(
+    name="hlines",
+    record=_hlines_record,
+    xdomain=lambda a: a["xmins"] + a["xmaxs"],
+    ydomain=lambda a: a["ys"],
+    draw=lambda a, ctx: _artist_hlines(a, ctx.x_scale, ctx.y_scale, ctx.color),
+    legend_swatch=_refline_legend_swatch,
+    data_attrs=_hlines_data_attrs,
+))
+
+
+add_artist(ArtistSpec(
+    name="vlines",
+    record=_vlines_record,
+    xdomain=lambda a: a["xs"],
+    ydomain=lambda a: a["ymins"] + a["ymaxs"],
+    draw=lambda a, ctx: _artist_vlines(a, ctx.x_scale, ctx.y_scale, ctx.color),
+    legend_swatch=_refline_legend_swatch,
+    data_attrs=_vlines_data_attrs,
 ))
 
 

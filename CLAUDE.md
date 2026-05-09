@@ -143,6 +143,7 @@ When suggesting changes or adding features:
 
 - **Decide core vs cookbook first.** Cookbook is the default for new plot types; core is only for shared infrastructure (this is how `imshow` got in — it carries the colormap registry and the PNG encoder, both reusable) or genuine essentials.
 - **Refuse new core plot types by default.** "Let's add a Sankey to the core" is almost always wrong; the right answer is `cookbook/<name>.py` or the user's own project.
+- **Lean flexible on existing core artists.** Once an artist is in core, prefer adding kwargs (alpha, color, per-side spine styling, etc.) over telling users to work around their absence. Cost test: how many lines of user code does the result take, with vs. without lib support? If it's ~1 line vs. 20+ lines of fragile workaround (post-processing SVG, monkey-patching globals, drawing parallel artists with the built-in turned off), add the kwarg. Exception: if the customization would noticeably bloat a core artist *and* the user could equivalently implement it as a small cookbook artist, leave it for cookbook. The "refuse new core plot types" rule above keeps the *vocabulary* small; this rule keeps the existing vocabulary friendly.
 - **Match existing code style.** Plain Python, top-to-bottom readable, no clever metaclasses or classes-everywhere.
 - **Preserve matplotlib API parity** for standard plots. If matplotlib calls it `axhline`, don't call it `horizontalLine`.
 - **No premature abstraction.** Three is the threshold — leave duplicated code alone until there's a third use site.

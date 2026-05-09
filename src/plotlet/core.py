@@ -231,6 +231,13 @@ def _replay(calls):
         "y_direction": "in", "y_marks": True,
         "spine_top": True, "spine_right": True,
         "spine_bottom": True, "spine_left": True,
+        # Per-side color/width overrides; None = inherit spec.json frame defaults.
+        # Tick marks on a given side adopt the same side's spine color/width
+        # for visual consistency.
+        "spine_top_color": None, "spine_right_color": None,
+        "spine_bottom_color": None, "spine_left_color": None,
+        "spine_top_width": None, "spine_right_width": None,
+        "spine_bottom_width": None, "spine_left_width": None,
         "grid": False, "legend": False,
     }
     for name, args, kw in calls:
@@ -253,9 +260,18 @@ def _replay(calls):
         elif name == "xticks": _record_ticks(st, "x", args, kw)
         elif name == "yticks": _record_ticks(st, "y", args, kw)
         elif name == "spines":
+            # Per-side value: bool toggles visibility only; dict accepts
+            # {"color": ..., "width": ..., "visible": ...} and implies
+            # visible=True unless visible is set explicitly.
             for side in ("top", "right", "bottom", "left"):
-                if side in kw:
-                    st[f"spine_{side}"] = bool(kw[side])
+                if side not in kw: continue
+                v = kw[side]
+                if isinstance(v, dict):
+                    st[f"spine_{side}"] = bool(v.get("visible", True))
+                    if "color" in v: st[f"spine_{side}_color"] = v["color"]
+                    if "width" in v: st[f"spine_{side}_width"] = v["width"]
+                else:
+                    st[f"spine_{side}"] = bool(v)
         elif name == "grid":   st["grid"] = (args[0] if args else True)
         elif name == "legend": st["legend"] = (args[0] if args else True)
     return st
@@ -850,12 +866,19 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             body = spec.draw(a, _ctx_for(a))
             parts.append(_wrap_artist(a, idx, body))
 
-    # Spines — toggleable per side via `c.spines(top=False, right=False, ...)`.
+    # Spines — toggleable per side via `c.spines(top=False, right=False, ...)`,
+    # restylable via `c.spines(top={"color": "red", "width": 1.5})`.
     # Tick marks on a hidden side are dropped too (an unanchored tick mark
     # reads as a render bug). Tick *labels* are independent — hiding a
     # spine doesn't remove the labels that side carries.
     # Joined share-pairs show two parallel spines (one per panel)
     # `inner_gap` pixels apart, by design.
+    def _side_stroke(side):
+        c = st[f"spine_{side}_color"]
+        w = st[f"spine_{side}_width"]
+        col = _resolve_color(c) if c is not None else _SPINE
+        return col, (w if w is not None else _SPW)
+
     for side, (x1, y1, x2, y2) in (
         ("top",    (0, 0, iw, 0)),
         ("bottom", (0, ih, iw, ih)),
@@ -864,8 +887,9 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     ):
         if not st[f"spine_{side}"]:
             continue
+        col, w = _side_stroke(side)
         parts.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" '
-                     f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
+                     f'stroke="{col}" stroke-width="{w}"/>')
 
     tick_size = _FONTSPEC["tick_size"]
     label_size = _FONTSPEC["label_size"]
@@ -900,12 +924,14 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         if x_marks:
             if st["spine_bottom"]:
                 y1, y2 = x_bot_endpoints
+                col, sw = _side_stroke("bottom")
                 parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{y1}" y2="{y2}" '
-                             f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
+                             f'stroke="{col}" stroke-width="{sw}"/>')
             if st["spine_top"]:
                 y1, y2 = x_top_endpoints
+                col, sw = _side_stroke("top")
                 parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{y1}" y2="{y2}" '
-                             f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
+                             f'stroke="{col}" stroke-width="{sw}"/>')
         # Drop only labels redundant with a sharing sibling. A small label
         # overflow into a joined neighbor's collapsed margin is acceptable.
         if not suppress_xt:
@@ -918,12 +944,14 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         if y_marks:
             if st["spine_left"]:
                 x1, x2 = y_left_endpoints
+                col, sw = _side_stroke("left")
                 parts.append(f'<line x1="{x1}" x2="{x2}" y1="{y:.2f}" y2="{y:.2f}" '
-                             f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
+                             f'stroke="{col}" stroke-width="{sw}"/>')
             if st["spine_right"]:
                 x1, x2 = y_right_endpoints
+                col, sw = _side_stroke("right")
                 parts.append(f'<line x1="{x1}" x2="{x2}" y1="{y:.2f}" y2="{y:.2f}" '
-                             f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
+                             f'stroke="{col}" stroke-width="{sw}"/>')
         if not suppress_yt:
             parts.append(_rotated_text(str(lbl), y_label_x, y + 4, y_size, y_rot, axis="y"))
 

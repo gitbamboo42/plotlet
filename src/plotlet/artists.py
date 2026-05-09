@@ -36,6 +36,11 @@ def _to_2d_pylist(obj):
     return out
 
 
+def _op(alpha):
+    """SVG opacity attribute, omitted when fully opaque to keep output lean."""
+    return "" if alpha == 1 else f' opacity="{alpha}"'
+
+
 def _histogram(data, bins):
     """Equal-width binning. Returns list of {'x0', 'x1', 'count'} dicts."""
     data = [v for v in _to_pylist(data)
@@ -66,6 +71,7 @@ def _histogram(data, bins):
 def _artist_plot(a, xs_, ys_, col):
     out = []
     opts = a["opts"]
+    alpha = opts.get("alpha", 1)
     pts = [(xs_(x), ys_(y)) for x, y in zip(a["xs"], a["ys"])]
     pts = [(px, py) if (math.isfinite(px) and math.isfinite(py)) else None
            for px, py in pts]
@@ -80,13 +86,14 @@ def _artist_plot(a, xs_, ys_, col):
     if ls not in ("", "none"):
         da = f' stroke-dasharray="{_DASH[ls]}"' if ls and _DASH.get(ls) else ""
         out.append(f'<path d="{"".join(d_segs)}" fill="none" stroke="{col}" '
-                   f'stroke-width="{opts.get("linewidth", _D["linewidth"])}"{da}/>')
+                   f'stroke-width="{opts.get("linewidth", _D["linewidth"])}"'
+                   f'{_op(alpha)}{da}/>')
     if opts.get("marker"):
         sz = opts.get("markersize", _D["markersize"])
         for p in pts:
             if p is None:
                 continue
-            out.append(_marker_at(opts["marker"], p[0], p[1], sz, col, 1))
+            out.append(_marker_at(opts["marker"], p[0], p[1], sz, col, alpha))
     return "".join(out)
 
 
@@ -120,7 +127,7 @@ def _artist_bar(a, xs_, ys_, col):
         x = xs_(c) - bw / 2
         y = ys_(v)
         out.append(f'<rect x="{x:.2f}" y="{min(y0, y):.2f}" width="{bw:.2f}" '
-                   f'height="{abs(y - y0):.2f}" fill="{col}" opacity="{alpha}"{crisp}/>')
+                   f'height="{abs(y - y0):.2f}" fill="{col}"{_op(alpha)}{crisp}/>')
     return "".join(out)
 
 
@@ -135,7 +142,7 @@ def _artist_hist(a, xs_, ys_, ih, col):
         y = ys_(b["count"])
         h = ih - y
         out.append(f'<rect x="{x0:.2f}" y="{y:.2f}" width="{w:.2f}" height="{h:.2f}" '
-                   f'fill="{col}" opacity="{alpha}"/>')
+                   f'fill="{col}"{_op(alpha)}/>')
     return "".join(out)
 
 
@@ -151,7 +158,7 @@ def _artist_axhline(a, xs_, ys_, iw, ih, col):
     da = f' stroke-dasharray="{_DASH[ls]}"' if ls and _DASH.get(ls) else ""
     alpha = opts.get("alpha", 1)
     return (f'<line x1="{x0:.2f}" x2="{x1:.2f}" y1="{y:.2f}" y2="{y:.2f}" '
-            f'stroke="{col}" stroke-width="{lw}" opacity="{alpha}"{da}/>')
+            f'stroke="{col}" stroke-width="{lw}"{_op(alpha)}{da}/>')
 
 
 def _artist_axvline(a, xs_, ys_, iw, ih, col):
@@ -166,7 +173,64 @@ def _artist_axvline(a, xs_, ys_, iw, ih, col):
     da = f' stroke-dasharray="{_DASH[ls]}"' if ls and _DASH.get(ls) else ""
     alpha = opts.get("alpha", 1)
     return (f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{y0:.2f}" y2="{y1:.2f}" '
-            f'stroke="{col}" stroke-width="{lw}" opacity="{alpha}"{da}/>')
+            f'stroke="{col}" stroke-width="{lw}"{_op(alpha)}{da}/>')
+
+
+def _broadcast_three(a0, a1, a2):
+    """For hlines/vlines: each input is scalar or list-like; broadcast to a
+    common length. Length-1 lists broadcast like scalars; mismatched
+    longer lengths raise."""
+    arrs = []
+    for v in (a0, a1, a2):
+        if hasattr(v, "__iter__") and not isinstance(v, str):
+            arrs.append(_to_pylist(v))
+        else:
+            arrs.append([v])
+    n = max(len(a) for a in arrs)
+    out = []
+    for a in arrs:
+        if len(a) == 1:
+            out.append(list(a) * n)
+        elif len(a) == n:
+            out.append(list(a))
+        else:
+            raise ValueError(
+                f"hlines/vlines: cannot broadcast length {len(a)} to {n}")
+    return out
+
+
+def _artist_hlines(a, xs_, ys_, col):
+    opts = a["opts"]
+    lw = opts.get("linewidth", _D["refline_width"])
+    ls = opts.get("linestyle")
+    da = f' stroke-dasharray="{_DASH[ls]}"' if ls and _DASH.get(ls) else ""
+    alpha = opts.get("alpha", 1)
+    out = []
+    for y, x0, x1 in zip(a["ys"], a["xmins"], a["xmaxs"]):
+        py = ys_(y); px0 = xs_(x0); px1 = xs_(x1)
+        if not (math.isfinite(py) and math.isfinite(px0) and math.isfinite(px1)):
+            continue
+        out.append(f'<line x1="{px0:.2f}" x2="{px1:.2f}" '
+                   f'y1="{py:.2f}" y2="{py:.2f}" '
+                   f'stroke="{col}" stroke-width="{lw}"{_op(alpha)}{da}/>')
+    return "".join(out)
+
+
+def _artist_vlines(a, xs_, ys_, col):
+    opts = a["opts"]
+    lw = opts.get("linewidth", _D["refline_width"])
+    ls = opts.get("linestyle")
+    da = f' stroke-dasharray="{_DASH[ls]}"' if ls and _DASH.get(ls) else ""
+    alpha = opts.get("alpha", 1)
+    out = []
+    for x, y0, y1 in zip(a["xs"], a["ymins"], a["ymaxs"]):
+        px = xs_(x); py0 = ys_(y0); py1 = ys_(y1)
+        if not (math.isfinite(px) and math.isfinite(py0) and math.isfinite(py1)):
+            continue
+        out.append(f'<line x1="{px:.2f}" x2="{px:.2f}" '
+                   f'y1="{py0:.2f}" y2="{py1:.2f}" '
+                   f'stroke="{col}" stroke-width="{lw}"{_op(alpha)}{da}/>')
+    return "".join(out)
 
 
 def _artist_axhspan(a, xs_, ys_, iw, ih, col):
@@ -180,7 +244,7 @@ def _artist_axhspan(a, xs_, ys_, iw, ih, col):
     x1 = iw * opts.get("xmax", 1.0)
     alpha = opts.get("alpha", _D["refspan_alpha"])
     return (f'<rect x="{x0:.2f}" y="{y0:.2f}" width="{x1 - x0:.2f}" '
-            f'height="{y1 - y0:.2f}" fill="{col}" opacity="{alpha}"/>')
+            f'height="{y1 - y0:.2f}" fill="{col}"{_op(alpha)}/>')
 
 
 def _artist_axvspan(a, xs_, ys_, iw, ih, col):
@@ -194,7 +258,7 @@ def _artist_axvspan(a, xs_, ys_, iw, ih, col):
     y1 = ih * (1 - opts.get("ymin", 0.0))
     alpha = opts.get("alpha", _D["refspan_alpha"])
     return (f'<rect x="{x0:.2f}" y="{y0:.2f}" width="{x1 - x0:.2f}" '
-            f'height="{y1 - y0:.2f}" fill="{col}" opacity="{alpha}"/>')
+            f'height="{y1 - y0:.2f}" fill="{col}"{_op(alpha)}/>')
 
 
 def _artist_fill_between(a, xs_, ys_, col):
@@ -205,7 +269,7 @@ def _artist_fill_between(a, xs_, ys_, col):
         return ""
     d = "M" + "L".join(f"{p[0]:.2f},{p[1]:.2f}" for p in pts) + "Z"
     alpha = a["opts"].get("alpha", _D["fill_alpha"])
-    return f'<path d="{d}" fill="{col}" opacity="{alpha}"/>'
+    return f'<path d="{d}" fill="{col}"{_op(alpha)}/>'
 
 
 def _artist_imshow(a, xs_, ys_, col):
@@ -292,23 +356,24 @@ def _artist_imshow(a, xs_, ys_, col):
 
 def _marker_at(marker, x, y, size, col, alpha):
     msw = _D["marker_stroke_width"]
+    op = _op(alpha)
     if marker == "o":
-        return f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{size}" fill="{col}" opacity="{alpha}"/>'
+        return f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{size}" fill="{col}"{op}/>'
     if marker == "s":
         return (f'<rect x="{x - size:.2f}" y="{y - size:.2f}" width="{2 * size}" '
-                f'height="{2 * size}" fill="{col}" opacity="{alpha}"/>')
+                f'height="{2 * size}" fill="{col}"{op}/>')
     if marker == "^":
         return (f'<path d="M{x:.2f},{y - size:.2f}L{x + size:.2f},{y + size:.2f}'
-                f'L{x - size:.2f},{y + size:.2f}Z" fill="{col}" opacity="{alpha}"/>')
+                f'L{x - size:.2f},{y + size:.2f}Z" fill="{col}"{op}/>')
     if marker == "v":
         return (f'<path d="M{x:.2f},{y + size:.2f}L{x + size:.2f},{y - size:.2f}'
-                f'L{x - size:.2f},{y - size:.2f}Z" fill="{col}" opacity="{alpha}"/>')
+                f'L{x - size:.2f},{y - size:.2f}Z" fill="{col}"{op}/>')
     if marker == "x":
         return (f'<path d="M{x - size:.2f},{y - size:.2f}L{x + size:.2f},{y + size:.2f}'
                 f'M{x - size:.2f},{y + size:.2f}L{x + size:.2f},{y - size:.2f}" '
-                f'stroke="{col}" stroke-width="{msw}" opacity="{alpha}"/>')
+                f'stroke="{col}" stroke-width="{msw}"{op}/>')
     if marker == "+":
         return (f'<path d="M{x - size:.2f},{y:.2f}L{x + size:.2f},{y:.2f}'
                 f'M{x:.2f},{y - size:.2f}L{x:.2f},{y + size:.2f}" '
-                f'stroke="{col}" stroke-width="{msw}" opacity="{alpha}"/>')
+                f'stroke="{col}" stroke-width="{msw}"{op}/>')
     return ""
