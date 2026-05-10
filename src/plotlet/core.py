@@ -329,8 +329,12 @@ def _scan_domain(artists, axis):
     return lo, hi
 
 
-def _resolve_domain(lo, hi, user_lim, scale_kind, force_zero=False):
-    """Apply user override, log snapping, and nice rounding."""
+def _resolve_domain(lo, hi, user_lim, scale_kind, force_zero=False, tight=False):
+    """Apply user override, log snapping, and nice rounding.
+
+    `tight=True` skips the nice-numbers padding — for artists with hard
+    rectangular bounds (e.g. imshow) where extending the axis past the
+    data just leaves dead space."""
     if user_lim is not None:
         return user_lim
     if math.isinf(lo):
@@ -343,6 +347,8 @@ def _resolve_domain(lo, hi, user_lim, scale_kind, force_zero=False):
         if lo > 0 and hi > 0:
             return (10 ** math.floor(math.log10(lo)),
                     10 ** math.ceil(math.log10(hi)))
+        return (lo, hi)
+    if tight:
         return (lo, hi)
     return _nice_domain(lo, hi)
 
@@ -439,7 +445,8 @@ def _x_descriptor(st) -> _AxisDescriptor:
         return _AxisDescriptor(kind="category", cats=cats, padding=padding)
 
     x_lo, x_hi = _scan_domain(artists, "x")
-    x_min, x_max = _resolve_domain(x_lo, x_hi, st["xlim"], st["xscale"])
+    x_min, x_max = _resolve_domain(x_lo, x_hi, st["xlim"], st["xscale"],
+                                    tight=_axis_is_tight(artists, "x"))
     return _AxisDescriptor(kind=st["xscale"], lo=x_min, hi=x_max)
 
 
@@ -451,6 +458,25 @@ def _any_artist_flips_y(artists) -> bool:
         if spec is not None and spec.flips_y_axis is not None and spec.flips_y_axis(a):
             return True
     return False
+
+
+def _axis_is_tight(artists, axis: str) -> bool:
+    """True when every artist that contributes to autoscaling on this axis
+    declares `tight_domain=True`. Artists that don't autoscale (xdomain or
+    ydomain returns None — e.g. axhline) don't get a vote. Returns False
+    when no artist contributes (nothing to be tight about)."""
+    saw_contributor = False
+    for a in artists:
+        spec = get_artist(a["type"])
+        if spec is None:
+            continue
+        fn = spec.xdomain if axis == "x" else spec.ydomain
+        if fn(a) is None:
+            continue
+        saw_contributor = True
+        if not spec.tight_domain:
+            return False
+    return saw_contributor
 
 
 def _y_descriptor(st) -> _AxisDescriptor:
@@ -473,7 +499,9 @@ def _y_descriptor(st) -> _AxisDescriptor:
     has_bar = any(a["type"] == "bar" for a in artists)
     force_zero = has_bar or any(a["type"] == "hist" for a in artists)
     y_lo, y_hi = _scan_domain(artists, "y")
-    y_min, y_max = _resolve_domain(y_lo, y_hi, st["ylim"], st["yscale"], force_zero=force_zero)
+    y_min, y_max = _resolve_domain(y_lo, y_hi, st["ylim"], st["yscale"],
+                                    force_zero=force_zero,
+                                    tight=_axis_is_tight(artists, "y"))
     return _AxisDescriptor(kind=st["yscale"], lo=y_min, hi=y_max,
                            flip=_any_artist_flips_y(artists))
 
@@ -499,7 +527,8 @@ def _x_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
         padding = _D["category_padding"] if anchor["x_padding"] is None else anchor["x_padding"]
         return _AxisDescriptor(kind="category", cats=cats, padding=padding)
     x_lo, x_hi = _scan_domain(all_artists, "x")
-    x_min, x_max = _resolve_domain(x_lo, x_hi, anchor["xlim"], anchor["xscale"])
+    x_min, x_max = _resolve_domain(x_lo, x_hi, anchor["xlim"], anchor["xscale"],
+                                    tight=_axis_is_tight(all_artists, "x"))
     return _AxisDescriptor(kind=anchor["xscale"], lo=x_min, hi=x_max)
 
 
@@ -521,7 +550,9 @@ def _y_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
         return _AxisDescriptor(kind="category", cats=cats, padding=padding)
     force_zero = any(a["type"] in ("bar", "hist") for a in all_artists)
     y_lo, y_hi = _scan_domain(all_artists, "y")
-    y_min, y_max = _resolve_domain(y_lo, y_hi, anchor["ylim"], anchor["yscale"], force_zero=force_zero)
+    y_min, y_max = _resolve_domain(y_lo, y_hi, anchor["ylim"], anchor["yscale"],
+                                    force_zero=force_zero,
+                                    tight=_axis_is_tight(all_artists, "y"))
     return _AxisDescriptor(kind=anchor["yscale"], lo=y_min, hi=y_max,
                            flip=_any_artist_flips_y(all_artists))
 

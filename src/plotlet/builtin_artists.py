@@ -428,4 +428,5 @@ add_artist(ArtistSpec(
     uses_color_cycle=False,
     data_attrs=_imshow_data_attrs,
     flips_y_axis=lambda a: a["opts"].get("origin", "lower") == "upper",
+    tight_domain=True,
 ))

@@ -52,6 +52,7 @@ class ArtistSpec:
     legend_gradient: Callable[[dict], dict | None] | None = None
     data_attrs: Callable[[dict], dict | None] | None = None
     flips_y_axis: Callable[[dict], bool] | None = None
+    tight_domain: bool = False
 
 
 @dataclass
