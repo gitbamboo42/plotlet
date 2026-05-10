@@ -16,7 +16,10 @@
     "color": "#000000",
     "width": 0.8,
     "tick_length": 3.5,
-    "tick_pad": 4
+    "tick_pad": 4,
+    "tick_direction": "out",
+    "tick_top": false,
+    "tick_right": false
   },
   "grid": {
     "color": "#b0b0b0",

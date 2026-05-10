@@ -231,14 +231,16 @@ def chart_xticks_rotation():
     return c
 
 
-def chart_xticks_outward():
-    # Tick marks point outward (matplotlib direction='out').
+def chart_xticks_inward_full_frame():
+    # Opt back into the legacy matplotlib look: inward ticks plus top/right
+    # ticks enabled. Default is outward + bottom/left only.
     xs = [i * 0.1 for i in range(64)]
     df = {"x": xs, "y": [math.sin(t) for t in xs]}
-    c = pt.chart(df, title="outward tick marks", xlabel="x", ylabel="y")
+    c = pt.chart(df, title="inward ticks, full frame (legacy look)",
+                 xlabel="x", ylabel="y")
     c.line(x="x", y="y")
-    c.xticks(direction="out")
-    c.yticks(direction="out")
+    c.xticks(direction="in", top=True)
+    c.yticks(direction="in", right=True)
     return c
 
 
@@ -355,6 +357,42 @@ def chart_plot_alpha():
     return c
 
 
+def chart_heatmap_labeled():
+    # DataFrame-aware heatmap: explicit row/col labels via xticklabels /
+    # yticklabels (no pandas dep in tests). Cells render at int+0.5 centers
+    # on a linear axis with origin="upper" so row 0 lands at the top.
+    data = [[math.sin(r * 0.6) * math.cos(c * 0.4) for c in range(8)]
+            for r in range(6)]
+    rows = [f"r{i}" for i in range(6)]
+    cols = [f"c{i}" for i in range(8)]
+    c = pt.chart(title="heatmap (labeled rows/cols)",
+                 xlabel="condition", ylabel="sample")
+    c.heatmap(data, xticklabels=cols, yticklabels=rows, cmap="viridis")
+    return c
+
+
+class _MockDF:
+    # Tiny stand-in for a pandas DataFrame so the .values / .columns / .index
+    # branch gets a baseline test without adding pandas as a test dep.
+    def __init__(self, values, index, columns):
+        self.values = values
+        self.index = index
+        self.columns = columns
+
+
+def chart_heatmap_dataframe():
+    rng = random.Random(1)
+    n_rows, n_cols = 5, 7
+    values = [[rng.gauss(0, 1) for _ in range(n_cols)] for _ in range(n_rows)]
+    df = _MockDF(values,
+                 index=[f"sample_{i}" for i in range(n_rows)],
+                 columns=[f"feature_{j}" for j in range(n_cols)])
+    c = pt.chart(title="heatmap (DataFrame branch, diverging cmap)")
+    c.heatmap(df, cmap="bwr", center=0)
+    c.xticks(rotation=45)
+    return c
+
+
 def chart_long_rotated_xticks():
     # Long x-tick labels rotated 45° — the rotated bbox height grows the
     # bottom margin so labels don't overflow the canvas. Without rotation
@@ -384,7 +422,7 @@ PLOTS = {
     "category_y_order":    chart_category_y_order,
     "hide_yticks":         chart_hide_yticks,
     "xticks_rotation":     chart_xticks_rotation,
-    "xticks_outward":      chart_xticks_outward,
+    "xticks_inward_full":  chart_xticks_inward_full_frame,
     "xticks_marks_off":    chart_xticks_marks_off,
     "xticks_explicit":     chart_xticks_explicit,
     "category_padding_0":  chart_category_padding_zero,
@@ -394,6 +432,8 @@ PLOTS = {
     "imshow_origin_upper": chart_imshow_origin_upper,
     "imshow_center":       chart_imshow_diverging_center,
     "imshow_log":          chart_imshow_log_norm,
+    "heatmap_labeled":     chart_heatmap_labeled,
+    "heatmap_dataframe":   chart_heatmap_dataframe,
     "long_title":          chart_long_title,
     "long_ylabel":         chart_long_ylabel,
     "long_rotated_xticks": chart_long_rotated_xticks,

@@ -64,10 +64,13 @@ Tick customization: `c.xticks([0, 5, 10], ["A","B","C"], rotation=45, fontsize=1
 | `.axhline(y, **opts)` / `.axvline(x, **opts)` | `color`, `linewidth`, `linestyle`, `alpha`, `label`, axes-fraction `xmin`/`xmax` (or `ymin`/`ymax`) |
 | `.axhspan(ymin, ymax, **opts)` / `.axvspan(xmin, xmax, **opts)` | `color`, `alpha`, `label`, axes-fraction `xmin`/`xmax` (or `ymin`/`ymax`) |
 | `.imshow(data, **opts)` | `cmap` (any matplotlib name, default `"viridis"`), `vmin`, `vmax`, `extent=(left, right, bottom, top)` |
+| `.heatmap(df, **opts)` | `cmap`, `vmin`, `vmax`, `norm`, `center`, `xticklabels`, `yticklabels`, `legend` |
 
 `hue=<col>` (on `.line` / `.scatter`) splits into one call per unique value with auto-labels and tab10 colors. Reference lines and spans default to black; spans use `alpha=0.2`. They're drawn outside the data color cycle and don't participate in autoscaling — they're decorations on the frame, not data.
 
 `.imshow(data)` renders a 2-D array as a colored grid. Small grids (`nrows × ncols ≤ 10000`) emit one `<rect>` per cell and stay vector-clean at any zoom; larger grids encode as a single base64 PNG and quantize to 256 levels. Image row 0 is rendered at the top of its rectangle; the y axis stays Cartesian (small at bottom). All ~180 matplotlib colormaps are vendored — see `pt.list_colormaps()`.
+
+`.heatmap(df)` is the DataFrame-aware companion to `.imshow`. A pandas DataFrame's `index` becomes the row tick labels and `columns` becomes the column tick labels; row 0 sits at the top. For a plain 2-D array, default labels are integer indices — pass `xticklabels=` / `yticklabels=` to override. Cells render at integer + 0.5 centers on a linear axis, which lines up with scipy's dendrogram leaf positions so a top/left dendrogram pairs cleanly via `share_x` / `share_y`.
 
 ### Subplots
 

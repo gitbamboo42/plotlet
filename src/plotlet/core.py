@@ -153,6 +153,11 @@ def _record_ticks(st, axis, args, kw):
     if "fontsize" in kw:  st[f"{axis}_fontsize"]  = kw["fontsize"]
     if "direction" in kw: st[f"{axis}_direction"] = kw["direction"]
     if "marks" in kw:     st[f"{axis}_marks"]     = bool(kw["marks"])
+    # Per-side opt-in for the secondary tick side: xticks(top=True) on the
+    # x-axis, yticks(right=True) on the y-axis. Both default off so the
+    # standard look is bottom + left only.
+    if axis == "x" and "top"   in kw: st["x_top"]   = bool(kw["top"])
+    if axis == "y" and "right" in kw: st["y_right"] = bool(kw["right"])
 
 
 # Conversion factors to pixels, CSS standard: 1 in = 96 px, 1 in = 2.54 cm,
@@ -230,9 +235,11 @@ def _replay(calls):
         "x_padding": None, "y_padding": None,
         # xticks/yticks overrides (None = auto, [] = hide):
         "x_ticks": None, "x_labels": None, "x_rotation": 0, "x_fontsize": None,
-        "x_direction": "in", "x_marks": True,
+        "x_direction": _FRAME["tick_direction"], "x_marks": True,
+        "x_top":   _FRAME["tick_top"],
         "y_ticks": None, "y_labels": None, "y_rotation": 0, "y_fontsize": None,
-        "y_direction": "in", "y_marks": True,
+        "y_direction": _FRAME["tick_direction"], "y_marks": True,
+        "y_right": _FRAME["tick_right"],
         "spine_top": True, "spine_right": True,
         "spine_bottom": True, "spine_left": True,
         # Per-side color/width overrides; None = inherit spec.json frame defaults.
@@ -653,8 +660,10 @@ def _required_margin(st, dw, dh) -> dict:
 
     # Right: outward tick OR the rightmost x-tick label's overhang past
     # the spine (centered text extends half its width past the tick).
+    # Right ticks default off (publication look); only reserve tick
+    # clearance when the user opted back in via `yticks(right=True)`.
     right_overhang = last_bbox_w / 2.0
-    right = max(out_y, right_overhang)
+    right = max(out_y if st["y_right"] else 0, right_overhang)
 
     # Long-text overflow: a title / xlabel longer than `dw` is centered on
     # `iw/2`, so it sticks out past the data area on both left and right
@@ -974,7 +983,9 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
 
     # y-axis labels need to clear an outward/inout tick mark; x-axis labels
     # already sit far enough below the spine to clear all three modes.
-    y_label_x = -_TICK_PAD if y_dir == "in" else -(_TICK_LEN + _TICK_PAD)
+    # When marks are suppressed there are no ticks to clear — sit tight
+    # against the spine regardless of direction.
+    y_label_x = -_TICK_PAD if (y_dir == "in" or not y_marks) else -(_TICK_LEN + _TICK_PAD)
 
     for t, lbl in zip(x_ticks, x_labels):
         x = x_scale(t)
@@ -984,7 +995,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
                 col, sw = _side_stroke("bottom")
                 parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{y1}" y2="{y2}" '
                              f'stroke="{col}" stroke-width="{sw}"/>')
-            if st["spine_top"]:
+            if st["spine_top"] and st["x_top"]:
                 y1, y2 = x_top_endpoints
                 col, sw = _side_stroke("top")
                 parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{y1}" y2="{y2}" '
@@ -1004,7 +1015,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
                 col, sw = _side_stroke("left")
                 parts.append(f'<line x1="{x1}" x2="{x2}" y1="{y:.2f}" y2="{y:.2f}" '
                              f'stroke="{col}" stroke-width="{sw}"/>')
-            if st["spine_right"]:
+            if st["spine_right"] and st["y_right"]:
                 x1, x2 = y_right_endpoints
                 col, sw = _side_stroke("right")
                 parts.append(f'<line x1="{x1}" x2="{x2}" y1="{y:.2f}" y2="{y:.2f}" '

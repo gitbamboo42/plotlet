@@ -35,7 +35,7 @@ from .core import (
     _FRAME_METHODS, _replay, _effective_margin, _render,
     _to_px, _spec_canvas_dims, _scaled_margin,
 )
-from .artists import _to_pylist
+from .artists import _to_pylist, _to_2d_pylist
 from .registry import get_artist, all_artist_names
 
 
@@ -413,6 +413,41 @@ class Chart:
                           **opts)
         else:
             self._record("fill_between", *args, **opts)
+        return self
+
+    def heatmap(self, df, *, cmap=None, vmin=None, vmax=None, norm="linear",
+                center=None, xticklabels=None, yticklabels=None, legend=None):
+        # DataFrame-aware companion to imshow: index/columns become tick
+        # labels, row 0 sits at the top (origin="upper"), and cell centers
+        # land at integer + 0.5 so a future top/left dendrogram pairs cleanly
+        # via share_x / share_y. Pure pre-processing — no separate artist;
+        # the rendering goes through imshow.
+        self._require_leaf("heatmap")
+        if hasattr(df, "values") and hasattr(df, "columns") and hasattr(df, "index"):
+            cols = list(df.columns) if xticklabels is None else list(xticklabels)
+            rows = list(df.index)   if yticklabels is None else list(yticklabels)
+            matrix = df.values
+        else:
+            d = _to_2d_pylist(df)
+            n_rows = len(d); n_cols = len(d[0]) if d else 0
+            cols = list(xticklabels) if xticklabels is not None else list(range(n_cols))
+            rows = list(yticklabels) if yticklabels is not None else list(range(n_rows))
+            matrix = d
+        cols = [str(x) for x in cols]
+        rows = [str(x) for x in rows]
+        n_cols = len(cols); n_rows = len(rows)
+
+        self._record("xticks", [i + 0.5 for i in range(n_cols)], cols, marks=False)
+        self._record("yticks", [i + 0.5 for i in range(n_rows)], rows, marks=False)
+
+        opts = {"origin": "upper"}
+        if cmap is not None:    opts["cmap"]   = cmap
+        if vmin is not None:    opts["vmin"]   = vmin
+        if vmax is not None:    opts["vmax"]   = vmax
+        if norm != "linear":    opts["norm"]   = norm
+        if center is not None:  opts["center"] = center
+        if legend is not None:  opts["legend"] = legend
+        self._record("imshow", matrix, **opts)
         return self
 
     # Reflines, imshow, and any user-registered artist forward through
