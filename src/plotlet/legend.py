@@ -17,10 +17,10 @@ Mixed sources stack continuous-first, discrete-second.
 from __future__ import annotations
 
 from .chart import Chart
-from .colormaps import colormap
+from .colormaps import colormap, _ContinuousNorm
 from .registry import RenderContext, get_artist
 from .font import _measure_text, _text_path
-from .scales import _LinearScale, _fmt_tick
+from .scales import _fmt_tick
 from ._spec import _D, _DASH, _FONTSPEC, _FRAME, _LEGSPEC
 
 _FONT = _FONTSPEC["family"]
@@ -180,6 +180,8 @@ def _render_continuous_entry(entry: dict, x: float, y: float) -> str:
         # i=0 at top → vmax color; i=n-1 at bottom → vmin color.
         # Each band but the last extends 1 px into the next so AA seams
         # don't show as hairline white lines between sub-pixel rects.
+        # Strip is always uniform in cmap space — non-linear norms (log,
+        # diverging-center) move the *ticks*, not the band colors.
         r, g, b = cm(1.0 - i / _GRAD_N)
         h = band_h + (1.0 if i < n_bands - 1 else 0.0)
         parts.append(f'<rect x="{x:.2f}" y="{strip_y + i*band_h:.4f}" '
@@ -189,10 +191,11 @@ def _render_continuous_entry(entry: dict, x: float, y: float) -> str:
                  f'height="{strip_h:.2f}" fill="none" '
                  f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
 
-    vmin, vmax = entry["vmin"], entry["vmax"]
-    scale = _LinearScale(vmin, vmax, strip_y + strip_h, strip_y)
+    norm = _ContinuousNorm(entry["vmin"], entry["vmax"],
+                           kind=entry.get("norm", "linear"),
+                           center=entry.get("center"))
     ticks = (list(entry["ticks"]) if entry.get("ticks") is not None
-             else scale.ticks(_adaptive_n_ticks(strip_h)))
+             else norm.ticks(_adaptive_n_ticks(strip_h)))
 
     tx0 = x + _GRAD_W
     tx1 = tx0 + _TICK_LEN
@@ -204,7 +207,7 @@ def _render_continuous_entry(entry: dict, x: float, y: float) -> str:
     # at the exact value position; only the text shifts.
     strip_mid = strip_y + strip_h / 2
     for t in ticks:
-        ty = scale(t)
+        ty = strip_y + (1.0 - norm.to_unit(t)) * strip_h
         parts.append(f'<line x1="{tx0}" x2="{tx1}" '
                      f'y1="{ty:.2f}" y2="{ty:.2f}" '
                      f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
@@ -252,7 +255,9 @@ def _legend_content_size(leaf: Chart, sources: list[Chart],
                 max_w = max(max_w, _measure_text(label, tick_size))
                 total_h += tick_size + 4
             ticks = (list(entry["ticks"]) if entry.get("ticks") is not None
-                     else _LinearScale(entry["vmin"], entry["vmax"], 0, 1).ticks(n_ticks))
+                     else _ContinuousNorm(entry["vmin"], entry["vmax"],
+                                          kind=entry.get("norm", "linear"),
+                                          center=entry.get("center")).ticks(n_ticks))
             max_tw = max((_measure_text(_fmt_tick(t), tick_size) for t in ticks), default=0.0)
             strip_col_w = _GRAD_W + _TICK_LEN + _TICK_PAD + max_tw
             max_w = max(max_w, strip_col_w)

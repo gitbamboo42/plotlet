@@ -185,6 +185,15 @@ def _imshow_data_attrs(a):
     extent = a["opts"].get("extent")
     if extent is not None:
         out["extent"] = ",".join(repr(float(v)) for v in extent)
+    origin = a["opts"].get("origin", "lower")
+    if origin != "lower":
+        out["origin"] = origin
+    norm = a["opts"].get("norm", "linear")
+    if norm != "linear":
+        out["norm"] = norm
+    center = a["opts"].get("center")
+    if center is not None:
+        out["center"] = float(center)
     return out
 
 
@@ -362,13 +371,20 @@ def _imshow_record(args, kw):
     nrows = len(d)
     ncols = len(d[0]) if d else 0
     vmin = kw.get("vmin"); vmax = kw.get("vmax")
+    norm = kw.get("norm", "linear")
+    # For log norm, autoscale ignores non-positive values (they can't be
+    # log-mapped). User-supplied vmin/vmax are still trusted as-is; the
+    # _ContinuousNorm constructor will raise if they're non-positive.
     if vmin is None or vmax is None:
-        flat = [v for row in d for v in row if v == v]
+        if norm == "log":
+            flat = [v for row in d for v in row if v == v and v > 0]
+        else:
+            flat = [v for row in d for v in row if v == v]
         if flat:
             if vmin is None: vmin = min(flat)
             if vmax is None: vmax = max(flat)
         else:
-            vmin, vmax = 0.0, 1.0
+            vmin, vmax = (1.0, 10.0) if norm == "log" else (0.0, 1.0)
     return {"type": "imshow", "_data": d, "_nrows": nrows, "_ncols": ncols,
             "_vmin": vmin, "_vmax": vmax, "data": d, "opts": kw}
 
@@ -395,6 +411,8 @@ def _imshow_legend_gradient(a):
         "cmap": a["opts"].get("cmap", _D["default_cmap"]),
         "vmin": a["_vmin"],
         "vmax": a["_vmax"],
+        "norm": a["opts"].get("norm", "linear"),
+        "center": a["opts"].get("center"),
         "label": legend_opts.get("label"),
         "ticks": legend_opts.get("ticks"),
     }
@@ -409,4 +427,5 @@ add_artist(ArtistSpec(
     legend_gradient=_imshow_legend_gradient,
     uses_color_cycle=False,
     data_attrs=_imshow_data_attrs,
+    flips_y_axis=lambda a: a["opts"].get("origin", "lower") == "upper",
 ))

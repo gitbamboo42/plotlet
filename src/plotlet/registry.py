@@ -51,6 +51,7 @@ class ArtistSpec:
     legend_swatch: Callable[[dict, "RenderContext", float, float], str] | None = None
     legend_gradient: Callable[[dict], dict | None] | None = None
     data_attrs: Callable[[dict], dict | None] | None = None
+    flips_y_axis: Callable[[dict], bool] | None = None
 
 
 @dataclass

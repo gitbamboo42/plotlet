@@ -37,6 +37,7 @@ The schema is semver-stable from 0.3.0, declared via
 | `data-plotlet-yscale`    | `"linear"` / `"log"` / `"category"` |                                     |
 | `data-plotlet-xlim`      | `"0,42"`               | resolved limits, post-autoscale; omitted on categorical |
 | `data-plotlet-ylim`      | `"-1.5,1.5"`           | omitted on categorical                           |
+| `data-plotlet-yflip`     | `"true"`               | present only when the y-axis is rendered inverted (larger data y at smaller pixel y); set automatically e.g. by `imshow(origin="upper")` |
 | `data-plotlet-panel-bbox`| `"0,0,560,348"`        | `"x,y,w,h"` of the full panel rect (margins included) in figure-SVG coords |
 | `data-plotlet-data-area` | `"60,24,500,300"`      | `"x,y,w,h"` of the data region in *panel-local* coords; add the bbox's `(x, y)` for figure-SVG coords |
 

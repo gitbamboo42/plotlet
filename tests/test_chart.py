@@ -120,6 +120,41 @@ def chart_imshow_diverging():
     return c
 
 
+def chart_imshow_origin_upper():
+    # origin="upper" opts into matrix-style display (row 0 at top). The
+    # panel's y-axis auto-inverts so tick "0" lands at the top next to
+    # row 0 — labels and image rows stay aligned, matching matplotlib.
+    # Asymmetric ramp makes the flip vs. the default ("lower") obvious.
+    data = [[r + 0.4 * c for c in range(20)] for r in range(15)]
+    c = pt.chart(title="imshow origin='upper'", xlabel="x", ylabel="y")
+    c.imshow(data, cmap="viridis", origin="upper",
+             extent=(0, 20, 0, 15))
+    return c
+
+
+def chart_imshow_diverging_center():
+    # Asymmetric range (-2 to 8) with center=0 — colorbar shows zero
+    # pinned to the middle of the strip even though zero is far from
+    # the geometric midpoint of [-2, 8]. Composed with pt.legend() so
+    # the gradient strip (where the new norm shows up) is rendered.
+    data = [[(r - 4) * 0.5 + (c - 4) * 0.7 for c in range(12)] for r in range(10)]
+    c = pt.chart(title="imshow center=0", xlabel="x", ylabel="y")
+    c.imshow(data, cmap="RdBu_r", center=0, vmin=-2, vmax=8,
+             legend={"label": "value"})
+    return c | pt.legend(c)
+
+
+def chart_imshow_log_norm():
+    # Multi-decade dynamic range — without log, all but the brightest
+    # cells render near-black; with log, structure across decades shows.
+    # Legend ticks are powers of 10.
+    data = [[10 ** (0.05 * r + 0.05 * c) for c in range(20)] for r in range(15)]
+    c = pt.chart(title="imshow norm='log'", xlabel="x", ylabel="y")
+    c.imshow(data, cmap="magma", norm="log",
+             legend={"label": "intensity"})
+    return c | pt.legend(c)
+
+
 def chart_category_x_scatter():
     # scatter on a categorical x — categories supplied alphabetically by default.
     rng = random.Random(3)
@@ -356,6 +391,9 @@ PLOTS = {
     "imshow_rect":         chart_imshow_rect,
     "imshow_png":          chart_imshow_png,
     "imshow_diverging":    chart_imshow_diverging,
+    "imshow_origin_upper": chart_imshow_origin_upper,
+    "imshow_center":       chart_imshow_diverging_center,
+    "imshow_log":          chart_imshow_log_norm,
     "long_title":          chart_long_title,
     "long_ylabel":         chart_long_ylabel,
     "long_rotated_xticks": chart_long_rotated_xticks,

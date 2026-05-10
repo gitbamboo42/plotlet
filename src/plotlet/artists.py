@@ -9,7 +9,7 @@ import math
 
 from ._spec import _D, _DASH
 from ._png import encode_rgb
-from .colormaps import colormap_lut
+from .colormaps import colormap_lut, _ContinuousNorm
 
 
 def _to_pylist(obj):
@@ -279,49 +279,61 @@ def _artist_imshow(a, xs_, ys_, col):
     for SVG file size. Below the threshold, each cell is its own <rect> — sharp
     at any zoom. Above, the whole image is encoded as base64 PNG.
 
-    Row 0 is rendered at the TOP of the data rectangle. With plotlet's standard
-    Cartesian y-axis (small y at bottom), this means image row 0 lands at the
-    LARGEST y value of `extent`. Users coming from matplotlib's `origin='upper'`
-    convention should know: the image looks correct (matrix as printed), but
-    the y-axis tick labels read in Cartesian order.
+    `origin` controls vertical orientation. Default `"lower"` puts row 0 at
+    the BOTTOM of the data rectangle (Cartesian). Opt in to `"upper"` for
+    matrix-style display (row 0 at top, what you see when you print the
+    array); the panel auto-inverts the y-axis in that case so tick "0"
+    lands next to row 0, matching matplotlib.
+
+    Color mapping goes through `_ContinuousNorm`, which supports `norm="log"`
+    and `center=` on top of the default linear range.
     """
     nrows = a["_nrows"]; ncols = a["_ncols"]
     if nrows == 0 or ncols == 0:
         return ""
     data = a["_data"]
-    vmin = a["_vmin"]; vmax = a["_vmax"]
-    span = (vmax - vmin) or 1.0
-    lut = colormap_lut(a["opts"].get("cmap", _D["default_cmap"]))
+    opts = a["opts"]
+    norm = _ContinuousNorm(a["_vmin"], a["_vmax"],
+                           kind=opts.get("norm", "linear"),
+                           center=opts.get("center"))
+    lut = colormap_lut(opts.get("cmap", _D["default_cmap"]))
+    origin = opts.get("origin", "lower")
 
-    extent = a["opts"].get("extent")
+    extent = opts.get("extent")
     if extent is None:
         x_left, x_right, y_bot, y_top = 0.0, float(ncols), 0.0, float(nrows)
     else:
         x_left, x_right, y_bot, y_top = extent
 
-    sx_l = xs_(min(x_left, x_right)); sx_r = xs_(max(x_left, x_right))
-    sy_t = ys_(max(y_bot, y_top));    sy_b = ys_(min(y_bot, y_top))
+    sxa = xs_(x_left); sxb = xs_(x_right)
+    sya = ys_(y_bot);  syb = ys_(y_top)
+    sx_l = min(sxa, sxb); sx_r = max(sxa, sxb)
+    sy_t = min(sya, syb); sy_b = max(sya, syb)
     pw = sx_r - sx_l; ph = sy_b - sy_t
     if pw <= 0 or ph <= 0:
         return ""
+
+    # Render order = order in which we walk pixel rows from top to bottom.
+    # Default origin="lower": row 0 belongs at the bottom, so iterate
+    # data in reverse to put the highest-index row at top first.
+    # origin="upper": row 0 belongs at the top — natural data order.
+    row_index = range(nrows) if origin == "upper" \
+                else ((nrows - 1 - r) for r in range(nrows))
+    rows_in_render_order = [data[i] for i in row_index]
 
     use_rects = nrows * ncols <= _D["imshow_max_rects"]
 
     if use_rects:
         out = []
         cw = pw / ncols; ch = ph / nrows
-        for r in range(nrows):
-            row = data[r]
+        for r, row in enumerate(rows_in_render_order):
             y = sy_t + r * ch
             for c in range(ncols):
                 v = row[c]
                 if v != v:
                     fill = "rgb(0,0,0)"
                 else:
-                    t = (v - vmin) / span
-                    if t < 0: t = 0
-                    elif t > 1: t = 1
-                    i = int(t * 255 + 0.5) * 3
+                    i = int(norm.to_unit(v) * 255 + 0.5) * 3
                     fill = f"rgb({lut[i]},{lut[i+1]},{lut[i+2]})"
                 x = sx_l + c * cw
                 out.append(
@@ -330,17 +342,13 @@ def _artist_imshow(a, xs_, ys_, col):
         return "".join(out)
 
     buf = bytearray()
-    for r in range(nrows):
-        row = data[r]
+    for row in rows_in_render_order:
         for c in range(ncols):
             v = row[c]
             if v != v:
                 buf.append(0); buf.append(0); buf.append(0)
             else:
-                t = (v - vmin) / span
-                if t < 0: t = 0
-                elif t > 1: t = 1
-                i = int(t * 255 + 0.5) * 3
+                i = int(norm.to_unit(v) * 255 + 0.5) * 3
                 buf.append(lut[i]); buf.append(lut[i+1]); buf.append(lut[i+2])
     png = encode_rgb(bytes(buf), ncols, nrows)
     b64 = base64.b64encode(png).decode("ascii")

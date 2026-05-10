@@ -70,12 +70,16 @@ _FRAME_METHODS = {
 class _AxisDescriptor:
     """Domain for one axis, decoupled from any pixel range. The layout
     pre-pass builds one per share-equivalence class; each panel calls
-    `build(r0, r1)` with its own pixel range to instantiate a scale."""
+    `build(r0, r1)` with its own pixel range to instantiate a scale.
+
+    `flip=True` means the panel renderer swaps `(r0, r1)` when calling
+    `build()`, inverting the axis."""
     kind: str           # "linear" | "log" | "category"
     lo: float = 0.0
     hi: float = 1.0
     cats: list | None = None
     padding: float = field(default_factory=lambda: _D["category_padding"])  # category only; 0 = contiguous bands
+    flip: bool = False
 
     def build(self, r0, r1):
         if self.kind == "log":
@@ -439,6 +443,16 @@ def _x_descriptor(st) -> _AxisDescriptor:
     return _AxisDescriptor(kind=st["xscale"], lo=x_min, hi=x_max)
 
 
+def _any_artist_flips_y(artists) -> bool:
+    """True if any artist on the panel declares (via its `flips_y_axis`
+    spec hook) that the y-axis should render inverted."""
+    for a in artists:
+        spec = get_artist(a["type"])
+        if spec is not None and spec.flips_y_axis is not None and spec.flips_y_axis(a):
+            return True
+    return False
+
+
 def _y_descriptor(st) -> _AxisDescriptor:
     """Compute this panel's natural y-axis descriptor from its own state.
 
@@ -460,7 +474,8 @@ def _y_descriptor(st) -> _AxisDescriptor:
     force_zero = has_bar or any(a["type"] == "hist" for a in artists)
     y_lo, y_hi = _scan_domain(artists, "y")
     y_min, y_max = _resolve_domain(y_lo, y_hi, st["ylim"], st["yscale"], force_zero=force_zero)
-    return _AxisDescriptor(kind=st["yscale"], lo=y_min, hi=y_max)
+    return _AxisDescriptor(kind=st["yscale"], lo=y_min, hi=y_max,
+                           flip=_any_artist_flips_y(artists))
 
 
 def _x_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
@@ -507,7 +522,8 @@ def _y_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
     force_zero = any(a["type"] in ("bar", "hist") for a in all_artists)
     y_lo, y_hi = _scan_domain(all_artists, "y")
     y_min, y_max = _resolve_domain(y_lo, y_hi, anchor["ylim"], anchor["yscale"], force_zero=force_zero)
-    return _AxisDescriptor(kind=anchor["yscale"], lo=y_min, hi=y_max)
+    return _AxisDescriptor(kind=anchor["yscale"], lo=y_min, hi=y_max,
+                           flip=_any_artist_flips_y(all_artists))
 
 
 def _rotated_label_bbox(label_w: float, label_h: float, rot_deg: float) -> tuple[float, float]:
@@ -548,7 +564,10 @@ def _required_margin(st, dw, dh) -> dict:
     x_axis = _x_descriptor(st)
     y_axis = _y_descriptor(st)
     x_scale = x_axis.build(0, dw)
-    y_scale = y_axis.build(0, dh) if y_axis.kind == "category" else y_axis.build(dh, 0)
+    if y_axis.kind == "category" or y_axis.flip:
+        y_scale = y_axis.build(0, dh)
+    else:
+        y_scale = y_axis.build(dh, 0)
 
     # Same tick-density rule as `_render_inner`.
     x_n = max(2, min(8, int(dw // 65)))
@@ -635,11 +654,16 @@ def _build_xy_scales(st, iw, ih, panel_opts: _PanelOpts):
     """Instantiate pixel-bound scales. `panel_opts.x_axis` / `y_axis` come
     from the layout pre-pass when set; otherwise we compute them from the
     panel's own state. y-category runs top-to-bottom (cats on rows);
-    y-linear/log runs cartesian."""
+    y-linear/log runs cartesian unless the descriptor requested a flip."""
     x_axis = panel_opts.x_axis or _x_descriptor(st)
     y_axis = panel_opts.y_axis or _y_descriptor(st)
     x_scale = x_axis.build(0, iw)
-    y_scale = y_axis.build(0, ih) if y_axis.kind == "category" else y_axis.build(ih, 0)
+    if y_axis.kind == "category":
+        y_scale = y_axis.build(0, ih)
+    elif y_axis.flip:
+        y_scale = y_axis.build(0, ih)
+    else:
+        y_scale = y_axis.build(ih, 0)
     x_is_cat = (x_axis.kind == "category")
     return x_scale, y_scale, x_is_cat
 
@@ -710,6 +734,8 @@ def _panel_attrs_and_meta(st, M, iw, ih, x_axis, y_axis,
         attrs["xlim"] = f"{repr(x_axis.lo)},{repr(x_axis.hi)}"
     if y_axis.kind != "category":
         attrs["ylim"] = f"{repr(y_axis.lo)},{repr(y_axis.hi)}"
+    if y_axis.flip:
+        attrs["yflip"] = "true"
 
     # Panel bbox in figure-SVG coords: the full rect this panel occupies,
     # margins included. Standalone figures: (0, 0, W, H). Multi-panel
