@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Project memory for **plotlet** — a small, hackable Python library that emits matplotlib-style SVG.
+Project memory for **plotlet** — a Python library for SVG plots, with multi-panel composition and an extension API for custom plot types.
 
 This file gives Claude (or any collaborator) the context needed to be useful from the first message of a new session. Read it before suggesting changes.
 

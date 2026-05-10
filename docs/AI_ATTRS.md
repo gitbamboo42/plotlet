@@ -21,7 +21,7 @@ The schema is semver-stable from 0.3.0, declared via
 
 | Attribute              | Example                | Notes                                       |
 |------------------------|------------------------|---------------------------------------------|
-| `data-plotlet-version` | `"0.3.0"`              | the plotlet release that emitted this SVG   |
+| `data-plotlet-version` | `"0.3.1"`              | the plotlet release that emitted this SVG   |
 | `data-plotlet-schema`  | `"1"`                  | bumped only when names change incompatibly  |
 | `data-plotlet-kind`    | `"figure"` / `"layout"` | single panel vs. multi-panel composition   |
 
@@ -153,7 +153,7 @@ print(c.to_svg())
 What an AI sees in the output (skipping geometry):
 
 ```
-SVG kind=figure plotlet=0.3.0 schema=1
+SVG kind=figure plotlet=0.3.1 schema=1
   PANEL title="Daily revenue" xlabel=day ylabel=USD
         xscale=linear xlim=1.0,4.0  yscale=linear ylim=10.0,15.0
     ARTIST 0 type=plot label=actual color=#1f77b4

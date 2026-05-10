@@ -1,12 +1,12 @@
 # plotlet
 
-A small, hackable Python library that emits matplotlib-style SVG plots.
+A Python library for SVG plots — with multi-panel composition, shared-axis layouts, and an extension API for custom plot types.
 
-## Why
+## What it's for
 
-matplotlib is the right tool when you want the kitchen sink. plotlet's niche is **custom plot types** — genome tracks, Manhattan plots, phylogenetic trees, anything matplotlib's extension API makes painful. The whole library has a deliberately tiny, exposed core: adding a new plot type is a 3-step recipe, not an architecture project.
+plotlet is built for **multi-panel scientific figures with custom plot types** — genome tracks, spike rasters, climate stacks, Manhattan plots, phylogenetic trees. The core ships ~5 standard plots plus multi-panel composition (`|`, `/`, `share_x()`).
 
-It's a **scaffold, not a feature catalog**: the core ships ~5 standard plots and the infrastructure for extending. Custom plot types live in your own project (or [`cookbook/`](cookbook/)), not upstream. See [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) for the full framing.
+Custom plot types are a 3-step recipe (`record`, `xdomain`/`ydomain`, `draw`) and live in your own project (or [`cookbook/`](cookbook/)) rather than upstream. See [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) for the full framing.
 
 ```python
 import plotlet as pt
@@ -30,11 +30,11 @@ pip install plotlet
 
 ## Properties
 
-- **Lightweight.** `fonttools` for font handling. numpy / pandas / polars inputs work transparently if you have them.
+- **Minimal dependencies.** `fonttools` for font handling. numpy / pandas / polars inputs work transparently if you have them.
 - **Static SVG output.** No interactivity, no animation. Same script → byte-identical SVG.
 - **Cross-machine reproducible.** Bundled DejaVu Sans + text-as-paths means rendering is identical on Linux, macOS, Windows, headless CI.
 - **Jupyter-native.** `Chart._repr_html_` auto-renders the last expression in a cell.
-- **Tiny output.** Each plot is ~50 KB SVG, self-contained.
+- **Compact output.** Each plot is ~50 KB SVG, self-contained.
 - **Compositional.** Multi-panel layouts via `|`, `/`, `pt.grid`; share scales with `(a | b).share_x()` or `pt.grid(..., share_x="col")`; layout-level legend with `pt.legend()` covering both discrete swatches and continuous gradients (the colorbar).
 - **AI-readable.** Every figure ships `data-plotlet-*` attributes describing plot type, axes, scales, ranges, and series labels — readable in one XML parse, no glyph-path OCR. Schema: [docs/AI_ATTRS.md](docs/AI_ATTRS.md).
 
@@ -120,7 +120,7 @@ c.write_html("plot.html")    # standalone HTML
 
 ## Adding a new plot type
 
-plotlet's central hackability claim: a custom plot type is a 3-step recipe (~50–100 lines) that gets axes, scales, legend, grid, and composability for free. The recommended home is your own project, or [`cookbook/`](cookbook/) as reference. Full guide: [docs/EXTENDING.md](docs/EXTENDING.md).
+plotlet is designed so that adding a new plot type is a 3-step recipe (~50–100 lines) that gets axes, scales, legend, grid, and composability for free. The recommended home is your own project, or [`cookbook/`](cookbook/) as reference. Full guide: [docs/EXTENDING.md](docs/EXTENDING.md).
 
 ## Testing
 
@@ -134,7 +134,7 @@ python tests/test_subplots.py         # subplot baselines + composition invarian
 ## Non-goals
 
 - No interactivity (hover, zoom, click). Static rendering is the point.
-- Not competing with matplotlib on standard plots; matplotlib is bigger and battle-tested.
+- Not aiming for full coverage of standard statistical plots — those needs are well-served elsewhere.
 - Not a 3D plotter, not a dashboard tool.
 - Not a feature catalog — new plot types belong in user projects or `cookbook/`, not in the core.
 

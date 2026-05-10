@@ -90,7 +90,7 @@ These fall out of plotlet's existing architecture and don't need a
 candidate to evaluate them:
 
 - **Cross-panel references are object handles**, not string IDs or grid
-  positions. plotlet is a small Python library; serialization isn't a
+  positions. plotlet is in-process Python; serialization isn't a
   goal yet, and grid positions are fragile under layout changes. If
   panel B says `share_y=A`, `A` is a Python object.
 - **Scale resolution is a pre-pass.** Today's render pipeline already

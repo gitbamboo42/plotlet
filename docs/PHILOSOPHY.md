@@ -1,8 +1,8 @@
 # Philosophy
 
-plotlet is a **scaffold**, not a feature catalog. The library ships a small,
-well-scoped core; users build their own custom plot types in their own
-projects, with AI assistance making the per-extension cost low.
+plotlet is **designed to be extended**. The library ships a well-scoped
+core, and users build their own custom plot types in their own projects,
+with AI assistance making the per-extension cost low.
 
 ## What's in the core
 
@@ -29,17 +29,17 @@ keeps dropping as AI assistance improves. The cost of *understanding* a
 30,000-line library, by contrast, doesn't drop — and that mental model is
 what gates productivity.
 
-So plotlet trades feature-completeness for understandability. The core is
-small enough to read in an afternoon. The extension points are documented and
-deliberate. Adding a custom plot type is a 3-step recipe, not an architecture
-project.
+So plotlet keeps the core focused and pushes feature breadth to user
+projects. The codebase stays readable; the extension points are documented
+and deliberate; adding a custom plot type is a 3-step recipe, not an
+architecture project.
 
 ## Non-goals
 
 plotlet will never:
 
 - Be interactive (no hover, zoom, pan, animation, ever)
-- Compete with matplotlib for the "kitchen-sink" role
+- Aim for full coverage of standard statistical plots (those needs are well-served elsewhere)
 - Accept third-party plot types into the core
 
 Tools that try to do everything age into legacy weight. We're not doing that.

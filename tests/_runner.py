@@ -11,11 +11,21 @@ Flags (read from `sys.argv`):
 from __future__ import annotations
 
 import difflib
+import re
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 BASELINE_ROOT = HERE / "baseline_images"
+
+# `data-plotlet-version` changes every release by definition — it's the SVG
+# equivalent of a build timestamp. Strip it before comparing so a version
+# bump alone doesn't invalidate every committed baseline. All other
+# `data-plotlet-*` attrs describe the plot itself and stay in the compare.
+_VOLATILE_ATTR_RE = re.compile(r' data-plotlet-version="[^"]*"')
+
+def _normalize(svg: str) -> str:
+    return _VOLATILE_ATTR_RE.sub("", svg)
 
 
 def _write_gallery(set_name: str, plots: dict, baseline_dir: Path) -> None:
@@ -67,7 +77,7 @@ def run(set_name: str, plots: dict) -> int:
             continue
 
         expected = target.read_text()
-        if actual == expected:
+        if _normalize(actual) == _normalize(expected):
             print(f"OK     {label}")
         else:
             failed += 1
@@ -75,7 +85,7 @@ def run(set_name: str, plots: dict) -> int:
             actual_path.write_text(actual)
             print(f"FAIL   {label}  (wrote {actual_path.name})")
             diff = list(difflib.unified_diff(
-                expected.splitlines(), actual.splitlines(),
+                _normalize(expected).splitlines(), _normalize(actual).splitlines(),
                 fromfile="baseline", tofile="actual", lineterm="", n=1))
             for line in diff[:12]:
                 print("    " + line)
