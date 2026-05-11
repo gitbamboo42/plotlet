@@ -393,6 +393,45 @@ def chart_heatmap_dataframe():
     return c
 
 
+def chart_rect():
+    # Mixed scalar / list inputs — broadcast covers the genome-track,
+    # gantt-style, and gene-model use cases that motivated adding rect.
+    # Also exercises edgecolor + linewidth so the outline path is covered.
+    c = pt.chart(title="rect (broadcast + edgecolor)",
+                 xlabel="x", ylabel="y", legend=True)
+    c.rect([0, 2, 4, 6], 0, [1.5, 1.5, 1.5, 1.5], 2, color="C0",
+           alpha=0.6, label="intervals")
+    c.rect(0.5, 2.5, 7, 1, color="C1", alpha=0.3,
+           edgecolor="C3", linewidth=1.5, label="overlay")
+    c.rect(3, 0.2, 1, 1.6, fill=False, edgecolor="black",
+           linewidth=2, label="outline")
+    return c
+
+
+def chart_polygon():
+    # Two polygons composed in one chart: a filled triangle (color cycle)
+    # and an outlined diamond (fill=False). Polygon auto-closes — the
+    # last vertex doesn't need to repeat the first.
+    c = pt.chart(title="polygon", xlabel="x", ylabel="y", legend=True)
+    c.polygon([0, 2, 1], [0, 0, 2], alpha=0.5, label="triangle")
+    c.polygon([3, 4, 3, 2], [1, 2, 3, 2], fill=False, linewidth=2,
+              label="diamond")
+    return c
+
+
+def chart_area():
+    # Area under a curve (base=0, default) and area between a curve and
+    # a non-zero baseline. Same artist, different `base=`.
+    xs = _xs()
+    c = pt.chart(title="area (base=0 and base=-0.5)",
+                 xlabel="t", ylabel="y", legend=True)
+    c.area(xs, [math.sin(x) for x in xs], color="C0", alpha=0.3,
+           label="sin")
+    c.area(xs, [math.cos(x) - 0.5 for x in xs], base=-0.5,
+           color="C3", alpha=0.4, label="cos shifted")
+    return c
+
+
 def chart_long_rotated_xticks():
     # Long x-tick labels rotated 45° — the rotated bbox height grows the
     # bottom margin so labels don't overflow the canvas. Without rotation
@@ -415,6 +454,9 @@ PLOTS = {
     "bar":                 chart_bar,
     "hist":                chart_hist,
     "fill_between":        chart_fill_between,
+    "rect":                chart_rect,
+    "polygon":             chart_polygon,
+    "area":                chart_area,
     "reflines":            chart_reflines,
     "category_x_scatter":  chart_category_x_scatter,
     "category_x_order":    chart_category_x_order,

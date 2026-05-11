@@ -42,7 +42,7 @@ plotlet/
 │       ├── font.py              # _measure_text, _text_path (DejaVu Sans)
 │       ├── artists.py           # SVG-emitting helpers for the built-in plot types
 │       ├── registry.py          # ArtistSpec + add_artist — the extension API
-│       ├── builtin_artists.py   # registers the 11 built-in artists at import
+│       ├── builtin_artists.py   # registers the built-in artists at import
 │       ├── core.py              # render engine — free functions over Chart state
 │       ├── chart.py             # Chart class (leaf + parent + composition + recording)
 │       ├── layout.py            # subplot rect computation + multi-panel SVG assembly

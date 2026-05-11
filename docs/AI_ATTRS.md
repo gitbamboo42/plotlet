@@ -85,6 +85,9 @@ Type-specific attrs:
 | `bar`           | `n`, `y-min`, `y-max`                                                        |
 | `hist`          | `n` (raw observations), `bins`, `x-min`, `x-max`, `count-max`                |
 | `fill_between`  | `n`, `x-min`, `x-max`, `y-min`, `y-max`                                      |
+| `area`          | `n`, `x-min`, `x-max`, `y-min`, `y-max`, `base`                              |
+| `rect`          | `n`, `x-min`, `x-max`, `y-min`, `y-max`                                      |
+| `polygon`       | `n`, `x-min`, `x-max`, `y-min`, `y-max`                                      |
 | `axhline`       | `y`                                                                          |
 | `axvline`       | `x`                                                                          |
 | `axhspan`       | `ymin`, `ymax`                                                               |

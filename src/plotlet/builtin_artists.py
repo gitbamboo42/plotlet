@@ -10,10 +10,11 @@ import math
 
 from .registry import ArtistSpec, RenderContext, add_artist
 from .artists import (
-    _to_pylist, _to_2d_pylist, _histogram, _broadcast_three,
+    _to_pylist, _to_2d_pylist, _histogram, _broadcast,
     _artist_plot, _artist_scatter, _artist_bar, _artist_hist, _artist_fill_between,
     _artist_axhline, _artist_axvline, _artist_axhspan, _artist_axvspan,
     _artist_hlines, _artist_vlines,
+    _artist_rect, _artist_polygon,
     _artist_imshow,
     _marker_at, _op,
 )
@@ -145,6 +146,29 @@ def _fill_between_data_attrs(a):
     return out
 
 
+def _rect_data_attrs(a):
+    n = len(a["xs"])
+    out = {"n": n}
+    if n:
+        x_ends = list(a["xs"]) + [x + w for x, w in zip(a["xs"], a["ws"])]
+        y_ends = list(a["ys"]) + [y + h for y, h in zip(a["ys"], a["hs"])]
+        out.update(_xy_minmax(x_ends, y_ends))
+    return out
+
+
+def _polygon_data_attrs(a):
+    out = {"n": len(a["xs"])}
+    out.update(_xy_minmax(a["xs"], a["ys"]))
+    return out
+
+
+def _area_data_attrs(a):
+    out = {"n": len(a["xs"])}
+    out.update(_xy_minmax(a["xs"], a["y1"]))
+    out["base"] = a["base"]
+    return out
+
+
 def _axhline_data_attrs(a):  return {"y": a["y"]}
 def _axvline_data_attrs(a):  return {"x": a["x"]}
 def _axhspan_data_attrs(a):  return {"ymin": a["ymin"], "ymax": a["ymax"]}
@@ -273,6 +297,82 @@ add_artist(ArtistSpec(
 ))
 
 
+# --- area -------------------------------------------------------------------
+# Shorthand for fill_between with a constant baseline (default 0). Records
+# into the same shape as fill_between (xs/y1/y2) and points draw straight
+# at fill_between's helper — no separate artist function needed. `base=`
+# is split out of opts so it's preserved across re-renders (record() is
+# called on every render against the stored kw dict).
+
+def _area_record(args, kw):
+    kw = dict(kw)
+    base = kw.pop("base", 0)
+    xs = _to_pylist(args[0])
+    ys = _to_pylist(args[1])
+    return {"type": "area", "xs": xs, "y1": ys, "y2": [base] * len(xs),
+            "base": base, "opts": kw}
+
+
+add_artist(ArtistSpec(
+    name="area",
+    record=_area_record,
+    xdomain=_xs_of,
+    ydomain=_y1y2_of,
+    draw=lambda a, ctx: _artist_fill_between(a, ctx.x_scale, ctx.y_scale, ctx.color),
+    legend_swatch=_bar_legend_swatch,
+    data_attrs=_area_data_attrs,
+))
+
+
+# --- rect -------------------------------------------------------------------
+# Scale-aware axis-aligned rectangles. Inputs broadcast: scalars and lists
+# mix as long as non-scalar inputs share a length (hlines/vlines convention).
+# Each rect spans `(x, y)` to `(x + w, y + h)` in numeric data coordinates —
+# `x + w` and `y + h` require numeric axes, so rect is the inverse of bar's
+# contract: bar wants categorical x, rect wants numeric x/y.
+
+def _rect_record(args, kw):
+    xs, ys, ws, hs = _broadcast(args[0], args[1], args[2], args[3])
+    return {"type": "rect", "xs": xs, "ys": ys, "ws": ws, "hs": hs, "opts": kw}
+
+
+def _rect_xdomain(a):
+    return list(a["xs"]) + [x + w for x, w in zip(a["xs"], a["ws"])]
+
+
+def _rect_ydomain(a):
+    return list(a["ys"]) + [y + h for y, h in zip(a["ys"], a["hs"])]
+
+
+add_artist(ArtistSpec(
+    name="rect",
+    record=_rect_record,
+    xdomain=_rect_xdomain,
+    ydomain=_rect_ydomain,
+    draw=lambda a, ctx: _artist_rect(a, ctx.x_scale, ctx.y_scale, ctx.color),
+    legend_swatch=_bar_legend_swatch,
+    data_attrs=_rect_data_attrs,
+))
+
+
+# --- polygon ----------------------------------------------------------------
+# Closed polygon from (xs, ys) vertices. One polygon per call — multiple
+# polygons = multiple calls. Auto-closes (matplotlib `plt.fill()` semantics).
+
+add_artist(ArtistSpec(
+    name="polygon",
+    record=lambda args, kw: {"type": "polygon",
+                              "xs": _to_pylist(args[0]),
+                              "ys": _to_pylist(args[1]),
+                              "opts": kw},
+    xdomain=_xs_of,
+    ydomain=_ys_of,
+    draw=lambda a, ctx: _artist_polygon(a, ctx.x_scale, ctx.y_scale, ctx.color),
+    legend_swatch=_bar_legend_swatch,
+    data_attrs=_polygon_data_attrs,
+))
+
+
 # --- reference lines and spans ----------------------------------------------
 # These don't participate in autoscaling — they decorate the frame.
 
@@ -331,12 +431,12 @@ add_artist(ArtistSpec(
 # and use the color cycle so a labeled hlines/vlines acts like a series.
 
 def _hlines_record(args, kw):
-    ys, xmins, xmaxs = _broadcast_three(args[0], args[1], args[2])
+    ys, xmins, xmaxs = _broadcast(args[0], args[1], args[2])
     return {"type": "hlines", "ys": ys, "xmins": xmins, "xmaxs": xmaxs, "opts": kw}
 
 
 def _vlines_record(args, kw):
-    xs, ymins, ymaxs = _broadcast_three(args[0], args[1], args[2])
+    xs, ymins, ymaxs = _broadcast(args[0], args[1], args[2])
     return {"type": "vlines", "xs": xs, "ymins": ymins, "ymaxs": ymaxs, "opts": kw}
 
 

@@ -10,6 +10,7 @@ import math
 from ._spec import _D, _DASH
 from ._png import encode_rgb
 from .colormaps import colormap_lut, _ContinuousNorm
+from .colors import _resolve_color
 
 
 def _to_pylist(obj):
@@ -176,12 +177,11 @@ def _artist_axvline(a, xs_, ys_, iw, ih, col):
             f'stroke="{col}" stroke-width="{lw}"{_op(alpha)}{da}/>')
 
 
-def _broadcast_three(a0, a1, a2):
-    """For hlines/vlines: each input is scalar or list-like; broadcast to a
-    common length. Length-1 lists broadcast like scalars; mismatched
-    longer lengths raise."""
+def _broadcast(*vals):
+    """Each input is scalar or list-like; broadcast to a common length.
+    Length-1 lists broadcast like scalars; mismatched longer lengths raise."""
     arrs = []
-    for v in (a0, a1, a2):
+    for v in vals:
         if hasattr(v, "__iter__") and not isinstance(v, str):
             arrs.append(_to_pylist(v))
         else:
@@ -194,8 +194,7 @@ def _broadcast_three(a0, a1, a2):
         elif len(a) == n:
             out.append(list(a))
         else:
-            raise ValueError(
-                f"hlines/vlines: cannot broadcast length {len(a)} to {n}")
+            raise ValueError(f"cannot broadcast length {len(a)} to {n}")
     return out
 
 
@@ -270,6 +269,66 @@ def _artist_fill_between(a, xs_, ys_, col):
     d = "M" + "L".join(f"{p[0]:.2f},{p[1]:.2f}" for p in pts) + "Z"
     alpha = a["opts"].get("alpha", _D["fill_alpha"])
     return f'<path d="{d}" fill="{col}"{_op(alpha)}/>'
+
+
+def _stroke_attrs(a, ctx_color):
+    """Shared edge/fill resolution for rect and polygon. Returns
+    `(fill_attr, stroke_attr)` — strings ready to splice into the SVG tag.
+    `fill=False` switches the fill off entirely; `edgecolor=` overrides the
+    artist color for the outline; `linewidth=` controls outline width
+    (default spec linewidth)."""
+    opts = a["opts"]
+    fill = opts.get("fill", True)
+    edge = opts.get("edgecolor")
+    lw = opts.get("linewidth", _D["linewidth"])
+    alpha = opts.get("alpha", _D["bar_alpha"])
+    if fill:
+        fill_attr = f'fill="{ctx_color}"{_op(alpha)}'
+    else:
+        fill_attr = 'fill="none"'
+    if edge is not None:
+        ec = _resolve_color(edge)
+        stroke_attr = f' stroke="{ec}" stroke-width="{lw}"'
+    elif not fill:
+        # No fill and no explicit edge: draw the outline in the artist color
+        # so the shape is visible at all (matplotlib's `fill=False` idiom).
+        stroke_attr = f' stroke="{ctx_color}" stroke-width="{lw}"'
+    else:
+        stroke_attr = ''
+    return fill_attr, stroke_attr
+
+
+def _artist_rect(a, xs_, ys_, col):
+    """Scale-aware axis-aligned rectangles. `xs`, `ys`, `ws`, `hs` are
+    pre-broadcast to a common length in `record`. Each rect spans
+    `(x, y) -> (x + w, y + h)` in data coords; pixel-space sign is fixed
+    up so flipped y-axes (imshow origin='upper') still render correctly."""
+    fill_attr, stroke_attr = _stroke_attrs(a, col)
+    out = []
+    for x, y, w, h in zip(a["xs"], a["ys"], a["ws"], a["hs"]):
+        px0 = xs_(x); px1 = xs_(x + w)
+        py0 = ys_(y); py1 = ys_(y + h)
+        if not all(math.isfinite(v) for v in (px0, px1, py0, py1)):
+            continue
+        x_l = min(px0, px1); y_t = min(py0, py1)
+        pw = abs(px1 - px0); ph = abs(py1 - py0)
+        if pw <= 0 or ph <= 0:
+            continue
+        out.append(f'<rect x="{x_l:.2f}" y="{y_t:.2f}" width="{pw:.2f}" '
+                   f'height="{ph:.2f}" {fill_attr}{stroke_attr}/>')
+    return "".join(out)
+
+
+def _artist_polygon(a, xs_, ys_, col):
+    """Closed polygon from `(xs, ys)` vertices. Always emits a closed path
+    (trailing `Z`) — matches matplotlib's `plt.fill()` which auto-closes."""
+    pts = [(xs_(x), ys_(y)) for x, y in zip(a["xs"], a["ys"])]
+    pts = [(px, py) for px, py in pts if math.isfinite(px) and math.isfinite(py)]
+    if len(pts) < 3:
+        return ""
+    fill_attr, stroke_attr = _stroke_attrs(a, col)
+    d = "M" + "L".join(f"{p[0]:.2f},{p[1]:.2f}" for p in pts) + "Z"
+    return f'<path d="{d}" {fill_attr}{stroke_attr}/>'
 
 
 def _artist_imshow(a, xs_, ys_, col):
