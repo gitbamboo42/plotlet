@@ -37,9 +37,9 @@ from . import builtin_artists  # noqa: F401  — registers built-ins on import
 
 # AI-readable SVG attrs — see docs/AI_ATTRS.md. Every plotlet SVG carries
 # `data-plotlet-*` attributes describing plot type, axes, scales, ranges,
-# and series labels. Schema is semver-stable from 0.3.0 forward, declared
-# via `data-plotlet-schema` on the root.
-_SCHEMA_VERSION = "1"
+# and series labels. Schema is semver-stable, declared via
+# `data-plotlet-schema` on the root.
+_SCHEMA_VERSION = "2"
 # Read from package metadata (pyproject.toml) so there's a single source
 # of truth for the version. Independent of `__init__.__version__` to
 # avoid a circular import.
@@ -673,11 +673,11 @@ def _build_xy_scales(st, iw, ih, panel_opts: _PanelOpts):
 
 
 # ---------------------------------------------------------------------------
-# AI-readable SVG attrs — schema and helpers (0.3.0)
+# AI-readable SVG attrs — schema and helpers
 # ---------------------------------------------------------------------------
 # Every plotlet SVG carries `data-plotlet-*` attributes describing plot type,
-# axes, scales, ranges, and series labels. Schema is semver-stable from 0.3.0
-# forward, declared via `data-plotlet-schema="1"` on the root.
+# axes, scales, ranges, and series labels. Schema is semver-stable, declared
+# via `data-plotlet-schema` on the root.
 
 def _attr_str(v) -> str:
     """Stringify a value for a data-plotlet-* attribute. floats use repr()

@@ -185,10 +185,10 @@ out = tree | hm1 | hm2
 out.show()
 
 # ---- 5. 2x2 small-multiples
-a = pt.chart(); a.plot(x, y1)
-b = pt.chart(); b.plot(x, y2)
-c = pt.chart(); c.plot(x, y3)
-d = pt.chart(); d.plot(x, y4)
+a = pt.chart(); a.line(x, y1)
+b = pt.chart(); b.line(x, y2)
+c = pt.chart(); c.line(x, y3)
+d = pt.chart(); d.line(x, y4)
 out = (a | b) / (c | d)
 out.show()
 ```
@@ -254,10 +254,10 @@ out.show()
 
 # ---- 5. 2x2 small-multiples
 out = pt.layout(rows=2, cols=2)
-out[0, 0].plot(x, y1)
-out[0, 1].plot(x, y2)
-out[1, 0].plot(x, y3)
-out[1, 1].plot(x, y4)
+out[0, 0].line(x, y1)
+out[0, 1].line(x, y2)
+out[1, 0].line(x, y3)
+out[1, 1].line(x, y4)
 out.show()
 ```
 

@@ -390,9 +390,9 @@ class Chart:
     def line(self, *args, x=None, y=None, hue=None, data=None, **opts):
         self._require_leaf("line")
         if x is not None or y is not None:
-            self._tabular("line", "plot", data, x, y, hue, opts)
+            self._tabular("line", "line", data, x, y, hue, opts)
         else:
-            self._record("plot", *args, **opts)
+            self._record("line", *args, **opts)
         return self
 
     def scatter(self, *args, x=None, y=None, hue=None, data=None, **opts):

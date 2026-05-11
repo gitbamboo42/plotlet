@@ -10,8 +10,8 @@ title is clipping, whether the axis range covers the data, whether the
 legend overlaps the data area, whether the colormap is discriminable.
 The structural metadata below is what makes those questions answerable.
 
-The schema is semver-stable from 0.3.0, declared via
-`data-plotlet-schema="1"` on the root `<svg>`.
+The schema is semver-stable, declared via `data-plotlet-schema="2"`
+on the root `<svg>`.
 
 ---
 
@@ -71,7 +71,7 @@ Common attrs (always emitted):
 
 | Attribute              | Example         |
 |------------------------|-----------------|
-| `data-plotlet-type`    | `"plot"`, `"bar"`, `"hist"`, `"imshow"`, … |
+| `data-plotlet-type`    | `"line"`, `"bar"`, `"hist"`, `"imshow"`, … |
 | `data-plotlet-index`   | `"0"`, `"1"`, … |
 | `data-plotlet-label`   | `"actual"` (only if user passed `label=`) |
 | `data-plotlet-color`   | `"#1f77b4"` (resolved hex) |
@@ -80,7 +80,7 @@ Type-specific attrs:
 
 | Artist          | Type-specific attrs                                                        |
 |-----------------|-----------------------------------------------------------------------------|
-| `plot`          | `n`, `x-min`, `x-max`, `y-min`, `y-max`, `linestyle`, `marker`              |
+| `line`          | `n`, `x-min`, `x-max`, `y-min`, `y-max`, `linestyle`, `marker`              |
 | `scatter`       | `n`, `x-min`, `x-max`, `y-min`, `y-max`, `marker`                            |
 | `bar`           | `n`, `y-min`, `y-max`                                                        |
 | `hist`          | `n` (raw observations), `bins`, `x-min`, `x-max`, `count-max`                |
@@ -150,17 +150,17 @@ import plotlet as pt
 
 c = pt.chart()
 c.title("Daily revenue").xlabel("day").ylabel("USD")
-c.plot([1, 2, 3, 4], [10.5, 12.3, 11.0, 14.7], label="actual")
+c.line([1, 2, 3, 4], [10.5, 12.3, 11.0, 14.7], label="actual")
 print(c.to_svg())
 ```
 
 What an AI sees in the output (skipping geometry):
 
 ```
-SVG kind=figure plotlet=0.3.1 schema=1
+SVG kind=figure plotlet=0.4.0 schema=2
   PANEL title="Daily revenue" xlabel=day ylabel=USD
         xscale=linear xlim=1.0,4.0  yscale=linear ylim=10.0,15.0
-    ARTIST 0 type=plot label=actual color=#1f77b4
+    ARTIST 0 type=line label=actual color=#1f77b4
            n=4 x-min=1 x-max=4 y-min=10.5 y-max=14.7
 ```
 

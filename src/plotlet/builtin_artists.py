@@ -44,7 +44,7 @@ def _line_swatch(a, ctx, x0, y_mid, default_lw):
             f'stroke-width="{a["opts"].get("linewidth", default_lw)}"{da}/>')
 
 
-def _plot_legend_swatch(a, ctx, x0, y_mid):
+def _line_legend_swatch(a, ctx, x0, y_mid):
     out = _line_swatch(a, ctx, x0, y_mid, ctx.defaults["linewidth"])
     if a["opts"].get("marker"):
         sw = _LEGSPEC["swatch_width"]
@@ -102,7 +102,7 @@ def _xy_minmax(xs, ys):
     return out
 
 
-def _plot_data_attrs(a):
+def _line_data_attrs(a):
     out = {"n": len(a["xs"])}
     out.update(_xy_minmax(a["xs"], a["ys"]))
     if a["opts"].get("linestyle"):
@@ -223,17 +223,17 @@ def _imshow_data_attrs(a):
 
 
 
-# --- plot (line) ------------------------------------------------------------
+# --- line -------------------------------------------------------------------
 
 add_artist(ArtistSpec(
-    name="plot",
-    record=lambda args, kw: {"type": "plot", "xs": _to_pylist(args[0]),
+    name="line",
+    record=lambda args, kw: {"type": "line", "xs": _to_pylist(args[0]),
                               "ys": _to_pylist(args[1]), "opts": kw},
     xdomain=_xs_of,
     ydomain=_ys_of,
     draw=lambda a, ctx: _artist_plot(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_swatch=_plot_legend_swatch,
-    data_attrs=_plot_data_attrs,
+    legend_swatch=_line_legend_swatch,
+    data_attrs=_line_data_attrs,
 ))
 
 
@@ -292,7 +292,7 @@ add_artist(ArtistSpec(
     xdomain=_xs_of,
     ydomain=_y1y2_of,
     draw=lambda a, ctx: _artist_fill_between(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_swatch=_plot_legend_swatch,
+    legend_swatch=_line_legend_swatch,
     data_attrs=_fill_between_data_attrs,
 ))
 
