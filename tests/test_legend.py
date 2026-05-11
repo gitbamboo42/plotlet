@@ -26,8 +26,8 @@ near-duplicate baselines:
   legend_overrides    — three sources with names={a: "Custom", b: None}
                         exercising the rename + hide-header paths.
   legend_flat_fixed   — group_by_chart=False flatten + explicit
-                        `canvas_width=` / `canvas_height=` override of
-                        the auto-sized rect.
+                        `canvas_width=` / `canvas_height=` on the legend
+                        leaf, overriding the content-driven auto-size.
   legend_joined_grid  — ComplexHeatmap-shaped grid where the legend cell
                         sits next to a join-pair-collapsed assembly. Tests
                         that legend_gap (6 px) coexists with share-pair
@@ -56,15 +56,15 @@ def _matrix():
 
 def legend_auto_grouped():
     xs = _xs()
-    a = pt.chart(title="alpha", canvas_width=240, canvas_height=200)
+    a = pt.chart(title="alpha", data_width=180, data_height=140)
     a.line(xs, [math.sin(x) for x in xs], label="sin")
-    b = pt.chart(title="beta", canvas_width=240, canvas_height=200)
+    b = pt.chart(title="beta", data_width=180, data_height=140)
     b.line(xs, [math.cos(x) for x in xs], label="cos")
     return (a | b).legend()
 
 
 def legend_continuous():
-    hm = pt.chart(title="heat", canvas_width=380, canvas_height=240)
+    hm = pt.chart(title="heat", data_width=320, data_height=180)
     hm.imshow(_matrix(), cmap="viridis",
               legend={"label": "intensity", "ticks": [0.0, 0.5, 1.0]})
     return hm | pt.legend(hm)
@@ -72,9 +72,9 @@ def legend_continuous():
 
 def legend_mixed():
     xs = _xs()
-    im = pt.chart(title="heat", canvas_width=240, canvas_height=200)
+    im = pt.chart(title="heat", data_width=180, data_height=140)
     im.imshow(_matrix(), cmap="plasma")
-    lines = pt.chart(title="trace", canvas_width=240, canvas_height=200)
+    lines = pt.chart(title="trace", data_width=180, data_height=140)
     lines.line(xs, [math.sin(x) for x in xs], label="sin")
     lines.line(xs, [math.cos(x) for x in xs], label="cos")
     return im | lines | pt.legend()
@@ -82,20 +82,23 @@ def legend_mixed():
 
 def legend_overrides():
     xs = _xs()
-    a = pt.chart(title="alpha", canvas_width=160, canvas_height=200)
+    a = pt.chart(title="alpha", data_width=100, data_height=140)
     a.line(xs, [math.sin(x) for x in xs], label="sin")
-    b = pt.chart(title="beta", canvas_width=160, canvas_height=200)
+    b = pt.chart(title="beta", data_width=100, data_height=140)
     b.line(xs, [math.cos(x) for x in xs], label="cos")
-    c = pt.chart(title="gamma", canvas_width=160, canvas_height=200)
+    c = pt.chart(title="gamma", data_width=100, data_height=140)
     c.line(xs, [math.sin(x) + 0.5 for x in xs], label="sin+0.5")
     return a | b | c | pt.legend(a, b, c, names={a: "Custom", b: None})
 
 
 def legend_flat_fixed():
+    # `pt.legend(canvas_width=…, canvas_height=…)` sets explicit canvas
+    # dims on the legend leaf (legends don't have data axes — canvas IS
+    # the dimensional primitive). Overrides the content-driven auto-size.
     xs = _xs()
-    a = pt.chart(title="alpha", canvas_width=220, canvas_height=200)
+    a = pt.chart(title="alpha", data_width=160, data_height=140)
     a.line(xs, [math.sin(x) for x in xs], label="sin")
-    b = pt.chart(title="beta", canvas_width=220, canvas_height=200)
+    b = pt.chart(title="beta", data_width=160, data_height=140)
     b.line(xs, [math.cos(x) for x in xs], label="cos")
     return a | b | pt.legend(a, b, group_by_chart=False,
                              canvas_width=140, canvas_height=160)
@@ -106,12 +109,12 @@ def legend_joined_grid():
     # (row 1). Both share-pairs are gap-collapsed (0 px). Legend sits to
     # the right of main with legend_gap (6 px) — distinct from the
     # share-pair joint.
-    main = pt.chart(title="main", canvas_width=380, canvas_height=240)
+    main = pt.chart(title="main", data_width=320, data_height=180)
     main.imshow(_matrix(), cmap="viridis", legend={"label": "value"})
-    top  = pt.chart(title="top",  canvas_width=380, canvas_height=60)
+    top  = pt.chart(title="top",  data_width=320, data_height=24)
     top.line([0, 1, 2, 3, 4, 5, 6, 7],
              [3, 1, 2, 4, 1, 2, 3, 1], label="counts")
-    tree = pt.chart(title="tree", canvas_width=80,  canvas_height=240)
+    tree = pt.chart(title="tree", data_width=60,  data_height=180)
     tree.line([0, 1, 2], [2, 3, 4])
     return pt.grid([
         [None, top,  None        ],
@@ -123,7 +126,7 @@ def legend_gap_override():
     # `pt.legend(..., legend_gap=N)` overrides the default 6 px separation
     # between legend and source. Here we widen it to 24 — the legend sits
     # well clear of `hm`, distinct from a share-pair joint (which would be 0).
-    hm = pt.chart(title="hm", canvas_width=300, canvas_height=200)
+    hm = pt.chart(title="hm", data_width=240, data_height=140)
     hm.imshow(_matrix(), cmap="viridis")
     return hm | pt.legend(hm, legend_gap=24)
 

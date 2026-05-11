@@ -128,14 +128,26 @@ def main() -> int:
     _check("mixed str/int data_width",  f_mix._data_width,  384, failures)
     _check("mixed str/int data_height", f_mix._data_height, 300, failures)
 
-    # canvas_* path with string.
-    f_canv = pt.chart(canvas_width="6in", canvas_height="4in")
-    _check("canvas_width via str",  f_canv._canvas_width,  576, failures)  # 6 * 96
-    _check("canvas_height via str", f_canv._canvas_height, 384, failures)  # 4 * 96
+    # `pt.chart(canvas_width=…)` no longer exists (removed in 0.4.0 —
+    # use `data_width=` to size the data region, or `.fit(canvas_width=…)`
+    # on a composed chart to scale the data region until the figure fits
+    # the target canvas).
+    _check_raises("canvas_width on pt.chart raises",
+                  lambda: pt.chart(canvas_width="6in"), TypeError, failures)
+    _check_raises("canvas_height on pt.chart raises",
+                  lambda: pt.chart(canvas_height=400), TypeError, failures)
 
-    # Mutual-exclusion still fires with strings.
-    _check_raises("data + canvas mutex with strings",
-                  lambda: pt.chart(data_width="4in", canvas_width="6in"),
+    # `.fit()` accepts unit-suffixed strings just like data_width=.
+    fit_str = pt.chart(data_width=400, data_height=240).fit(canvas_width="6in")
+    fit_int = pt.chart(data_width=400, data_height=240).fit(canvas_width=576)
+    if fit_str.to_svg() != fit_int.to_svg():
+        failures.append("FAIL: .fit() with str vs int canvas_width differ")
+
+    # `.fit()` rejects empty calls and non-positive dims.
+    _check_raises(".fit() with no args raises",
+                  lambda: pt.chart(data_width=100).fit(), ValueError, failures)
+    _check_raises(".fit() with zero canvas_width raises",
+                  lambda: pt.chart(data_width=100).fit(canvas_width=0),
                   ValueError, failures)
 
     # SVG byte-identity: string input → same SVG as numeric equivalent.

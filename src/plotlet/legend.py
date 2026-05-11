@@ -83,10 +83,13 @@ def legend(*sources: Chart, names: dict | None = None,
             )
     # Canvas size starts as a 1×1 placeholder; `_size_legends` overrides
     # it from harvested content at render time, unless the user passed
-    # an explicit canvas_*.
-    leaf = Chart(canvas_width=canvas_width if canvas_width is not None else 1,
-                 canvas_height=canvas_height if canvas_height is not None else 1)
-    leaf._leaf_kind = "legend"
+    # an explicit canvas_*. Legend leaves have no data region — the
+    # canvas IS the dimensional primitive (see `Chart._new_sized_leaf`).
+    from .core import _to_px
+    cw = _to_px(canvas_width) if canvas_width is not None else 1
+    ch = _to_px(canvas_height) if canvas_height is not None else 1
+    leaf = Chart._new_sized_leaf(canvas_width=cw, canvas_height=ch,
+                                 leaf_kind="legend")
     leaf._legend_sources = list(sources)
     leaf._legend_names = dict(names) if names else {}
     leaf._legend_group_by_chart = group_by_chart

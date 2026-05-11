@@ -61,9 +61,11 @@ def layout_diagram(chart: Chart) -> Chart:
     W, H = _figure_size(src_svg)
     inner = _render_diagram_inner(src_svg, W, H)
 
-    leaf = Chart(canvas_width=W, canvas_height=H,
-                 margin={"left": 0, "right": 0, "top": 0, "bottom": 0})
-    leaf._leaf_kind = "diagram"
+    leaf = Chart._new_sized_leaf(
+        canvas_width=W, canvas_height=H,
+        leaf_kind="diagram",
+        margin={"left": 0, "right": 0, "top": 0, "bottom": 0},
+    )
     leaf._diagram_inner = inner
     return leaf
 

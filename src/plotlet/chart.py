@@ -33,7 +33,7 @@ from pathlib import Path
 from ._spec import _SIZESPEC
 from .core import (
     _FRAME_METHODS, _replay, _effective_margin, _render,
-    _to_px, _spec_canvas_dims, _scaled_margin,
+    _to_px,
 )
 from .artists import _to_pylist, _to_2d_pylist
 from .registry import get_artist, all_artist_names
@@ -43,8 +43,6 @@ class Chart:
     def __init__(self, data=None, *,
                  data_width: int | float | str | None = None,
                  data_height: int | float | str | None = None,
-                 canvas_width: int | float | str | None = None,
-                 canvas_height: int | float | str | None = None,
                  margin: dict | None = None,
                  title: str | None = None,
                  xlabel: str | None = None, ylabel: str | None = None,
@@ -57,8 +55,14 @@ class Chart:
         if "width" in kwargs or "height" in kwargs:
             raise TypeError(
                 "pt.chart() no longer accepts `width=` / `height=` (changed in 0.2.0). "
-                "Pass `data_width=` / `data_height=` for the data region (preferred) "
-                "or `canvas_width=` / `canvas_height=` for the full SVG canvas."
+                "Pass `data_width=` / `data_height=` for the data region."
+            )
+        if "canvas_width" in kwargs or "canvas_height" in kwargs:
+            raise TypeError(
+                "pt.chart() no longer accepts `canvas_width=` / `canvas_height=` "
+                "(removed in 0.4.0). Use `data_width=` / `data_height=` to size the "
+                "data region; if you need the rendered SVG to fit a specific canvas, "
+                "chain `.fit(canvas_width=…, canvas_height=…)` after composition."
             )
         if "share_x" in kwargs or "share_y" in kwargs:
             raise TypeError(
@@ -72,41 +76,19 @@ class Chart:
         # ---- Render-state init (leaf-only fields used by core._render) ----
         # Resolve unit-suffixed strings (`"4in"`, `"10cm"`, …) once at the
         # boundary so internal math stays in pixels.
-        data_width    = _to_px(data_width)
-        data_height   = _to_px(data_height)
-        canvas_width  = _to_px(canvas_width)
-        canvas_height = _to_px(canvas_height)
-
-        data_set   = (data_width   is not None) or (data_height   is not None)
-        canvas_set = (canvas_width is not None) or (canvas_height is not None)
-        if data_set and canvas_set:
-            raise ValueError(
-                "Pass either data_width/data_height (the data region — preferred) "
-                "or canvas_width/canvas_height (the full SVG canvas), not both."
-            )
+        data_width  = _to_px(data_width)
+        data_height = _to_px(data_height)
 
         self._calls: list[tuple[str, list, dict]] = []
         self._margin = dict(margin) if margin is not None else dict(_SIZESPEC["margin"])
 
-        if canvas_set:
-            # Canvas path: user picked the SVG canvas; effective margin scales
-            # by canvas/spec_canvas (legacy 0.1.x behavior). Data region falls
-            # out as canvas - effective margin.
-            spec_cw, spec_ch = _spec_canvas_dims()
-            self._canvas_width  = canvas_width  if canvas_width  is not None else spec_cw
-            self._canvas_height = canvas_height if canvas_height is not None else spec_ch
-            self._canvas_explicit = True
-            M_eff = _scaled_margin(self._margin, self._canvas_width, self._canvas_height)
-            self._data_width  = self._canvas_width  - M_eff["left"] - M_eff["right"]
-            self._data_height = self._canvas_height - M_eff["top"]  - M_eff["bottom"]
-        else:
-            # Data path (default): user picked the data region exactly. Margin
-            # is used unscaled (only floored). Canvas falls out as data + margin.
-            self._data_width  = data_width  if data_width  is not None else _SIZESPEC["data_width"]
-            self._data_height = data_height if data_height is not None else _SIZESPEC["data_height"]
-            self._canvas_width  = self._data_width  + self._margin["left"] + self._margin["right"]
-            self._canvas_height = self._data_height + self._margin["top"]  + self._margin["bottom"]
-            self._canvas_explicit = False
+        # User picks the data region exactly. Margin is used unscaled (only
+        # floored). Canvas falls out as data + margin; render-time pre-pass
+        # may grow the margin further to fit long tick/axis labels.
+        self._data_width  = data_width  if data_width  is not None else _SIZESPEC["data_width"]
+        self._data_height = data_height if data_height is not None else _SIZESPEC["data_height"]
+        self._canvas_width  = self._data_width  + self._margin["left"] + self._margin["right"]
+        self._canvas_height = self._data_height + self._margin["top"]  + self._margin["bottom"]
         # Snapshot the user's originally-requested data dims. The render-time
         # share-scaling pre-pass mutates `_data_width` / `_data_height` to
         # coordinate sibling sizes; restoring from these on re-render keeps
@@ -176,6 +158,41 @@ class Chart:
         p._legend_names = {}
         p._legend_group_by_chart = True
         return p
+
+    @classmethod
+    def _new_sized_leaf(cls, *,
+                        canvas_width: int, canvas_height: int,
+                        leaf_kind: str,
+                        margin: dict | None = None) -> "Chart":
+        """Construct a non-data leaf with an explicitly-sized canvas.
+        Used internally by `pt.legend()` and `pt.layout_diagram()` —
+        legends and diagrams have no axes so sizing isn't expressed as
+        a data region; the canvas IS the primitive. Bypasses the
+        body-first margin path in `__init__`."""
+        leaf = cls.__new__(cls)
+        leaf._calls = []
+        leaf._margin = dict(margin) if margin is not None else dict(_SIZESPEC["margin"])
+        leaf._canvas_width  = int(canvas_width)
+        leaf._canvas_height = int(canvas_height)
+        # Non-data leaves carry no real data region; keep zeros so any
+        # accidental read produces a zero contribution.
+        leaf._data_width = 0
+        leaf._data_height = 0
+        leaf._orig_data_width = 0
+        leaf._orig_data_height = 0
+        leaf._data = None
+        leaf._parent = None
+        leaf._layout_kind = None
+        leaf._children = []
+        leaf._share_x = None
+        leaf._share_y = None
+        leaf._gap = None
+        leaf._inner_gap = None
+        leaf._leaf_kind = leaf_kind
+        leaf._legend_sources = []
+        leaf._legend_names = {}
+        leaf._legend_group_by_chart = True
+        return leaf
 
     @property
     def _is_parent(self) -> bool:
@@ -505,15 +522,12 @@ class Chart:
         if self._leaf_kind == "diagram":
             from .layout_diagram import _render_standalone_diagram
             return _render_standalone_diagram(self)
-        # Data leaf. Canvas-path keeps its promised canvas; data-path canvas
-        # grows to fit the (possibly measure-driven-expanded) margin.
+        # Data leaf. Canvas grows to fit the (possibly measure-driven-
+        # expanded) margin — data region stays at the user-requested size.
         st = _replay(self._calls)
         M_eff = _effective_margin(self, st)
-        if self._canvas_explicit:
-            W, H = self._canvas_width, self._canvas_height
-        else:
-            W = self._data_width  + M_eff["left"] + M_eff["right"]
-            H = self._data_height + M_eff["top"]  + M_eff["bottom"]
+        W = self._data_width  + M_eff["left"] + M_eff["right"]
+        H = self._data_height + M_eff["top"]  + M_eff["bottom"]
         return _render(st, W, H, M_eff)
 
     def to_html(self, full_page: bool = False) -> str:
@@ -545,6 +559,58 @@ class Chart:
         Path(path).write_text(self.to_html(full_page=True))
         return self
 
+    def fit(self, canvas_width=None, canvas_height=None) -> "Chart":
+        """Return a copy of this chart with data dimensions scaled so the
+        rendered SVG fits within `canvas_width × canvas_height` pixels.
+
+        Layout-aware: only data regions scale. Tick labels, titles, axis
+        labels, spine widths, font sizes, and panel gaps stay at their
+        absolute pixel sizes — the result keeps the publication look at
+        every size, just with a smaller or larger data area.
+
+        Aspect ratio is preserved (the binding constraint wins). Pass
+        one dimension to scale uniformly to that axis; pass both to
+        fit-within W × H. Accepts pixels (``400``) or unit-suffixed
+        strings (``"4in"``, ``"10cm"``, ``"72pt"``).
+
+        Returns a fresh Chart; the original is unchanged."""
+        from copy import deepcopy
+        from .layout import _natural_size, _data_total_size
+        W = _to_px(canvas_width)
+        H = _to_px(canvas_height)
+        if W is None and H is None:
+            raise ValueError(
+                "Chart.fit() requires at least one of canvas_width=, canvas_height=."
+            )
+        if (W is not None and W <= 0) or (H is not None and H <= 0):
+            raise ValueError("Chart.fit() canvas dimensions must be positive.")
+        chart = deepcopy(self)
+        chart._parent = None  # copy may inherit a stale parent ref
+        # Direct solve. Natural figure = data_total + overhead (margins,
+        # gaps, non-data leaves). Solving target = s * data_total +
+        # overhead for s gives the exact factor in one pass — unless the
+        # overhead changes with scale (it can, via measure-driven tick
+        # label growth). Iterating absorbs that residual; in practice
+        # 2–3 passes converge to within a pixel.
+        for _ in range(6):
+            W_nat, H_nat = _natural_size(chart)
+            D_w, D_h = _data_total_size(chart)
+            ratios = []
+            if W is not None and D_w > 0:
+                overhead_w = W_nat - D_w
+                ratios.append(max(1e-3, (W - overhead_w) / D_w))
+            if H is not None and D_h > 0:
+                overhead_h = H_nat - D_h
+                ratios.append(max(1e-3, (H - overhead_h) / D_h))
+            if not ratios:
+                # Nothing to scale (e.g. a sole legend leaf).
+                break
+            s = min(ratios)
+            if abs(s - 1.0) < 5e-4:
+                break
+            _scale_data_dims(chart, s)
+        return chart
+
     def _require_render_root(self):
         if self._parent is not None:
             raise RuntimeError(
@@ -555,6 +621,27 @@ class Chart:
 def chart(data=None, **opts) -> Chart:
     """Construct a table-bound Chart. See `Chart` for keyword arguments."""
     return Chart(data, **opts)
+
+
+def _scale_data_dims(node: Chart, s: float) -> None:
+    """Multiply every data leaf's `_data_width` / `_data_height` by `s`,
+    rederiving `_canvas_*`. Non-data leaves (legend, diagram) keep their
+    explicitly-sized canvases — their dimensional primitive isn't the
+    data region. Used by `Chart.fit()` after measuring natural size."""
+    if not node._is_parent:
+        if node._leaf_kind == "data":
+            new_w = max(1, int(round(node._data_width * s)))
+            new_h = max(1, int(round(node._data_height * s)))
+            node._data_width = new_w
+            node._data_height = new_h
+            node._orig_data_width = new_w
+            node._orig_data_height = new_h
+            node._canvas_width  = new_w + node._margin["left"] + node._margin["right"]
+            node._canvas_height = new_h + node._margin["top"]  + node._margin["bottom"]
+        return
+    for child in node._children:
+        if child is not None:
+            _scale_data_dims(child, s)
 
 
 def _normalize_share_mode(axis: str, mode) -> str:

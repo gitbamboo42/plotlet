@@ -212,7 +212,7 @@ def chart_hide_yticks():
     # Metadata-strip pattern: numeric y for positioning, but ticks suppressed
     # via the matplotlib idiom yticks([]).
     df = {"sample": ["S1", "S2", "S3", "S4"], "stage": [0.5] * 4}
-    c = pt.chart(df, canvas_width=400, canvas_height=80, title="metadata strip",
+    c = pt.chart(df, data_width=320, data_height=24, title="metadata strip",
                  ylabel="stage")
     c.bar(x="sample", y="stage", color="C1")
     c.ylim(0, 1)
@@ -224,7 +224,7 @@ def chart_xticks_rotation():
     # Rotate category labels that would crowd horizontally.
     df = {"month": ["Jan", "Feb", "Mar", "Apr", "May"],
           "count": [12, 7, 19, 14, 9]}
-    c = pt.chart(df, canvas_width=400, canvas_height=260,
+    c = pt.chart(df, data_width=320, data_height=180,
                  title="rotated x labels", ylabel="count")
     c.bar(x="month", y="count", color="C0")
     c.xticks(rotation=45)
@@ -268,7 +268,7 @@ def chart_xticks_explicit():
 def chart_category_padding_zero():
     # Contiguous track: cells butt up with no inner gap.
     df = {"x": ["a", "b", "c", "d", "e"], "v": [1, 2, 3, 2, 1]}
-    c = pt.chart(df, canvas_width=400, canvas_height=120, title="padding=0 (contiguous)")
+    c = pt.chart(df, data_width=320, data_height=60, title="padding=0 (contiguous)")
     c.xscale("category", padding=0)
     c.bar(x="x", y="v", color="C0")
     return c

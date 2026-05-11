@@ -127,7 +127,7 @@ All visual constants — colors, font sizes, spine widths, default alphas, legen
 Each leaf `Chart` accumulates:
 
 - `_calls` — list of recorded artist + styling calls
-- `_data_width`, `_data_height`, `_canvas_width`, `_canvas_height`, `_margin`, `_canvas_explicit` — figure dimensions. The user-facing primitive is the *data region* (`data_width=` / `data_height=`); canvas is derived from data + margin. The legacy canvas-first form (`canvas_width=` / `canvas_height=`) sets `_canvas_explicit=True` and triggers margin scaling at render time. The two are mutually exclusive.
+- `_data_width`, `_data_height`, `_canvas_width`, `_canvas_height`, `_margin` — figure dimensions. The user-facing primitive is the *data region* (`data_width=` / `data_height=`); canvas is derived from data + margin (grown to fit content at render time). To fit a composition into a specific SVG canvas, users chain `.fit(canvas_width=…, canvas_height=…)` after composing — it rescales each leaf's data dims layout-aware (fonts, spines, margins, and gaps stay at their absolute pixel sizes). Canvas-first sizing was removed in 0.4.0. Non-data leaves (legend, diagram) bypass the body-first path: they get explicit canvas dims via `Chart._new_sized_leaf(...)` because they have no data region.
 
 Parent Charts (composed via `|`, `/`, `pt.grid`) carry no leaf state — they only hold `_children` and `_layout_kind`. Their dimensions emerge at render time from summing their children plus gaps.
 

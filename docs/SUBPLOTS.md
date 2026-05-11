@@ -27,14 +27,16 @@ parent's leaf tree builds one `_AxisDescriptor` (kind + domain) per
 share-equivalence class, every sharer adopts its source's domain, the
 matching inner margin shrinks to `layout.inner_gap`, and inner tick
 labels redundant with a sharing sibling are dropped (spines and tick
-marks remain so each panel still reads as a closed rectangle). Body-
-first leaves (`pt.chart(data_width=...)`, the recommended form) honor
-their data region exactly — margins are floored at `spec.size.
+marks remain so each panel still reads as a closed rectangle). Leaves
+are body-first: `pt.chart(data_width=..., data_height=...)` declares
+the data region exactly, margins are floored at `spec.size.
 margin_floor` and grow to fit content (long titles, wide y-tick
 labels) via measure-driven margin computation, so the data region
-never gets squeezed by overflowing text. Canvas-first leaves
-(`canvas_width=...`) keep the legacy 0.1.x behavior — margins scale
-by panel-canvas/spec-canvas, text overflow is the user's call. Within
+never gets squeezed by overflowing text. To target a specific SVG
+canvas size, chain `.fit(canvas_width=…, canvas_height=…)` after
+composing — it rescales data regions while keeping fonts, spines,
+and margins at their absolute pixel sizes (layout-aware scaling).
+Within
 a grid, the `hide_*` margin flag propagates column-wise and row-wise
 so panels in the same column/row stay x-aligned (a top track sized
 by `share_x` lines up with the central chart it sits above), and a
@@ -302,12 +304,14 @@ Recommended:
   (raises); each chart has at most one parent (single-parent
   invariant, enforced at composition time).
 - **Sizing.** Body-first per-leaf sizing: `pt.chart(data_width=…,
-  data_height=…)` (or `canvas_width=`/`canvas_height=` for the legacy
-  fixed-canvas form). Sum-sizes composition derives the parent's
-  total canvas; ratios are expressed by setting per-leaf data widths.
-  Margins grow to fit content (measure-driven), and within a grid the
-  per-column/row coordination keeps body-first cells' data regions
-  aligned across rows and columns.
+  data_height=…)` is the only primitive. Sum-sizes composition derives
+  the parent's total canvas; ratios are expressed by setting per-leaf
+  data widths. Margins grow to fit content (measure-driven), and within
+  a grid the per-column/row coordination keeps cells' data regions
+  aligned across rows and columns. To target a specific final SVG
+  canvas, chain `.fit(canvas_width=…, canvas_height=…)` after composing —
+  it rescales data regions layout-aware (fonts, spines, margins, and
+  gaps stay at their absolute pixel sizes).
 
 ---
 
@@ -467,16 +471,17 @@ Not a roadmap — just the dependency order:
 
    Two additional tweaks that turned out to matter:
 
-   - **Margin policy depends on path.** Body-first leaves
-     (`data_width=…`) keep margins unscaled (only floored at
-     `spec.size.margin_floor`) and grow them to fit content via
-     measure-driven computation, so the data region is preserved
-     exactly. Canvas-first leaves (`canvas_width=…`) scale margins
-     linearly by `min(1, panel_canvas / spec_canvas)` (legacy 0.1.x
-     behavior) so small fixed-canvas panels don't get most of their
-     width eaten by margin. Within a grid, body-first cells in the
-     same column/row coordinate to share the wider measured margin so
-     their data regions stay aligned across rows and columns.
+   - **Margin policy.** Leaves are body-first (`data_width=…`,
+     `data_height=…`): margins are unscaled (only floored at
+     `spec.size.margin_floor`) and grow to fit content via measure-
+     driven computation, so the data region is preserved exactly and
+     long tick / axis labels never get clipped. Within a grid, cells
+     in the same column/row coordinate to share the wider measured
+     margin so their data regions stay aligned across rows and columns.
+     To target a final SVG canvas size, `.fit(canvas_width=…,
+     canvas_height=…)` rescales data regions while keeping fonts /
+     spines / margins / gaps at their absolute pixel sizes (layout-aware
+     scaling — solves `target = s * data_total + overhead` directly).
    - **Tick density** is `max(2, min(8, iw // 65))` for x and similar for
      y — narrow panels (a tree at 80-px-wide inner) don't get 8 crushed
      labels.
@@ -501,9 +506,10 @@ Not a roadmap — just the dependency order:
    - **Strip height is fixed** (`legend.gradient_height = 60`) per
      continuous entry — independent of source plot height. Pre-render
      pass `_size_legends` overrides each legend leaf's intrinsic
-     `_fig` size with its content-driven (width, height) before
-     `_measure` runs (unless the user passed explicit `canvas_width=` /
-     `canvas_height=`).
+     canvas with its content-driven (width, height) before `_measure`
+     runs (unless the user passed explicit `canvas_width=` /
+     `canvas_height=` on `pt.legend(...)` — legend leaves have no data
+     region, so canvas IS the dimensional primitive there).
    - **Tick count adapts** to strip height (`max(2, min(5, h // 18))`),
      mirroring the axis-tick-density rule in `core._render_inner`,
      so labels don't crowd at small sizes.

@@ -20,7 +20,7 @@ from graphlib import CycleError, TopologicalSorter
 
 from ._spec import _LAYOUTSPEC, _FONTSPEC
 from .core import (
-    _render_inner, _replay, _scaled_margin, _enforce_floors, _required_margin,
+    _render_inner, _replay, _enforce_floors, _required_margin,
     _x_descriptor_multi, _y_descriptor_multi,
     _AxisDescriptor, _PanelOpts,
     _figure_root_attrs, _panel_open,
@@ -227,11 +227,10 @@ def _grid_row_gap(children: list[Chart | None], rows: int, cols: int, r: int) ->
 # ---------------------------------------------------------------------------
 
 def _leaf_rect_size(leaf: Chart) -> tuple[int, int]:
-    """The leaf's intrinsic canvas size — derived from
-    `pt.chart(data_width=…)` (data + unscaled margin) or set directly
-    via `canvas_width=…` (which carries scaled margin baked in),
-    falling back to spec defaults. Doubles as the relative size hint
-    when the parent allocates space."""
+    """The leaf's intrinsic canvas size. For data leaves: data region
+    + measure-driven margin (set by the layout pre-pass). For legend
+    and diagram leaves: the explicit canvas dims set at construction.
+    Doubles as the relative size hint when the parent allocates space."""
     return leaf._canvas_width, leaf._canvas_height
 
 
@@ -276,6 +275,70 @@ def _measure(node: Chart) -> tuple[int, int]:
     W = int(round(sum(col_widths) + sum(h_gaps)))
     H = int(round(sum(row_heights) + sum(v_gaps)))
     return W, H
+
+
+def _natural_size(root: Chart) -> tuple[int, int]:
+    """The figure's natural (W, H), including measure-driven margin growth
+    and any share-scaling coordination between leaves. Runs the pre-pass
+    so every data leaf's `_canvas_*` reflects the final body+margin total,
+    then sums those across the composition.
+
+    Mutates `root` — pass a deep copy if you need a non-destructive
+    measurement. Used by `Chart.fit()`."""
+    if not root._is_parent:
+        # Single-leaf root: data leaves grow their canvas to fit content
+        # via the solo `_effective_margin`; non-data leaves keep the
+        # canvas they were constructed with.
+        if root._leaf_kind == "data":
+            from .core import _effective_margin as _solo_margin
+            st = _replay(root._calls)
+            M_eff = _solo_margin(root, st)
+            root._canvas_width  = root._data_width  + M_eff["left"] + M_eff["right"]
+            root._canvas_height = root._data_height + M_eff["top"]  + M_eff["bottom"]
+        return _measure(root)
+    _, states = _build_panel_opts(root)
+    # Legend leaves harvest their content size from sibling data leaves;
+    # without this, layouts containing a layout-level legend would report
+    # a stale 1×1 placeholder canvas.
+    from .legend import _size_legends
+    _size_legends(root, states)
+    return _measure(root)
+
+
+def _data_total_size(node: Chart) -> tuple[float, float]:
+    """Sum of `_data_width` / `_data_height` across all data leaves in
+    the node's tree, combined the same way `_measure` combines canvases
+    (sum along layout direction, max orthogonally). Non-data leaves
+    contribute zero — their canvases live in the "overhead" budget that
+    `Chart.fit()` subtracts when solving for the scale factor.
+
+    Used so `fit()` can solve `target = s * data_total + overhead`
+    directly in one pass instead of converging geometrically via
+    `s = target / natural`."""
+    if not node._is_parent:
+        if node._leaf_kind == "data":
+            return float(node._data_width), float(node._data_height)
+        return 0.0, 0.0
+    if node._layout_kind == "h":
+        sizes = [_data_total_size(c) for c in node._children]
+        return sum(w for w, _ in sizes), max((h for _, h in sizes), default=0.0)
+    if node._layout_kind == "v":
+        sizes = [_data_total_size(c) for c in node._children]
+        return max((w for w, _ in sizes), default=0.0), sum(h for _, h in sizes)
+    # grid
+    rows, cols = node._grid_rows, node._grid_cols
+    children = node._children
+    col_w = [0.0] * cols
+    row_h = [0.0] * rows
+    for r in range(rows):
+        for c in range(cols):
+            cell = children[r * cols + c]
+            if cell is None:
+                continue
+            cw, ch = _data_total_size(cell)
+            if cw > col_w[c]: col_w[c] = cw
+            if ch > row_h[r]: row_h[r] = ch
+    return sum(col_w), sum(row_h)
 
 
 def _hint_ratios(sizes: list[float], n: int) -> list[float]:
@@ -375,22 +438,18 @@ def _allocate(node: Chart, x: float, y: float, w: float, h: float, out: list):
 # ---------------------------------------------------------------------------
 
 def _apply_share_scaling(leaves: list[Chart]) -> None:
-    """Mutate non-anchor body-first leaves' `_data_width` / `_data_height`
-    to coordinate with their share anchors. Reads from `_orig_data_*`
+    """Mutate non-anchor leaves' `_data_width` / `_data_height` to
+    coordinate with their share anchors. Reads from `_orig_data_*`
     each call so the operation is idempotent across re-renders."""
     # Reset to the user's original dims first so scaling is computed from a
     # clean baseline regardless of prior renders.
     for leaf in leaves:
-        if leaf._canvas_explicit:
-            continue
         leaf._data_width  = leaf._orig_data_width
         leaf._data_height = leaf._orig_data_height
 
     # Apply scaling in topo order so anchors of chained share-classes
     # have settled before sharers depend on them.
     for leaf in _topo_order(leaves):
-        if leaf._canvas_explicit:
-            continue
         sx = leaf._share_x
         sy = leaf._share_y
         if sx is None and sy is None:
@@ -611,9 +670,7 @@ def _compute_measured_margins(leaves: list[Chart],
                               panel_opts: dict[int, _PanelOpts]) -> None:
     """Per-leaf preliminary effective margin = max(floor, content-required),
     with `hide_*` collapses applied so the canvas sizing computed downstream
-    matches what gets rendered. Body-first leaves only; canvas-first leaves
-    keep `M_eff = None` so they fall through to `_scaled_margin` at render
-    time (legacy).
+    matches what gets rendered.
 
     Why apply hide_* here rather than at render time: the canvas-sizing
     pre-pass writes `canvas = data + M_eff`, and render-time `iw =
@@ -623,8 +680,6 @@ def _compute_measured_margins(leaves: list[Chart],
     N-wide data area. Folding the collapse into M_eff before canvas-sizing
     keeps `iw == data_width` regardless of join state."""
     for leaf in leaves:
-        if leaf._canvas_explicit:
-            continue
         po = panel_opts[id(leaf)]
         M_floor = _enforce_floors(leaf._margin)
         M_req = _required_margin(states[id(leaf)],
@@ -640,12 +695,11 @@ def _compute_measured_margins(leaves: list[Chart],
 
 
 def _body_cell(cell: Chart | None, panel_opts: dict[int, _PanelOpts]) -> bool:
-    """Cells eligible for per-column/row margin coordination — body-first
-    data leaves whose preliminary margin has been computed."""
+    """Cells eligible for per-column/row margin coordination — data
+    leaves whose preliminary margin has been computed."""
     return (cell is not None
             and not cell._is_parent
             and cell._leaf_kind == "data"
-            and not cell._canvas_explicit
             and panel_opts.get(id(cell)) is not None
             and panel_opts[id(cell)].M_eff is not None)
 
@@ -743,13 +797,11 @@ def _pad_canvases(cells: list[Chart], panel_opts: dict[int, _PanelOpts],
 
 def _update_canvases_for_margins(leaves: list[Chart],
                                  panel_opts: dict[int, _PanelOpts]) -> None:
-    """Mutate each body-first leaf's `_canvas_width` / `_canvas_height`
-    to match the coordinated effective margin. Layout's `_measure` reads
+    """Mutate each data leaf's `_canvas_width` / `_canvas_height` to
+    match the coordinated effective margin. Layout's `_measure` reads
     the canvas, so this is what makes max-per-column/row see the
     grown-to-fit dimensions."""
     for leaf in leaves:
-        if leaf._canvas_explicit:
-            continue
         po = panel_opts[id(leaf)]
         if po.M_eff is None:
             continue
@@ -759,17 +811,14 @@ def _update_canvases_for_margins(leaves: list[Chart],
 
 
 def _effective_margin(leaf: Chart, po: _PanelOpts, w: float, h: float) -> dict:
-    """Margin used at render time. Body-first leaves read the coordinated
-    margin from `po.M_eff` (already includes hide_* collapse from the
-    pre-pass — see `_compute_measured_margins`); canvas-first leaves scale
-    margins by panel-canvas/spec-canvas (legacy 0.1.x behavior) and apply
-    hide_* collapse here at render time."""
+    """Margin used at render time. Data leaves read the coordinated margin
+    from `po.M_eff` (which already includes hide_* collapse from the
+    pre-pass — see `_compute_measured_margins`). The fallback path
+    (`M_eff is None`) is reachable only if a leaf slipped through the
+    pre-pass; it preserves the hide_* collapse semantics defensively."""
     if po.M_eff is not None:
         return dict(po.M_eff)
-    if leaf._canvas_explicit:
-        M_eff = _scaled_margin(leaf._margin, w, h)
-    else:
-        M_eff = _enforce_floors(leaf._margin)
+    M_eff = _enforce_floors(leaf._margin)
     ig = _resolve_inner_gap(leaf)
     if po.hide_left:   M_eff["left"]   = ig
     if po.hide_right:  M_eff["right"]  = ig

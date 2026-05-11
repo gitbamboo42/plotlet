@@ -99,9 +99,9 @@ class _PanelOpts:
     with a neighbor that already labels it; set only on the panel that
     actually shares, never propagated by grid alignment.
     `M_eff`, when set, is the layout-pre-pass-resolved effective margin
-    for a body-first leaf — it has already incorporated measure-driven
-    growth and per-column/row coordination. Canvas-first leaves leave
-    this `None` and fall through to `_scaled_margin` at render time.
+    for a data leaf — it has already incorporated measure-driven growth
+    and per-column/row coordination. Non-data leaves (legend, diagram)
+    leave this `None` and use their own render paths.
     """
     x_axis: _AxisDescriptor | None = None
     y_axis: _AxisDescriptor | None = None
@@ -212,18 +212,6 @@ def _to_px(value):
     return int(round(num * _UNIT_PX[unit]))
 
 
-def _spec_canvas_dims() -> tuple[int, int]:
-    """Spec-default canvas size, derived from data region + spec margin.
-
-    The dimensional primitive is the data region (`spec.size.data_width` /
-    `data_height`); this helper rebuilds the implied canvas size so legacy
-    canvas-based math (`_scaled_margin`, layout allocation) keeps a single
-    well-defined reference point."""
-    M = _SIZESPEC["margin"]
-    return (_SIZESPEC["data_width"]  + M["left"] + M["right"],
-            _SIZESPEC["data_height"] + M["top"]  + M["bottom"])
-
-
 def _replay(calls):
     """Walk a Chart's recorded calls into a state dict consumed by the
     renderer. Pure function of `calls` and the artist registry — same input
@@ -292,18 +280,12 @@ def _effective_margin(leaf, st=None) -> dict:
     """Margin used at render time. Reads dimension state directly off the
     leaf Chart.
 
-    Canvas path: scales by canvas dims (legacy 0.1.x behavior); text
-    overflow is the user's responsibility because canvas size is promised
-    exactly.
-
-    Data path: combines `_enforce_floors(spec/user margin)` with the
-    content-driven `_required_margin(st, data_w, data_h)` by taking the
-    per-side max — so the canvas grows as needed to fit long tick labels,
-    titles, and axis labels rather than letting them overflow. Caller
-    passes the replayed `st`; callers without one get only the
-    floor-applied spec margin."""
-    if leaf._canvas_explicit:
-        return _scaled_margin(leaf._margin, leaf._canvas_width, leaf._canvas_height)
+    Combines `_enforce_floors(spec/user margin)` with the content-driven
+    `_required_margin(st, data_w, data_h)` by taking the per-side max —
+    so the canvas grows as needed to fit long tick labels, titles, and
+    axis labels rather than letting them overflow. Caller passes the
+    replayed `st`; callers without one get only the floor-applied spec
+    margin."""
     M_floor = _enforce_floors(leaf._margin)
     if st is None:
         return M_floor
@@ -369,24 +351,6 @@ def _enforce_floors(M):
         "bottom": max(_MARGIN_FLOOR["bottom"], int(round(M["bottom"]))),
         "left":   max(_MARGIN_FLOOR["left"],   int(round(M["left"]))),
         "right":  max(_MARGIN_FLOOR["right"],  int(round(M["right"]))),
-    }
-
-
-def _scaled_margin(M, W, H):
-    """Shrink margins for small canvases, with a per-side floor so tick
-    labels and titles still fit. Used by the canvas-explicit path
-    (`Chart(canvas_width=…)` and the layout's per-panel allocation),
-    where the canvas size is fixed and margins must scale to fit. Floors
-    live in `spec.size.margin_floor`; the reference canvas is derived
-    from `spec.size.data_width/height + spec margin`."""
-    spec_W, spec_H = _spec_canvas_dims()
-    fw = min(1.0, W / spec_W)
-    fh = min(1.0, H / spec_H)
-    return {
-        "top":    max(_MARGIN_FLOOR["top"],    int(round(M["top"]    * fh))),
-        "bottom": max(_MARGIN_FLOOR["bottom"], int(round(M["bottom"] * fh))),
-        "left":   max(_MARGIN_FLOOR["left"],   int(round(M["left"]   * fw))),
-        "right":  max(_MARGIN_FLOOR["right"],  int(round(M["right"]  * fw))),
     }
 
 
