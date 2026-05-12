@@ -84,8 +84,8 @@ Type-specific attrs:
 | `scatter`       | `n`, `x-min`, `x-max`, `y-min`, `y-max`, `marker`                            |
 | `bar`           | `n`, `y-min`, `y-max`                                                        |
 | `hist`          | `n` (raw observations), `bins`, `x-min`, `x-max`, `count-max`                |
-| `fill_between`  | `n`, `x-min`, `x-max`, `y-min`, `y-max`                                      |
-| `area`          | `n`, `x-min`, `x-max`, `y-min`, `y-max`, `base`                              |
+| `fill_between`  | `n`, `x-min`, `x-max`, `y-min`, `y-max`, `curve`                             |
+| `area`          | `n`, `x-min`, `x-max`, `y-min`, `y-max`, `base`, `curve`                     |
 | `rect`          | `n`, `x-min`, `x-max`, `y-min`, `y-max`                                      |
 | `polygon`       | `n`, `x-min`, `x-max`, `y-min`, `y-max`                                      |
 | `axhline`       | `y`                                                                          |

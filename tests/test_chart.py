@@ -409,6 +409,22 @@ def chart_curve_steps():
     return c
 
 
+def chart_curve_fills():
+    # curve= on fill_between and area. Use case: a sensor reading band
+    # that holds between samples (step-after) — diagonal interpolation
+    # would imply smooth transitions the data doesn't have.
+    xs = [0, 1, 2, 3, 4, 5]
+    lo = [0.5, 0.8, 1.2, 1.5, 1.1, 0.9]
+    hi = [1.5, 1.8, 2.2, 2.5, 2.1, 1.9]
+    c = pt.chart(title="curve= on fill_between / area",
+                 xlabel="t", ylabel="value", legend=True)
+    c.fill_between(xs, lo, hi, curve="step-after", color="C0",
+                   alpha=0.3, label="step band")
+    c.area(xs, [1.0, 1.3, 1.7, 2.0, 1.6, 1.4], curve="step-after",
+           color="C1", alpha=0.5, label="step area")
+    return c
+
+
 def chart_rect():
     # Mixed scalar / list inputs — broadcast covers the genome-track,
     # gantt-style, and gene-model use cases that motivated adding rect.
@@ -471,6 +487,7 @@ PLOTS = {
     "hist":                chart_hist,
     "fill_between":        chart_fill_between,
     "curve_steps":         chart_curve_steps,
+    "curve_fills":         chart_curve_fills,
     "rect":                chart_rect,
     "polygon":             chart_polygon,
     "area":                chart_area,

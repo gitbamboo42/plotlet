@@ -146,6 +146,9 @@ def _fill_between_data_attrs(a):
     ys_all = list(a["y1"]) + list(a["y2"])
     out = {"n": len(a["xs"])}
     out.update(_xy_minmax(a["xs"], ys_all))
+    curve = a["opts"].get("curve")
+    if curve and curve != "linear":
+        out["curve"] = curve
     return out
 
 
@@ -169,6 +172,9 @@ def _area_data_attrs(a):
     out = {"n": len(a["xs"])}
     out.update(_xy_minmax(a["xs"], a["y1"]))
     out["base"] = a["base"]
+    curve = a["opts"].get("curve")
+    if curve and curve != "linear":
+        out["curve"] = curve
     return out
 
 

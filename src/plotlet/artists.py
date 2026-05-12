@@ -302,13 +302,29 @@ def _artist_axvspan(a, xs_, ys_, iw, ih, col):
 
 
 def _artist_fill_between(a, xs_, ys_, col):
-    upper = [(xs_(x), ys_(y)) for x, y in zip(a["xs"], a["y1"])]
-    lower = [(xs_(x), ys_(y)) for x, y in zip(a["xs"], a["y2"])]
+    opts = a["opts"]
+    curve = opts.get("curve", "linear")
+    if curve not in _CURVE_VALUES:
+        raise ValueError(
+            f"unknown curve={curve!r}; expected one of {_CURVE_VALUES}"
+        )
+    # Apply step interleaving to both edges so the polygon zips correctly
+    # — for constant baselines (area) this still interleaves x-coords,
+    # which the upper edge needs to pair with.
+    if curve == "linear":
+        upper_xs, upper_ys = a["xs"], a["y1"]
+        lower_xs, lower_ys = a["xs"], a["y2"]
+    else:
+        mode = curve[5:]
+        upper_xs, upper_ys = _step_coords(a["xs"], a["y1"], mode)
+        lower_xs, lower_ys = _step_coords(a["xs"], a["y2"], mode)
+    upper = [(xs_(x), ys_(y)) for x, y in zip(upper_xs, upper_ys)]
+    lower = [(xs_(x), ys_(y)) for x, y in zip(lower_xs, lower_ys)]
     pts = upper + list(reversed(lower))
     if not pts:
         return ""
     d = "M" + "L".join(f"{p[0]:.2f},{p[1]:.2f}" for p in pts) + "Z"
-    alpha = a["opts"].get("alpha", _D["fill_alpha"])
+    alpha = opts.get("alpha", _D["fill_alpha"])
     return f'<path d="{d}" fill="{col}"{_op(alpha)}/>'
 
 
