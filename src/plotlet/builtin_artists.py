@@ -11,7 +11,7 @@ import math
 from .registry import ArtistSpec, RenderContext, add_artist
 from .artists import (
     _to_pylist, _to_2d_pylist, _histogram, _broadcast,
-    _artist_plot, _artist_scatter, _artist_bar, _artist_hist, _artist_fill_between,
+    _artist_line, _artist_scatter, _artist_bar, _artist_hist, _artist_fill_between,
     _artist_axhline, _artist_axvline, _artist_axhspan, _artist_axvspan,
     _artist_hlines, _artist_vlines,
     _artist_rect, _artist_polygon,
@@ -109,6 +109,9 @@ def _line_data_attrs(a):
         out["linestyle"] = a["opts"]["linestyle"]
     if a["opts"].get("marker"):
         out["marker"] = a["opts"]["marker"]
+    curve = a["opts"].get("curve")
+    if curve and curve != "linear":
+        out["curve"] = curve
     return out
 
 
@@ -231,7 +234,7 @@ add_artist(ArtistSpec(
                               "ys": _to_pylist(args[1]), "opts": kw},
     xdomain=_xs_of,
     ydomain=_ys_of,
-    draw=lambda a, ctx: _artist_plot(a, ctx.x_scale, ctx.y_scale, ctx.color),
+    draw=lambda a, ctx: _artist_line(a, ctx.x_scale, ctx.y_scale, ctx.color),
     legend_swatch=_line_legend_swatch,
     data_attrs=_line_data_attrs,
 ))

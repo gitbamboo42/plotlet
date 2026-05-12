@@ -80,7 +80,7 @@ Type-specific attrs:
 
 | Artist          | Type-specific attrs                                                        |
 |-----------------|-----------------------------------------------------------------------------|
-| `line`          | `n`, `x-min`, `x-max`, `y-min`, `y-max`, `linestyle`, `marker`              |
+| `line`          | `n`, `x-min`, `x-max`, `y-min`, `y-max`, `linestyle`, `marker`, `curve`     |
 | `scatter`       | `n`, `x-min`, `x-max`, `y-min`, `y-max`, `marker`                            |
 | `bar`           | `n`, `y-min`, `y-max`                                                        |
 | `hist`          | `n` (raw observations), `bins`, `x-min`, `x-max`, `count-max`                |

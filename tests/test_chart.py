@@ -393,6 +393,22 @@ def chart_heatmap_dataframe():
     return c
 
 
+def chart_curve_steps():
+    # All three step modes on the same axes, plus the default linear.
+    # Markers stay at the original data points regardless of mode — they
+    # mark where the values are; the step shape just chooses how to
+    # connect them.
+    xs = [0, 1, 2, 3, 4, 5]
+    ys = [1, 3, 2, 5, 4, 6]
+    c = pt.chart(title="curve= modes", xlabel="x", ylabel="y",
+                 legend=True, grid=True)
+    c.line(xs, ys, curve="linear",      marker="o", label="linear")
+    c.line(xs, [v + 2 for v in ys],  curve="step-after",  marker="o", label="step-after")
+    c.line(xs, [v + 4 for v in ys],  curve="step-before", marker="o", label="step-before")
+    c.line(xs, [v + 6 for v in ys],  curve="step-mid",    marker="o", label="step-mid")
+    return c
+
+
 def chart_rect():
     # Mixed scalar / list inputs — broadcast covers the genome-track,
     # gantt-style, and gene-model use cases that motivated adding rect.
@@ -454,6 +470,7 @@ PLOTS = {
     "bar":                 chart_bar,
     "hist":                chart_hist,
     "fill_between":        chart_fill_between,
+    "curve_steps":         chart_curve_steps,
     "rect":                chart_rect,
     "polygon":             chart_polygon,
     "area":                chart_area,

@@ -69,15 +69,55 @@ def _histogram(data, bins):
 # Artist helpers
 # ---------------------------------------------------------------------------
 
-def _artist_plot(a, xs_, ys_, col):
+_CURVE_VALUES = ("linear", "step-before", "step-after", "step-mid")
+
+
+def _step_coords(xs, ys, mode):
+    """Interleave (xs, ys) into step-shaped coordinates.
+
+    `mode` is one of 'before' | 'after' | 'mid'. NaN values pass through
+    unchanged — the path-building stage breaks the stroke at them, so
+    gaps don't get bridged by a phantom step."""
+    n = len(xs)
+    if n < 2:
+        return list(xs), list(ys)
+    out_x = [xs[0]]
+    out_y = [ys[0]]
+    for i in range(1, n):
+        x0, x1 = xs[i - 1], xs[i]
+        y0, y1 = ys[i - 1], ys[i]
+        if mode == "before":
+            out_x.append(x0); out_y.append(y1)
+        elif mode == "after":
+            out_x.append(x1); out_y.append(y0)
+        else:  # mid
+            mid = (x0 + x1) / 2
+            out_x.append(mid); out_y.append(y0)
+            out_x.append(mid); out_y.append(y1)
+        out_x.append(x1); out_y.append(y1)
+    return out_x, out_y
+
+
+def _artist_line(a, xs_, ys_, col):
     out = []
     opts = a["opts"]
     alpha = opts.get("alpha", 1)
-    pts = [(xs_(x), ys_(y)) for x, y in zip(a["xs"], a["ys"])]
-    pts = [(px, py) if (math.isfinite(px) and math.isfinite(py)) else None
-           for px, py in pts]
+    curve = opts.get("curve", "linear")
+    if curve not in _CURVE_VALUES:
+        raise ValueError(
+            f"unknown curve={curve!r}; expected one of {_CURVE_VALUES}"
+        )
+    # Path coordinates depend on the curve mode; markers always sit at
+    # the original data points, so we keep two coordinate lists.
+    if curve == "linear":
+        path_xs, path_ys = a["xs"], a["ys"]
+    else:
+        path_xs, path_ys = _step_coords(a["xs"], a["ys"], curve[5:])
+    path_pts = [(xs_(x), ys_(y)) for x, y in zip(path_xs, path_ys)]
+    path_pts = [(px, py) if (math.isfinite(px) and math.isfinite(py)) else None
+                for px, py in path_pts]
     d_segs, started = [], False
-    for p in pts:
+    for p in path_pts:
         if p is None:
             started = False
             continue
@@ -91,10 +131,11 @@ def _artist_plot(a, xs_, ys_, col):
                    f'{_op(alpha)}{da}/>')
     if opts.get("marker"):
         sz = opts.get("markersize", _D["markersize"])
-        for p in pts:
-            if p is None:
+        for x, y in zip(a["xs"], a["ys"]):
+            px, py = xs_(x), ys_(y)
+            if not (math.isfinite(px) and math.isfinite(py)):
                 continue
-            out.append(_marker_at(opts["marker"], p[0], p[1], sz, col, alpha))
+            out.append(_marker_at(opts["marker"], px, py, sz, col, alpha))
     return "".join(out)
 
 
