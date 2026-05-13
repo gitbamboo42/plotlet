@@ -47,6 +47,15 @@ Composition recipes (no new artists, just core plus `|` / `/` / `share_x`):
   with the leaf permutation, compose with `/`, attach labels at the
   heatmap level.
 
+Domain recipes (combine custom artists with composition):
+
+- [`omics_heatmap/`](omics_heatmap/) — annotated heatmap in the
+  ComplexHeatmap shape: top categorical track + left dendrogram +
+  central heatmap + unified colorbar / legend panel. Built from
+  `pt.grid([[None, top, None], [tree, hm, pt.legend()]], share_x="col",
+  share_y="row")` plus a tiny `annotation_strip` custom artist for
+  per-group colored cells with discrete legend swatches.
+
 ## How to use a recipe
 
 1. Copy the recipe file (or its whole folder) into your own project.
