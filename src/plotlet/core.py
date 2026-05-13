@@ -228,8 +228,8 @@ def _replay(calls):
         "y_ticks": None, "y_labels": None, "y_rotation": 0, "y_fontsize": None,
         "y_direction": _FRAME["tick_direction"], "y_marks": True,
         "y_right": _FRAME["tick_right"],
-        "spine_top": True, "spine_right": True,
-        "spine_bottom": True, "spine_left": True,
+        "spine_top": _FRAME["spine_top"], "spine_right": _FRAME["spine_right"],
+        "spine_bottom": _FRAME["spine_bottom"], "spine_left": _FRAME["spine_left"],
         # Per-side color/width overrides; None = inherit spec.json frame defaults.
         # Tick marks on a given side adopt the same side's spine color/width
         # for visual consistency.
@@ -362,6 +362,18 @@ def _prebin_hist(st):
             a["_bins"] = _histogram(a["data"], a["opts"].get("bins", 10))
 
 
+def _artist_axis_order(artists, axis):
+    """Return the first artist-supplied order for `axis`, or None."""
+    for a in artists:
+        spec = get_artist(a["type"])
+        if spec is None or spec.axis_order is None:
+            continue
+        hint = spec.axis_order(a)
+        if hint and axis in hint:
+            return list(hint[axis])
+    return None
+
+
 def _collect_categories(artists, axis):
     """Unique values an artist contributes on `axis`, alphabetically sorted."""
     seen = set()
@@ -399,10 +411,11 @@ def _x_descriptor(st) -> _AxisDescriptor:
 
     Categorical precedence:
       1. explicit `xscale("category", order=[...])` → that exact order
-      2. `xscale("category")` with no order → alphabetical of unique x values
-      3. any artist contributes string-valued x (bar, scatter on strings,
+      2. an artist's `axis_order` hook (e.g. dendrogram's leaf order)
+      3. `xscale("category")` with no order → alphabetical of unique x values
+      4. any artist contributes string-valued x (bar, scatter on strings,
          …) → alphabetical of unique x values
-      4. otherwise → linear/log path
+      5. otherwise → linear/log path
     """
     _prebin_hist(st)
     artists = st["artists"]
@@ -410,8 +423,10 @@ def _x_descriptor(st) -> _AxisDescriptor:
     auto_cat = _is_categorical_axis(artists, "x")
 
     if explicit_cat or auto_cat:
-        cats = (list(st["x_order"]) if st["x_order"] is not None
-                else _collect_categories(artists, "x"))
+        if st["x_order"] is not None:
+            cats = list(st["x_order"])
+        else:
+            cats = _artist_axis_order(artists, "x") or _collect_categories(artists, "x")
         padding = _D["category_padding"] if st["x_padding"] is None else st["x_padding"]
         return _AxisDescriptor(kind="category", cats=cats, padding=padding)
 
@@ -462,8 +477,10 @@ def _y_descriptor(st) -> _AxisDescriptor:
     auto_cat = _is_categorical_axis(artists, "y")
 
     if explicit_cat or auto_cat:
-        cats = (list(st["y_order"]) if st["y_order"] is not None
-                else _collect_categories(artists, "y"))
+        if st["y_order"] is not None:
+            cats = list(st["y_order"])
+        else:
+            cats = _artist_axis_order(artists, "y") or _collect_categories(artists, "y")
         padding = _D["category_padding"] if st["y_padding"] is None else st["y_padding"]
         return _AxisDescriptor(kind="category", cats=cats, padding=padding)
 
@@ -493,8 +510,10 @@ def _x_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
     explicit_cat = anchor["xscale"] == "category"
     auto_cat = _is_categorical_axis(all_artists, "x")
     if explicit_cat or auto_cat:
-        cats = (list(anchor["x_order"]) if anchor["x_order"] is not None
-                else _collect_categories(all_artists, "x"))
+        if anchor["x_order"] is not None:
+            cats = list(anchor["x_order"])
+        else:
+            cats = _artist_axis_order(all_artists, "x") or _collect_categories(all_artists, "x")
         padding = _D["category_padding"] if anchor["x_padding"] is None else anchor["x_padding"]
         return _AxisDescriptor(kind="category", cats=cats, padding=padding)
     x_lo, x_hi = _scan_domain(all_artists, "x")
@@ -515,8 +534,10 @@ def _y_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
     explicit_cat = anchor["yscale"] == "category"
     auto_cat = _is_categorical_axis(all_artists, "y")
     if explicit_cat or auto_cat:
-        cats = (list(anchor["y_order"]) if anchor["y_order"] is not None
-                else _collect_categories(all_artists, "y"))
+        if anchor["y_order"] is not None:
+            cats = list(anchor["y_order"])
+        else:
+            cats = _artist_axis_order(all_artists, "y") or _collect_categories(all_artists, "y")
         padding = _D["category_padding"] if anchor["y_padding"] is None else anchor["y_padding"]
         return _AxisDescriptor(kind="category", cats=cats, padding=padding)
     force_zero = any(a["type"] in ("bar", "hist") for a in all_artists)

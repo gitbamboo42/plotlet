@@ -68,12 +68,13 @@ one form).
 ## The five examples this has to express
 
 If a candidate model reads cleanly across all five, it's a real model.
-If it only reads well for #3, it's been over-fit to ComplexHeatmap.
+If it only reads well for #3, it's been over-fit to the annotated-heatmap
+layout.
 
 1. **Heatmap + colorbar.** Single panel with one attached colorbar.
 2. **Heatmap + left dendrogram.** Two panels; tree shares the heatmap's
    y-axis. The tree's leaves must line up with the heatmap's rows.
-3. **ComplexHeatmap-style.** Heatmap + top annotation track + left
+3. **Annotated heatmap.** Heatmap + top annotation track + left
    dendrogram + shared legend on the right. Three panels share scales
    with the central heatmap; the layout-level legend collects swatches
    from all of them, grouped by source chart.
@@ -165,7 +166,7 @@ tree = pt.chart(share_y=hm);   tree.dendrogram(linkage)
 out = tree | hm
 out.show()
 
-# ---- 3. ComplexHeatmap-style
+# ---- 3. Annotated heatmap
 hm   = pt.chart();             hm.imshow(matrix)
 top  = pt.chart(share_x=hm);   top.bar(scores)
 tree = pt.chart(share_y=hm);   tree.dendrogram(linkage)
@@ -235,7 +236,7 @@ hm   = out[0, 1]; hm.imshow(matrix)
 tree = out[0, 0]; tree.dendrogram(linkage, share_y=hm)
 out.show()
 
-# ---- 3. ComplexHeatmap-style
+# ---- 3. Annotated heatmap
 out = pt.layout(rows=2, cols=3,
                 widths=[0.2, 1, 0.25],
                 heights=[0.2, 1])
@@ -284,7 +285,7 @@ familiar.
 |---|---|---|---|
 | 1. heatmap + colorbar | `hm \| pt.legend(hm)` | `pt.layout(1,2,widths=[1,0.05])` + index | **A** — legend self-sizes |
 | 2. heatmap + left tree | `tree \| hm` | layout + `share_y=hm` | **A** — terser |
-| 3. ComplexHeatmap | `pt.grid([[None,top,None],[tree,hm,legend]])` | `pt.layout(2,3,...)` + 4 assignments | **B** slightly — sizes co-located |
+| 3. annotated heatmap | `pt.grid([[None,top,None],[tree,hm,legend]])` | `pt.layout(2,3,...)` + 4 assignments | **B** slightly — sizes co-located |
 | 4. two heatmaps + 1 tree | `tree \| hm1 \| hm2` | `pt.layout(1,3,...)` + indexing | **A** — composable, hands off cleanly |
 | 5. 2×2 small-multiples | `(a\|b)/(c\|d)` | `pt.layout(2,2)` + indexing | tie |
 
@@ -368,7 +369,7 @@ Recommended:
      out = pt.grid([[None, top, None], [tree, hm, pt.legend()]])
      ```
      Use when you want explicit grid placement and column-width control
-     (ComplexHeatmap-style layouts).
+     (annotated-heatmap layouts).
 
    The decorator form is sugar over the panel form internally — same
    renderer, same auto-collection-and-grouping behavior. Two surface
@@ -518,6 +519,6 @@ Not a roadmap — just the dependency order:
    neighbor — distinct from the share-pair zero-gap rule, since a
    legend isn't a share joint and shouldn't trigger spine/label
    suppression on either side.
-4. **Cookbook recipes:** `heatmap_with_tree`, ComplexHeatmap-style.
+4. **Cookbook recipes:** `heatmap_with_tree`, annotated heatmap.
 
 Item 4 lands once item 3 is in.

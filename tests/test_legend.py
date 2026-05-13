@@ -28,7 +28,7 @@ near-duplicate baselines:
   legend_flat_fixed   — group_by_chart=False flatten + explicit
                         `canvas_width=` / `canvas_height=` on the legend
                         leaf, overriding the content-driven auto-size.
-  legend_joined_grid  — ComplexHeatmap-shaped grid where the legend cell
+  legend_joined_grid  — annotated-heatmap-shaped grid where the legend cell
                         sits next to a join-pair-collapsed assembly. Tests
                         that legend_gap (6 px) coexists with share-pair
                         zero-gaps in the same grid, and that the legend

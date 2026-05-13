@@ -364,8 +364,12 @@ class Chart:
                 f"{name!r} is not available on a parent Chart "
                 f"(layout={self._layout_kind!r}). Call it on a leaf chart instead."
             )
-        if name in _FRAME_METHODS or get_artist(name) is not None:
+        spec = get_artist(name)
+        if name in _FRAME_METHODS or spec is not None:
             def recorder(*args, **kwargs):
+                if spec is not None and spec.frame_defaults is not None:
+                    for call in spec.frame_defaults(list(args), dict(kwargs)) or ():
+                        self._calls.append(call)
                 self._calls.append((name, list(args), dict(kwargs)))
                 return self
             return recorder

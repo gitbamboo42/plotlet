@@ -96,6 +96,8 @@ ArtistSpec(
     legend_swatch: (a, ctx, x0, y_mid) -> str | None = None,
     legend_gradient: (a) -> dict | None = None,
     data_attrs: (a) -> dict | None = None,
+    axis_order: (a) -> dict | None = None,
+    frame_defaults: (args, kwargs) -> list[tuple] | None = None,
 )
 ```
 
@@ -107,6 +109,8 @@ ArtistSpec(
 | `legend_swatch` | `None` | Provide to draw your own legend entry. Without it, the legend falls back to a colored line in the artist's color. Signature: `(a, ctx, x0, y_mid) -> svg_fragment`. |
 | `legend_gradient` | `None` | Provide for artists with a continuous color mapping (heatmap-style). Returns `{"kind": "continuous", "cmap": ..., "vmin": ..., "vmax": ...}` so the layout-level legend can render a colorbar. |
 | `data_attrs` | `None` | AI-readable structural attrs. Returned dict keys land on the artist's `<g>` as `data-plotlet-<key>`. Common attrs (type, index, label, color) are added automatically without this field — declare it if you want type-specific attrs (`n`, ranges, marker, …). See [`AI_ATTRS.md`](AI_ATTRS.md). |
+| `axis_order` | `None` | Contribute a canonical order for a categorical axis. Returns `{"x": [...]}` or `{"y": [...]}`. Use when your artist's data has a load-bearing order that alphabetical sorting would destroy (e.g. dendrogram's leaf permutation). The user's explicit `xscale("category", order=...)` still wins. |
+| `frame_defaults` | `None` | Return a list of `(call_name, args, kwargs)` recorded *before* the artist itself. Use for strong conventional defaults — e.g. dendrogram hides all spines. Replay is in order, so user calls made *after* `c.<your_artist>()` still win. Signature: `(args, kwargs) -> list[tuple] \| None`. |
 
 ---
 

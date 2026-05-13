@@ -464,6 +464,42 @@ def chart_area():
     return c
 
 
+def _dendro_sample():
+    rng = random.Random(0)
+    return [[rng.gauss(0, 1) for _ in range(4)] for _ in range(8)]
+
+
+def chart_dendrogram_top():
+    c = pt.chart(title="dendrogram (orient=top)", data_height=180)
+    c.dendrogram(_dendro_sample(), method="ward")
+    return c
+
+
+def chart_dendrogram_left():
+    c = pt.chart(title="dendrogram (orient=left)", data_width=240)
+    c.dendrogram(_dendro_sample(), method="ward", orient="left")
+    return c
+
+
+def chart_dendrogram_styled():
+    # Demonstrates the opt-in path: dendrogram's spineless default is
+    # restored to a height axis. Also exercises color / linewidth kwargs.
+    c = pt.chart(title="dendrogram with restored height axis",
+                 ylabel="height", data_height=180)
+    c.dendrogram(_dendro_sample(), method="average",
+                 color="C3", linewidth=1.4)
+    c.spines(left=True)
+    c.yticks(None)
+    return c
+
+
+def chart_dendrogram_labeled():
+    labels = ["sample_" + ch for ch in "ABCDEFGH"]
+    c = pt.chart(title="dendrogram with labels", data_height=200)
+    c.dendrogram(_dendro_sample(), method="ward", labels=labels)
+    return c
+
+
 def chart_long_rotated_xticks():
     # Long x-tick labels rotated 45° — the rotated bbox height grows the
     # bottom margin so labels don't overflow the canvas. Without rotation
@@ -517,6 +553,10 @@ PLOTS = {
     "restyled_spines":     chart_restyled_spines,
     "hlines_vlines":       chart_hlines_vlines,
     "plot_alpha":          chart_plot_alpha,
+    "dendrogram_top":      chart_dendrogram_top,
+    "dendrogram_left":     chart_dendrogram_left,
+    "dendrogram_styled":   chart_dendrogram_styled,
+    "dendrogram_labeled":  chart_dendrogram_labeled,
 }
 
 

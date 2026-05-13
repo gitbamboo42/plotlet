@@ -163,22 +163,4 @@ User-facing non-goals (no interactivity, no 3D, no production dashboard, not a m
 - **Interactivity is out forever, not deferred.** Hover, zoom, pan, click, animation are *not* "maybe later" — they kill the byte-identical reproducibility that makes baseline-image testing possible. Don't soften this in code review.
 - **Not aiming for 100% matplotlib coverage.** Just the parts the author actually uses, plus whatever shared infrastructure is forced by core artists. Reject "we should add this for parity" arguments.
 
----
-
-## Long-term direction (collaborator-internal)
-
-Where plotlet is heading once subplots and coordinated multi-panel land: **a lightweight, reproducibility-first alternative for library authors and scientists who don't need 1,000 plot types**, with a specific foothold in the annotated-heatmap niche currently held by ComplexHeatmap (R, aging) and marsilea (Python, heavy + opinionated).
-
-Subplots is the **essential prerequisite, not just one item among others**. Without it plotlet is toy-shaped — any real workflow produces multiple charts, and "assemble in Inkscape" is not a viable path; it kills the reproducibility pillar. Subplots is table stakes for the lightweight identity itself; coordinated multi-panel is the strategic differentiator on top.
-
-Two pillars:
-
-1. **Reproducibility-first.** Byte-identical SVG with text-as-paths; every output renders identically across machines without a font install dance. matplotlib's SVG drifts subtly across machines; this doesn't.
-2. **Annotated-heatmap niche after coordinated panels.** ComplexHeatmap is R-only; marsilea is heavy. A small Python library with a clean composition algebra and parent-level `.share_x()` / `.share_y()` (or `pt.grid([[...]], share_x="col"/"row"/True)`) fills a real gap. Sharing forces aspect-ratio coordination across the share class — anchor (first leaf in reading order) sets the scale, others scale proportionally — and unions data ranges. Sequence: subplots first, then the shared-scale hook, then science-niche standard vocabulary that every heatmap-niche incumbent ships (e.g. dendrogram) as core artists, with full ComplexHeatmap-style annotated-heatmap layouts still in cookbook as compositions of those pieces.
-
-Use this as a razor for gray-area requests:
-
-- **Strengthens the goal** → say yes: shared-scale ergonomics, layout composition, colormap quality, reproducibility guarantees, easier annotated-track recipes in cookbook.
-- **Drifts from it** → say no, even if tempting: another standard plot type "for parity," interactivity, animation, dashboarding features, or anything that pushes plotlet toward "generic plotting library."
-
-This positioning is collaborator-internal because the prerequisites (subplots, shared scales) aren't built yet — premature to put it in [README.md](README.md) or [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md). Promote it to public-facing once subplots lands.
+Strategic positioning (long-term direction, competitor landscape, the razor for gray-area requests) lives in [CLAUDE.local.md](CLAUDE.local.md) — collaborator-internal, gitignored.

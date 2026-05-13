@@ -29,6 +29,8 @@ cookbook/
 
 ## Recipes
 
+Custom plot types (register a new artist):
+
 - [`lollipop/`](lollipop/) — stem-and-circle chart for sparse comparisons,
   plus an optional `legend_swatch` so the legend entry looks like a mini
   lollipop.
@@ -36,6 +38,14 @@ cookbook/
   with an explicit `width=` (data units), for cases where the built-in
   categorical `bar` doesn't fit (genome coordinates, time-series with
   numeric x, etc.).
+
+Composition recipes (no new artists, just core plus `|` / `/` / `share_x`):
+
+- [`dendrogram_heatmap/`](dendrogram_heatmap/) — column dendrogram on
+  top of a heatmap with `share_x` keeping columns aligned. Shows the
+  manual pattern: compute the linkage with scipy, reorder the matrix
+  with the leaf permutation, compose with `/`, attach labels at the
+  heatmap level.
 
 ## How to use a recipe
 

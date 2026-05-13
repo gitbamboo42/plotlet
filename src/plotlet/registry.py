@@ -29,6 +29,18 @@ A spec bundles the four things `_render` needs to know about a plot type:
         Common attrs (type, index, label, color) are added by the wrapper —
         each artist contributes only its own fields (n, x-min, marker, …).
 
+  - `axis_order(artist) -> dict | None` (optional)
+        Contribute a canonical order for a categorical axis. Returns
+        `{"x": [...]}` or `{"y": [...]}`. Used by artists like dendrogram
+        whose leaf order is non-alphabetical and load-bearing. The user's
+        explicit `xscale("category", order=...)` still wins.
+
+  - `frame_defaults(args, kwargs) -> list[tuple] | None` (optional)
+        Return a list of `(call_name, args, kwargs)` to record *before*
+        the artist itself. Used by artists with strong conventional
+        defaults (e.g. dendrogram hides all spines). User calls made
+        after the artist still win — replay is in order.
+
 `add_artist(name, ...)` is the public extension API. After calling it, users
 can do `fig.<name>(...)` and it Just Works.
 """
@@ -53,6 +65,8 @@ class ArtistSpec:
     data_attrs: Callable[[dict], dict | None] | None = None
     flips_y_axis: Callable[[dict], bool] | None = None
     tight_domain: bool = False
+    axis_order: Callable[[dict], dict | None] | None = None
+    frame_defaults: Callable[[list, dict], list | None] | None = None
 
 
 @dataclass

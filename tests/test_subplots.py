@@ -203,7 +203,7 @@ def custom_inner_gap():
 
 
 def complex_grid_shares():
-    # ComplexHeatmap-flavored shape via grid with column/row sharing:
+    # Annotated-heatmap shape via grid with column/row sharing:
     # `share_x="col"` → top↔main share x (column 1); `share_y="row"` →
     # tree↔main share y (row 1).
     main = pt.chart(title="main", data_width=400, data_height=240)

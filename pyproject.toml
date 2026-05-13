@@ -36,6 +36,7 @@ classifiers = [
 ]
 dependencies = [
   "fonttools>=4.0",
+  "scipy>=1.10",
 ]
 
 [project.optional-dependencies]

@@ -44,22 +44,29 @@ _SPINE_LINE_RE = re.compile(
 )
 
 
+_SPEC_FRAME = pt.SPEC["frame"]
+_SPINES_PER_PANEL = sum(
+    1 for s in ("top", "right", "bottom", "left") if _SPEC_FRAME[f"spine_{s}"]
+)
+
+
 def _spine_rects(svg: str) -> list[tuple[int, int]]:
     """Return one `(iw, ih)` per panel found in `svg`.
 
-    A panel's four spines form a rect anchored at (0, 0) in panel-local
-    coords (the outer `<g transform="translate(...)">` does the offset).
-    Group consecutive matches into rects of four; iw/ih come from the
-    max x/y across the group.
+    Each panel's visible spines anchor at (0, 0) in panel-local coords
+    (the outer `<g transform="translate(...)">` does the offset). The
+    visible-spine count is whatever spec.json currently turns on; group
+    consecutive matches accordingly. iw/ih come from max x/y.
     """
     matches = _SPINE_LINE_RE.findall(svg)
-    if len(matches) % 4 != 0:
+    n = _SPINES_PER_PANEL
+    if n == 0 or len(matches) % n != 0:
         raise AssertionError(
-            f"expected spine lines to come in groups of 4, got {len(matches)}"
+            f"expected spine lines to come in groups of {n}, got {len(matches)}"
         )
     rects: list[tuple[int, int]] = []
-    for i in range(0, len(matches), 4):
-        group = [tuple(int(float(c)) for c in m) for m in matches[i : i + 4]]
+    for i in range(0, len(matches), n):
+        group = [tuple(int(float(c)) for c in m) for m in matches[i : i + n]]
         iw = max(max(x1, x2) for x1, _, x2, _ in group)
         ih = max(max(y1, y2) for _, y1, _, y2 in group)
         rects.append((iw, ih))

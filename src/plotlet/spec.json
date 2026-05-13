@@ -19,7 +19,11 @@
     "tick_pad": 4,
     "tick_direction": "out",
     "tick_top": false,
-    "tick_right": false
+    "tick_right": false,
+    "spine_top": true,
+    "spine_right": true,
+    "spine_bottom": true,
+    "spine_left": true
   },
   "grid": {
     "color": "#b0b0b0",
@@ -71,7 +75,9 @@
     "refspan_color": "#000000",
     "refspan_alpha": 0.2,
     "default_cmap": "viridis",
-    "imshow_max_rects": 10000
+    "imshow_max_rects": 10000,
+    "dendrogram_color": "#1a1a1a",
+    "dendrogram_linewidth": 0.7
   },
   "legend": {
     "row_height": 16,
