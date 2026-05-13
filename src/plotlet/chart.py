@@ -39,6 +39,32 @@ from .artists import _to_pylist, _to_2d_pylist
 from .registry import get_artist, all_artist_names
 
 
+def _normalize_inner_gap(value) -> tuple[float, float]:
+    """Normalize an `inner_gap` value to an internal `(vertical, horizontal)`
+    tuple. Scalars are duplicated to both directions; a 2-tuple/list is
+    coerced element-wise. Negative values reject."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        v = float(value)
+        if v < 0:
+            raise ValueError(f"inner_gap must be non-negative; got {value!r}")
+        return (v, v)
+    if isinstance(value, (tuple, list)) and len(value) == 2:
+        try:
+            v, h = float(value[0]), float(value[1])
+        except (TypeError, ValueError):
+            raise TypeError(
+                "inner_gap tuple must contain two numbers; "
+                f"got {value!r}"
+            ) from None
+        if v < 0 or h < 0:
+            raise ValueError(f"inner_gap values must be non-negative; got {value!r}")
+        return (v, h)
+    raise TypeError(
+        "inner_gap must be a number or a 2-tuple (vertical, horizontal); "
+        f"got {type(value).__name__}: {value!r}"
+    )
+
+
 class Chart:
     def __init__(self, data=None, *,
                  data_width: int | float | str | None = None,
@@ -111,7 +137,7 @@ class Chart:
         # leaving them on leaves too keeps `_new_parent` and `__init__`
         # symmetric without a separate slot type.
         self._gap: float | None = None
-        self._inner_gap: float | None = None
+        self._inner_gap: tuple[float, float] | None = None
         # Leaf discriminator. Values: "data" (default — normal chart leaf
         # with axes and artists), "legend" (set by pt.legend(...), bypasses
         # the frame+artists render path; see legend.py), "diagram" (set by
@@ -228,16 +254,19 @@ class Chart:
         self._gap = float(value)
         return self
 
-    def inner_gap(self, value: int | float) -> "Chart":
+    def inner_gap(self, value) -> "Chart":
         """Override the inner-margin collapse value for share-pair joints
-        among this parent's body-first leaves. Falls back to
-        `spec.json:layout.inner_gap` (default 12) when unset."""
+        among this parent's body-first leaves. Accepts a scalar (applies to
+        both directions) or a 2-tuple `(vertical, horizontal)` to set
+        per-direction values — `vertical` controls joints in a vertical
+        stack (share_x), `horizontal` controls joints in a horizontal row
+        (share_y). Falls back to `spec.json:layout.inner_gap` when unset."""
         if not self._is_parent:
             raise TypeError(
                 "Chart.inner_gap() requires a parent Chart, not a leaf. "
                 "Compose first (e.g. (a | b).share_x().inner_gap(4)) then call."
             )
-        self._inner_gap = float(value)
+        self._inner_gap = _normalize_inner_gap(value)
         return self
 
     def _apply_share(self, axis: str, mode) -> None:

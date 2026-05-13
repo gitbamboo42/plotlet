@@ -93,8 +93,8 @@
     "section_gap": 8
   },
   "layout": {
-    "gap": 20,
-    "inner_gap": 12,
+    "gap": 0,
+    "inner_gap": [6, 6],
     "legend_gap": 6
   }
 }

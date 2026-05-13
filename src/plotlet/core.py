@@ -773,7 +773,10 @@ def _panel_attrs_and_meta(st, M, iw, ih, x_axis, y_axis,
     # Data-area rect in panel-local coords: (M.left, M.top) within the
     # panel bbox, with size (iw, ih). To get figure-SVG coords, add the
     # panel bbox's (px, py).
-    attrs["data-area"] = f'{M["left"]},{M["top"]},{int(round(iw))},{int(round(ih))}'
+    attrs["data-area"] = (
+        f'{int(round(M["left"]))},{int(round(M["top"]))},'
+        f'{int(round(iw))},{int(round(ih))}'
+    )
 
     meta_parts = []
     if x_axis.kind == "category" and x_axis.cats:

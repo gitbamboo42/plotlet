@@ -9,6 +9,8 @@ bar width is a fixed data-unit distance you control directly.
 This recipe gives `c.numeric_bar(xs, heights, width=0.8, ...)` — same
 matplotlib-style API as `pyplot.bar`, but lives in your project, not core.
 """
+
+SUMMARY = 'Bars anchored at numeric x with an explicit data-unit width (no category scale).'
 from pathlib import Path
 
 import plotlet as pt

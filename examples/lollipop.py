@@ -9,6 +9,8 @@ color cycling, and the legend integrate for free. The optional
 `legend_swatch` hook lets the legend entry actually look like a tiny
 lollipop instead of the default colored line.
 """
+
+SUMMARY = 'Stem-and-circle chart for sparse comparisons; optional mini-lollipop legend swatch.'
 from pathlib import Path
 
 import plotlet as pt

@@ -25,10 +25,10 @@ from .core import (
     _AxisDescriptor, _PanelOpts,
     _figure_root_attrs, _panel_open,
 )
-from .chart import Chart
+from .chart import Chart, _normalize_inner_gap
 
 _GAP = _LAYOUTSPEC["gap"]
-_INNER_GAP = _LAYOUTSPEC["inner_gap"]
+_INNER_GAP = _normalize_inner_gap(_LAYOUTSPEC["inner_gap"])
 _LEGEND_GAP = _LAYOUTSPEC["legend_gap"]
 _FONT = _FONTSPEC["family"]
 
@@ -41,7 +41,7 @@ def grid(cells: list[list],
          share_x: bool | str = False,
          share_y: bool | str = False,
          gap: int | float | None = None,
-         inner_gap: int | float | None = None,
+         inner_gap=None,
          **kwargs) -> Chart:
     """Build a grid-layout parent Chart from a list-of-lists of cells.
 
@@ -113,7 +113,7 @@ def grid(cells: list[list],
     if gap is not None:
         parent._gap = float(gap)
     if inner_gap is not None:
-        parent._inner_gap = float(inner_gap)
+        parent._inner_gap = _normalize_inner_gap(inner_gap)
     parent.share_x(share_x)
     parent.share_y(share_y)
     return parent
@@ -152,15 +152,19 @@ def _resolve_gap(a: Chart | None, b: Chart | None) -> float:
     return _GAP
 
 
-def _resolve_inner_gap(leaf: Chart) -> float:
+def _resolve_inner_gap(leaf: Chart, axis: str) -> float:
     """Pull the per-parent `inner_gap` override off the leaf's immediate
-    parent; fall back to `spec.json:layout.inner_gap`. Cross-layout shares
-    (rare) read from each leaf's *own* parent — explicit per-parent setting
-    wins on whichever side it's declared."""
+    parent; fall back to `spec.json:layout.inner_gap`. `axis="v"` returns
+    the vertical-arrangement (share_x) value, `axis="h"` the horizontal-
+    arrangement (share_y) value. Cross-layout shares (rare) read from each
+    leaf's *own* parent — explicit per-parent setting wins on whichever
+    side it's declared."""
     parent = leaf._parent
     if parent is not None and parent._inner_gap is not None:
-        return parent._inner_gap
-    return _INNER_GAP
+        v, h = parent._inner_gap
+    else:
+        v, h = _INNER_GAP
+    return v if axis == "v" else h
 
 
 def _pair_gap(a: Chart | None, b: Chart | None, *, axis: str) -> float:
@@ -556,12 +560,18 @@ def _build_axis_descriptors(leaves: list[Chart],
 
 def _mark_joined_pair(a: Chart | None, b: Chart | None, *, axis: str,
                       out: dict[int, _PanelOpts]) -> None:
-    """If `a` and `b` are joined along `axis` (gap collapsed to 0), set
-    `hide_*` on both sides of the joint and `suppress_*_labels` on the side
-    whose tick labels would duplicate the neighbor's. h-axis: y-tick labels
-    live on the left, so the right panel suppresses. v-axis: x-tick labels
-    live on the bottom, so the top panel suppresses."""
-    if a is None or b is None or _pair_gap(a, b, axis=axis) != 0.0:
+    """If `a` and `b` are joined along `axis` (i.e., share-equivalent on the
+    orthogonal axis), set `hide_*` on both sides of the joint and
+    `suppress_*_labels` on the side whose tick labels would duplicate the
+    neighbor's. h-axis: y-tick labels live on the left, so the right panel
+    suppresses. v-axis: x-tick labels live on the bottom, so the top panel
+    suppresses."""
+    if a is None or b is None or a._is_parent or b._is_parent:
+        return
+    if a._leaf_kind != "data" or b._leaf_kind != "data":
+        return
+    share_axis = "y" if axis == "h" else "x"
+    if _share_root(a, share_axis) is not _share_root(b, share_axis):
         return
     if axis == "h":
         out[id(a)].hide_right = True
@@ -686,11 +696,12 @@ def _compute_measured_margins(leaves: list[Chart],
                                  leaf._data_width,
                                  leaf._data_height)
         M_eff = {side: max(M_floor[side], M_req[side]) for side in M_floor}
-        ig = _resolve_inner_gap(leaf)
-        if po.hide_left:   M_eff["left"]   = ig
-        if po.hide_right:  M_eff["right"]  = ig
-        if po.hide_top:    M_eff["top"]    = ig
-        if po.hide_bottom: M_eff["bottom"] = ig
+        ig_v = _resolve_inner_gap(leaf, axis="v")
+        ig_h = _resolve_inner_gap(leaf, axis="h")
+        if po.hide_left:   M_eff["left"]   = ig_h
+        if po.hide_right:  M_eff["right"]  = ig_h
+        if po.hide_top:    M_eff["top"]    = ig_v
+        if po.hide_bottom: M_eff["bottom"] = ig_v
         po.M_eff = M_eff
 
 
@@ -819,11 +830,12 @@ def _effective_margin(leaf: Chart, po: _PanelOpts, w: float, h: float) -> dict:
     if po.M_eff is not None:
         return dict(po.M_eff)
     M_eff = _enforce_floors(leaf._margin)
-    ig = _resolve_inner_gap(leaf)
-    if po.hide_left:   M_eff["left"]   = ig
-    if po.hide_right:  M_eff["right"]  = ig
-    if po.hide_top:    M_eff["top"]    = ig
-    if po.hide_bottom: M_eff["bottom"] = ig
+    ig_v = _resolve_inner_gap(leaf, axis="v")
+    ig_h = _resolve_inner_gap(leaf, axis="h")
+    if po.hide_left:   M_eff["left"]   = ig_h
+    if po.hide_right:  M_eff["right"]  = ig_h
+    if po.hide_top:    M_eff["top"]    = ig_v
+    if po.hide_bottom: M_eff["bottom"] = ig_v
     return M_eff
 
 
