@@ -35,7 +35,7 @@ from .core import (
     _FRAME_METHODS, _replay, _effective_margin, _render,
     _to_px,
 )
-from .artists import _to_pylist, _to_2d_pylist
+from .utils import to_list, to_list_2d
 from .registry import get_artist, all_artist_names
 
 
@@ -440,7 +440,7 @@ class Chart:
         self._require_leaf("bar")
         if x is not None or y is not None:
             df = self._resolve_data(data, "bar")
-            self._record("bar", _to_pylist(df[x]), _to_pylist(df[y]), **opts)
+            self._record("bar", to_list(df[x]), to_list(df[y]), **opts)
         else:
             self._record("bar", *args, **opts)
         return self
@@ -449,7 +449,7 @@ class Chart:
         self._require_leaf("hist")
         if x is not None:
             df = self._resolve_data(data, "hist")
-            self._record("hist", _to_pylist(df[x]), **opts)
+            self._record("hist", to_list(df[x]), **opts)
         else:
             self._record("hist", *args, **opts)
         return self
@@ -459,7 +459,7 @@ class Chart:
         if x is not None or y1 is not None or y2 is not None:
             df = self._resolve_data(data, "fill_between")
             self._record("fill_between",
-                          _to_pylist(df[x]), _to_pylist(df[y1]), _to_pylist(df[y2]),
+                          to_list(df[x]), to_list(df[y1]), to_list(df[y2]),
                           **opts)
         else:
             self._record("fill_between", *args, **opts)
@@ -478,7 +478,7 @@ class Chart:
             rows = list(df.index)   if yticklabels is None else list(yticklabels)
             matrix = df.values
         else:
-            d = _to_2d_pylist(df)
+            d = to_list_2d(df)
             n_rows = len(d); n_cols = len(d[0]) if d else 0
             cols = list(xticklabels) if xticklabels is not None else list(range(n_cols))
             rows = list(yticklabels) if yticklabels is not None else list(range(n_rows))
@@ -524,11 +524,11 @@ class Chart:
     def _tabular(self, public_name, kind, data, x_col, y_col, hue, opts):
         df = self._resolve_data(data, public_name)
         if hue is None:
-            self._record(kind, _to_pylist(df[x_col]), _to_pylist(df[y_col]), **opts)
+            self._record(kind, to_list(df[x_col]), to_list(df[y_col]), **opts)
             return
-        hue_vals = _to_pylist(df[hue])
-        xs_all = _to_pylist(df[x_col])
-        ys_all = _to_pylist(df[y_col])
+        hue_vals = to_list(df[hue])
+        xs_all = to_list(df[x_col])
+        ys_all = to_list(df[y_col])
         seen: list = []
         for v in hue_vals:
             if v not in seen:

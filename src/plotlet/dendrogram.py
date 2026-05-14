@@ -7,7 +7,7 @@ from scipy.cluster.hierarchy import linkage as _scipy_linkage
 from scipy.cluster.hierarchy import dendrogram as _scipy_dendrogram
 
 from ._spec import _D
-from .colors import _resolve_color
+from .draw.colors import _resolve_color
 
 
 _ORIENTS = ("top", "bottom", "left", "right")

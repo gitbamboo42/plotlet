@@ -8,61 +8,11 @@ import base64
 import math
 
 from ._spec import _D, _DASH
-from ._png import encode_rgb
-from .colormaps import colormap_lut, _ContinuousNorm
-from .colors import _resolve_color
-
-
-def _to_pylist(obj):
-    """Convert numpy / pandas / arbitrary iterables to plain Python lists."""
-    if hasattr(obj, "tolist"):
-        return obj.tolist()
-    if isinstance(obj, (list, tuple)):
-        return list(obj)
-    return list(obj)
-
-
-def _to_2d_pylist(obj):
-    """Convert a 2-D input (list-of-lists, numpy 2-D, DataFrame) to nested lists."""
-    if hasattr(obj, "values") and not hasattr(obj, "tolist"):
-        obj = obj.values
-    if hasattr(obj, "tolist"):
-        out = obj.tolist()
-    else:
-        out = [list(row) for row in obj]
-    if not out:
-        return out
-    if not isinstance(out[0], list):
-        raise ValueError("imshow data must be 2-D")
-    return out
-
-
-def _op(alpha):
-    """SVG opacity attribute, omitted when fully opaque to keep output lean."""
-    return "" if alpha == 1 else f' opacity="{alpha}"'
-
-
-def _histogram(data, bins):
-    """Equal-width binning. Returns list of {'x0', 'x1', 'count'} dicts."""
-    data = [v for v in _to_pylist(data)
-            if v is not None and not (isinstance(v, float) and math.isnan(v))]
-    if not data:
-        return []
-    lo, hi = min(data), max(data)
-    if lo == hi:
-        hi = lo + 1
-    n = bins if isinstance(bins, int) else 10
-    width = (hi - lo) / n
-    counts = [0] * n
-    for v in data:
-        if v == hi:
-            counts[-1] += 1
-        else:
-            i = int((v - lo) / width)
-            if 0 <= i < n:
-                counts[i] += 1
-    return [{"x0": lo + i * width, "x1": lo + (i + 1) * width, "count": counts[i]}
-            for i in range(n)]
+from .draw._png import encode_rgb
+from .draw.colormaps import colormap_lut, _ContinuousNorm
+from .draw.colors import _resolve_color
+from .draw import text_path, marker, op
+from .utils import to_list, to_list_2d, histogram
 
 
 # ---------------------------------------------------------------------------
@@ -128,14 +78,14 @@ def _artist_line(a, xs_, ys_, col):
         da = f' stroke-dasharray="{_DASH[ls]}"' if ls and _DASH.get(ls) else ""
         out.append(f'<path d="{"".join(d_segs)}" fill="none" stroke="{col}" '
                    f'stroke-width="{opts.get("linewidth", _D["linewidth"])}"'
-                   f'{_op(alpha)}{da}/>')
+                   f'{op(alpha)}{da}/>')
     if opts.get("marker"):
         sz = opts.get("markersize", _D["markersize"])
         for x, y in zip(a["xs"], a["ys"]):
             px, py = xs_(x), ys_(y)
             if not (math.isfinite(px) and math.isfinite(py)):
                 continue
-            out.append(_marker_at(opts["marker"], px, py, sz, col, alpha))
+            out.append(marker(opts["marker"], px, py, sz, col, alpha))
     return "".join(out)
 
 
@@ -143,13 +93,13 @@ def _artist_scatter(a, xs_, ys_, col):
     opts = a["opts"]
     sz = math.sqrt(opts.get("s", _D["scatter_s"])) / 2
     alpha = opts.get("alpha", _D["scatter_alpha"])
-    marker = opts.get("marker", "o")
+    mk = opts.get("marker", "o")
     out = []
     for x, y in zip(a["xs"], a["ys"]):
         px, py = xs_(x), ys_(y)
         if not (math.isfinite(px) and math.isfinite(py)):
             continue
-        out.append(_marker_at(marker, px, py, sz, col, alpha))
+        out.append(marker(mk, px, py, sz, col, alpha))
     return "".join(out)
 
 
@@ -169,7 +119,7 @@ def _artist_bar(a, xs_, ys_, col):
         x = xs_(c) - bw / 2
         y = ys_(v)
         out.append(f'<rect x="{x:.2f}" y="{min(y0, y):.2f}" width="{bw:.2f}" '
-                   f'height="{abs(y - y0):.2f}" fill="{col}"{_op(alpha)}{crisp}/>')
+                   f'height="{abs(y - y0):.2f}" fill="{col}"{op(alpha)}{crisp}/>')
     return "".join(out)
 
 
@@ -184,7 +134,7 @@ def _artist_hist(a, xs_, ys_, ih, col):
         y = ys_(b["count"])
         h = ih - y
         out.append(f'<rect x="{x0:.2f}" y="{y:.2f}" width="{w:.2f}" height="{h:.2f}" '
-                   f'fill="{col}"{_op(alpha)}/>')
+                   f'fill="{col}"{op(alpha)}/>')
     return "".join(out)
 
 
@@ -200,7 +150,7 @@ def _artist_axhline(a, xs_, ys_, iw, ih, col):
     da = f' stroke-dasharray="{_DASH[ls]}"' if ls and _DASH.get(ls) else ""
     alpha = opts.get("alpha", 1)
     return (f'<line x1="{x0:.2f}" x2="{x1:.2f}" y1="{y:.2f}" y2="{y:.2f}" '
-            f'stroke="{col}" stroke-width="{lw}"{_op(alpha)}{da}/>')
+            f'stroke="{col}" stroke-width="{lw}"{op(alpha)}{da}/>')
 
 
 def _artist_axvline(a, xs_, ys_, iw, ih, col):
@@ -215,28 +165,7 @@ def _artist_axvline(a, xs_, ys_, iw, ih, col):
     da = f' stroke-dasharray="{_DASH[ls]}"' if ls and _DASH.get(ls) else ""
     alpha = opts.get("alpha", 1)
     return (f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{y0:.2f}" y2="{y1:.2f}" '
-            f'stroke="{col}" stroke-width="{lw}"{_op(alpha)}{da}/>')
-
-
-def _broadcast(*vals):
-    """Each input is scalar or list-like; broadcast to a common length.
-    Length-1 lists broadcast like scalars; mismatched longer lengths raise."""
-    arrs = []
-    for v in vals:
-        if hasattr(v, "__iter__") and not isinstance(v, str):
-            arrs.append(_to_pylist(v))
-        else:
-            arrs.append([v])
-    n = max(len(a) for a in arrs)
-    out = []
-    for a in arrs:
-        if len(a) == 1:
-            out.append(list(a) * n)
-        elif len(a) == n:
-            out.append(list(a))
-        else:
-            raise ValueError(f"cannot broadcast length {len(a)} to {n}")
-    return out
+            f'stroke="{col}" stroke-width="{lw}"{op(alpha)}{da}/>')
 
 
 def _artist_hlines(a, xs_, ys_, col):
@@ -252,7 +181,7 @@ def _artist_hlines(a, xs_, ys_, col):
             continue
         out.append(f'<line x1="{px0:.2f}" x2="{px1:.2f}" '
                    f'y1="{py:.2f}" y2="{py:.2f}" '
-                   f'stroke="{col}" stroke-width="{lw}"{_op(alpha)}{da}/>')
+                   f'stroke="{col}" stroke-width="{lw}"{op(alpha)}{da}/>')
     return "".join(out)
 
 
@@ -269,7 +198,7 @@ def _artist_vlines(a, xs_, ys_, col):
             continue
         out.append(f'<line x1="{px:.2f}" x2="{px:.2f}" '
                    f'y1="{py0:.2f}" y2="{py1:.2f}" '
-                   f'stroke="{col}" stroke-width="{lw}"{_op(alpha)}{da}/>')
+                   f'stroke="{col}" stroke-width="{lw}"{op(alpha)}{da}/>')
     return "".join(out)
 
 
@@ -284,7 +213,7 @@ def _artist_axhspan(a, xs_, ys_, iw, ih, col):
     x1 = iw * opts.get("xmax", 1.0)
     alpha = opts.get("alpha", _D["refspan_alpha"])
     return (f'<rect x="{x0:.2f}" y="{y0:.2f}" width="{x1 - x0:.2f}" '
-            f'height="{y1 - y0:.2f}" fill="{col}"{_op(alpha)}/>')
+            f'height="{y1 - y0:.2f}" fill="{col}"{op(alpha)}/>')
 
 
 def _artist_axvspan(a, xs_, ys_, iw, ih, col):
@@ -298,7 +227,7 @@ def _artist_axvspan(a, xs_, ys_, iw, ih, col):
     y1 = ih * (1 - opts.get("ymin", 0.0))
     alpha = opts.get("alpha", _D["refspan_alpha"])
     return (f'<rect x="{x0:.2f}" y="{y0:.2f}" width="{x1 - x0:.2f}" '
-            f'height="{y1 - y0:.2f}" fill="{col}"{_op(alpha)}/>')
+            f'height="{y1 - y0:.2f}" fill="{col}"{op(alpha)}/>')
 
 
 def _artist_fill_between(a, xs_, ys_, col):
@@ -325,7 +254,7 @@ def _artist_fill_between(a, xs_, ys_, col):
         return ""
     d = "M" + "L".join(f"{p[0]:.2f},{p[1]:.2f}" for p in pts) + "Z"
     alpha = opts.get("alpha", _D["fill_alpha"])
-    return f'<path d="{d}" fill="{col}"{_op(alpha)}/>'
+    return f'<path d="{d}" fill="{col}"{op(alpha)}/>'
 
 
 def _stroke_attrs(a, ctx_color):
@@ -340,7 +269,7 @@ def _stroke_attrs(a, ctx_color):
     lw = opts.get("linewidth", _D["linewidth"])
     alpha = opts.get("alpha", _D["bar_alpha"])
     if fill:
-        fill_attr = f'fill="{ctx_color}"{_op(alpha)}'
+        fill_attr = f'fill="{ctx_color}"{op(alpha)}'
     else:
         fill_attr = 'fill="none"'
     if edge is not None:
@@ -474,30 +403,114 @@ def _artist_imshow(a, xs_, ys_, col):
             f'href="data:image/png;base64,{b64}"/>')
 
 
+# Marker primitive lives in `plotlet.draw.marker` (imported above).
+
+
 # ---------------------------------------------------------------------------
-# Marker primitive — used by plot/scatter and the legend
+# text — data-anchored labels via bundled DejaVu Sans (font-independent)
 # ---------------------------------------------------------------------------
 
-def _marker_at(marker, x, y, size, col, alpha):
-    msw = _D["marker_stroke_width"]
-    op = _op(alpha)
-    if marker == "o":
-        return f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{size}" fill="{col}"{op}/>'
-    if marker == "s":
-        return (f'<rect x="{x - size:.2f}" y="{y - size:.2f}" width="{2 * size}" '
-                f'height="{2 * size}" fill="{col}"{op}/>')
-    if marker == "^":
-        return (f'<path d="M{x:.2f},{y - size:.2f}L{x + size:.2f},{y + size:.2f}'
-                f'L{x - size:.2f},{y + size:.2f}Z" fill="{col}"{op}/>')
-    if marker == "v":
-        return (f'<path d="M{x:.2f},{y + size:.2f}L{x + size:.2f},{y - size:.2f}'
-                f'L{x - size:.2f},{y - size:.2f}Z" fill="{col}"{op}/>')
-    if marker == "x":
-        return (f'<path d="M{x - size:.2f},{y - size:.2f}L{x + size:.2f},{y + size:.2f}'
-                f'M{x - size:.2f},{y + size:.2f}L{x + size:.2f},{y - size:.2f}" '
-                f'stroke="{col}" stroke-width="{msw}"{op}/>')
-    if marker == "+":
-        return (f'<path d="M{x - size:.2f},{y:.2f}L{x + size:.2f},{y:.2f}'
-                f'M{x:.2f},{y - size:.2f}L{x:.2f},{y + size:.2f}" '
-                f'stroke="{col}" stroke-width="{msw}"{op}/>')
-    return ""
+_HA_TO_ANCHOR = {"left": "start", "center": "middle", "right": "end"}
+
+
+def _artist_text(a, xs_, ys_, col):
+    """Render text labels at data coordinates. Accepts parallel
+    `xs` / `ys` / `labels` lists. Empty labels are skipped."""
+    opts = a["opts"]
+    fontsize = opts.get("fontsize", _D["text_size"])
+    ha = opts.get("ha", "left")
+    va = opts.get("va", "baseline")
+    color = opts.get("color") or col or _D["text_color"]
+    dx = opts.get("dx", 0)
+    dy = opts.get("dy", 0)
+    anchor = _HA_TO_ANCHOR.get(ha, "start")
+    # va offset on top of the SVG baseline. Cap-height of DejaVu ≈ 0.7 * size;
+    # x-height ≈ 0.5. These constants give visually-centered placement for
+    # the three common va values without measuring per-glyph metrics.
+    if va == "top":
+        va_offset = fontsize * 0.78
+    elif va == "center":
+        va_offset = fontsize * 0.34
+    elif va == "bottom":
+        va_offset = 0.0
+    else:  # baseline
+        va_offset = 0.0
+    out = []
+    for x, y, s in zip(a["xs"], a["ys"], a["labels"]):
+        if s is None or s == "":
+            continue
+        px = xs_(x) + dx
+        py = ys_(y) + dy + va_offset
+        if not (math.isfinite(px) and math.isfinite(py)):
+            continue
+        out.append(text_path(str(s), px, py, fontsize, anchor=anchor, color=color))
+    return "".join(out)
+
+
+# ---------------------------------------------------------------------------
+# errorbar — points with vertical/horizontal error bars and optional caps
+# ---------------------------------------------------------------------------
+
+def _expand_err(err, n):
+    """Normalize an error-spec into (lower, upper) lists of length n.
+    Accepts scalar, list/array, or a 2-tuple (lower, upper) for asymmetric."""
+    if err is None:
+        return [0.0] * n, [0.0] * n
+    if isinstance(err, tuple) and len(err) == 2:
+        lo = to_list(err[0]); hi = to_list(err[1])
+        if len(lo) == 1: lo = lo * n
+        if len(hi) == 1: hi = hi * n
+        return lo, hi
+    if hasattr(err, "__iter__") and not isinstance(err, str):
+        v = to_list(err)
+        return list(v), list(v)
+    return [float(err)] * n, [float(err)] * n
+
+
+def _artist_errorbar(a, xs_, ys_, col):
+    xs, ys, opts = a["xs"], a["ys"], a["opts"]
+    n = len(xs)
+    xlo, xhi = _expand_err(opts.get("xerr"), n)
+    ylo, yhi = _expand_err(opts.get("yerr"), n)
+    capsize = opts.get("capsize", _D["errorbar_capsize"])
+    lw = opts.get("linewidth", _D["errorbar_linewidth"])
+    mk = opts.get("marker", "o")
+    msize = opts.get("markersize", _D["markersize"])
+    alpha = opts.get("alpha", 1)
+    op_attr = op(alpha)
+    out = []
+    for x, y, dxl, dxh, dyl, dyh in zip(xs, ys, xlo, xhi, ylo, yhi):
+        px = xs_(x); py = ys_(y)
+        if not (math.isfinite(px) and math.isfinite(py)):
+            continue
+        if dyl or dyh:
+            y_lo = ys_(y - dyl); y_hi = ys_(y + dyh)
+            out.append(
+                f'<line x1="{px:.2f}" x2="{px:.2f}" y1="{y_lo:.2f}" y2="{y_hi:.2f}" '
+                f'stroke="{col}" stroke-width="{lw}"{op_attr}/>'
+            )
+            if capsize:
+                out.append(
+                    f'<line x1="{px - capsize / 2:.2f}" x2="{px + capsize / 2:.2f}" '
+                    f'y1="{y_lo:.2f}" y2="{y_lo:.2f}" stroke="{col}" stroke-width="{lw}"{op_attr}/>'
+                    f'<line x1="{px - capsize / 2:.2f}" x2="{px + capsize / 2:.2f}" '
+                    f'y1="{y_hi:.2f}" y2="{y_hi:.2f}" stroke="{col}" stroke-width="{lw}"{op_attr}/>'
+                )
+        if dxl or dxh:
+            x_lo = xs_(x - dxl); x_hi = xs_(x + dxh)
+            out.append(
+                f'<line x1="{x_lo:.2f}" x2="{x_hi:.2f}" y1="{py:.2f}" y2="{py:.2f}" '
+                f'stroke="{col}" stroke-width="{lw}"{op_attr}/>'
+            )
+            if capsize:
+                out.append(
+                    f'<line x1="{x_lo:.2f}" x2="{x_lo:.2f}" '
+                    f'y1="{py - capsize / 2:.2f}" y2="{py + capsize / 2:.2f}" '
+                    f'stroke="{col}" stroke-width="{lw}"{op_attr}/>'
+                    f'<line x1="{x_hi:.2f}" x2="{x_hi:.2f}" '
+                    f'y1="{py - capsize / 2:.2f}" y2="{py + capsize / 2:.2f}" '
+                    f'stroke="{col}" stroke-width="{lw}"{op_attr}/>'
+                )
+        if mk:
+            out.append(marker(mk, px, py, msize, col, alpha))
+    return "".join(out)

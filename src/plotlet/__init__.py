@@ -13,17 +13,19 @@ For non-tabular use, the chained form works directly on the same Chart:
     c
 """
 from ._spec import SPEC
-from .colors import TAB10, colors
-from .colormaps import colormap, list_colormaps
+from .draw.colors import TAB10, colors
+from .draw.colormaps import colormap, list_colormaps
 from .chart import Chart, chart
 from .layout import grid
 from .legend import legend
 from .registry import ArtistSpec, add_artist
 from .layout_diagram import layout_diagram
+from . import draw, utils
 
 __all__ = ["chart", "Chart", "SPEC", "TAB10", "colors",
            "colormap", "list_colormaps", "grid", "legend",
-           "ArtistSpec", "add_artist", "layout_diagram"]
+           "ArtistSpec", "add_artist", "layout_diagram",
+           "draw", "utils"]
 
 # Single source of truth: pyproject.toml. importlib.metadata reads it at
 # runtime from the installed package metadata (works for `pip install` and

@@ -77,7 +77,11 @@
     "default_cmap": "viridis",
     "imshow_max_rects": 10000,
     "dendrogram_color": "#1a1a1a",
-    "dendrogram_linewidth": 0.7
+    "dendrogram_linewidth": 0.7,
+    "text_color": "#222222",
+    "text_size": 11,
+    "errorbar_linewidth": 1.2,
+    "errorbar_capsize": 4
   },
   "legend": {
     "row_height": 16,

@@ -345,6 +345,32 @@ def chart_hlines_vlines():
     return c
 
 
+def chart_text():
+    # Data-anchored text labels. Single-point and batched-list forms.
+    xs = [1, 2, 3, 4, 5]
+    ys = [3, 7, 4, 9, 5]
+    c = pt.chart(title="text annotations", xlabel="x", ylabel="y")
+    c.scatter(xs, ys)
+    c.text(xs, ys, ["A", "B", "C", "D", "E"], dy=-10, ha="center")
+    c.text(3, 9.5, "peak", color="C3", ha="center")
+    return c
+
+
+def chart_errorbar():
+    # Vertical + horizontal error bars, symmetric and asymmetric.
+    xs = [1, 2, 3, 4, 5, 6]
+    ys = [2.1, 3.4, 4.0, 3.8, 5.1, 6.2]
+    yerr = [0.4, 0.3, 0.6, 0.5, 0.4, 0.7]
+    c = pt.chart(title="error bars", xlabel="x", ylabel="y", legend=True)
+    c.errorbar(xs, ys, yerr=yerr, label="measurement")
+    c.errorbar([1.2, 2.2, 3.2, 4.2, 5.2, 6.2],
+               [1.5, 2.6, 3.3, 4.7, 5.9, 6.8],
+               yerr=([0.2, 0.3, 0.2, 0.4, 0.3, 0.5],
+                     [0.5, 0.4, 0.6, 0.3, 0.5, 0.4]),
+               marker="s", label="model")
+    return c
+
+
 def chart_plot_alpha():
     # alpha now propagates to both the stroke and (if present) markers.
     xs = _xs()
@@ -552,6 +578,8 @@ PLOTS = {
     "despined":            chart_despined,
     "restyled_spines":     chart_restyled_spines,
     "hlines_vlines":       chart_hlines_vlines,
+    "text":                chart_text,
+    "errorbar":            chart_errorbar,
     "plot_alpha":          chart_plot_alpha,
     "dendrogram_top":      chart_dendrogram_top,
     "dendrogram_left":     chart_dendrogram_left,

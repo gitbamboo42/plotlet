@@ -17,9 +17,10 @@ Mixed sources stack continuous-first, discrete-second.
 from __future__ import annotations
 
 from .chart import Chart
-from .colormaps import colormap, _ContinuousNorm
+from .draw.colormaps import colormap, _ContinuousNorm
 from .registry import RenderContext, get_artist
-from .font import _measure_text, _text_path
+from .draw.font import _measure_text
+from .draw import text_path
 from .scales import _fmt_tick
 from ._spec import _D, _DASH, _FONTSPEC, _FRAME, _LEGSPEC
 
@@ -171,7 +172,7 @@ def _render_continuous_entry(entry: dict, x: float, y: float) -> str:
     label_text = entry.get("label")
     label_h = tick_size + 4 if label_text else 0
     if label_text:
-        parts.append(_text_path(label_text, x, y + tick_size,
+        parts.append(text_path(label_text, x, y + tick_size,
                                 tick_size, anchor="start"))
 
     strip_y = y + label_h
@@ -215,7 +216,7 @@ def _render_continuous_entry(entry: dict, x: float, y: float) -> str:
                      f'y1="{ty:.2f}" y2="{ty:.2f}" '
                      f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
         bias = 4 * (strip_mid - ty) / (strip_h / 2) if strip_h > 0 else 0
-        parts.append(_text_path(_fmt_tick(t), label_x, ty + 4 + bias,
+        parts.append(text_path(_fmt_tick(t), label_x, ty + 4 + bias,
                                 tick_size, anchor="start"))
     return "".join(parts)
 
@@ -328,7 +329,7 @@ def _render_legend(leaf: Chart, w: float, h: float,
     cy = pad_y
     for gi, g in enumerate(groups):
         if g["header"]:
-            parts.append(_text_path(g["header"], pad_x, cy + label_size,
+            parts.append(text_path(g["header"], pad_x, cy + label_size,
                                     label_size, anchor="start"))
             cy += header_h
         for entry in g["cont"]:
@@ -345,7 +346,7 @@ def _render_legend(leaf: Chart, w: float, h: float,
             else:
                 parts.append(f'<line x1="{pad_x}" x2="{pad_x + sw}" y1="{ry}" y2="{ry}" '
                              f'stroke="{a["_color"]}" stroke-width="{_D["linewidth"]}"/>')
-            parts.append(_text_path(a["opts"]["label"], pad_x + sw + 6, ry + 4,
+            parts.append(text_path(a["opts"]["label"], pad_x + sw + 6, ry + 4,
                                     tick_size, anchor="start"))
         cy += len(g["disc"]) * row_h
         if gi < len(groups) - 1:

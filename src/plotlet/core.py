@@ -28,10 +28,11 @@ from pathlib import Path
 from ._spec import (
     SPEC, _SIZESPEC, _MARGIN_FLOOR, _FRAME, _GRIDSPEC, _FONTSPEC, _LEGSPEC, _D, _DASH,
 )
-from .colors import _resolve_color, TAB10
+from .draw.colors import _resolve_color, TAB10
 from .scales import _LinearScale, _LogScale, _CategoryScale, _nice_domain, _fmt_tick
-from .font import _measure_text, _text_path
-from .artists import _histogram
+from .draw.font import _measure_text
+from .draw import text_path
+from .utils import histogram, collect_categories
 from .registry import RenderContext, get_artist, all_artist_names
 from . import builtin_artists  # noqa: F401  — registers built-ins on import
 
@@ -126,8 +127,8 @@ def _rotated_text(s, x, y, size, angle, axis):
     against SVG's positive-clockwise rotation."""
     if not angle:
         anchor = "middle" if axis == "x" else "end"
-        return _text_path(s, x, y, size, anchor=anchor)
-    text = _text_path(s, 0, 0, size, anchor="end")
+        return text_path(s, x, y, size, anchor=anchor)
+    text = text_path(s, 0, 0, size, anchor="end")
     return f'<g transform="translate({x:.2f},{y:.2f}) rotate({-angle})">{text}</g>'
 
 
@@ -359,7 +360,7 @@ def _prebin_hist(st):
     scanning. Idempotent (guarded by `_bins` presence)."""
     for a in st["artists"]:
         if a["type"] == "hist" and "_bins" not in a:
-            a["_bins"] = _histogram(a["data"], a["opts"].get("bins", 10))
+            a["_bins"] = histogram(a["data"], a["opts"].get("bins", 10))
 
 
 def _artist_axis_order(artists, axis):
@@ -372,23 +373,6 @@ def _artist_axis_order(artists, axis):
         if hint and axis in hint:
             return list(hint[axis])
     return None
-
-
-def _collect_categories(artists, axis):
-    """Unique values an artist contributes on `axis`, alphabetically sorted."""
-    seen = set()
-    out = []
-    for a in artists:
-        spec = get_artist(a["type"])
-        if spec is None: continue
-        fn = spec.xdomain if axis == "x" else spec.ydomain
-        vals = fn(a)
-        if vals is None: continue
-        for v in vals:
-            if v is None: continue
-            if v not in seen:
-                seen.add(v); out.append(v)
-    return sorted(out, key=str)
 
 
 def _is_categorical_axis(artists, axis):
@@ -426,7 +410,7 @@ def _x_descriptor(st) -> _AxisDescriptor:
         if st["x_order"] is not None:
             cats = list(st["x_order"])
         else:
-            cats = _artist_axis_order(artists, "x") or _collect_categories(artists, "x")
+            cats = _artist_axis_order(artists, "x") or collect_categories(artists, "x")
         padding = _D["category_padding"] if st["x_padding"] is None else st["x_padding"]
         return _AxisDescriptor(kind="category", cats=cats, padding=padding)
 
@@ -480,7 +464,7 @@ def _y_descriptor(st) -> _AxisDescriptor:
         if st["y_order"] is not None:
             cats = list(st["y_order"])
         else:
-            cats = _artist_axis_order(artists, "y") or _collect_categories(artists, "y")
+            cats = _artist_axis_order(artists, "y") or collect_categories(artists, "y")
         padding = _D["category_padding"] if st["y_padding"] is None else st["y_padding"]
         return _AxisDescriptor(kind="category", cats=cats, padding=padding)
 
@@ -513,7 +497,7 @@ def _x_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
         if anchor["x_order"] is not None:
             cats = list(anchor["x_order"])
         else:
-            cats = _artist_axis_order(all_artists, "x") or _collect_categories(all_artists, "x")
+            cats = _artist_axis_order(all_artists, "x") or collect_categories(all_artists, "x")
         padding = _D["category_padding"] if anchor["x_padding"] is None else anchor["x_padding"]
         return _AxisDescriptor(kind="category", cats=cats, padding=padding)
     x_lo, x_hi = _scan_domain(all_artists, "x")
@@ -537,7 +521,7 @@ def _y_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
         if anchor["y_order"] is not None:
             cats = list(anchor["y_order"])
         else:
-            cats = _artist_axis_order(all_artists, "y") or _collect_categories(all_artists, "y")
+            cats = _artist_axis_order(all_artists, "y") or collect_categories(all_artists, "y")
         padding = _D["category_padding"] if anchor["y_padding"] is None else anchor["y_padding"]
         return _AxisDescriptor(kind="category", cats=cats, padding=padding)
     force_zero = any(a["type"] in ("bar", "hist") for a in all_artists)
@@ -1014,14 +998,14 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     # xlabel / ylabel / title live in margin space; drop when that margin
     # is collapsed against a joined neighbor.
     if st["xlabel"] and not hide_b:
-        parts.append(_text_path(st["xlabel"], iw / 2, ih + M["bottom"] - 8,
+        parts.append(text_path(st["xlabel"], iw / 2, ih + M["bottom"] - 8,
                                 label_size, anchor="middle"))
     if st["ylabel"] and not hide_l:
-        ylabel_path = _text_path(st["ylabel"], 0, 0, label_size, anchor="middle")
+        ylabel_path = text_path(st["ylabel"], 0, 0, label_size, anchor="middle")
         parts.append(f'<g transform="translate({-(M["left"] - 12)},{ih/2}) rotate(-90)">'
                      f'{ylabel_path}</g>')
     if st["title"] and not hide_t:
-        parts.append(_text_path(st["title"], iw / 2, -10, title_size, anchor="middle"))
+        parts.append(text_path(st["title"], iw / 2, -10, title_size, anchor="middle"))
 
     # legend — each artist's spec supplies its own swatch via legend_swatch.
     # Custom artists that don't define one fall back to a colored line.
@@ -1048,7 +1032,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
                 else:
                     parts.append(f'<line x1="{pad_x}" x2="{pad_x + sw}" y1="{ry}" y2="{ry}" '
                                  f'stroke="{a["_color"]}" stroke-width="{_D["linewidth"]}"/>')
-                parts.append(_text_path(a["opts"]["label"], pad_x + sw + 6, ry + 4,
+                parts.append(text_path(a["opts"]["label"], pad_x + sw + 6, ry + 4,
                                         tick_size, anchor="start"))
             parts.append('</g>')
 

@@ -1,0 +1,95 @@
+"""Custom artist: numeric-x bar.
+
+The built-in `c.bar(cats, vals)` is categorical: cats become a category
+scale, and bandwidth comes from the scale. That's the right call for the
+common case, but sometimes you want bars anchored at *numeric* positions
+(e.g. genome coordinates, time-series with explicit numeric x), where the
+bar width is a fixed data-unit distance you control directly.
+
+This recipe gives `c.numeric_bar(xs, heights, width=0.8, ...)` — same
+matplotlib-style API as `pyplot.bar`, but lives in your project, not core.
+"""
+
+SUMMARY = 'Bars anchored at numeric x with an explicit data-unit width (no category scale).'
+from pathlib import Path
+
+import plotlet as pt
+from plotlet.utils import to_list
+from plotlet._spec import _D
+
+
+def numeric_bar_record(args, kw):
+    return {
+        "type": "numeric_bar",
+        "xs":      to_list(args[0]),
+        "heights": to_list(args[1]),
+        "opts": kw,
+    }
+
+
+# Autoscale: x extent grows by half-width on each side so bar edges fit;
+# y always includes 0 so bars anchor visually.
+def numeric_bar_xdomain(a):
+    w = a["opts"].get("width", 0.8)
+    return [x - w / 2 for x in a["xs"]] + [x + w / 2 for x in a["xs"]]
+
+
+def numeric_bar_ydomain(a):
+    return list(a["heights"]) + [0]
+
+
+def numeric_bar_draw(a, ctx):
+    opts = a["opts"]
+    w = opts.get("width", 0.8)
+    alpha = opts.get("alpha", _D["bar_alpha"])
+    col = ctx.color
+    y0 = ctx.y_scale(0)
+    out = []
+    for x, h in zip(a["xs"], a["heights"]):
+        x_left  = ctx.x_scale(x - w / 2)
+        x_right = ctx.x_scale(x + w / 2)
+        y_top   = ctx.y_scale(h)
+        bx = min(x_left, x_right)
+        bw = abs(x_right - x_left)
+        by = min(y0, y_top)
+        bh = abs(y_top - y0)
+        out.append(
+            f'<rect x="{bx:.2f}" y="{by:.2f}" width="{bw:.2f}" '
+            f'height="{bh:.2f}" fill="{col}" opacity="{alpha}"/>'
+        )
+    return "".join(out)
+
+
+def numeric_bar_legend_swatch(a, ctx, x0, y_mid):
+    col = a["_color"]
+    alpha = a["opts"].get("alpha", _D["bar_alpha"])
+    return (f'<rect x="{x0}" y="{y_mid - 5}" width="22" height="10" '
+            f'fill="{col}" opacity="{alpha}"/>')
+
+
+pt.add_artist(pt.ArtistSpec(
+    name="numeric_bar",
+    record=numeric_bar_record,
+    xdomain=numeric_bar_xdomain,
+    ydomain=numeric_bar_ydomain,
+    draw=numeric_bar_draw,
+    legend_swatch=numeric_bar_legend_swatch,
+))
+
+
+def demo():
+    """Build the demonstration chart with synthetic data.
+
+    Returns a `pt.Chart` ready for `.save_svg()` or further composition."""
+    c = pt.chart()
+    c.numeric_bar([1.0, 2.5, 4.0, 5.5, 7.0], [3, 7, 2, 9, 5],
+                  width=0.6, label="counts")
+    c.title("Numeric-x bars").xlabel("position").ylabel("count")
+    c.legend(True)
+    return c
+
+
+if __name__ == "__main__":
+    out = Path(__file__).with_suffix(".svg")
+    demo().save_svg(out)
+    print(f"wrote {out}")

@@ -9,14 +9,15 @@ from __future__ import annotations
 import math
 
 from .registry import ArtistSpec, RenderContext, add_artist
+from .draw import marker, op
+from .utils import to_list, to_list_2d, broadcast, histogram
 from .artists import (
-    _to_pylist, _to_2d_pylist, _histogram, _broadcast,
     _artist_line, _artist_scatter, _artist_bar, _artist_hist, _artist_fill_between,
     _artist_axhline, _artist_axvline, _artist_axhspan, _artist_axvspan,
     _artist_hlines, _artist_vlines,
     _artist_rect, _artist_polygon,
     _artist_imshow,
-    _marker_at, _op,
+    _artist_text, _artist_errorbar, _expand_err,
 )
 from .dendrogram import (
     _dendrogram_record,
@@ -57,7 +58,7 @@ def _line_legend_swatch(a, ctx, x0, y_mid):
     out = _line_swatch(a, ctx, x0, y_mid, ctx.defaults["linewidth"])
     if a["opts"].get("marker"):
         sw = _LEGSPEC["swatch_width"]
-        out += _marker_at(a["opts"]["marker"], x0 + sw / 2, y_mid,
+        out += marker(a["opts"]["marker"], x0 + sw / 2, y_mid,
                           a["opts"].get("markersize", ctx.defaults["markersize"]),
                           a["_color"], 1)
     return out
@@ -70,7 +71,7 @@ def _refline_legend_swatch(a, ctx, x0, y_mid):
 def _scatter_legend_swatch(a, ctx, x0, y_mid):
     sw = _LEGSPEC["swatch_width"]
     s_size = math.sqrt(a["opts"].get("s", ctx.defaults["scatter_s"])) / 2
-    return _marker_at(a["opts"].get("marker", "o"),
+    return marker(a["opts"].get("marker", "o"),
                       x0 + sw / 2, y_mid, s_size, a["_color"],
                       a["opts"].get("alpha", ctx.defaults["scatter_alpha"]))
 
@@ -79,7 +80,7 @@ def _rect_swatch(a, x0, y_mid, default_alpha):
     sw = _LEGSPEC["swatch_width"]
     return (f'<rect x="{x0}" y="{y_mid - 5}" width="{sw}" height="10" '
             f'fill="{a["_color"]}"'
-            f'{_op(a["opts"].get("alpha", default_alpha))}/>')
+            f'{op(a["opts"].get("alpha", default_alpha))}/>')
 
 
 def _bar_legend_swatch(a, ctx, x0, y_mid):
@@ -245,8 +246,8 @@ def _imshow_data_attrs(a):
 
 add_artist(ArtistSpec(
     name="line",
-    record=lambda args, kw: {"type": "line", "xs": _to_pylist(args[0]),
-                              "ys": _to_pylist(args[1]), "opts": kw},
+    record=lambda args, kw: {"type": "line", "xs": to_list(args[0]),
+                              "ys": to_list(args[1]), "opts": kw},
     xdomain=_xs_of,
     ydomain=_ys_of,
     draw=lambda a, ctx: _artist_line(a, ctx.x_scale, ctx.y_scale, ctx.color),
@@ -259,8 +260,8 @@ add_artist(ArtistSpec(
 
 add_artist(ArtistSpec(
     name="scatter",
-    record=lambda args, kw: {"type": "scatter", "xs": _to_pylist(args[0]),
-                              "ys": _to_pylist(args[1]), "opts": kw},
+    record=lambda args, kw: {"type": "scatter", "xs": to_list(args[0]),
+                              "ys": to_list(args[1]), "opts": kw},
     xdomain=_xs_of,
     ydomain=_ys_of,
     draw=lambda a, ctx: _artist_scatter(a, ctx.x_scale, ctx.y_scale, ctx.color),
@@ -275,8 +276,8 @@ add_artist(ArtistSpec(
 
 add_artist(ArtistSpec(
     name="bar",
-    record=lambda args, kw: {"type": "bar", "cats": _to_pylist(args[0]),
-                              "vals": _to_pylist(args[1]), "opts": kw},
+    record=lambda args, kw: {"type": "bar", "cats": to_list(args[0]),
+                              "vals": to_list(args[1]), "opts": kw},
     xdomain=lambda a: a["cats"],
     ydomain=_vals_of,
     draw=lambda a, ctx: _artist_bar(a, ctx.x_scale, ctx.y_scale, ctx.color),
@@ -289,7 +290,7 @@ add_artist(ArtistSpec(
 
 add_artist(ArtistSpec(
     name="hist",
-    record=lambda args, kw: {"type": "hist", "data": _to_pylist(args[0]), "opts": kw},
+    record=lambda args, kw: {"type": "hist", "data": to_list(args[0]), "opts": kw},
     xdomain=_bin_xs,
     ydomain=_bin_ys,
     draw=lambda a, ctx: _artist_hist(a, ctx.x_scale, ctx.y_scale, ctx.ih, ctx.color),
@@ -303,9 +304,9 @@ add_artist(ArtistSpec(
 add_artist(ArtistSpec(
     name="fill_between",
     record=lambda args, kw: {"type": "fill_between",
-                              "xs": _to_pylist(args[0]),
-                              "y1": _to_pylist(args[1]),
-                              "y2": _to_pylist(args[2]),
+                              "xs": to_list(args[0]),
+                              "y1": to_list(args[1]),
+                              "y2": to_list(args[2]),
                               "opts": kw},
     xdomain=_xs_of,
     ydomain=_y1y2_of,
@@ -325,8 +326,8 @@ add_artist(ArtistSpec(
 def _area_record(args, kw):
     kw = dict(kw)
     base = kw.pop("base", 0)
-    xs = _to_pylist(args[0])
-    ys = _to_pylist(args[1])
+    xs = to_list(args[0])
+    ys = to_list(args[1])
     return {"type": "area", "xs": xs, "y1": ys, "y2": [base] * len(xs),
             "base": base, "opts": kw}
 
@@ -350,7 +351,7 @@ add_artist(ArtistSpec(
 # contract: bar wants categorical x, rect wants numeric x/y.
 
 def _rect_record(args, kw):
-    xs, ys, ws, hs = _broadcast(args[0], args[1], args[2], args[3])
+    xs, ys, ws, hs = broadcast(args[0], args[1], args[2], args[3])
     return {"type": "rect", "xs": xs, "ys": ys, "ws": ws, "hs": hs, "opts": kw}
 
 
@@ -380,8 +381,8 @@ add_artist(ArtistSpec(
 add_artist(ArtistSpec(
     name="polygon",
     record=lambda args, kw: {"type": "polygon",
-                              "xs": _to_pylist(args[0]),
-                              "ys": _to_pylist(args[1]),
+                              "xs": to_list(args[0]),
+                              "ys": to_list(args[1]),
                               "opts": kw},
     xdomain=_xs_of,
     ydomain=_ys_of,
@@ -449,12 +450,12 @@ add_artist(ArtistSpec(
 # and use the color cycle so a labeled hlines/vlines acts like a series.
 
 def _hlines_record(args, kw):
-    ys, xmins, xmaxs = _broadcast(args[0], args[1], args[2])
+    ys, xmins, xmaxs = broadcast(args[0], args[1], args[2])
     return {"type": "hlines", "ys": ys, "xmins": xmins, "xmaxs": xmaxs, "opts": kw}
 
 
 def _vlines_record(args, kw):
-    xs, ymins, ymaxs = _broadcast(args[0], args[1], args[2])
+    xs, ymins, ymaxs = broadcast(args[0], args[1], args[2])
     return {"type": "vlines", "xs": xs, "ymins": ymins, "ymaxs": ymaxs, "opts": kw}
 
 
@@ -485,7 +486,7 @@ add_artist(ArtistSpec(
 # domain can be computed. We do that in record() rather than _render.
 
 def _imshow_record(args, kw):
-    d = _to_2d_pylist(args[0])
+    d = to_list_2d(args[0])
     nrows = len(d)
     ncols = len(d[0]) if d else 0
     vmin = kw.get("vmin"); vmax = kw.get("vmax")
@@ -567,4 +568,97 @@ add_artist(ArtistSpec(
     axis_order=_dendrogram_axis_order,
     frame_defaults=_dendrogram_frame_defaults,
     tight_domain=True,
+))
+
+
+# --- text -------------------------------------------------------------------
+# Data-anchored labels rendered as glyph paths from the bundled DejaVu Sans
+# (output stays font-independent). Accepts scalar `(x, y, s)` for a single
+# label or parallel lists for batched annotation. Strings broadcast: pass
+# `s="*"` with list `xs`/`ys` to mark every point with the same glyph.
+
+def _text_record(args, kw):
+    x, y, s = args[0], args[1], args[2]
+    x_is_scalar = not (hasattr(x, "__iter__") and not isinstance(x, str))
+    if x_is_scalar:
+        xs = [x]; ys = [y]; labels = [s]
+    else:
+        xs = to_list(x); ys = to_list(y)
+        if isinstance(s, str):
+            labels = [s] * len(xs)
+        else:
+            labels = list(s)
+        if not (len(xs) == len(ys) == len(labels)):
+            raise ValueError(
+                f"text() expects xs, ys, labels to share length; "
+                f"got {len(xs)}, {len(ys)}, {len(labels)}"
+            )
+    return {"type": "text", "xs": xs, "ys": ys, "labels": labels, "opts": kw}
+
+
+def _text_data_attrs(a):
+    out = {"n": len(a["xs"])}
+    out.update(_xy_minmax(a["xs"], a["ys"]))
+    return out
+
+
+add_artist(ArtistSpec(
+    name="text",
+    record=_text_record,
+    xdomain=lambda a: a["xs"],
+    ydomain=lambda a: a["ys"],
+    draw=lambda a, ctx: _artist_text(a, ctx.x_scale, ctx.y_scale, ctx.color),
+    layer="foreground",
+    uses_color_cycle=False,
+    default_color=_D["text_color"],
+    data_attrs=_text_data_attrs,
+))
+
+
+# --- errorbar ---------------------------------------------------------------
+# Points with vertical (and/or horizontal) error bars and optional caps —
+# the matplotlib `ax.errorbar` staple. `yerr`/`xerr` accept a scalar,
+# a per-point sequence, or a `(lower, upper)` tuple for asymmetric bars.
+
+def _errorbar_xdomain(a):
+    xs = a["xs"]
+    xlo, xhi = _expand_err(a["opts"].get("xerr"), len(xs))
+    return [x - lo for x, lo in zip(xs, xlo)] + [x + hi for x, hi in zip(xs, xhi)]
+
+
+def _errorbar_ydomain(a):
+    ys = a["ys"]
+    ylo, yhi = _expand_err(a["opts"].get("yerr"), len(ys))
+    return [y - lo for y, lo in zip(ys, ylo)] + [y + hi for y, hi in zip(ys, yhi)]
+
+
+def _errorbar_data_attrs(a):
+    out = {"n": len(a["xs"])}
+    out.update(_xy_minmax(a["xs"], a["ys"]))
+    out["marker"] = a["opts"].get("marker", "o")
+    return out
+
+
+def _errorbar_legend_swatch(a, ctx, x0, y_mid):
+    col = a["_color"]
+    msize = a["opts"].get("markersize", ctx.defaults["markersize"])
+    cx = x0 + _LEGSPEC["swatch_width"] / 2
+    return (
+        f'<line x1="{cx}" x2="{cx}" y1="{y_mid - 5}" y2="{y_mid + 5}" '
+        f'stroke="{col}" stroke-width="{_D["errorbar_linewidth"]}"/>'
+        + marker(a["opts"].get("marker", "o"), cx, y_mid, msize, col, 1)
+    )
+
+
+add_artist(ArtistSpec(
+    name="errorbar",
+    record=lambda args, kw: {"type": "errorbar",
+                              "xs": to_list(args[0]),
+                              "ys": to_list(args[1]),
+                              "opts": kw},
+    xdomain=_errorbar_xdomain,
+    ydomain=_errorbar_ydomain,
+    draw=lambda a, ctx: _artist_errorbar(a, ctx.x_scale, ctx.y_scale, ctx.color),
+    legend_swatch=_errorbar_legend_swatch,
+    data_attrs=_errorbar_data_attrs,
 ))
