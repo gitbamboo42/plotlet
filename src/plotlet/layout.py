@@ -18,19 +18,21 @@ from __future__ import annotations
 
 from graphlib import CycleError, TopologicalSorter
 
-from ._spec import _LAYOUTSPEC, _FONTSPEC
+from ._spec import SPEC, _LAYOUTSPEC, _FONTSPEC, active_theme
 from .core import (
     _render_inner, _replay, _enforce_floors, _required_margin,
     _x_descriptor_multi, _y_descriptor_multi,
     _AxisDescriptor, _PanelOpts,
     _figure_root_attrs, _panel_open,
 )
-from .chart import Chart, _normalize_inner_gap
+from .chart import Chart, _normalize_inner_gap, _extract_theme
 
+# Layout gaps stay captured — they're parent-level positional, not
+# per-leaf-themable. Font family and background read live from the spec
+# so a leaf's `c.theme(...)` propagates to the surrounding canvas.
 _GAP = _LAYOUTSPEC["gap"]
 _INNER_GAP = _normalize_inner_gap(_LAYOUTSPEC["inner_gap"])
 _LEGEND_GAP = _LAYOUTSPEC["legend_gap"]
-_FONT = _FONTSPEC["family"]
 
 
 # ---------------------------------------------------------------------------
@@ -661,7 +663,14 @@ def _build_panel_opts(root: Chart) -> tuple[dict[int, _PanelOpts], dict[int, dic
     render through their own pipeline (see `legend.py`)."""
     leaves = [l for l in _iter_leaves(root) if l._leaf_kind == "data"]
     _apply_share_scaling(leaves)
-    states = {id(l): _replay(l._calls) for l in leaves}
+    # Replay each leaf under its own theme so state defaults (spine
+    # visibility, tick direction) and any measurement reads pick up the
+    # theme's values. Multi-panel layouts may mix themes; each leaf
+    # carries its own context.
+    states = {}
+    for l in leaves:
+        with active_theme(_extract_theme(l._calls)):
+            states[id(l)] = _replay(l._calls)
     x_desc, y_desc = _build_axis_descriptors(leaves, states)
     panel_opts = {
         id(l): _PanelOpts(x_axis=x_desc[id(l)], y_axis=y_desc[id(l)])
@@ -852,8 +861,8 @@ def _render_layout(root: Chart) -> str:
 
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
-        f'viewBox="0 0 {W} {H}" font-family="{_FONT}" font-size="11" '
-        f'style="background:#fff"'
+        f'viewBox="0 0 {W} {H}" font-family="{_FONTSPEC["family"]}" font-size="11" '
+        f'style="background:{SPEC["figure"]["background"]}"'
         f'{_figure_root_attrs("layout")}>'
     ]
     # Two passes so legends can read color-cycle assignments off data
@@ -881,9 +890,12 @@ def _render_layout(root: Chart) -> str:
         ih = h - M_eff["top"] - M_eff["bottom"]
         st = states[id(leaf)]
         transform = f'translate({x + M_eff["left"]:.2f},{y + M_eff["top"]:.2f})'
-        parts.append(_panel_open(st, po, transform, M_eff, iw, ih, (x, y, w, h)))
-        parts.append(_render_inner(st, iw, ih, M_eff, po))
-        parts.append('</g>')
+        # Per-leaf theme wraps both panel-opening attrs and inner render,
+        # so frame draws (spines, ticks, text) read the leaf's theme.
+        with active_theme(_extract_theme(leaf._calls)):
+            parts.append(_panel_open(st, po, transform, M_eff, iw, ih, (x, y, w, h)))
+            parts.append(_render_inner(st, iw, ih, M_eff, po))
+            parts.append('</g>')
         data_leaves.append(leaf)
     for leaf, (x, y, w, h) in placements:
         if leaf._leaf_kind != "legend":

@@ -121,6 +121,21 @@ c.write_html("plot.html")    # standalone HTML
 - Single-letter: `"k"`, `"w"`, `"b"`, `"g"`, `"r"`
 - Any hex / CSS color string passes through
 
+### Themes
+
+Per-chart visual presets — background, spines, ticks, grid, font color. Ships four:
+
+| `classic` (default) | `minimal` | `dark` | `void` |
+| --- | --- | --- | --- |
+| white bg, four black spines, no grid | white bg, no spines, light dashed grid on | dark bg, light spines, soft grid on | white bg, no spines, no ticks |
+
+```python
+c = pt.chart(theme="dark", title="hits", xlabel="t", ylabel="hits")
+# or chained: c.theme("minimal")
+```
+
+Multi-panel layouts may mix themes per leaf. Define your own with `pt.register_theme(name, dict_or_path)`. Full reference: [docs/THEMES.md](docs/THEMES.md).
+
 ## Adding a new plot type
 
 plotlet is designed so that adding a new plot type is a 3-step recipe (~50–100 lines) that gets axes, scales, legend, grid, and composability for free. The `draw` callback composes pixel-coordinate helpers from `plotlet.draw` (`segment`, `rect`, `circle`, `path`, `polyline`, `polygon`, `errorbar_v`/`errorbar_h`, `marker`, `text_path`) — no hand-rolling SVG strings. The recommended home is your own project, or [`src/plotlet/recipes/`](src/plotlet/recipes/) as reference. Full guide: [docs/EXTENDING.md](docs/EXTENDING.md).
@@ -132,6 +147,7 @@ python tests/test_chart.py            # check vs. committed baselines
 python tests/test_chart.py --update   # regenerate (review the diff!)
 python tests/test_chart.py --gallery  # build tests/baseline_images/chart/index.html
 python tests/test_subplots.py         # subplot baselines + composition invariants
+python tests/test_themes.py           # one chart × each shipped theme
 ```
 
 ## Non-goals

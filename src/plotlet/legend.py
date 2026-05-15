@@ -22,17 +22,7 @@ from .registry import RenderContext, get_artist
 from .draw.font import _measure_text
 from .draw import text_path
 from .scales import _fmt_tick
-from ._spec import _D, _DASH, _FONTSPEC, _FRAME, _LEGSPEC
-
-_FONT = _FONTSPEC["family"]
-_SPINE = _FRAME["color"]
-_SPW = _FRAME["width"]
-_TICK_LEN = _FRAME["tick_length"]
-_TICK_PAD = _FRAME["tick_pad"]
-_GRAD_W = _LEGSPEC["gradient_width"]
-_GRAD_H = _LEGSPEC["gradient_height"]
-_GRAD_N = _LEGSPEC["gradient_n_stops"]
-_SECTION_GAP = _LEGSPEC["section_gap"]
+from ._spec import _D, _DASH, _FIGSPEC, _FONTSPEC, _FRAME, _LEGSPEC
 
 
 def _adaptive_n_ticks(strip_h: float) -> int:
@@ -161,7 +151,7 @@ def _render_continuous_entry(entry: dict, x: float, y: float) -> str:
     of fixed height (`legend.gradient_height`) with right-side ticks.
     Tick count adapts to strip height so labels don't crowd.
 
-    The strip is drawn as `_GRAD_N + 1` solid-fill rect bands rather than
+    The strip is drawn as `_LEGSPEC["gradient_n_stops"] + 1` solid-fill rect bands rather than
     a `<linearGradient>` — no `<defs>`, no `id`, no `url(#…)`, so the SVG
     has nothing that can collide when multiple plotlet SVGs are inlined
     into the same HTML document. Bands are sub-pixel at the spec strip
@@ -169,16 +159,17 @@ def _render_continuous_entry(entry: dict, x: float, y: float) -> str:
     makes the result visually identical to a native gradient."""
     parts = []
     tick_size = _FONTSPEC["tick_size"]
+    text_color = _FONTSPEC["color"]
     label_text = entry.get("label")
     label_h = tick_size + 4 if label_text else 0
     if label_text:
         parts.append(text_path(label_text, x, y + tick_size,
-                                tick_size, anchor="start"))
+                                tick_size, anchor="start", color=text_color))
 
     strip_y = y + label_h
-    strip_h = float(_GRAD_H)
+    strip_h = float(_LEGSPEC["gradient_height"])
     cm = colormap(entry["cmap"])
-    n_bands = _GRAD_N + 1
+    n_bands = _LEGSPEC["gradient_n_stops"] + 1
     band_h = strip_h / n_bands
     for i in range(n_bands):
         # i=0 at top → vmax color; i=n-1 at bottom → vmin color.
@@ -186,14 +177,14 @@ def _render_continuous_entry(entry: dict, x: float, y: float) -> str:
         # don't show as hairline white lines between sub-pixel rects.
         # Strip is always uniform in cmap space — non-linear norms (log,
         # diverging-center) move the *ticks*, not the band colors.
-        r, g, b = cm(1.0 - i / _GRAD_N)
+        r, g, b = cm(1.0 - i / _LEGSPEC["gradient_n_stops"])
         h = band_h + (1.0 if i < n_bands - 1 else 0.0)
         parts.append(f'<rect x="{x:.2f}" y="{strip_y + i*band_h:.4f}" '
-                     f'width="{_GRAD_W}" height="{h:.4f}" '
+                     f'width="{_LEGSPEC["gradient_width"]}" height="{h:.4f}" '
                      f'fill="rgb({r},{g},{b})"/>')
-    parts.append(f'<rect x="{x:.2f}" y="{strip_y:.2f}" width="{_GRAD_W}" '
+    parts.append(f'<rect x="{x:.2f}" y="{strip_y:.2f}" width="{_LEGSPEC["gradient_width"]}" '
                  f'height="{strip_h:.2f}" fill="none" '
-                 f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
+                 f'stroke="{_FRAME["color"]}" stroke-width="{_FRAME["width"]}"/>')
 
     norm = _ContinuousNorm(entry["vmin"], entry["vmax"],
                            kind=entry.get("norm", "linear"),
@@ -201,9 +192,9 @@ def _render_continuous_entry(entry: dict, x: float, y: float) -> str:
     ticks = (list(entry["ticks"]) if entry.get("ticks") is not None
              else norm.ticks(_adaptive_n_ticks(strip_h)))
 
-    tx0 = x + _GRAD_W
-    tx1 = tx0 + _TICK_LEN
-    label_x = tx1 + _TICK_PAD
+    tx0 = x + _LEGSPEC["gradient_width"]
+    tx1 = tx0 + _FRAME["tick_length"]
+    label_x = tx1 + _FRAME["tick_pad"]
     # Bias each tick-label baseline toward the strip's vertical center —
     # top tick shifts down so it doesn't crowd whatever sits above the
     # strip (entry label / chart title), bottom tick shifts up by the
@@ -214,10 +205,10 @@ def _render_continuous_entry(entry: dict, x: float, y: float) -> str:
         ty = strip_y + (1.0 - norm.to_unit(t)) * strip_h
         parts.append(f'<line x1="{tx0}" x2="{tx1}" '
                      f'y1="{ty:.2f}" y2="{ty:.2f}" '
-                     f'stroke="{_SPINE}" stroke-width="{_SPW}"/>')
+                     f'stroke="{_FRAME["color"]}" stroke-width="{_FRAME["width"]}"/>')
         bias = 4 * (strip_mid - ty) / (strip_h / 2) if strip_h > 0 else 0
         parts.append(text_path(_fmt_tick(t), label_x, ty + 4 + bias,
-                                tick_size, anchor="start"))
+                                tick_size, anchor="start", color=text_color))
     return "".join(parts)
 
 
@@ -245,7 +236,7 @@ def _legend_content_size(leaf: Chart, sources: list[Chart],
     tick_size = _FONTSPEC["tick_size"]
     label_size = _FONTSPEC["label_size"]
     header_h = label_size + 4
-    n_ticks = _adaptive_n_ticks(_GRAD_H)
+    n_ticks = _adaptive_n_ticks(_LEGSPEC["gradient_height"])
 
     max_w = 0.0
     total_h = 2 * pad_y
@@ -263,17 +254,17 @@ def _legend_content_size(leaf: Chart, sources: list[Chart],
                                           kind=entry.get("norm", "linear"),
                                           center=entry.get("center")).ticks(n_ticks))
             max_tw = max((_measure_text(_fmt_tick(t), tick_size) for t in ticks), default=0.0)
-            strip_col_w = _GRAD_W + _TICK_LEN + _TICK_PAD + max_tw
+            strip_col_w = _LEGSPEC["gradient_width"] + _FRAME["tick_length"] + _FRAME["tick_pad"] + max_tw
             max_w = max(max_w, strip_col_w)
-            total_h += _GRAD_H
+            total_h += _LEGSPEC["gradient_height"]
         if g["cont"] and g["disc"]:
-            total_h += _SECTION_GAP
+            total_h += _LEGSPEC["section_gap"]
         for a in g["disc"]:
             disc_w = sw + 6 + _measure_text(a["opts"]["label"], tick_size)
             max_w = max(max_w, disc_w)
         total_h += len(g["disc"]) * row_h
         if gi < len(groups) - 1:
-            total_h += _SECTION_GAP
+            total_h += _LEGSPEC["section_gap"]
 
     return max_w + 2 * pad_x, total_h
 
@@ -323,6 +314,7 @@ def _render_legend(leaf: Chart, w: float, h: float,
     sw    = _LEGSPEC["swatch_width"]
     tick_size = _FONTSPEC["tick_size"]
     label_size = _FONTSPEC["label_size"]
+    text_color = _FONTSPEC["color"]
     header_h = label_size + 4
 
     parts = []
@@ -330,14 +322,14 @@ def _render_legend(leaf: Chart, w: float, h: float,
     for gi, g in enumerate(groups):
         if g["header"]:
             parts.append(text_path(g["header"], pad_x, cy + label_size,
-                                    label_size, anchor="start"))
+                                    label_size, anchor="start", color=text_color))
             cy += header_h
         for entry in g["cont"]:
             entry_label_h = (tick_size + 4) if entry.get("label") else 0
             parts.append(_render_continuous_entry(entry, pad_x, cy))
-            cy += entry_label_h + _GRAD_H
+            cy += entry_label_h + _LEGSPEC["gradient_height"]
         if g["cont"] and g["disc"]:
-            cy += _SECTION_GAP
+            cy += _LEGSPEC["section_gap"]
         for i, a in enumerate(g["disc"]):
             ry = cy + i * row_h + row_h / 2
             spec = get_artist(a["type"])
@@ -347,10 +339,10 @@ def _render_legend(leaf: Chart, w: float, h: float,
                 parts.append(f'<line x1="{pad_x}" x2="{pad_x + sw}" y1="{ry}" y2="{ry}" '
                              f'stroke="{a["_color"]}" stroke-width="{_D["linewidth"]}"/>')
             parts.append(text_path(a["opts"]["label"], pad_x + sw + 6, ry + 4,
-                                    tick_size, anchor="start"))
+                                    tick_size, anchor="start", color=text_color))
         cy += len(g["disc"]) * row_h
         if gi < len(groups) - 1:
-            cy += _SECTION_GAP
+            cy += _LEGSPEC["section_gap"]
 
     return ''.join(parts)
 
@@ -364,5 +356,5 @@ def _render_standalone_legend(leaf: Chart) -> str:
     inner = (f'<rect x="0.5" y="0.5" width="{w-1:.2f}" height="{h-1:.2f}" '
              f'fill="none" stroke="#bbb" stroke-dasharray="4,3"/>')
     return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '
-            f'viewBox="0 0 {w} {h}" font-family="{_FONT}" font-size="11" '
-            f'style="background:#fff">{inner}</svg>')
+            f'viewBox="0 0 {w} {h}" font-family="{_FONTSPEC["family"]}" font-size="11" '
+            f'style="background:{_FIGSPEC["background"]}">{inner}</svg>')

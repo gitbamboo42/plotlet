@@ -1,0 +1,24 @@
+{
+  "figure": {
+    "background": "#1f1f1f"
+  },
+  "font": {
+    "color": "#f0f0f0"
+  },
+  "frame": {
+    "color": "#cccccc"
+  },
+  "grid": {
+    "color": "#444444",
+    "default_on": true
+  },
+  "defaults": {
+    "refline_color": "#cccccc",
+    "refspan_color": "#cccccc",
+    "dendrogram_color": "#e0e0e0",
+    "text_color": "#f0f0f0"
+  },
+  "legend": {
+    "background": "#2a2a2a"
+  }
+}

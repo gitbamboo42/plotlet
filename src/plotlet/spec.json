@@ -6,11 +6,15 @@
     "margin": {"top": 30, "right": 18, "bottom": 48, "left": 58},
     "margin_floor": {"top": 24, "right": 4, "bottom": 20, "left": 20}
   },
+  "figure": {
+    "background": "#fff"
+  },
   "font": {
     "family": "DejaVu Sans, Bitstream Vera Sans, Verdana, Arial, sans-serif",
     "tick_size": 11,
     "label_size": 12,
-    "title_size": 13
+    "title_size": 13,
+    "color": "#000"
   },
   "frame": {
     "color": "#000000",
@@ -28,7 +32,8 @@
   "grid": {
     "color": "#b0b0b0",
     "width": 0.5,
-    "dasharray": "2,3"
+    "dasharray": "2,3",
+    "default_on": false
   },
   "colors": {
     "tab10": [

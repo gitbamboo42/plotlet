@@ -1,0 +1,15 @@
+{
+  "figure": {
+    "background": "#ffffff"
+  },
+  "frame": {
+    "spine_top": false,
+    "spine_right": false,
+    "spine_bottom": false,
+    "spine_left": false,
+    "tick_length": 0
+  },
+  "grid": {
+    "default_on": false
+  }
+}

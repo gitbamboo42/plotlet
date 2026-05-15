@@ -30,13 +30,24 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ._spec import _SIZESPEC
+from ._spec import _SIZESPEC, active_theme
 from .core import (
     _FRAME_METHODS, _replay, _effective_margin, _render,
     _to_px,
 )
 from .utils import to_list, to_list_2d
 from .registry import get_artist, all_artist_names
+
+
+def _extract_theme(calls) -> str | None:
+    """Last-call-wins scan for the active theme. Returns `None` when the
+    chart never set a theme — `active_theme(None)` is a passthrough that
+    leaves the spec dicts on their current values."""
+    name = None
+    for call_name, args, _ in calls:
+        if call_name == "theme":
+            name = args[0] if args else None
+    return name
 
 
 def _normalize_inner_gap(value) -> tuple[float, float]:
@@ -75,6 +86,7 @@ class Chart:
                  xlim: tuple | None = None, ylim: tuple | None = None,
                  xscale: str | None = None, yscale: str | None = None,
                  legend: bool | None = None, grid: bool | None = None,
+                 theme: str | None = None,
                  **kwargs):
         # Migration errors — surface the rename loudly rather than silently
         # accepting and producing a different-sized figure.
@@ -161,6 +173,7 @@ class Chart:
         if yscale is not None: self.yscale(yscale)
         if legend is not None: self.legend(legend)
         if grid   is not None: self.grid(grid)
+        if theme  is not None: self.theme(theme)
 
     # ---------- composition ----------
 
@@ -557,11 +570,16 @@ class Chart:
             return _render_standalone_diagram(self)
         # Data leaf. Canvas grows to fit the (possibly measure-driven-
         # expanded) margin — data region stays at the user-requested size.
-        st = _replay(self._calls)
-        M_eff = _effective_margin(self, st)
-        W = self._data_width  + M_eff["left"] + M_eff["right"]
-        H = self._data_height + M_eff["top"]  + M_eff["bottom"]
-        return _render(st, W, H, M_eff)
+        # Theme is applied around the whole replay+render pipeline so
+        # `_replay` picks up the right defaults (spine visibility, tick
+        # direction) and every module reading from the spec dicts sees
+        # the override transparently.
+        with active_theme(_extract_theme(self._calls)):
+            st = _replay(self._calls)
+            M_eff = _effective_margin(self, st)
+            W = self._data_width  + M_eff["left"] + M_eff["right"]
+            H = self._data_height + M_eff["top"]  + M_eff["bottom"]
+            return _render(st, W, H, M_eff)
 
     def to_html(self, full_page: bool = False) -> str:
         svg = self.to_svg()

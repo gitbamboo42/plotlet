@@ -46,20 +46,15 @@ _SCHEMA_VERSION = "2"
 # avoid a circular import.
 _PLOTLET_VERSION = _pkg_version("plotlet")
 
-_TICK_LEN = _FRAME["tick_length"]
-_TICK_PAD = _FRAME["tick_pad"]
-_SPINE = _FRAME["color"]
-_SPW = _FRAME["width"]
-_GRID = _GRIDSPEC["color"]
-_FONT = _FONTSPEC["family"]
-
-
 # Frame metadata methods (title, xlabel, etc.) — these aren't artists,
-# they're just state setters. Kept as a fixed set.
+# they're just state setters. Kept as a fixed set. `theme` joins the set
+# so a chart's theme can be recorded and replayed like any other frame
+# attribute; `_render` reads it before drawing and wraps the rest of the
+# pipeline in an `active_theme(...)` context.
 _FRAME_METHODS = {
     "title", "xlabel", "ylabel", "xlim", "ylim",
     "xscale", "yscale", "grid", "legend",
-    "xticks", "yticks", "spines",
+    "xticks", "yticks", "spines", "theme",
 }
 
 
@@ -125,10 +120,11 @@ def _rotated_text(s, x, y, size, angle, axis):
     rotation pivots at the call-site's (x, y). The negation matches
     matplotlib's convention (positive angle = counterclockwise on screen)
     against SVG's positive-clockwise rotation."""
+    color = _FONTSPEC["color"]
     if not angle:
         anchor = "middle" if axis == "x" else "end"
-        return text_path(s, x, y, size, anchor=anchor)
-    text = text_path(s, 0, 0, size, anchor="end")
+        return text_path(s, x, y, size, anchor=anchor, color=color)
+    text = text_path(s, 0, 0, size, anchor="end", color=color)
     return f'<g transform="translate({x:.2f},{y:.2f}) rotate({-angle})">{text}</g>'
 
 
@@ -238,7 +234,7 @@ def _replay(calls):
         "spine_bottom_color": None, "spine_left_color": None,
         "spine_top_width": None, "spine_right_width": None,
         "spine_bottom_width": None, "spine_left_width": None,
-        "grid": False, "legend": False,
+        "grid": _GRIDSPEC.get("default_on", False), "legend": False,
     }
     for name, args, kw in calls:
         spec = get_artist(name)
@@ -274,6 +270,11 @@ def _replay(calls):
                     st[f"spine_{side}"] = bool(v)
         elif name == "grid":   st["grid"] = (args[0] if args else True)
         elif name == "legend": st["legend"] = (args[0] if args else True)
+        elif name == "theme":
+            # `theme` is applied outside replay (by `active_theme(...)` in
+            # `Chart.to_svg`) so the spec dicts are already on the right
+            # values by the time we get here. No state to record.
+            pass
     return st
 
 
@@ -594,8 +595,8 @@ def _required_margin(st, dw, dh) -> dict:
     x_marks, y_marks = st["x_marks"], st["y_marks"]
 
     # Outward / inout tick marks reach past the spine; "in" is internal only.
-    out_x = _TICK_LEN if x_marks and x_dir != "in" else 0
-    out_y = _TICK_LEN if y_marks and y_dir != "in" else 0
+    out_x = _FRAME["tick_length"] if x_marks and x_dir != "in" else 0
+    out_y = _FRAME["tick_length"] if y_marks and y_dir != "in" else 0
 
     # X-tick label bbox (after rotation).
     if x_labels:
@@ -616,14 +617,14 @@ def _required_margin(st, dw, dh) -> dict:
 
     # Bottom: outward tick + tick_pad + 8 px buffer + tick label bbox + xlabel.
     # The "+8" mirrors the literal in _render_inner's tick-label baseline y.
-    bottom = out_x + _TICK_PAD + 8 + xtl_bbox_h
+    bottom = out_x + _FRAME["tick_pad"] + 8 + xtl_bbox_h
     if st["xlabel"]:
         bottom += label_size + 8
 
     # Left: outward tick + tick_pad + tick label bbox + ylabel allowance.
     # ylabel sits at canvas-left + 12 px (rotated -90), so it occupies
     # roughly `label_size` in the horizontal direction.
-    left = out_y + _TICK_PAD + ytl_bbox_w
+    left = out_y + _FRAME["tick_pad"] + ytl_bbox_w
     if st["ylabel"]:
         left += label_size + 8
 
@@ -821,8 +822,8 @@ def _render(st, W, H, M):
     transform = f'translate({M["left"]},{M["top"]})'
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
-        f'viewBox="0 0 {W} {H}" font-family="{_FONT}" font-size="11" '
-        f'style="background:#fff"'
+        f'viewBox="0 0 {W} {H}" font-family="{_FONTSPEC["family"]}" font-size="11" '
+        f'style="background:{SPEC["figure"]["background"]}"'
         f'{_figure_root_attrs("figure")}>'
         + _panel_open(st, None, transform, M, iw, ih, (0, 0, W, H))
         + _render_inner(st, iw, ih, M)
@@ -863,11 +864,11 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             for t in x_ticks:
                 x = x_scale(t)
                 parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="0" y2="{ih}" '
-                             f'stroke="{_GRID}" stroke-width="{gw}" stroke-dasharray="{gd}"/>')
+                             f'stroke="{_GRIDSPEC["color"]}" stroke-width="{gw}" stroke-dasharray="{gd}"/>')
         for t in y_ticks:
             y = y_scale(t)
             parts.append(f'<line x1="0" x2="{iw}" y1="{y:.2f}" y2="{y:.2f}" '
-                         f'stroke="{_GRID}" stroke-width="{gw}" stroke-dasharray="{gd}"/>')
+                         f'stroke="{_GRIDSPEC["color"]}" stroke-width="{gw}" stroke-dasharray="{gd}"/>')
 
     # color assignment — only color-cycle artists consume the cycle
     color_idx = 0
@@ -914,8 +915,8 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     def _side_stroke(side):
         c = st[f"spine_{side}_color"]
         w = st[f"spine_{side}_width"]
-        col = _resolve_color(c) if c is not None else _SPINE
-        return col, (w if w is not None else _SPW)
+        col = _resolve_color(c) if c is not None else _FRAME["color"]
+        return col, (w if w is not None else _FRAME["width"])
 
     for side, (x1, y1, x2, y2) in (
         ("top",    (0, 0, iw, 0)),
@@ -942,13 +943,13 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
 
     # Tick-mark endpoints relative to the spine. "in" goes inside the data
     # area, "out" goes outside, "inout" spans both sides at full length each.
-    bot_in, bot_out = ih - _TICK_LEN, ih + _TICK_LEN  # bottom spine offsets
-    top_in, top_out = _TICK_LEN, -_TICK_LEN           # top spine offsets
+    bot_in, bot_out = ih - _FRAME["tick_length"], ih + _FRAME["tick_length"]  # bottom spine offsets
+    top_in, top_out = _FRAME["tick_length"], -_FRAME["tick_length"]           # top spine offsets
     if x_dir == "in":      x_bot_endpoints, x_top_endpoints = (ih, bot_in),  (0, top_in)
     elif x_dir == "out":   x_bot_endpoints, x_top_endpoints = (ih, bot_out), (0, top_out)
     else:                  x_bot_endpoints, x_top_endpoints = (bot_out, bot_in), (top_out, top_in)
-    left_in, left_out  = _TICK_LEN, -_TICK_LEN        # left spine offsets (x = 0)
-    right_in, right_out = iw - _TICK_LEN, iw + _TICK_LEN
+    left_in, left_out  = _FRAME["tick_length"], -_FRAME["tick_length"]        # left spine offsets (x = 0)
+    right_in, right_out = iw - _FRAME["tick_length"], iw + _FRAME["tick_length"]
     if y_dir == "in":      y_left_endpoints, y_right_endpoints = (0, left_in),  (iw, right_in)
     elif y_dir == "out":   y_left_endpoints, y_right_endpoints = (0, left_out), (iw, right_out)
     else:                  y_left_endpoints, y_right_endpoints = (left_out, left_in), (right_out, right_in)
@@ -957,7 +958,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     # already sit far enough below the spine to clear all three modes.
     # When marks are suppressed there are no ticks to clear — sit tight
     # against the spine regardless of direction.
-    y_label_x = -_TICK_PAD if (y_dir == "in" or not y_marks) else -(_TICK_LEN + _TICK_PAD)
+    y_label_x = -_FRAME["tick_pad"] if (y_dir == "in" or not y_marks) else -(_FRAME["tick_length"] + _FRAME["tick_pad"])
 
     for t, lbl in zip(x_ticks, x_labels):
         x = x_scale(t)
@@ -975,7 +976,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         # Drop only labels redundant with a sharing sibling. A small label
         # overflow into a joined neighbor's collapsed margin is acceptable.
         if not suppress_xt:
-            parts.append(_rotated_text(str(lbl), x, ih + _TICK_LEN + _TICK_PAD + 8,
+            parts.append(_rotated_text(str(lbl), x, ih + _FRAME["tick_length"] + _FRAME["tick_pad"] + 8,
                                        x_size, x_rot, axis="x"))
 
     # y ticks + labels
@@ -997,15 +998,18 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
 
     # xlabel / ylabel / title live in margin space; drop when that margin
     # is collapsed against a joined neighbor.
+    text_color = _FONTSPEC["color"]
     if st["xlabel"] and not hide_b:
         parts.append(text_path(st["xlabel"], iw / 2, ih + M["bottom"] - 8,
-                                label_size, anchor="middle"))
+                                label_size, anchor="middle", color=text_color))
     if st["ylabel"] and not hide_l:
-        ylabel_path = text_path(st["ylabel"], 0, 0, label_size, anchor="middle")
+        ylabel_path = text_path(st["ylabel"], 0, 0, label_size,
+                                anchor="middle", color=text_color)
         parts.append(f'<g transform="translate({-(M["left"] - 12)},{ih/2}) rotate(-90)">'
                      f'{ylabel_path}</g>')
     if st["title"] and not hide_t:
-        parts.append(text_path(st["title"], iw / 2, -10, title_size, anchor="middle"))
+        parts.append(text_path(st["title"], iw / 2, -10, title_size,
+                                anchor="middle", color=text_color))
 
     # legend — each artist's spec supplies its own swatch via legend_swatch.
     # Custom artists that don't define one fall back to a colored line.
@@ -1022,8 +1026,8 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             lx, ly = iw - lw - _LEGSPEC["border_offset"], _LEGSPEC["border_offset"]
             parts.append(f'<g transform="translate({lx:.2f},{ly})">')
             parts.append(f'<rect x="0" y="0" width="{lw:.2f}" height="{lh}" '
-                         f'fill="{_LEGSPEC["background"]}" stroke="{_SPINE}" '
-                         f'stroke-width="{_SPW}" opacity="{_LEGSPEC["opacity"]}"/>')
+                         f'fill="{_LEGSPEC["background"]}" stroke="{_FRAME["color"]}" '
+                         f'stroke-width="{_FRAME["width"]}" opacity="{_LEGSPEC["opacity"]}"/>')
             for i, a in enumerate(labeled):
                 ry = pad_y + i * row_h + row_h / 2
                 spec = get_artist(a["type"])
@@ -1033,7 +1037,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
                     parts.append(f'<line x1="{pad_x}" x2="{pad_x + sw}" y1="{ry}" y2="{ry}" '
                                  f'stroke="{a["_color"]}" stroke-width="{_D["linewidth"]}"/>')
                 parts.append(text_path(a["opts"]["label"], pad_x + sw + 6, ry + 4,
-                                        tick_size, anchor="start"))
+                                        tick_size, anchor="start", color=text_color))
             parts.append('</g>')
 
     return "".join(parts)

@@ -36,8 +36,10 @@ plotlet/
 ├── src/
 │   └── plotlet/
 │       ├── __init__.py          # public API
-│       ├── _spec.py             # loads spec.json
-│       ├── spec.json            # locked visual constants — package data
+│       ├── _spec.py             # loads spec.json; active_theme() ctx
+│       ├── spec.json            # locked default visual spec — package data
+│       ├── themes.py            # theme loader + register_theme()
+│       ├── themes/              # built-in theme overrides (dark, minimal, void)
 │       ├── utils.py             # to_list / to_list_2d / broadcast / histogram
 │       ├── scales.py            # _LinearScale, _LogScale, _CategoryScale, nice ticks
 │       ├── draw/                # PUBLIC drawing primitives (pixel-coord helpers)
@@ -65,6 +67,7 @@ plotlet/
 │   ├── baseline_images/         # committed SVG baselines (chart/, subplots/, legend/, …)
 │   ├── _runner.py               # shared CLI: --update, --gallery, default = check
 │   ├── test_chart.py            # plot defs for the pt.chart() API
+│   ├── test_themes.py           # one chart × each theme (classic / dark / minimal / void)
 │   └── test_recipes.py          # smoke test: import + demo() + non-empty SVG for every recipe
 └── docs/
     ├── PHILOSOPHY.md
@@ -125,9 +128,15 @@ Instead of emitting `<text>` elements that depend on the consumer's installed fo
 
 Tradeoff: text in the output isn't selectable / searchable. matplotlib makes the same trade for the same reason.
 
-### Visual spec (`spec.json`)
+### Visual spec + themes
 
-All visual constants — colors, font sizes, spine widths, default alphas, legend dimensions — live in `src/plotlet/spec.json`. The package reads it at import via `_spec.py`. Changing a value in `spec.json` is the *only* way to alter the locked visual style. Don't reintroduce hard-coded literals in render code.
+All visual constants — colors, font sizes, spine widths, default alphas, legend dimensions, background — live in [`src/plotlet/spec.json`](src/plotlet/spec.json), the locked default look. `_spec.py` loads it at import and exposes live dicts (`_D`, `_FRAME`, `_GRIDSPEC`, `_FONTSPEC`, `_LEGSPEC`, `_FIGSPEC`, …) that other modules import once and read repeatedly. Built-in themes (`dark`, `minimal`, `void`) live as partial JSON files in [`src/plotlet/themes/`](src/plotlet/themes/) and deep-merge over `spec.json` at render time.
+
+A theme is a partial JSON override under `themes/` (or registered at runtime via `pt.register_theme`). `c.theme("dark")` records the theme name into `_calls`; at render time, [`active_theme(name)`](src/plotlet/_spec.py) deep-merges the theme over classic and *mutates the contents* of the live spec dicts for the duration of one render, restoring on exit. The mutate-in-place trick is what lets every module keep its `from ._spec import _D` import without a 100-site dependency-injection refactor — the dict identity is stable, only its contents change.
+
+Multi-panel layouts apply each leaf's theme independently — the swap is restored between panels. The outer SVG background still comes from whatever theme is active at the root (defaults to `classic`); set a theme on every leaf if you want a fully dark figure. See [docs/THEMES.md](docs/THEMES.md).
+
+Changing a value in `spec.json` is the *only* way to alter the locked default look. Don't reintroduce hard-coded literals in render code — if you find yourself typing a number, it belongs in the spec.
 
 ### State on a leaf Chart
 
@@ -155,7 +164,7 @@ When suggesting changes or adding features:
 - **Match existing code style.** Plain Python, top-to-bottom readable, no clever metaclasses or classes-everywhere.
 - **Preserve matplotlib API parity** for standard plots. If matplotlib calls it `axhline`, don't call it `horizontalLine`.
 - **No premature abstraction.** Three is the threshold — leave duplicated code alone until there's a third use site.
-- **Visual constants live in `spec.json`.** If you find yourself typing a number into render code, ask whether it should be there instead.
+- **Visual constants live in `spec.json`.** If you find yourself typing a number into render code, ask whether it should be there (themable) or hardcoded by design.
 - **Test with baselines.** Core changes get added to `tests/test_chart.py` with a committed SVG. Recipes are smoke-tested only (`tests/test_recipes.py` checks each `demo()` imports + serializes); they evolve faster than core, so 64 baseline files would bloat the repo without adding much coverage.
 - **Mention matplotlib quirks that aren't replicated** and why, when relevant.
 - **Layout / multi-panel code lives in its own module** (`layout.py` for rect computation + multi-panel assembly; `legend.py` for the layout-level legend), not in `core.py`. Keep responsibilities split: pixel-coord primitives in `draw/`; per-artist SVG emission in `artists.py` / `dendrogram.py`; framework state + frame/ticks in `core.py` / `registry.py` / `scales.py`; composition + multi-panel in `layout.py` / `legend.py`.
