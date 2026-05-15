@@ -18,7 +18,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
-from plotlet.draw import text_path
+from plotlet.draw import text_path, segment, circle
 
 
 def slope_record(args, kw):
@@ -48,10 +48,9 @@ def slope_draw(a, ctx):
     for label, av, bv in zip(a["labels"], a["a"], a["b"]):
         y0 = ctx.y_scale(av); y1 = ctx.y_scale(bv)
         out.append(
-            f'<line x1="{x0:.2f}" x2="{x1:.2f}" y1="{y0:.2f}" y2="{y1:.2f}" '
-            f'stroke="{col}" stroke-width="{lw}" opacity="{alpha}"/>'
-            f'<circle cx="{x0:.2f}" cy="{y0:.2f}" r="{r}" fill="{col}" opacity="{alpha}"/>'
-            f'<circle cx="{x1:.2f}" cy="{y1:.2f}" r="{r}" fill="{col}" opacity="{alpha}"/>'
+            segment(x0, y0, x1, y1, color=col, width=lw, alpha=alpha)
+            + circle(x0, y0, r, fill=col, alpha=alpha)
+            + circle(x1, y1, r, fill=col, alpha=alpha)
         )
         if show_labels:
             out.append(text_path(f"{label}", x1 + 6, y1 + 3, 10, anchor="start"))

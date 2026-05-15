@@ -19,7 +19,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
-from plotlet.draw import text_path
+from plotlet.draw import path, text_path
 
 
 def gene_arrow_record(args, kw):
@@ -72,7 +72,7 @@ def gene_arrow_draw(a, ctx):
                  f"L{tip:.2f},{y_mid:.2f} "
                  f"L{body_l:.2f},{y_bot + (y_top - y_bot) * 0.25:.2f} "
                  f"L{body_l:.2f},{y_bot:.2f} L{body_r:.2f},{y_bot:.2f} Z")
-        out.append(f'<path d="{d}" fill="{col}"/>')
+        out.append(path(d, fill=col))
         if labels and i < len(labels) and labels[i]:
             out.append(text_path(labels[i], (x_s + x_e) / 2, y_top - 4,
                                   10, anchor="middle"))

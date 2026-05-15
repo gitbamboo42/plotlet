@@ -18,6 +18,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
+from plotlet.draw import polyline, segment
 
 
 def roc_record(args, kw):
@@ -62,25 +63,21 @@ def roc_draw(a, ctx):
     lw = a["opts"].get("linewidth", 1.6)
     out = []
     pts = [(ctx.x_scale(x), ctx.y_scale(y)) for x, y in zip(a["_fpr"], a["_tpr"])]
-    d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts)
-    out.append(f'<path d="{d}" fill="none" stroke="{col}" stroke-width="{lw}"/>')
+    out.append(polyline(pts, color=col, width=lw))
     # Diagonal: draw it only once (with the first artist). The simplest
     # convention: every roc artist also draws the diagonal, but in a
     # consistent gray, which overplots cleanly. To keep the SVG lean,
     # add a tiny marker: only the first instance draws it.
     if a["opts"].get("_first", True):
-        out.append(
-            f'<line x1="{ctx.x_scale(0):.2f}" y1="{ctx.y_scale(0):.2f}" '
-            f'x2="{ctx.x_scale(1):.2f}" y2="{ctx.y_scale(1):.2f}" '
-            f'stroke="#888" stroke-width="0.8" stroke-dasharray="4,3"/>'
-        )
+        out.append(segment(ctx.x_scale(0), ctx.y_scale(0),
+                           ctx.x_scale(1), ctx.y_scale(1),
+                           color="#888", width=0.8, dash="4,3"))
     return "".join(out)
 
 
 def roc_legend_swatch(a, ctx, x0, y_mid):
     col = a["_color"]
-    return (f'<line x1="{x0}" x2="{x0 + 22}" y1="{y_mid}" y2="{y_mid}" '
-            f'stroke="{col}" stroke-width="1.6"/>')
+    return segment(x0, y_mid, x0 + 22, y_mid, color=col, width=1.6)
 
 
 pt.add_artist(pt.ArtistSpec(

@@ -21,7 +21,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
-from plotlet.draw import text_path
+from plotlet.draw import text_path, segment, rect, errorbar_h, polygon
 
 
 def forest_record(args, kw):
@@ -62,10 +62,8 @@ def forest_draw(a, ctx):
     x_ref = ctx.x_scale(ref)
     y_top = ctx.y_scale(n)
     y_bot = ctx.y_scale(-1 if pooled else 0)
-    out = [
-        f'<line x1="{x_ref:.2f}" x2="{x_ref:.2f}" y1="{y_top:.2f}" y2="{y_bot:.2f}" '
-        f'stroke="#888" stroke-width="0.8" stroke-dasharray="3,3"/>'
-    ]
+    out = [segment(x_ref, y_top, x_ref, y_bot,
+                   color="#888", width=0.8, dash="3,3")]
     # Study rows: first study at the top, so row i appears at y = n - 1 - i.
     max_w = max(weights) or 1
     for i, (lab, e, l, h, w) in enumerate(zip(a["labels"], a["est"],
@@ -73,21 +71,12 @@ def forest_draw(a, ctx):
         y_data = n - 1 - i
         py = ctx.y_scale(y_data)
         px_lo = ctx.x_scale(l); px_hi = ctx.x_scale(h); px_e = ctx.x_scale(e)
-        # CI bar.
-        out.append(
-            f'<line x1="{px_lo:.2f}" x2="{px_hi:.2f}" y1="{py:.2f}" y2="{py:.2f}" '
-            f'stroke="{color}" stroke-width="1.2"/>'
-            f'<line x1="{px_lo:.2f}" x2="{px_lo:.2f}" y1="{py - 3:.2f}" y2="{py + 3:.2f}" '
-            f'stroke="{color}" stroke-width="1.2"/>'
-            f'<line x1="{px_hi:.2f}" x2="{px_hi:.2f}" y1="{py - 3:.2f}" y2="{py + 3:.2f}" '
-            f'stroke="{color}" stroke-width="1.2"/>'
-        )
+        # CI bar with end caps.
+        out.append(errorbar_h(py, px_lo, px_hi,
+                              capsize=6, color=color, width=1.2))
         # Square scaled by weight.
         s = 3 + 7 * math.sqrt(w / max_w)
-        out.append(
-            f'<rect x="{px_e - s:.2f}" y="{py - s:.2f}" width="{2 * s:.2f}" '
-            f'height="{2 * s:.2f}" fill="{color}"/>'
-        )
+        out.append(rect(px_e - s, py - s, 2 * s, 2 * s, fill=color))
         # Study label on the left (just inside data area).
         out.append(text_path(lab, ctx.x_scale(min(a["lo"])) - 6, py + 3,
                               10, anchor="end"))
@@ -97,9 +86,8 @@ def forest_draw(a, ctx):
         py = ctx.y_scale(-1)
         px_lo = ctx.x_scale(pl); px_hi = ctx.x_scale(ph); px_e = ctx.x_scale(pe)
         s = 8
-        d = (f"M{px_lo:.2f},{py:.2f} L{px_e:.2f},{py - s:.2f} "
-             f"L{px_hi:.2f},{py:.2f} L{px_e:.2f},{py + s:.2f} Z")
-        out.append(f'<path d="{d}" fill="{color}"/>')
+        out.append(polygon([(px_lo, py), (px_e, py - s),
+                            (px_hi, py), (px_e, py + s)], fill=color))
         out.append(text_path(plab, ctx.x_scale(min(a["lo"])) - 6, py + 3,
                               10, anchor="end", color="#000"))
     return "".join(out)

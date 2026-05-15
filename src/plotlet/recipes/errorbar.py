@@ -13,7 +13,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
-from plotlet.draw import marker
+from plotlet.draw import marker, segment, errorbar_v, errorbar_h
 
 
 def _expand_err(err, n):
@@ -63,35 +63,11 @@ def errorbar_draw(a, ctx):
     for x, y, dxl, dxh, dyl, dyh in zip(xs, ys, xlo, xhi, ylo, yhi):
         px = ctx.x_scale(x); py = ctx.y_scale(y)
         if dyl or dyh:
-            y_lo = ctx.y_scale(y - dyl)
-            y_hi = ctx.y_scale(y + dyh)
-            out.append(
-                f'<line x1="{px:.2f}" x2="{px:.2f}" y1="{y_lo:.2f}" y2="{y_hi:.2f}" '
-                f'stroke="{col}" stroke-width="{lw}"/>'
-            )
-            if capsize:
-                out.append(
-                    f'<line x1="{px - capsize / 2:.2f}" x2="{px + capsize / 2:.2f}" '
-                    f'y1="{y_lo:.2f}" y2="{y_lo:.2f}" stroke="{col}" stroke-width="{lw}"/>'
-                    f'<line x1="{px - capsize / 2:.2f}" x2="{px + capsize / 2:.2f}" '
-                    f'y1="{y_hi:.2f}" y2="{y_hi:.2f}" stroke="{col}" stroke-width="{lw}"/>'
-                )
+            out.append(errorbar_v(px, ctx.y_scale(y - dyl), ctx.y_scale(y + dyh),
+                                  capsize=capsize, color=col, width=lw))
         if dxl or dxh:
-            x_lo = ctx.x_scale(x - dxl)
-            x_hi = ctx.x_scale(x + dxh)
-            out.append(
-                f'<line x1="{x_lo:.2f}" x2="{x_hi:.2f}" y1="{py:.2f}" y2="{py:.2f}" '
-                f'stroke="{col}" stroke-width="{lw}"/>'
-            )
-            if capsize:
-                out.append(
-                    f'<line x1="{x_lo:.2f}" x2="{x_lo:.2f}" '
-                    f'y1="{py - capsize / 2:.2f}" y2="{py + capsize / 2:.2f}" '
-                    f'stroke="{col}" stroke-width="{lw}"/>'
-                    f'<line x1="{x_hi:.2f}" x2="{x_hi:.2f}" '
-                    f'y1="{py - capsize / 2:.2f}" y2="{py + capsize / 2:.2f}" '
-                    f'stroke="{col}" stroke-width="{lw}"/>'
-                )
+            out.append(errorbar_h(py, ctx.x_scale(x - dxl), ctx.x_scale(x + dxh),
+                                  capsize=capsize, color=col, width=lw))
         out.append(marker(mk, px, py, msize, col, 1))
     return "".join(out)
 
@@ -101,8 +77,7 @@ def errorbar_legend_swatch(a, ctx, x0, y_mid):
     msize = a["opts"].get("markersize", ctx.defaults["markersize"])
     cx = x0 + 11
     return (
-        f'<line x1="{cx}" x2="{cx}" y1="{y_mid - 5}" y2="{y_mid + 5}" '
-        f'stroke="{col}" stroke-width="1.2"/>'
+        segment(cx, y_mid - 5, cx, y_mid + 5, color=col, width=1.2)
         + marker(a["opts"].get("marker", "o"), cx, y_mid, msize, col, 1)
     )
 

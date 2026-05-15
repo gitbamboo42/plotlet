@@ -25,6 +25,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
+from plotlet.draw import segment, circle
 
 
 def dumbbell_record(args, kw):
@@ -50,13 +51,10 @@ def dumbbell_draw(a, ctx):
         py = ctx.y_scale(label)
         ax = ctx.x_scale(av); bx = ctx.x_scale(bv)
         line_col = up_col if bv > av else (down_col if bv < av else "#888")
+        out.append(segment(ax, py, bx, py, color=line_col, width=lw))
         out.append(
-            f'<line x1="{ax:.2f}" x2="{bx:.2f}" y1="{py:.2f}" y2="{py:.2f}" '
-            f'stroke="{line_col}" stroke-width="{lw}"/>'
-        )
-        out.append(
-            f'<circle cx="{ax:.2f}" cy="{py:.2f}" r="{r}" fill="{a_col}"/>'
-            f'<circle cx="{bx:.2f}" cy="{py:.2f}" r="{r}" fill="{b_col}"/>'
+            circle(ax, py, r, fill=a_col)
+            + circle(bx, py, r, fill=b_col)
         )
     return "".join(out)
 

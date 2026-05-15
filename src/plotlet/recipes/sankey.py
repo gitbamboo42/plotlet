@@ -32,7 +32,7 @@ from collections import deque
 from pathlib import Path
 
 import plotlet as pt
-from plotlet.draw import text_path
+from plotlet.draw import path, rect, text_path
 
 
 _DEFAULT_PALETTE = [
@@ -176,18 +176,15 @@ def sankey_draw(a, ctx):
              f"{fx(cx1):.2f},{fy(sb_):.2f} "
              f"{fx(x_src):.2f},{fy(sb_):.2f} "
              f"Z")
-        out.append(f'<path d="{d}" fill="{col}" fill-opacity="{ribbon_alpha}"/>')
+        out.append(path(d, fill=col, alpha=ribbon_alpha))
     # Node bars + labels on top.
     for i, name in enumerate(nodes):
         y_t, y_b = node_y[i]
         x_l = node_x[i]; x_r = x_l + node_w
         col = node_colors.get(name, _DEFAULT_PALETTE[i % len(_DEFAULT_PALETTE)])
         # fy(y_t) is the smaller SVG y (top of the bar); fy(y_b) the larger.
-        out.append(
-            f'<rect x="{fx(x_l):.2f}" y="{fy(y_t):.2f}" '
-            f'width="{fx(x_r) - fx(x_l):.2f}" height="{fy(y_b) - fy(y_t):.2f}" '
-            f'fill="{col}"/>'
-        )
+        out.append(rect(fx(x_l), fy(y_t), fx(x_r) - fx(x_l), fy(y_b) - fy(y_t),
+                        fill=col))
         # Label: left of leftmost-layer nodes (anchor end), right of others (anchor start).
         cy_px = fy((y_t + y_b) / 2) + 4
         if layer[i] == 0:

@@ -30,6 +30,7 @@ from scipy.stats import gaussian_kde
 
 import plotlet as pt
 from plotlet.utils import to_list
+from plotlet.draw import path, segment, rect, circle
 
 
 def _quantile(xs, q):
@@ -92,10 +93,8 @@ def split_violin_draw(a, ctx):
         top_y = ctx.y_scale(grid[-1]); bot_y = ctx.y_scale(grid[0])
         a_path = ("M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in a_pts)
                   + f" L{cx:.2f},{top_y:.2f} L{cx:.2f},{bot_y:.2f} Z")
-        out.append(
-            f'<path d="{a_path}" fill="{col_a}" fill-opacity="{fill_alpha}" '
-            f'stroke="{col_a}" stroke-width="0.8"/>'
-        )
+        out.append(path(a_path, fill=col_a, stroke=col_a, stroke_width=0.8,
+                        fill_alpha=fill_alpha, stroke_alpha=1))
         # Right half (group B).
         b_pts = []
         for gx, dy in zip(grid, d_b):
@@ -104,15 +103,10 @@ def split_violin_draw(a, ctx):
             b_pts.append((cx + dx_px, py))
         b_path = ("M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in b_pts)
                   + f" L{cx:.2f},{top_y:.2f} L{cx:.2f},{bot_y:.2f} Z")
-        out.append(
-            f'<path d="{b_path}" fill="{col_b}" fill-opacity="{fill_alpha}" '
-            f'stroke="{col_b}" stroke-width="0.8"/>'
-        )
+        out.append(path(b_path, fill=col_b, stroke=col_b, stroke_width=0.8,
+                        fill_alpha=fill_alpha, stroke_alpha=1))
         # Center line.
-        out.append(
-            f'<line x1="{cx:.2f}" x2="{cx:.2f}" y1="{top_y:.2f}" y2="{bot_y:.2f}" '
-            f'stroke="#fff" stroke-width="0.8"/>'
-        )
+        out.append(segment(cx, top_y, cx, bot_y, color="#fff", width=0.8))
         # Inner stats.
         if inner == "box":
             for vals, side, fill_col in ((vals_a, -1, col_a), (vals_b, +1, col_b)):
@@ -125,18 +119,15 @@ def split_violin_draw(a, ctx):
                 x_anchor = cx + side * iqr_w
                 y_q1 = ctx.y_scale(q1); y_q2 = ctx.y_scale(q2); y_q3 = ctx.y_scale(q3)
                 out.append(
-                    f'<rect x="{min(x_anchor, cx):.2f}" y="{min(y_q1, y_q3):.2f}" '
-                    f'width="{abs(x_anchor - cx):.2f}" '
-                    f'height="{abs(y_q3 - y_q1):.2f}" fill="#222"/>'
-                    f'<circle cx="{(x_anchor + cx) / 2:.2f}" cy="{y_q2:.2f}" '
-                    f'r="1.8" fill="#ffffff"/>'
+                    rect(min(x_anchor, cx), min(y_q1, y_q3),
+                         abs(x_anchor - cx), abs(y_q3 - y_q1), fill="#222")
+                    + circle((x_anchor + cx) / 2, y_q2, 1.8, fill="#ffffff")
                 )
     return "".join(out)
 
 
 def split_violin_legend_swatch(a, ctx, x0, y_mid):
-    return (f'<rect x="{x0}" y="{y_mid - 5}" width="22" height="10" '
-            f'fill="{a["_color"]}" fill-opacity="0.55"/>')
+    return rect(x0, y_mid - 5, 22, 10, fill=a["_color"], alpha=0.55)
 
 
 pt.add_artist(pt.ArtistSpec(

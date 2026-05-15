@@ -15,6 +15,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
+from plotlet.draw import circle
 
 
 def _hash01(i, j):
@@ -48,10 +49,7 @@ def strip_draw(a, ctx):
             dx = _hash01(i, j) * band * jitter
             px = cx + dx
             py = ctx.y_scale(v)
-            out.append(
-                f'<circle cx="{px:.2f}" cy="{py:.2f}" r="{r}" '
-                f'fill="{col}" opacity="{alpha}"/>'
-            )
+            out.append(circle(px, py, r, fill=col, alpha=alpha))
     return "".join(out)
 
 
@@ -59,9 +57,9 @@ def strip_legend_swatch(a, ctx, x0, y_mid):
     col = a["_color"]
     alpha = a["opts"].get("alpha", 0.7)
     return (
-        f'<circle cx="{x0 + 6}" cy="{y_mid}" r="2.5" fill="{col}" opacity="{alpha}"/>'
-        f'<circle cx="{x0 + 14}" cy="{y_mid - 2}" r="2.5" fill="{col}" opacity="{alpha}"/>'
-        f'<circle cx="{x0 + 18}" cy="{y_mid + 2}" r="2.5" fill="{col}" opacity="{alpha}"/>'
+        circle(x0 + 6, y_mid, 2.5, fill=col, alpha=alpha)
+        + circle(x0 + 14, y_mid - 2, 2.5, fill=col, alpha=alpha)
+        + circle(x0 + 18, y_mid + 2, 2.5, fill=col, alpha=alpha)
     )
 
 

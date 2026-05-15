@@ -13,6 +13,7 @@ import math
 from pathlib import Path
 
 import plotlet as pt
+from plotlet.draw import circle
 from plotlet.utils import to_list
 
 
@@ -69,10 +70,7 @@ def swarm_draw(a, ctx):
         dxs = _place_swarm(ys_px, r)
         cx = ctx.x_scale(cat)
         for dy, dx in zip(ys_px, dxs):
-            out.append(
-                f'<circle cx="{cx + dx:.2f}" cy="{dy:.2f}" r="{r}" '
-                f'fill="{col}" opacity="{alpha}"/>'
-            )
+            out.append(circle(cx + dx, dy, r, fill=col, alpha=alpha))
     return "".join(out)
 
 

@@ -21,6 +21,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
+from plotlet.draw import polygon, polyline, rect, segment
 
 
 def _quantile(xs, q):
@@ -65,22 +66,18 @@ def pband_draw(a, ctx):
     top = [(ctx.x_scale(x), ctx.y_scale(y)) for x, y in zip(a["xs"], a["_hi"])]
     bot = [(ctx.x_scale(x), ctx.y_scale(y)) for x, y in zip(a["xs"], a["_lo"])]
     pts = top + bot[::-1]
-    d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts) + " Z"
-    out = [f'<path d="{d}" fill="{col}" fill-opacity="{fill_alpha}"/>']
+    out = [polygon(pts, fill=col, alpha=fill_alpha)]
     # Median line.
     line_pts = [(ctx.x_scale(x), ctx.y_scale(y)) for x, y in zip(a["xs"], a["_med"])]
-    d2 = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in line_pts)
-    out.append(f'<path d="{d2}" fill="none" stroke="{col}" stroke-width="{lw}"/>')
+    out.append(polyline(line_pts, color=col, width=lw))
     return "".join(out)
 
 
 def pband_legend_swatch(a, ctx, x0, y_mid):
     col = a["_color"]
     return (
-        f'<rect x="{x0}" y="{y_mid - 5}" width="22" height="10" '
-        f'fill="{col}" fill-opacity="0.25"/>'
-        f'<line x1="{x0}" x2="{x0 + 22}" y1="{y_mid}" y2="{y_mid}" '
-        f'stroke="{col}" stroke-width="1.6"/>'
+        rect(x0, y_mid - 5, 22, 10, fill=col, alpha=0.25)
+        + segment(x0, y_mid, x0 + 22, y_mid, color=col, width=1.6)
     )
 
 

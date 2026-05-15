@@ -16,6 +16,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
+from plotlet.draw import path, rect, circle, segment
 
 
 def _silverman_bw(xs):
@@ -89,30 +90,23 @@ def violin_draw(a, ctx):
             right.append((cx + dx_px, py))
         pts = left + right[::-1]
         path_d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts) + " Z"
-        out.append(
-            f'<path d="{path_d}" fill="{col}" fill-opacity="{fill_alpha}" '
-            f'stroke="{col}" stroke-width="1"/>'
-        )
+        out.append(path(path_d, fill=col, stroke=col, stroke_width=1,
+                        fill_alpha=fill_alpha, stroke_alpha=1))
         # Inner stats.
         q1 = _quantile(vals, 0.25); q2 = _quantile(vals, 0.5); q3 = _quantile(vals, 0.75)
         y_q1, y_q2, y_q3 = ctx.y_scale(q1), ctx.y_scale(q2), ctx.y_scale(q3)
         if inner == "box":
             iqr_w = half_w_px * 0.35
             out.append(
-                f'<rect x="{cx - iqr_w:.2f}" y="{min(y_q1, y_q3):.2f}" '
-                f'width="{2 * iqr_w:.2f}" height="{abs(y_q3 - y_q1):.2f}" '
-                f'fill="#222"/>'
-                f'<circle cx="{cx:.2f}" cy="{y_q2:.2f}" r="2" fill="#ffffff"/>'
+                rect(cx - iqr_w, min(y_q1, y_q3), 2 * iqr_w, abs(y_q3 - y_q1), fill="#222")
+                + circle(cx, y_q2, 2, fill="#ffffff")
             )
         elif inner == "quartile":
             for q in (q1, q2, q3):
                 py = ctx.y_scale(q)
-                out.append(
-                    f'<line x1="{cx - half_w_px * 0.7:.2f}" '
-                    f'x2="{cx + half_w_px * 0.7:.2f}" '
-                    f'y1="{py:.2f}" y2="{py:.2f}" stroke="{col}" '
-                    f'stroke-width="1" stroke-dasharray="3,2"/>'
-                )
+                out.append(segment(cx - half_w_px * 0.7, py,
+                                   cx + half_w_px * 0.7, py,
+                                   color=col, width=1, dash="3,2"))
     return "".join(out)
 
 

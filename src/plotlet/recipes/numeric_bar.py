@@ -14,6 +14,7 @@ SUMMARY = 'Bars anchored at numeric x with an explicit data-unit width (no categ
 from pathlib import Path
 
 import plotlet as pt
+from plotlet.draw import rect
 from plotlet.utils import to_list
 from plotlet._spec import _D
 
@@ -53,18 +54,14 @@ def numeric_bar_draw(a, ctx):
         bw = abs(x_right - x_left)
         by = min(y0, y_top)
         bh = abs(y_top - y0)
-        out.append(
-            f'<rect x="{bx:.2f}" y="{by:.2f}" width="{bw:.2f}" '
-            f'height="{bh:.2f}" fill="{col}" opacity="{alpha}"/>'
-        )
+        out.append(rect(bx, by, bw, bh, fill=col, alpha=alpha))
     return "".join(out)
 
 
 def numeric_bar_legend_swatch(a, ctx, x0, y_mid):
     col = a["_color"]
     alpha = a["opts"].get("alpha", _D["bar_alpha"])
-    return (f'<rect x="{x0}" y="{y_mid - 5}" width="22" height="10" '
-            f'fill="{col}" opacity="{alpha}"/>')
+    return rect(x0, y_mid - 5, 22, 10, fill=col, alpha=alpha)
 
 
 pt.add_artist(pt.ArtistSpec(

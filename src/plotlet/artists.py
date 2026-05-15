@@ -7,11 +7,13 @@ and the resolved color, and returns an SVG fragment. They're called from
 import base64
 import math
 
-from ._spec import _D, _DASH
+from ._spec import _D
 from .draw._png import encode_rgb
 from .draw.colormaps import colormap_lut, _ContinuousNorm
 from .draw.colors import _resolve_color
-from .draw import text_path, marker, op
+from .draw import (text_path, marker, op,
+                    segment, rect as draw_rect, path as draw_path,
+                    polygon as draw_polygon, errorbar_v, errorbar_h)
 from .utils import to_list, to_list_2d, histogram
 
 
@@ -75,10 +77,9 @@ def _artist_line(a, xs_, ys_, col):
         started = True
     ls = opts.get("linestyle")
     if ls not in ("", "none"):
-        da = f' stroke-dasharray="{_DASH[ls]}"' if ls and _DASH.get(ls) else ""
-        out.append(f'<path d="{"".join(d_segs)}" fill="none" stroke="{col}" '
-                   f'stroke-width="{opts.get("linewidth", _D["linewidth"])}"'
-                   f'{op(alpha)}{da}/>')
+        out.append(draw_path("".join(d_segs), stroke=col,
+                             stroke_width=opts.get("linewidth", _D["linewidth"]),
+                             dash=ls, alpha=alpha))
     if opts.get("marker"):
         sz = opts.get("markersize", _D["markersize"])
         for x, y in zip(a["xs"], a["ys"]):
@@ -133,8 +134,7 @@ def _artist_hist(a, xs_, ys_, ih, col):
         w = max(0, x1 - x0)
         y = ys_(b["count"])
         h = ih - y
-        out.append(f'<rect x="{x0:.2f}" y="{y:.2f}" width="{w:.2f}" height="{h:.2f}" '
-                   f'fill="{col}"{op(alpha)}/>')
+        out.append(draw_rect(x0, y, w, h, fill=col, alpha=alpha))
     return "".join(out)
 
 
@@ -145,12 +145,11 @@ def _artist_axhline(a, xs_, ys_, iw, ih, col):
         return ""
     x0 = iw * opts.get("xmin", 0.0)
     x1 = iw * opts.get("xmax", 1.0)
-    lw = opts.get("linewidth", _D["refline_width"])
-    ls = opts.get("linestyle")
-    da = f' stroke-dasharray="{_DASH[ls]}"' if ls and _DASH.get(ls) else ""
-    alpha = opts.get("alpha", 1)
-    return (f'<line x1="{x0:.2f}" x2="{x1:.2f}" y1="{y:.2f}" y2="{y:.2f}" '
-            f'stroke="{col}" stroke-width="{lw}"{op(alpha)}{da}/>')
+    return segment(x0, y, x1, y,
+                   color=col,
+                   width=opts.get("linewidth", _D["refline_width"]),
+                   dash=opts.get("linestyle"),
+                   alpha=opts.get("alpha", 1))
 
 
 def _artist_axvline(a, xs_, ys_, iw, ih, col):
@@ -160,28 +159,25 @@ def _artist_axvline(a, xs_, ys_, iw, ih, col):
         return ""
     y0 = ih * (1 - opts.get("ymax", 1.0))
     y1 = ih * (1 - opts.get("ymin", 0.0))
-    lw = opts.get("linewidth", _D["refline_width"])
-    ls = opts.get("linestyle")
-    da = f' stroke-dasharray="{_DASH[ls]}"' if ls and _DASH.get(ls) else ""
-    alpha = opts.get("alpha", 1)
-    return (f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{y0:.2f}" y2="{y1:.2f}" '
-            f'stroke="{col}" stroke-width="{lw}"{op(alpha)}{da}/>')
+    return segment(x, y0, x, y1,
+                   color=col,
+                   width=opts.get("linewidth", _D["refline_width"]),
+                   dash=opts.get("linestyle"),
+                   alpha=opts.get("alpha", 1))
 
 
 def _artist_hlines(a, xs_, ys_, col):
     opts = a["opts"]
     lw = opts.get("linewidth", _D["refline_width"])
     ls = opts.get("linestyle")
-    da = f' stroke-dasharray="{_DASH[ls]}"' if ls and _DASH.get(ls) else ""
     alpha = opts.get("alpha", 1)
     out = []
     for y, x0, x1 in zip(a["ys"], a["xmins"], a["xmaxs"]):
         py = ys_(y); px0 = xs_(x0); px1 = xs_(x1)
         if not (math.isfinite(py) and math.isfinite(px0) and math.isfinite(px1)):
             continue
-        out.append(f'<line x1="{px0:.2f}" x2="{px1:.2f}" '
-                   f'y1="{py:.2f}" y2="{py:.2f}" '
-                   f'stroke="{col}" stroke-width="{lw}"{op(alpha)}{da}/>')
+        out.append(segment(px0, py, px1, py, color=col, width=lw,
+                           dash=ls, alpha=alpha))
     return "".join(out)
 
 
@@ -189,16 +185,14 @@ def _artist_vlines(a, xs_, ys_, col):
     opts = a["opts"]
     lw = opts.get("linewidth", _D["refline_width"])
     ls = opts.get("linestyle")
-    da = f' stroke-dasharray="{_DASH[ls]}"' if ls and _DASH.get(ls) else ""
     alpha = opts.get("alpha", 1)
     out = []
     for x, y0, y1 in zip(a["xs"], a["ymins"], a["ymaxs"]):
         px = xs_(x); py0 = ys_(y0); py1 = ys_(y1)
         if not (math.isfinite(px) and math.isfinite(py0) and math.isfinite(py1)):
             continue
-        out.append(f'<line x1="{px:.2f}" x2="{px:.2f}" '
-                   f'y1="{py0:.2f}" y2="{py1:.2f}" '
-                   f'stroke="{col}" stroke-width="{lw}"{op(alpha)}{da}/>')
+        out.append(segment(px, py0, px, py1, color=col, width=lw,
+                           dash=ls, alpha=alpha))
     return "".join(out)
 
 
@@ -211,9 +205,8 @@ def _artist_axhspan(a, xs_, ys_, iw, ih, col):
         return ""
     x0 = iw * opts.get("xmin", 0.0)
     x1 = iw * opts.get("xmax", 1.0)
-    alpha = opts.get("alpha", _D["refspan_alpha"])
-    return (f'<rect x="{x0:.2f}" y="{y0:.2f}" width="{x1 - x0:.2f}" '
-            f'height="{y1 - y0:.2f}" fill="{col}"{op(alpha)}/>')
+    return draw_rect(x0, y0, x1 - x0, y1 - y0, fill=col,
+                     alpha=opts.get("alpha", _D["refspan_alpha"]))
 
 
 def _artist_axvspan(a, xs_, ys_, iw, ih, col):
@@ -225,9 +218,8 @@ def _artist_axvspan(a, xs_, ys_, iw, ih, col):
         return ""
     y0 = ih * (1 - opts.get("ymax", 1.0))
     y1 = ih * (1 - opts.get("ymin", 0.0))
-    alpha = opts.get("alpha", _D["refspan_alpha"])
-    return (f'<rect x="{x0:.2f}" y="{y0:.2f}" width="{x1 - x0:.2f}" '
-            f'height="{y1 - y0:.2f}" fill="{col}"{op(alpha)}/>')
+    return draw_rect(x0, y0, x1 - x0, y1 - y0, fill=col,
+                     alpha=opts.get("alpha", _D["refspan_alpha"]))
 
 
 def _artist_fill_between(a, xs_, ys_, col):
@@ -250,38 +242,35 @@ def _artist_fill_between(a, xs_, ys_, col):
     upper = [(xs_(x), ys_(y)) for x, y in zip(upper_xs, upper_ys)]
     lower = [(xs_(x), ys_(y)) for x, y in zip(lower_xs, lower_ys)]
     pts = upper + list(reversed(lower))
-    if not pts:
-        return ""
-    d = "M" + "L".join(f"{p[0]:.2f},{p[1]:.2f}" for p in pts) + "Z"
-    alpha = opts.get("alpha", _D["fill_alpha"])
-    return f'<path d="{d}" fill="{col}"{op(alpha)}/>'
+    return draw_polygon(pts, fill=col,
+                        alpha=opts.get("alpha", _D["fill_alpha"]))
 
 
-def _stroke_attrs(a, ctx_color):
-    """Shared edge/fill resolution for rect and polygon. Returns
-    `(fill_attr, stroke_attr)` — strings ready to splice into the SVG tag.
+def _fill_stroke_params(a, ctx_color):
+    """Shared edge/fill resolution for rect and polygon. Returns a kwargs
+    dict ready to splat into `draw.rect` / `draw.polygon`.
     `fill=False` switches the fill off entirely; `edgecolor=` overrides the
     artist color for the outline; `linewidth=` controls outline width
     (default spec linewidth)."""
     opts = a["opts"]
-    fill = opts.get("fill", True)
+    do_fill = opts.get("fill", True)
     edge = opts.get("edgecolor")
     lw = opts.get("linewidth", _D["linewidth"])
     alpha = opts.get("alpha", _D["bar_alpha"])
-    if fill:
-        fill_attr = f'fill="{ctx_color}"{op(alpha)}'
-    else:
-        fill_attr = 'fill="none"'
     if edge is not None:
-        ec = _resolve_color(edge)
-        stroke_attr = f' stroke="{ec}" stroke-width="{lw}"'
-    elif not fill:
+        stroke = _resolve_color(edge)
+    elif not do_fill:
         # No fill and no explicit edge: draw the outline in the artist color
         # so the shape is visible at all (matplotlib's `fill=False` idiom).
-        stroke_attr = f' stroke="{ctx_color}" stroke-width="{lw}"'
+        stroke = ctx_color
     else:
-        stroke_attr = ''
-    return fill_attr, stroke_attr
+        stroke = None
+    return {"fill": ctx_color if do_fill else None,
+            "stroke": stroke,
+            "stroke_width": lw,
+            # `fill=False` means a transparent shape with an opaque outline —
+            # never apply the fill-alpha to the stroke.
+            "alpha": alpha if do_fill else 1}
 
 
 def _artist_rect(a, xs_, ys_, col):
@@ -289,7 +278,7 @@ def _artist_rect(a, xs_, ys_, col):
     pre-broadcast to a common length in `record`. Each rect spans
     `(x, y) -> (x + w, y + h)` in data coords; pixel-space sign is fixed
     up so flipped y-axes (imshow origin='upper') still render correctly."""
-    fill_attr, stroke_attr = _stroke_attrs(a, col)
+    params = _fill_stroke_params(a, col)
     out = []
     for x, y, w, h in zip(a["xs"], a["ys"], a["ws"], a["hs"]):
         px0 = xs_(x); px1 = xs_(x + w)
@@ -300,8 +289,7 @@ def _artist_rect(a, xs_, ys_, col):
         pw = abs(px1 - px0); ph = abs(py1 - py0)
         if pw <= 0 or ph <= 0:
             continue
-        out.append(f'<rect x="{x_l:.2f}" y="{y_t:.2f}" width="{pw:.2f}" '
-                   f'height="{ph:.2f}" {fill_attr}{stroke_attr}/>')
+        out.append(draw_rect(x_l, y_t, pw, ph, **params))
     return "".join(out)
 
 
@@ -310,11 +298,7 @@ def _artist_polygon(a, xs_, ys_, col):
     (trailing `Z`) — matches matplotlib's `plt.fill()` which auto-closes."""
     pts = [(xs_(x), ys_(y)) for x, y in zip(a["xs"], a["ys"])]
     pts = [(px, py) for px, py in pts if math.isfinite(px) and math.isfinite(py)]
-    if len(pts) < 3:
-        return ""
-    fill_attr, stroke_attr = _stroke_attrs(a, col)
-    d = "M" + "L".join(f"{p[0]:.2f},{p[1]:.2f}" for p in pts) + "Z"
-    return f'<path d="{d}" {fill_attr}{stroke_attr}/>'
+    return draw_polygon(pts, **_fill_stroke_params(a, col))
 
 
 def _artist_imshow(a, xs_, ys_, col):
@@ -477,40 +461,17 @@ def _artist_errorbar(a, xs_, ys_, col):
     mk = opts.get("marker", "o")
     msize = opts.get("markersize", _D["markersize"])
     alpha = opts.get("alpha", 1)
-    op_attr = op(alpha)
     out = []
     for x, y, dxl, dxh, dyl, dyh in zip(xs, ys, xlo, xhi, ylo, yhi):
         px = xs_(x); py = ys_(y)
         if not (math.isfinite(px) and math.isfinite(py)):
             continue
         if dyl or dyh:
-            y_lo = ys_(y - dyl); y_hi = ys_(y + dyh)
-            out.append(
-                f'<line x1="{px:.2f}" x2="{px:.2f}" y1="{y_lo:.2f}" y2="{y_hi:.2f}" '
-                f'stroke="{col}" stroke-width="{lw}"{op_attr}/>'
-            )
-            if capsize:
-                out.append(
-                    f'<line x1="{px - capsize / 2:.2f}" x2="{px + capsize / 2:.2f}" '
-                    f'y1="{y_lo:.2f}" y2="{y_lo:.2f}" stroke="{col}" stroke-width="{lw}"{op_attr}/>'
-                    f'<line x1="{px - capsize / 2:.2f}" x2="{px + capsize / 2:.2f}" '
-                    f'y1="{y_hi:.2f}" y2="{y_hi:.2f}" stroke="{col}" stroke-width="{lw}"{op_attr}/>'
-                )
+            out.append(errorbar_v(px, ys_(y - dyl), ys_(y + dyh),
+                                  capsize=capsize, color=col, width=lw, alpha=alpha))
         if dxl or dxh:
-            x_lo = xs_(x - dxl); x_hi = xs_(x + dxh)
-            out.append(
-                f'<line x1="{x_lo:.2f}" x2="{x_hi:.2f}" y1="{py:.2f}" y2="{py:.2f}" '
-                f'stroke="{col}" stroke-width="{lw}"{op_attr}/>'
-            )
-            if capsize:
-                out.append(
-                    f'<line x1="{x_lo:.2f}" x2="{x_lo:.2f}" '
-                    f'y1="{py - capsize / 2:.2f}" y2="{py + capsize / 2:.2f}" '
-                    f'stroke="{col}" stroke-width="{lw}"{op_attr}/>'
-                    f'<line x1="{x_hi:.2f}" x2="{x_hi:.2f}" '
-                    f'y1="{py - capsize / 2:.2f}" y2="{py + capsize / 2:.2f}" '
-                    f'stroke="{col}" stroke-width="{lw}"{op_attr}/>'
-                )
+            out.append(errorbar_h(py, xs_(x - dxl), xs_(x + dxh),
+                                  capsize=capsize, color=col, width=lw, alpha=alpha))
         if mk:
             out.append(marker(mk, px, py, msize, col, alpha))
     return "".join(out)

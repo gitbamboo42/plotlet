@@ -22,7 +22,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
-from plotlet.draw import text_path
+from plotlet.draw import circle, segment
 
 
 def ma_record(args, kw):
@@ -57,25 +57,18 @@ def ma_draw(a, ctx):
         else:
             sig = abs(m) > fc_th
         col = sig_col if sig else ns_col
-        out.append(
-            f'<circle cx="{ctx.x_scale(ae):.2f}" cy="{ctx.y_scale(m):.2f}" '
-            f'r="{size}" fill="{col}" opacity="0.7"/>'
-        )
+        out.append(circle(ctx.x_scale(ae), ctx.y_scale(m), size,
+                          fill=col, alpha=0.7))
     # Reference y = 0.
     x_lo = ctx.x_scale(min(a["_a"]))
     x_hi = ctx.x_scale(max(a["_a"]))
     y_zero = ctx.y_scale(0)
-    out.append(
-        f'<line x1="{x_lo:.2f}" x2="{x_hi:.2f}" y1="{y_zero:.2f}" y2="{y_zero:.2f}" '
-        f'stroke="#444" stroke-width="0.8"/>'
-    )
+    out.append(segment(x_lo, y_zero, x_hi, y_zero, color="#444", width=0.8))
     # Fold-change threshold dashes at +/- fc_th.
     for sign in (-1, 1):
         y_th = ctx.y_scale(sign * fc_th)
-        out.append(
-            f'<line x1="{x_lo:.2f}" x2="{x_hi:.2f}" y1="{y_th:.2f}" y2="{y_th:.2f}" '
-            f'stroke="#888" stroke-width="0.8" stroke-dasharray="4,3"/>'
-        )
+        out.append(segment(x_lo, y_th, x_hi, y_th,
+                           color="#888", width=0.8, dash="4,3"))
     return "".join(out)
 
 

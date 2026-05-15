@@ -6,7 +6,8 @@ that, `c.<your_name>(...)` Just Works on any `Chart` — autoscaling, gridlines,
 color cycling, and the legend integrate for free.
 
 No edits to `core.py`. No monkey-patching of `Chart`. Custom artists live in
-your project (or in [`cookbook/`](../cookbook/) as reference), not upstream.
+your project (or in [`src/plotlet/recipes/`](../src/plotlet/recipes/) as
+reference), not upstream.
 
 > If your custom plot is generally useful, **publish it from your own project**;
 > see [`PHILOSOPHY.md`](PHILOSOPHY.md) for why we don't accept new plot types
@@ -16,9 +17,16 @@ your project (or in [`cookbook/`](../cookbook/) as reference), not upstream.
 
 ## The three steps
 
+The `draw` callback is where the SVG actually gets produced. Use the
+primitives in [`plotlet.draw`](../src/plotlet/draw/__init__.py) — they emit
+SVG at pixel coordinates, match the built-in look, and stay byte-stable as
+plotlet evolves. Hand-rolled `<line>`/`<rect>` f-strings work too, but the
+helpers are shorter and you inherit any future format changes for free.
+
 ```python
 import plotlet as pt
-from plotlet.artists import _to_pylist
+from plotlet.utils import to_list
+from plotlet.draw import segment, circle
 
 
 # 1. record(args, kwargs) -> dict
@@ -26,8 +34,8 @@ from plotlet.artists import _to_pylist
 #    dict that gets stored in Chart._calls. Pure data — no scales yet.
 def my_record(args, kw):
     return {"type": "lollipop",
-            "xs": _to_pylist(args[0]),
-            "ys": _to_pylist(args[1]),
+            "xs": to_list(args[0]),
+            "ys": to_list(args[1]),
             "opts": kw}
 
 
@@ -50,11 +58,8 @@ def my_draw(a, ctx):
     y0 = ctx.y_scale(0)
     for x, y in zip(a["xs"], a["ys"]):
         px, py = ctx.x_scale(x), ctx.y_scale(y)
-        out.append(
-            f'<line x1="{px:.2f}" x2="{px:.2f}" y1="{y0:.2f}" y2="{py:.2f}" '
-            f'stroke="{ctx.color}" stroke-width="1.5"/>'
-            f'<circle cx="{px:.2f}" cy="{py:.2f}" r="5" fill="{ctx.color}"/>'
-        )
+        out.append(segment(px, y0, px, py, color=ctx.color, width=1.5))
+        out.append(circle(px, py, 5, fill=ctx.color))
     return "".join(out)
 
 
@@ -75,9 +80,40 @@ c.title("Lollipop chart").grid(True).legend(True)
 c.save_svg("out.svg")
 ```
 
-Worked example: [`cookbook/lollipop/lollipop.py`](../cookbook/lollipop/lollipop.py) — basic
+Worked example: [`src/plotlet/recipes/lollipop.py`](../src/plotlet/recipes/lollipop.py) — basic
 artist plus an optional `legend_swatch` so the legend entry actually
 looks like a tiny lollipop.
+
+---
+
+## Drawing helpers
+
+`plotlet.draw` exposes pixel-coordinate primitives matching the built-in
+look — same float precision, same opacity handling, same dash codes
+(`"--"`, `":"`, `"-."`, or any raw SVG dasharray). Compose them inside
+`draw` with `"".join(...)`; the framework wraps your fragment in a `<g>`
+that carries `data-plotlet-*` attrs.
+
+| Helper | What it emits |
+|---|---|
+| `segment(x1, y1, x2, y2, *, color, width, dash, alpha)` | One `<line>`. |
+| `rect(x, y, w, h, *, fill, stroke, stroke_width, alpha)` | One `<rect>`. Pass `fill=None` (default) for outline-only. |
+| `circle(cx, cy, r, *, fill, stroke, stroke_width, alpha)` | One `<circle>`. Pass `fill=` or `stroke=` (or both). |
+| `path(d, *, fill, stroke, stroke_width, dash, alpha)` | One `<path>` with an arbitrary `d` string. Use when `polyline` / `polygon` aren't shaped right. |
+| `polyline(points, *, color, width, dash, alpha)` | Stroked polyline through a list of `(x, y)` tuples. No fill. |
+| `polygon(points, *, fill, stroke, stroke_width, alpha)` | Closed shape (auto-trailing `Z`) through a list of `(x, y)` tuples. |
+| `errorbar_v(x, y_lo, y_hi, *, capsize, color, width, alpha)` | Vertical bar with two horizontal caps. `capsize=0` drops the caps. |
+| `errorbar_h(y, x_lo, x_hi, *, capsize, color, width, alpha)` | Horizontal bar with two vertical caps. |
+| `marker(marker, x, y, size, col, alpha)` | One of `"o" "s" "^" "v" "x" "+"` at pixel `(x, y)`. |
+| `text_path(s, x, y, size, anchor, color)` | Text as glyph paths (font-independent across machines). |
+| `op(alpha)` | The `opacity=...` attribute fragment — omitted entirely when `alpha == 1` so output stays lean. |
+
+The recipes under [`src/plotlet/recipes/`](../src/plotlet/recipes/) are the
+canonical worked examples — every one of them uses these helpers and only
+these helpers. Skim a couple before writing your own.
+
+When no helper fits — Bézier paths, custom SVG elements like `<text>` or
+`<image>`, gradients — drop down to a raw f-string. It's just SVG.
 
 ---
 
@@ -106,7 +142,7 @@ ArtistSpec(
 | `xdomain` / `ydomain` | `None` | Set when your artist's data should drive axis limits. Return `None` for decorative artists that just sit on the frame (axhline, axvline). |
 | `layer` | `"data"` | `"background"` for fills and shaded spans (drawn first), `"foreground"` for reference lines (drawn last, on top). Same artist within a layer keeps insertion order. |
 | `uses_color_cycle` | `True` | Set `False` for artists that shouldn't consume a tab10 slot — reflines, image-based artists, anything that picks its own color. Set `default_color` to give it a fallback. |
-| `legend_swatch` | `None` | Provide to draw your own legend entry. Without it, the legend falls back to a colored line in the artist's color. Signature: `(a, ctx, x0, y_mid) -> svg_fragment`. |
+| `legend_swatch` | `None` | Provide to draw your own legend entry. Without it, the legend falls back to a colored line in the artist's color. Signature: `(a, ctx, x0, y_mid) -> svg_fragment`. Build it with the same `draw.*` helpers — see `lollipop_legend_swatch`. |
 | `legend_gradient` | `None` | Provide for artists with a continuous color mapping (heatmap-style). Returns `{"kind": "continuous", "cmap": ..., "vmin": ..., "vmax": ...}` so the layout-level legend can render a colorbar. |
 | `data_attrs` | `None` | AI-readable structural attrs. Returned dict keys land on the artist's `<g>` as `data-plotlet-<key>`. Common attrs (type, index, label, color) are added automatically without this field — declare it if you want type-specific attrs (`n`, ranges, marker, …). See [`AI_ATTRS.md`](AI_ATTRS.md). |
 | `axis_order` | `None` | Contribute a canonical order for a categorical axis. Returns `{"x": [...]}` or `{"y": [...]}`. Use when your artist's data has a load-bearing order that alphabetical sorting would destroy (e.g. dendrogram's leaf permutation). The user's explicit `xscale("category", order=...)` still wins. |
@@ -126,7 +162,7 @@ stay short:
 | `iw`, `ih` | float | Inner figure width and height in pixels (after margins). |
 | `color` | `str \| None` | The resolved color for this artist. `None` if `uses_color_cycle=False` *and* no `default_color` was set (e.g. `imshow`, which uses a colormap). |
 | `defaults` | dict | The `spec.json` defaults — `linewidth`, `markersize`, `scatter_s`, `refspan_alpha`, etc. Use these instead of hardcoded numbers. |
-| `dash` | dict | Linestyle codes (`"--"`, `":"`, `"-."`) → SVG `stroke-dasharray` strings. |
+| `dash` | dict | Linestyle codes (`"--"`, `":"`, `"-."`) → SVG `stroke-dasharray` strings. The `draw.*` helpers already accept these codes directly via `dash=`. |
 
 ---
 
@@ -150,6 +186,8 @@ stash pre-processed data in [`builtin_artists.py`](../src/plotlet/builtin_artist
 
 ## Things to keep in mind
 
+- **Use the `draw.*` helpers.** Recipes under `src/plotlet/recipes/` are
+  the working examples; they're short because they don't hand-roll SVG.
 - **Reuse the visual spec.** Don't hardcode colors, font sizes, alphas.
   Pull from `ctx.defaults` (or import `_D` from `plotlet._spec`) so your
   artist matches the locked plotlet look.
@@ -160,4 +198,5 @@ stash pre-processed data in [`builtin_artists.py`](../src/plotlet/builtin_artist
   Static SVG is what makes plotlet's baseline-image testing possible — see
   the non-goals section in [`PHILOSOPHY.md`](PHILOSOPHY.md).
 - **Custom plot types don't get added to `core.py`.** Live in your project,
-  or send a recipe to [`cookbook/`](../cookbook/) as a reference for others.
+  or send a recipe to [`src/plotlet/recipes/`](../src/plotlet/recipes/) as
+  a reference for others.

@@ -21,7 +21,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
-from plotlet.draw import text_path
+from plotlet.draw import text_path, circle, segment
 
 
 def manhattan_record(args, kw):
@@ -72,27 +72,18 @@ def manhattan_draw(a, ctx):
     out = []
     for x, y, idx in zip(a["_xs"], a["_ys"], a["_chrom_idx"]):
         col = colors[idx % len(colors)]
-        out.append(
-            f'<circle cx="{ctx.x_scale(x):.2f}" cy="{ctx.y_scale(y):.2f}" '
-            f'r="{size}" fill="{col}"/>'
-        )
+        out.append(circle(ctx.x_scale(x), ctx.y_scale(y), size, fill=col))
     # Genome-wide threshold.
     if sig is not None:
         y_sig = ctx.y_scale(-math.log10(sig))
-        out.append(
-            f'<line x1="{ctx.x_scale(0):.2f}" '
-            f'x2="{ctx.x_scale(a["_total"]):.2f}" '
-            f'y1="{y_sig:.2f}" y2="{y_sig:.2f}" stroke="#d62728" '
-            f'stroke-width="1" stroke-dasharray="6,3"/>'
-        )
+        out.append(segment(ctx.x_scale(0), y_sig,
+                           ctx.x_scale(a["_total"]), y_sig,
+                           color="#d62728", width=1, dash="6,3"))
     if suggestive is not None:
         y_sug = ctx.y_scale(-math.log10(suggestive))
-        out.append(
-            f'<line x1="{ctx.x_scale(0):.2f}" '
-            f'x2="{ctx.x_scale(a["_total"]):.2f}" '
-            f'y1="{y_sug:.2f}" y2="{y_sug:.2f}" stroke="#888" '
-            f'stroke-width="1" stroke-dasharray="3,3"/>'
-        )
+        out.append(segment(ctx.x_scale(0), y_sug,
+                           ctx.x_scale(a["_total"]), y_sug,
+                           color="#888", width=1, dash="3,3"))
     # Chromosome labels under each block.
     for ch, cx in a["_centers"].items():
         out.append(text_path(str(ch), ctx.x_scale(cx),

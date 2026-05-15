@@ -16,6 +16,7 @@ SUMMARY = 'Letter-value plot (boxenplot): nested quantile boxes for big-sample d
 from pathlib import Path
 
 import plotlet as pt
+from plotlet.draw import rect, segment
 from plotlet.utils import to_list
 
 
@@ -80,18 +81,13 @@ def boxen_draw(a, ctx):
             shade = _mix_to_white(col, min(0.75, 0.18 * k))
             y_top = ctx.y_scale(max(v_lo, v_hi))
             y_bot = ctx.y_scale(min(v_lo, v_hi))
-            out.append(
-                f'<rect x="{cx - w_px / 2:.2f}" y="{y_top:.2f}" '
-                f'width="{w_px:.2f}" height="{abs(y_bot - y_top):.2f}" '
-                f'fill="{shade}" stroke="{col}" stroke-width="0.6"/>'
-            )
+            out.append(rect(cx - w_px / 2, y_top, w_px, abs(y_bot - y_top),
+                            fill=shade, stroke=col, stroke_width=0.6))
         # Median tick across the innermost box.
         y_med = ctx.y_scale(median)
         inner_w = band * bw_frac
-        out.append(
-            f'<line x1="{cx - inner_w / 2:.2f}" x2="{cx + inner_w / 2:.2f}" '
-            f'y1="{y_med:.2f}" y2="{y_med:.2f}" stroke="{col}" stroke-width="1.6"/>'
-        )
+        out.append(segment(cx - inner_w / 2, y_med, cx + inner_w / 2, y_med,
+                           color=col, width=1.6))
     return "".join(out)
 
 

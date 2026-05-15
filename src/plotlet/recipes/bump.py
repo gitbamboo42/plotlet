@@ -20,6 +20,7 @@ SUMMARY = 'Ranked categorical lines over a sequence of periods (rank 1 at the to
 from pathlib import Path
 
 import plotlet as pt
+from plotlet.draw import circle, polyline
 from plotlet.utils import to_list
 
 
@@ -70,10 +71,9 @@ def bump_draw(a, ctx):
         py = ctx.y_scale(a["n_series"] + 1 - rk)
         pts.append((px, py))
     if len(pts) > 1:
-        d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts)
-        out.append(f'<path d="{d}" fill="none" stroke="{col}" stroke-width="{lw}"/>')
+        out.append(polyline(pts, color=col, width=lw))
     for x, y in pts:
-        out.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{r}" fill="{col}"/>')
+        out.append(circle(x, y, r, fill=col))
     return "".join(out)
 
 

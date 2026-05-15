@@ -27,7 +27,7 @@ SUMMARY = "Significance brackets over a boxplot/violin: '*'/'**'/'ns' annotation
 from pathlib import Path
 
 import plotlet as pt
-from plotlet.draw import text_path
+from plotlet.draw import path, text_path
 
 
 def sig_record(args, kw):
@@ -74,11 +74,9 @@ def sig_draw(a, ctx):
         px_a = ctx.x_scale(cat_a); px_b = ctx.x_scale(cat_b)
         x_lo = min(px_a, px_b); x_hi = max(px_a, px_b)
         drop = 4  # bracket tick length in px
-        out.append(
-            f'<path d="M{x_lo:.2f},{py + drop:.2f} L{x_lo:.2f},{py:.2f} '
-            f'L{x_hi:.2f},{py:.2f} L{x_hi:.2f},{py + drop:.2f}" '
-            f'fill="none" stroke="#222" stroke-width="0.8"/>'
-        )
+        d = (f"M{x_lo:.2f},{py + drop:.2f} L{x_lo:.2f},{py:.2f} "
+             f"L{x_hi:.2f},{py:.2f} L{x_hi:.2f},{py + drop:.2f}")
+        out.append(path(d, stroke="#222", stroke_width=0.8))
         out.append(text_path(text, (x_lo + x_hi) / 2, py - 4,
                               11, anchor="middle"))
     return "".join(out)

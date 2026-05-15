@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 
 from .registry import ArtistSpec, RenderContext, add_artist
-from .draw import marker, op
+from .draw import marker, segment, rect, circle
 from .utils import to_list, to_list_2d, broadcast, histogram
 from .artists import (
     _artist_line, _artist_scatter, _artist_bar, _artist_hist, _artist_fill_between,
@@ -47,11 +47,10 @@ def _bin_ys(a): return [b["count"] for b in a["_bins"]] + [0]
 
 def _line_swatch(a, ctx, x0, y_mid, default_lw):
     sw = _LEGSPEC["swatch_width"]
-    ls = a["opts"].get("linestyle")
-    da = f' stroke-dasharray="{ctx.dash[ls]}"' if ls and ctx.dash.get(ls) else ""
-    return (f'<line x1="{x0}" x2="{x0 + sw}" y1="{y_mid}" y2="{y_mid}" '
-            f'stroke="{a["_color"]}" '
-            f'stroke-width="{a["opts"].get("linewidth", default_lw)}"{da}/>')
+    return segment(x0, y_mid, x0 + sw, y_mid,
+                   color=a["_color"],
+                   width=a["opts"].get("linewidth", default_lw),
+                   dash=a["opts"].get("linestyle"))
 
 
 def _line_legend_swatch(a, ctx, x0, y_mid):
@@ -78,9 +77,8 @@ def _scatter_legend_swatch(a, ctx, x0, y_mid):
 
 def _rect_swatch(a, x0, y_mid, default_alpha):
     sw = _LEGSPEC["swatch_width"]
-    return (f'<rect x="{x0}" y="{y_mid - 5}" width="{sw}" height="10" '
-            f'fill="{a["_color"]}"'
-            f'{op(a["opts"].get("alpha", default_alpha))}/>')
+    return rect(x0, y_mid - 5, sw, 10, fill=a["_color"],
+                alpha=a["opts"].get("alpha", default_alpha))
 
 
 def _bar_legend_swatch(a, ctx, x0, y_mid):
@@ -644,8 +642,8 @@ def _errorbar_legend_swatch(a, ctx, x0, y_mid):
     msize = a["opts"].get("markersize", ctx.defaults["markersize"])
     cx = x0 + _LEGSPEC["swatch_width"] / 2
     return (
-        f'<line x1="{cx}" x2="{cx}" y1="{y_mid - 5}" y2="{y_mid + 5}" '
-        f'stroke="{col}" stroke-width="{_D["errorbar_linewidth"]}"/>'
+        segment(cx, y_mid - 5, cx, y_mid + 5,
+                color=col, width=_D["errorbar_linewidth"])
         + marker(a["opts"].get("marker", "o"), cx, y_mid, msize, col, 1)
     )
 

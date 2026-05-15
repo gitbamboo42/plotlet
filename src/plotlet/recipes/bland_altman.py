@@ -14,7 +14,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
-from plotlet.draw import text_path
+from plotlet.draw import circle, segment, text_path
 
 
 def ba_record(args, kw):
@@ -44,10 +44,8 @@ def ba_draw(a, ctx):
     r = a["opts"].get("size", 3)
     out = []
     for x, y in zip(a["means"], a["diffs"]):
-        out.append(
-            f'<circle cx="{ctx.x_scale(x):.2f}" cy="{ctx.y_scale(y):.2f}" '
-            f'r="{r}" fill="{col}" opacity="0.7"/>'
-        )
+        out.append(circle(ctx.x_scale(x), ctx.y_scale(y), r,
+                          fill=col, alpha=0.7))
     x_lo = ctx.x_scale(min(a["means"]))
     x_hi = ctx.x_scale(max(a["means"]))
     for y_data, label, dash in (
@@ -56,11 +54,8 @@ def ba_draw(a, ctx):
         (a["_bias"] - 1.96 * a["_sd"], f"−1.96 SD = {a['_bias'] - 1.96 * a['_sd']:+.2f}", "5,3"),
     ):
         py = ctx.y_scale(y_data)
-        da = f' stroke-dasharray="{dash}"' if dash else ""
-        out.append(
-            f'<line x1="{x_lo:.2f}" x2="{x_hi:.2f}" y1="{py:.2f}" y2="{py:.2f}" '
-            f'stroke="#444" stroke-width="0.8"{da}/>'
-        )
+        out.append(segment(x_lo, py, x_hi, py,
+                           color="#444", width=0.8, dash=dash))
         out.append(text_path(label, x_hi - 4, py - 4, 10, anchor="end"))
     return "".join(out)
 

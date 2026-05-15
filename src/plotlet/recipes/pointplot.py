@@ -25,6 +25,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
+from plotlet.draw import segment, circle, polyline, errorbar_v
 from scipy.stats import t as _t_dist
 
 
@@ -104,30 +105,20 @@ def pointplot_draw(a, ctx):
             continue
         cx = ctx.x_scale(cat); py = ctx.y_scale(est)
         if lo == lo and hi == hi:
-            py_lo = ctx.y_scale(lo); py_hi = ctx.y_scale(hi)
-            out.append(
-                f'<line x1="{cx:.2f}" x2="{cx:.2f}" y1="{py_lo:.2f}" y2="{py_hi:.2f}" '
-                f'stroke="{col}" stroke-width="{lw}"/>'
-                f'<line x1="{cx - capsize / 2:.2f}" x2="{cx + capsize / 2:.2f}" '
-                f'y1="{py_lo:.2f}" y2="{py_lo:.2f}" stroke="{col}" stroke-width="{lw}"/>'
-                f'<line x1="{cx - capsize / 2:.2f}" x2="{cx + capsize / 2:.2f}" '
-                f'y1="{py_hi:.2f}" y2="{py_hi:.2f}" stroke="{col}" stroke-width="{lw}"/>'
-            )
+            out.append(errorbar_v(cx, ctx.y_scale(lo), ctx.y_scale(hi),
+                                  capsize=capsize, color=col, width=lw))
         pts.append((cx, py))
-    if len(pts) >= 2:
-        d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts)
-        out.append(f'<path d="{d}" fill="none" stroke="{col}" stroke-width="{lw}"/>')
+    out.append(polyline(pts, color=col, width=lw))
     for x, y in pts:
-        out.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{r}" fill="{col}"/>')
+        out.append(circle(x, y, r, fill=col))
     return "".join(out)
 
 
 def pointplot_legend_swatch(a, ctx, x0, y_mid):
     col = a["_color"]
     return (
-        f'<line x1="{x0}" x2="{x0 + 22}" y1="{y_mid}" y2="{y_mid}" '
-        f'stroke="{col}" stroke-width="1.4"/>'
-        f'<circle cx="{x0 + 11}" cy="{y_mid}" r="3" fill="{col}"/>'
+        segment(x0, y_mid, x0 + 22, y_mid, color=col, width=1.4)
+        + circle(x0 + 11, y_mid, 3, fill=col)
     )
 
 

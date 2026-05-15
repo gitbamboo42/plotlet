@@ -18,6 +18,7 @@ SUMMARY = 'Short tick marks along an axis showing where each observation sits.'
 from pathlib import Path
 
 import plotlet as pt
+from plotlet.draw import segment
 from plotlet.utils import to_list
 
 
@@ -46,22 +47,16 @@ def rug_draw(a, ctx):
         y_top = y_base - length * ctx.ih
         for v in a["vals"]:
             px = ctx.x_scale(v)
-            out.append(
-                f'<line x1="{px:.2f}" x2="{px:.2f}" y1="{y_base:.2f}" '
-                f'y2="{y_top:.2f}" stroke="{col}" stroke-width="{lw}" '
-                f'opacity="{alpha}"/>'
-            )
+            out.append(segment(px, y_base, px, y_top,
+                               color=col, width=lw, alpha=alpha))
     else:
         # Ticks extend right from the left spine.
         x_base = 0
         x_right = length * ctx.iw
         for v in a["vals"]:
             py = ctx.y_scale(v)
-            out.append(
-                f'<line x1="{x_base:.2f}" x2="{x_right:.2f}" y1="{py:.2f}" '
-                f'y2="{py:.2f}" stroke="{col}" stroke-width="{lw}" '
-                f'opacity="{alpha}"/>'
-            )
+            out.append(segment(x_base, py, x_right, py,
+                               color=col, width=lw, alpha=alpha))
     return "".join(out)
 
 

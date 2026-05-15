@@ -15,6 +15,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
+from plotlet.draw import segment, circle
 
 
 # 1. record(): turn args/kwargs into the artist dict stored in Chart._calls.
@@ -42,13 +43,8 @@ def lollipop_draw(a, ctx):
     col = ctx.color
     for x, y in zip(a["xs"], a["ys"]):
         px = ctx.x_scale(x); py = ctx.y_scale(y)
-        out.append(
-            f'<line x1="{px:.2f}" x2="{px:.2f}" y1="{y0:.2f}" y2="{py:.2f}" '
-            f'stroke="{col}" stroke-width="{lw}"/>'
-        )
-        out.append(
-            f'<circle cx="{px:.2f}" cy="{py:.2f}" r="{head_r}" fill="{col}"/>'
-        )
+        out.append(segment(px, y0, px, py, color=col, width=lw))
+        out.append(circle(px, py, head_r, fill=col))
     return "".join(out)
 
 
@@ -58,9 +54,8 @@ def lollipop_draw(a, ctx):
 def lollipop_legend_swatch(a, ctx, x0, y_mid):
     col = a["_color"]
     return (
-        f'<line x1="{x0 + 11}" x2="{x0 + 11}" y1="{y_mid + 5}" y2="{y_mid - 4}" '
-        f'stroke="{col}" stroke-width="1.5"/>'
-        f'<circle cx="{x0 + 11}" cy="{y_mid - 4}" r="3.5" fill="{col}"/>'
+        segment(x0 + 11, y_mid + 5, x0 + 11, y_mid - 4, color=col, width=1.5)
+        + circle(x0 + 11, y_mid - 4, 3.5, fill=col)
     )
 
 

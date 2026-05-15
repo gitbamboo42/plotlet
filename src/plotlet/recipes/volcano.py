@@ -20,7 +20,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
-from plotlet.draw import text_path
+from plotlet.draw import text_path, circle, segment
 
 
 def volcano_record(args, kw):
@@ -59,26 +59,17 @@ def volcano_draw(a, ctx):
         pts.append((fc, log_p, lab, col))
     out = []
     for fc, log_p, lab, col in pts:
-        out.append(
-            f'<circle cx="{ctx.x_scale(fc):.2f}" cy="{ctx.y_scale(log_p):.2f}" '
-            f'r="{size}" fill="{col}" opacity="0.7"/>'
-        )
+        out.append(circle(ctx.x_scale(fc), ctx.y_scale(log_p), size,
+                          fill=col, alpha=0.7))
     # Threshold lines.
-    out.append(
-        f'<line x1="{ctx.x_scale(min(a["fc"])):.2f}" '
-        f'x2="{ctx.x_scale(max(a["fc"])):.2f}" '
-        f'y1="{ctx.y_scale(log_p_th):.2f}" '
-        f'y2="{ctx.y_scale(log_p_th):.2f}" stroke="#888" '
-        f'stroke-width="0.8" stroke-dasharray="4,3"/>'
-    )
+    out.append(segment(ctx.x_scale(min(a["fc"])), ctx.y_scale(log_p_th),
+                       ctx.x_scale(max(a["fc"])), ctx.y_scale(log_p_th),
+                       color="#888", width=0.8, dash="4,3"))
     for sign in (-1, 1):
         x_th = ctx.x_scale(sign * fc_th)
-        out.append(
-            f'<line x1="{x_th:.2f}" x2="{x_th:.2f}" '
-            f'y1="{ctx.y_scale(0):.2f}" '
-            f'y2="{ctx.y_scale(max(p[1] for p in pts) if pts else 1):.2f}" '
-            f'stroke="#888" stroke-width="0.8" stroke-dasharray="4,3"/>'
-        )
+        out.append(segment(x_th, ctx.y_scale(0),
+                           x_th, ctx.y_scale(max(p[1] for p in pts) if pts else 1),
+                           color="#888", width=0.8, dash="4,3"))
     # Label top-N by significance among the colored (non-NS) points.
     colored = [p for p in pts if p[3] != ns_c and p[2]]
     colored.sort(key=lambda p: -p[1])

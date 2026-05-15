@@ -19,7 +19,7 @@ from pathlib import Path
 import plotlet as pt
 from plotlet.utils import to_list
 from plotlet.draw.colormaps import colormap, _ContinuousNorm
-from plotlet.draw import text_path
+from plotlet.draw import rect, text_path
 
 
 def cm_record(args, kw):
@@ -78,10 +78,7 @@ def cm_draw(a, ctx):
             cy = ctx.y_scale(cls_t)
             rgb = cmap(norm.to_unit(v))
             fill = f"rgb({rgb[0]},{rgb[1]},{rgb[2]})"
-            out.append(
-                f'<rect x="{cx - bw / 2:.2f}" y="{cy - bh / 2:.2f}" '
-                f'width="{bw:.2f}" height="{bh:.2f}" fill="{fill}"/>'
-            )
+            out.append(rect(cx - bw / 2, cy - bh / 2, bw, bh, fill=fill))
             txt_col = "#ffffff" if _luminance(rgb) < 0.55 else "#000000"
             if normalize:
                 label = f"{v:.2f}\n({cnt})" if a["opts"].get("show_counts", True) else f"{v:.2f}"

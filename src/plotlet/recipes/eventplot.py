@@ -18,6 +18,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
+from plotlet.draw import segment
 
 
 def eventplot_record(args, kw):
@@ -50,29 +51,23 @@ def eventplot_draw(a, ctx):
         y2 = ctx.y_scale(y + ln / 2)
         for x in a["pos"]:
             px = ctx.x_scale(x)
-            out.append(
-                f'<line x1="{px:.2f}" x2="{px:.2f}" y1="{y1:.2f}" y2="{y2:.2f}" '
-                f'stroke="{col}" stroke-width="{lw}"/>'
-            )
+            out.append(segment(px, y1, px, y2, color=col, width=lw))
     else:  # horizontal — `y` here is read as an x-coord baseline
         x1 = ctx.x_scale(y - ln / 2)
         x2 = ctx.x_scale(y + ln / 2)
         for p in a["pos"]:
             py = ctx.y_scale(p)
-            out.append(
-                f'<line x1="{x1:.2f}" x2="{x2:.2f}" y1="{py:.2f}" y2="{py:.2f}" '
-                f'stroke="{col}" stroke-width="{lw}"/>'
-            )
+            out.append(segment(x1, py, x2, py, color=col, width=lw))
     return "".join(out)
 
 
 def eventplot_legend_swatch(a, ctx, x0, y_mid):
     col = a["_color"]
     return (
-        f'<line x1="{x0 + 4}" x2="{x0 + 4}" y1="{y_mid - 5}" y2="{y_mid + 5}" stroke="{col}"/>'
-        f'<line x1="{x0 + 10}" x2="{x0 + 10}" y1="{y_mid - 5}" y2="{y_mid + 5}" stroke="{col}"/>'
-        f'<line x1="{x0 + 14}" x2="{x0 + 14}" y1="{y_mid - 5}" y2="{y_mid + 5}" stroke="{col}"/>'
-        f'<line x1="{x0 + 19}" x2="{x0 + 19}" y1="{y_mid - 5}" y2="{y_mid + 5}" stroke="{col}"/>'
+        segment(x0 + 4, y_mid - 5, x0 + 4, y_mid + 5, color=col)
+        + segment(x0 + 10, y_mid - 5, x0 + 10, y_mid + 5, color=col)
+        + segment(x0 + 14, y_mid - 5, x0 + 14, y_mid + 5, color=col)
+        + segment(x0 + 19, y_mid - 5, x0 + 19, y_mid + 5, color=col)
     )
 
 

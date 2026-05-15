@@ -24,6 +24,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
+from plotlet.draw import polygon, polyline, segment
 from scipy.stats import chi2, norm
 
 
@@ -110,8 +111,7 @@ def km_draw(a, ctx):
         upper.append((ctx.x_scale(last_t), ctx.y_scale(last_hi)))
         lower.append((ctx.x_scale(last_t), ctx.y_scale(last_lo)))
         band = upper + lower[::-1]
-        d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in band) + " Z"
-        out.append(f'<path d="{d}" fill="{col}" fill-opacity="0.18"/>')
+        out.append(polygon(band, fill=col, alpha=0.18))
     # --- main step-after curve ---
     pts = []
     for i, (t, s) in enumerate(zip(a["_t"], a["_s"])):
@@ -120,22 +120,17 @@ def km_draw(a, ctx):
             pts.append((ctx.x_scale(t), ctx.y_scale(prev_s)))
         pts.append((ctx.x_scale(t), ctx.y_scale(s)))
     pts.append((ctx.x_scale(a["_t"][-1]), ctx.y_scale(a["_s"][-1])))
-    d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts)
-    out.append(f'<path d="{d}" fill="none" stroke="{col}" stroke-width="{lw}"/>')
+    out.append(polyline(pts, color=col, width=lw))
     # --- censoring ticks ---
     for t, s in a["_cens"]:
         px = ctx.x_scale(t); py = ctx.y_scale(s)
-        out.append(
-            f'<line x1="{px:.2f}" x2="{px:.2f}" y1="{py - 4:.2f}" y2="{py + 4:.2f}" '
-            f'stroke="{col}" stroke-width="{lw}"/>'
-        )
+        out.append(segment(px, py - 4, px, py + 4, color=col, width=lw))
     return "".join(out)
 
 
 def km_legend_swatch(a, ctx, x0, y_mid):
     col = a["_color"]
-    return (f'<line x1="{x0}" x2="{x0 + 22}" y1="{y_mid}" y2="{y_mid}" '
-            f'stroke="{col}" stroke-width="1.6"/>')
+    return segment(x0, y_mid, x0 + 22, y_mid, color=col, width=1.6)
 
 
 pt.add_artist(pt.ArtistSpec(

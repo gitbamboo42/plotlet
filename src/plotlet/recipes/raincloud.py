@@ -20,6 +20,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
+from plotlet.draw import path, rect, segment, circle
 
 
 def _silverman(xs):
@@ -103,10 +104,8 @@ def raincloud_draw(a, ctx):
         top_y = ctx.y_scale(grid[-1]); bot_y = ctx.y_scale(grid[0])
         path_d = ("M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in left_pts)
                   + f" L{cx_violin:.2f},{top_y:.2f} L{cx_violin:.2f},{bot_y:.2f} Z")
-        out.append(
-            f'<path d="{path_d}" fill="{col}" fill-opacity="{fill_alpha}" '
-            f'stroke="{col}" stroke-width="0.8"/>'
-        )
+        out.append(path(path_d, fill=col, stroke=col, stroke_width=0.8,
+                        fill_alpha=fill_alpha, stroke_alpha=1))
 
         # --- box in the MIDDLE ---
         q1 = _quantile(vals, 0.25); q2 = _quantile(vals, 0.5); q3 = _quantile(vals, 0.75)
@@ -118,15 +117,12 @@ def raincloud_draw(a, ctx):
         y_q1 = ctx.y_scale(q1); y_q2 = ctx.y_scale(q2); y_q3 = ctx.y_scale(q3)
         y_lo = ctx.y_scale(whis_lo); y_hi = ctx.y_scale(whis_hi)
         out.append(
-            f'<rect x="{x0:.2f}" y="{min(y_q1, y_q3):.2f}" '
-            f'width="{box_w:.2f}" height="{abs(y_q3 - y_q1):.2f}" '
-            f'fill="{col}" fill-opacity="0.25" stroke="{col}" stroke-width="1"/>'
-            f'<line x1="{x0:.2f}" x2="{x1:.2f}" y1="{y_q2:.2f}" y2="{y_q2:.2f}" '
-            f'stroke="{col}" stroke-width="1.6"/>'
-            f'<line x1="{cx_box:.2f}" x2="{cx_box:.2f}" y1="{y_q1:.2f}" y2="{y_lo:.2f}" '
-            f'stroke="{col}" stroke-width="1"/>'
-            f'<line x1="{cx_box:.2f}" x2="{cx_box:.2f}" y1="{y_q3:.2f}" y2="{y_hi:.2f}" '
-            f'stroke="{col}" stroke-width="1"/>'
+            rect(x0, min(y_q1, y_q3), box_w, abs(y_q3 - y_q1),
+                 fill=col, stroke=col, stroke_width=1,
+                 fill_alpha=0.25, stroke_alpha=1)
+            + segment(x0, y_q2, x1, y_q2, color=col, width=1.6)
+            + segment(cx_box, y_q1, cx_box, y_lo, color=col, width=1)
+            + segment(cx_box, y_q3, cx_box, y_hi, color=col, width=1)
         )
 
         # --- jittered strip on the RIGHT ---
@@ -135,10 +131,7 @@ def raincloud_draw(a, ctx):
             dx = _hash01(i, j) * (third * 0.5)
             px = cx_strip + dx
             py = ctx.y_scale(v)
-            out.append(
-                f'<circle cx="{px:.2f}" cy="{py:.2f}" r="{r}" '
-                f'fill="{col}" opacity="0.55"/>'
-            )
+            out.append(circle(px, py, r, fill=col, alpha=0.55))
     return "".join(out)
 
 

@@ -19,6 +19,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
+from plotlet.draw import polyline, segment
 
 
 def pr_record(args, kw):
@@ -63,8 +64,7 @@ def pr_draw(a, ctx):
     col = ctx.color
     lw = a["opts"].get("linewidth", 1.6)
     pts = [(ctx.x_scale(x), ctx.y_scale(y)) for x, y in zip(a["_rec"], a["_prec"])]
-    d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts)
-    out = f'<path d="{d}" fill="none" stroke="{col}" stroke-width="{lw}"/>'
+    out = polyline(pts, color=col, width=lw)
     # Baseline = positive class prevalence (constant line). Drawn once.
     if a["opts"].get("_first", True):
         # Approximate prevalence from the final recall denominator: we don't
@@ -73,16 +73,14 @@ def pr_draw(a, ctx):
         prev = a["opts"].get("prevalence")
         if prev is not None:
             y_prev = ctx.y_scale(prev)
-            out += (f'<line x1="{ctx.x_scale(0):.2f}" '
-                    f'x2="{ctx.x_scale(1):.2f}" '
-                    f'y1="{y_prev:.2f}" y2="{y_prev:.2f}" '
-                    f'stroke="#888" stroke-width="0.8" stroke-dasharray="4,3"/>')
+            out += segment(ctx.x_scale(0), y_prev,
+                           ctx.x_scale(1), y_prev,
+                           color="#888", width=0.8, dash="4,3")
     return out
 
 
 def pr_legend_swatch(a, ctx, x0, y_mid):
-    return (f'<line x1="{x0}" x2="{x0 + 22}" y1="{y_mid}" y2="{y_mid}" '
-            f'stroke="{a["_color"]}" stroke-width="1.6"/>')
+    return segment(x0, y_mid, x0 + 22, y_mid, color=a["_color"], width=1.6)
 
 
 pt.add_artist(pt.ArtistSpec(

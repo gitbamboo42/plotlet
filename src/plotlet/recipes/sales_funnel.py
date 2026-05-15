@@ -18,7 +18,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
-from plotlet.draw import text_path
+from plotlet.draw import rect, text_path
 
 
 def sales_funnel_record(args, kw):
@@ -44,10 +44,7 @@ def sales_funnel_draw(a, ctx):
         cy = ctx.y_scale(label)
         frac = v / vmax
         x_l = ctx.x_scale(-frac); x_r = ctx.x_scale(frac)
-        out.append(
-            f'<rect x="{x_l:.2f}" y="{cy - bar_h / 2:.2f}" '
-            f'width="{x_r - x_l:.2f}" height="{bar_h:.2f}" fill="{col}"/>'
-        )
+        out.append(rect(x_l, cy - bar_h / 2, x_r - x_l, bar_h, fill=col))
         if show_values:
             txt = f"{v:g}"
             if show_pct and v != first and first:

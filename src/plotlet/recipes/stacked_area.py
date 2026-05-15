@@ -15,6 +15,7 @@ SUMMARY = 'Stacked area chart for additive over-time series (energy mix, market 
 from pathlib import Path
 
 import plotlet as pt
+from plotlet.draw import polygon, rect
 from plotlet.utils import to_list
 
 
@@ -49,13 +50,11 @@ def stacked_area_draw(a, ctx):
     pts = [(ctx.x_scale(x), ctx.y_scale(t)) for x, t in zip(a["xs"], top)]
     pts += [(ctx.x_scale(x), ctx.y_scale(b)) for x, b in zip(reversed(a["xs"]),
                                                               reversed(base))]
-    d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts) + " Z"
-    return f'<path d="{d}" fill="{col}" fill-opacity="{alpha}"/>'
+    return polygon(pts, fill=col, alpha=alpha)
 
 
 def stacked_area_legend_swatch(a, ctx, x0, y_mid):
-    return (f'<rect x="{x0}" y="{y_mid - 5}" width="22" height="10" '
-            f'fill="{a["_color"]}"/>')
+    return rect(x0, y_mid - 5, 22, 10, fill=a["_color"])
 
 
 pt.add_artist(pt.ArtistSpec(

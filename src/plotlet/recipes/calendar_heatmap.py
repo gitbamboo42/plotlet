@@ -16,7 +16,7 @@ from pathlib import Path
 import plotlet as pt
 from plotlet.draw.colormaps import colormap, _ContinuousNorm
 from plotlet._spec import _D
-from plotlet.draw import text_path
+from plotlet.draw import rect, text_path
 
 
 def calhm_record(args, kw):
@@ -74,11 +74,9 @@ def calhm_draw(a, ctx):
             else:
                 r, g, b = cmap(norm.to_unit(v))
                 fill = f"rgb({r},{g},{b})"
-            out.append(
-                f'<rect x="{min(x, x + x_step) + pad / 2:.2f}" '
-                f'y="{min(y, y + y_step) + pad / 2:.2f}" '
-                f'width="{cw:.2f}" height="{ch:.2f}" fill="{fill}"/>'
-            )
+            out.append(rect(min(x, x + x_step) + pad / 2,
+                            min(y, y + y_step) + pad / 2,
+                            cw, ch, fill=fill))
     # Weekday labels along the left.
     labels = a["opts"].get("weekday_labels", ["Mon", "", "Wed", "", "Fri", "", "Sun"])
     for wd, label in enumerate(labels):

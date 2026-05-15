@@ -24,7 +24,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
-from plotlet.draw import text_path
+from plotlet.draw import rect, text_path
 
 
 def pyramid_record(args, kw):
@@ -55,16 +55,10 @@ def pyramid_draw(a, ctx):
         cy = ctx.y_scale(label)
         # Left bar: from -lv to 0
         x_l = ctx.x_scale(-lv)
-        out.append(
-            f'<rect x="{x_l:.2f}" y="{cy - bar_h / 2:.2f}" '
-            f'width="{x0 - x_l:.2f}" height="{bar_h:.2f}" fill="{l_col}"/>'
-        )
+        out.append(rect(x_l, cy - bar_h / 2, x0 - x_l, bar_h, fill=l_col))
         # Right bar: from 0 to rv
         x_r = ctx.x_scale(rv)
-        out.append(
-            f'<rect x="{x0:.2f}" y="{cy - bar_h / 2:.2f}" '
-            f'width="{x_r - x0:.2f}" height="{bar_h:.2f}" fill="{r_col}"/>'
-        )
+        out.append(rect(x0, cy - bar_h / 2, x_r - x0, bar_h, fill=r_col))
     # Top-of-plot legend labels.
     y_top = ctx.y_scale(a["labels"][0]) - band * 0.7
     out.append(text_path(l_lab, x0 - 6, y_top, 11, anchor="end", color=l_col))

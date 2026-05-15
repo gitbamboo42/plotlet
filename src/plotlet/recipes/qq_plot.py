@@ -19,6 +19,7 @@ SUMMARY = "Quantile-quantile plot vs the standard normal (or any scipy.stats dis
 from pathlib import Path
 
 import plotlet as pt
+from plotlet.draw import circle, segment
 from plotlet.utils import to_list
 from scipy.stats import norm
 
@@ -53,8 +54,7 @@ def qq_draw(a, ctx):
     out = []
     for tx, sy in zip(a["theo"], a["sample"]):
         px = ctx.x_scale(tx); py = ctx.y_scale(sy)
-        out.append(f'<circle cx="{px:.2f}" cy="{py:.2f}" r="{r}" '
-                   f'fill="{col}" opacity="0.7"/>')
+        out.append(circle(px, py, r, fill=col, alpha=0.7))
     n = len(a["sample"])
     if n >= 4:
         i25 = int(0.25 * (n - 1)); i75 = int(0.75 * (n - 1))
@@ -67,11 +67,9 @@ def qq_draw(a, ctx):
             pad = (x_hi - x_lo) * 0.05
             x0, x1e = x_lo - pad, x_hi + pad
             y0, y1e = intercept + slope * x0, intercept + slope * x1e
-            out.append(
-                f'<line x1="{ctx.x_scale(x0):.2f}" x2="{ctx.x_scale(x1e):.2f}" '
-                f'y1="{ctx.y_scale(y0):.2f}" y2="{ctx.y_scale(y1e):.2f}" '
-                f'stroke="#888" stroke-width="1" stroke-dasharray="4,3"/>'
-            )
+            out.append(segment(ctx.x_scale(x0), ctx.y_scale(y0),
+                               ctx.x_scale(x1e), ctx.y_scale(y1e),
+                               color="#888", width=1, dash="4,3"))
     return "".join(out)
 
 

@@ -19,6 +19,7 @@ SUMMARY = 'Likert / score-vs-baseline bars going left or right of zero, colored 
 from pathlib import Path
 
 import plotlet as pt
+from plotlet.draw import rect, segment
 from plotlet.utils import to_list
 
 
@@ -49,17 +50,11 @@ def diverging_bar_draw(a, ctx):
         cy = ctx.y_scale(label)
         xv = ctx.x_scale(v)
         x_l = min(x0, xv); w = abs(xv - x0)
-        out.append(
-            f'<rect x="{x_l:.2f}" y="{cy - bar_h / 2:.2f}" '
-            f'width="{w:.2f}" height="{bar_h:.2f}" fill="{col}"/>'
-        )
+        out.append(rect(x_l, cy - bar_h / 2, w, bar_h, fill=col))
     # Zero reference line drawn on top of the bars (so it stays visible).
     y_top = ctx.y_scale(a["labels"][0]) - band / 2
     y_bot = ctx.y_scale(a["labels"][-1]) + band / 2
-    out.append(
-        f'<line x1="{x0:.2f}" x2="{x0:.2f}" y1="{y_top:.2f}" y2="{y_bot:.2f}" '
-        f'stroke="#444" stroke-width="0.8"/>'
-    )
+    out.append(segment(x0, y_top, x0, y_bot, color="#444", width=0.8))
     return "".join(out)
 
 

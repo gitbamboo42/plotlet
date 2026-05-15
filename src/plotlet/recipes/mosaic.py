@@ -24,7 +24,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list_2d
-from plotlet.draw import text_path
+from plotlet.draw import rect, text_path
 
 
 _PALETTE = [
@@ -68,11 +68,9 @@ def mosaic_draw(a, ctx):
             y0 = ctx.y_scale(1 - (y + rh) + pad / 2)
             x1 = ctx.x_scale(x + cw - pad / 2)
             y1 = ctx.y_scale(1 - y - pad / 2)
-            out.append(
-                f'<rect x="{x0:.2f}" y="{y0:.2f}" '
-                f'width="{x1 - x0:.2f}" height="{y1 - y0:.2f}" '
-                f'fill="{fill}" fill-opacity="0.65" stroke="white" stroke-width="0.6"/>'
-            )
+            out.append(rect(x0, y0, x1 - x0, y1 - y0,
+                            fill=fill, stroke="white", stroke_width=0.6,
+                            fill_alpha=0.65, stroke_alpha=1))
             # Annotate cell with count if it's big enough to fit.
             if (x1 - x0) > 30 and (y1 - y0) > 14:
                 out.append(text_path(str(table[i][j]),

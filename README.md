@@ -6,7 +6,7 @@ A Python library for SVG plots — with multi-panel composition, shared-axis lay
 
 plotlet is built for **multi-panel scientific figures with custom plot types** — genome tracks, spike rasters, climate stacks, Manhattan plots, phylogenetic trees. The core ships ~5 standard plots plus multi-panel composition (`|`, `/`, `share_x()`).
 
-Custom plot types are a 3-step recipe (`record`, `xdomain`/`ydomain`, `draw`) and live in your own project (or [`cookbook/`](cookbook/)) rather than upstream. See [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) for the full framing.
+Custom plot types are a 3-step recipe (`record`, `xdomain`/`ydomain`, `draw`) and live in your own project (or [`src/plotlet/recipes/`](src/plotlet/recipes/)) rather than upstream. See [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) for the full framing.
 
 ```python
 import plotlet as pt
@@ -123,7 +123,7 @@ c.write_html("plot.html")    # standalone HTML
 
 ## Adding a new plot type
 
-plotlet is designed so that adding a new plot type is a 3-step recipe (~50–100 lines) that gets axes, scales, legend, grid, and composability for free. The recommended home is your own project, or [`cookbook/`](cookbook/) as reference. Full guide: [docs/EXTENDING.md](docs/EXTENDING.md).
+plotlet is designed so that adding a new plot type is a 3-step recipe (~50–100 lines) that gets axes, scales, legend, grid, and composability for free. The `draw` callback composes pixel-coordinate helpers from `plotlet.draw` (`segment`, `rect`, `circle`, `path`, `polyline`, `polygon`, `errorbar_v`/`errorbar_h`, `marker`, `text_path`) — no hand-rolling SVG strings. The recommended home is your own project, or [`src/plotlet/recipes/`](src/plotlet/recipes/) as reference. Full guide: [docs/EXTENDING.md](docs/EXTENDING.md).
 
 ## Testing
 
@@ -139,7 +139,7 @@ python tests/test_subplots.py         # subplot baselines + composition invarian
 - No interactivity (hover, zoom, click). Static rendering is the point.
 - Not aiming for full coverage of standard statistical plots — those needs are well-served elsewhere.
 - Not a 3D plotter, not a dashboard tool.
-- Not a feature catalog — new plot types belong in user projects or `cookbook/`, not in the core.
+- Not a feature catalog — new plot types belong in user projects or `src/plotlet/recipes/` (or `cookbook/` for multi-file projects), not in the core.
 
 ## License
 

@@ -16,6 +16,7 @@ SUMMARY = 'Banded compressed time-series strip; folds large y-ranges into N prog
 from pathlib import Path
 
 import plotlet as pt
+from plotlet.draw import polygon as draw_polygon
 from plotlet.utils import to_list
 
 
@@ -63,7 +64,7 @@ def horizon_draw(a, ctx):
         for sign, color_rgb in ((+1, pos_rgb), (-1, neg_rgb)):
             lo = b * band_h
             hi = (b + 1) * band_h
-            polygon = []
+            pts = []
             for x, d in zip(a["xs"], deviations):
                 m = sign * d
                 if m <= lo:
@@ -73,19 +74,18 @@ def horizon_draw(a, ctx):
                 else:
                     yfold = (m - lo) / band_h
                 px = ctx.x_scale(x); py = ctx.y_scale(yfold)
-                polygon.append((px, py))
+                pts.append((px, py))
             # Close along the baseline.
             x_last = ctx.x_scale(a["xs"][-1])
             x_first = ctx.x_scale(a["xs"][0])
             y_base = ctx.y_scale(0)
-            polygon.append((x_last, y_base))
-            polygon.append((x_first, y_base))
+            pts.append((x_last, y_base))
+            pts.append((x_first, y_base))
             # Closer-to-baseline bands are paler; farther bands keep full
             # saturation so larger magnitudes catch the eye (standard horizon).
             fade = 1 - b / max(bands - 1, 1)
             fill = _mix(color_rgb, white, fade * 0.6)
-            d_path = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in polygon) + " Z"
-            out.append(f'<path d="{d_path}" fill="{fill}"/>')
+            out.append(draw_polygon(pts, fill=fill))
     return "".join(out)
 
 

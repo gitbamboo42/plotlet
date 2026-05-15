@@ -15,6 +15,7 @@ import math
 from pathlib import Path
 
 import plotlet as pt
+from plotlet.draw import polygon
 from plotlet.utils import to_list
 from plotlet.draw.colormaps import colormap, _ContinuousNorm
 from plotlet._spec import _D
@@ -95,8 +96,7 @@ def hexbin_draw(a, ctx):
             vx = center_px_x + math.cos(angle) * (rx_data / 2 * sx)
             vy = center_px_y + math.sin(angle) * (ry_data * sy)
             verts.append((vx, vy))
-        d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in verts) + " Z"
-        out.append(f'<path d="{d}" fill="{fill}"/>')
+        out.append(polygon(verts, fill=fill))
     return "".join(out)
 
 

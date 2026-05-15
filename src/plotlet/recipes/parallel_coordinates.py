@@ -25,7 +25,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
-from plotlet.draw import text_path
+from plotlet.draw import polyline, segment, text_path
 
 
 def parallel_coords_record(args, kw):
@@ -74,20 +74,13 @@ def parallel_coords_draw(a, ctx):
         for i, v in enumerate(row):
             frac = (v - col_lo[i]) / span[i]
             pts.append((ctx.x_scale(i), ctx.y_scale(frac)))
-        d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts)
-        out.append(
-            f'<path d="{d}" fill="none" stroke="{rc}" stroke-width="{lw}" '
-            f'opacity="{alpha}"/>'
-        )
+        out.append(polyline(pts, color=rc, width=lw, alpha=alpha))
     # Axes: a thin vertical line at each variable's x, with the variable
     # name at the top and lo/hi labels at the bottom and top.
     y_top = ctx.y_scale(1); y_bot = ctx.y_scale(0)
     for i, name in enumerate(var_names):
         x = ctx.x_scale(i)
-        out.append(
-            f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{y_top:.2f}" y2="{y_bot:.2f}" '
-            f'stroke="#888" stroke-width="0.8"/>'
-        )
+        out.append(segment(x, y_top, x, y_bot, color="#888", width=0.8))
         out.append(text_path(name, x, y_bot + 14, 10, anchor="middle"))
         out.append(text_path(f"{col_hi[i]:.2g}", x + 3, y_top + 4, 8, anchor="start"))
         out.append(text_path(f"{col_lo[i]:.2g}", x + 3, y_bot - 1, 8, anchor="start"))

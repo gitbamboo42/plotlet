@@ -16,6 +16,7 @@ import math
 from pathlib import Path
 
 import plotlet as pt
+from plotlet.draw import path, text_path
 from plotlet.utils import to_list
 
 
@@ -90,13 +91,10 @@ def ridge_draw(a, ctx):
         x_left = ctx.x_scale(grid[0])
         y_base = ctx.y_scale(baseline_y)
         path_d = "M" + " L".join(pts) + f" L{x_right:.2f},{y_base:.2f} L{x_left:.2f},{y_base:.2f} Z"
-        out.append(
-            f'<path d="{path_d}" fill="{col}" fill-opacity="{fill_alpha}" '
-            f'stroke="{col}" stroke-width="1"/>'
-        )
+        out.append(path(path_d, fill=col, stroke=col, stroke_width=1,
+                        fill_alpha=fill_alpha, stroke_alpha=1))
         # Row label at the left baseline, in data coords using ctx.x_scale(lo).
         # Use a generic text path through plotlet.font so it's text-as-path.
-        from plotlet.draw import text_path
         out.append(text_path(label, ctx.x_scale(lo) + 4,
                               ctx.y_scale(baseline_y) - 3, 11, anchor="start"))
     return "".join(out)

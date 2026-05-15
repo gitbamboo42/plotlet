@@ -16,6 +16,7 @@ SUMMARY = 'Categorical dot matrix encoding two values per cell (size + color).'
 from pathlib import Path
 
 import plotlet as pt
+from plotlet.draw import circle
 from plotlet.utils import to_list, to_list_2d
 from plotlet.draw.colormaps import colormap, _ContinuousNorm
 from plotlet._spec import _D
@@ -56,8 +57,7 @@ def bubble_draw(a, ctx):
             rgb = cmap(cnorm.to_unit(cv))
             fill = f"rgb({rgb[0]},{rgb[1]},{rgb[2]})"
             cx = ctx.x_scale(x); cy = ctx.y_scale(y)
-            out.append(f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="{r:.2f}" '
-                       f'fill="{fill}"/>')
+            out.append(circle(cx, cy, r, fill=fill))
     return "".join(out)
 
 

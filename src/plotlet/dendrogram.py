@@ -7,6 +7,7 @@ from scipy.cluster.hierarchy import linkage as _scipy_linkage
 from scipy.cluster.hierarchy import dendrogram as _scipy_dendrogram
 
 from ._spec import _D
+from .draw import polyline
 from .draw.colors import _resolve_color
 
 
@@ -155,15 +156,7 @@ def _dendrogram_draw(a, ctx):
             pts.append((px, py))
         if not ok:
             continue
-        d = (
-            f"M{pts[0][0]:.2f},{pts[0][1]:.2f}"
-            f"L{pts[1][0]:.2f},{pts[1][1]:.2f}"
-            f"L{pts[2][0]:.2f},{pts[2][1]:.2f}"
-            f"L{pts[3][0]:.2f},{pts[3][1]:.2f}"
-        )
-        out.append(
-            f'<path d="{d}" fill="none" stroke="{col}" stroke-width="{lw}"/>'
-        )
+        out.append(polyline(pts, color=col, width=lw))
     return "".join(out)
 
 

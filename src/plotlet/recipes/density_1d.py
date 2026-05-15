@@ -19,6 +19,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
+from plotlet.draw import path, polyline, segment
 
 
 def _silverman(xs):
@@ -71,15 +72,13 @@ def density_1d_draw(a, ctx):
         y0 = ctx.y_scale(0)
         d = ("M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts)
              + f" L{pts[-1][0]:.2f},{y0:.2f} L{pts[0][0]:.2f},{y0:.2f} Z")
-        out.append(f'<path d="{d}" fill="{col}" fill-opacity="{alpha}"/>')
-    d_line = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts)
-    out.append(f'<path d="{d_line}" fill="none" stroke="{col}" stroke-width="{lw}"/>')
+        out.append(path(d, fill=col, alpha=alpha))
+    out.append(polyline(pts, color=col, width=lw))
     return "".join(out)
 
 
 def density_1d_legend_swatch(a, ctx, x0, y_mid):
-    return (f'<line x1="{x0}" x2="{x0 + 22}" y1="{y_mid}" y2="{y_mid}" '
-            f'stroke="{a["_color"]}" stroke-width="1.6"/>')
+    return segment(x0, y_mid, x0 + 22, y_mid, color=a["_color"], width=1.6)
 
 
 pt.add_artist(pt.ArtistSpec(

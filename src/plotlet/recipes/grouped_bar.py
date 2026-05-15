@@ -17,6 +17,7 @@ SUMMARY = 'Dodged side-by-side bars per category (seaborn `barplot(hue=)` analog
 from pathlib import Path
 
 import plotlet as pt
+from plotlet.draw import rect
 from plotlet.utils import to_list
 from plotlet._spec import _D
 
@@ -49,17 +50,13 @@ def grouped_bar_draw(a, ctx):
         cx = ctx.x_scale(cat)
         x0 = cx + left_edge + slot * bar_w
         y_top = ctx.y_scale(v)
-        out.append(
-            f'<rect x="{x0:.2f}" y="{min(y0, y_top):.2f}" '
-            f'width="{bar_w:.2f}" height="{abs(y_top - y0):.2f}" '
-            f'fill="{col}" opacity="{alpha}"/>'
-        )
+        out.append(rect(x0, min(y0, y_top), bar_w, abs(y_top - y0),
+                        fill=col, alpha=alpha))
     return "".join(out)
 
 
 def grouped_bar_legend_swatch(a, ctx, x0, y_mid):
-    return (f'<rect x="{x0}" y="{y_mid - 5}" width="22" height="10" '
-            f'fill="{a["_color"]}"/>')
+    return rect(x0, y_mid - 5, 22, 10, fill=a["_color"])
 
 
 def grouped_bars(c, cats, series_vals, labels=None, colors=None, **opts):

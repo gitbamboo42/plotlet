@@ -24,7 +24,7 @@ from itertools import combinations
 from pathlib import Path
 
 import plotlet as pt
-from plotlet.draw import text_path
+from plotlet.draw import text_path, rect, segment, circle
 
 
 def upset_record(args, kw):
@@ -76,16 +76,11 @@ def upset_draw(a, ctx):
         x0 = cx - bar_w / 2 * (ctx.x_scale(1) - ctx.x_scale(0))
         w = bar_w * (ctx.x_scale(1) - ctx.x_scale(0))
         y_top = ctx.y_scale(size)
-        out.append(
-            f'<rect x="{x0:.2f}" y="{y_top:.2f}" width="{w:.2f}" '
-            f'height="{abs(y0 - y_top):.2f}" fill="{bar_color}"/>'
-        )
+        out.append(rect(x0, y_top, w, abs(y0 - y_top), fill=bar_color))
         out.append(text_path(str(size), cx, y_top - 4, 9, anchor="middle"))
     # Divider between bars and matrix.
-    out.append(
-        f'<line x1="{ctx.x_scale(-0.5):.2f}" x2="{ctx.x_scale(n_inter - 0.5):.2f}" '
-        f'y1="{y0:.2f}" y2="{y0:.2f}" stroke="#bbb" stroke-width="0.8"/>'
-    )
+    out.append(segment(ctx.x_scale(-0.5), y0, ctx.x_scale(n_inter - 0.5), y0,
+                       color="#bbb", width=0.8))
     # Dot matrix: rows at y = -1, -2, ... -n_sets.
     for j, name in enumerate(a["_names"]):
         y_data = -(j + 1)
@@ -96,9 +91,7 @@ def upset_draw(a, ctx):
         for i, (combo, _) in enumerate(a["_inter"]):
             cx = ctx.x_scale(i)
             fill = on_color if name in combo else off_color
-            out.append(
-                f'<circle cx="{cx:.2f}" cy="{py:.2f}" r="4" fill="{fill}"/>'
-            )
+            out.append(circle(cx, py, 4, fill=fill))
     # Connector lines through contiguous "on" dots in each column.
     for i, (combo, _) in enumerate(a["_inter"]):
         rows_on = [j for j, name in enumerate(a["_names"]) if name in combo]
@@ -106,10 +99,7 @@ def upset_draw(a, ctx):
             cx = ctx.x_scale(i)
             y_top = ctx.y_scale(-(min(rows_on) + 1))
             y_bot = ctx.y_scale(-(max(rows_on) + 1))
-            out.append(
-                f'<line x1="{cx:.2f}" x2="{cx:.2f}" y1="{y_top:.2f}" y2="{y_bot:.2f}" '
-                f'stroke="{on_color}" stroke-width="1.4"/>'
-            )
+            out.append(segment(cx, y_top, cx, y_bot, color=on_color, width=1.4))
     return "".join(out)
 
 

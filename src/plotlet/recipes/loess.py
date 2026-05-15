@@ -20,6 +20,7 @@ SUMMARY = "LOESS local-regression smoother via statsmodels lowess (degree 1 + ro
 from pathlib import Path
 
 import plotlet as pt
+from plotlet.draw import polyline, segment
 from plotlet.utils import to_list
 from statsmodels.nonparametric.smoothers_lowess import lowess
 
@@ -47,13 +48,11 @@ def loess_draw(a, ctx):
            for x, y in zip(a["_grid"], a["_fit"]) if y == y]
     if len(pts) < 2:
         return ""
-    d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts)
-    return f'<path d="{d}" fill="none" stroke="{col}" stroke-width="{lw}"/>'
+    return polyline(pts, color=col, width=lw)
 
 
 def loess_legend_swatch(a, ctx, x0, y_mid):
-    return (f'<line x1="{x0}" x2="{x0 + 22}" y1="{y_mid}" y2="{y_mid}" '
-            f'stroke="{a["_color"]}" stroke-width="2"/>')
+    return segment(x0, y_mid, x0 + 22, y_mid, color=a["_color"], width=2)
 
 
 pt.add_artist(pt.ArtistSpec(

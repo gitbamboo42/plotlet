@@ -17,6 +17,7 @@ SUMMARY = 'Vertically stacked segments per category; ships with a `stacked_bars(
 from pathlib import Path
 
 import plotlet as pt
+from plotlet.draw import rect
 from plotlet.utils import to_list
 from plotlet._spec import _D
 
@@ -55,11 +56,8 @@ def stacked_bar_draw(a, ctx):
         x0 = cx - bar_w / 2
         y_top = ctx.y_scale(base.get(cat, 0) + v)
         y_bot = ctx.y_scale(base.get(cat, 0))
-        out.append(
-            f'<rect x="{x0:.2f}" y="{min(y_top, y_bot):.2f}" '
-            f'width="{bar_w:.2f}" height="{abs(y_bot - y_top):.2f}" '
-            f'fill="{col}" opacity="{alpha}"/>'
-        )
+        out.append(rect(x0, min(y_top, y_bot), bar_w, abs(y_bot - y_top),
+                        fill=col, alpha=alpha))
     return "".join(out)
 
 
@@ -69,9 +67,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=stacked_bar_xdomain,
     ydomain=stacked_bar_ydomain,
     draw=stacked_bar_draw,
-    legend_swatch=lambda a, ctx, x0, ym: (
-        f'<rect x="{x0}" y="{ym - 5}" width="22" height="10" fill="{a["_color"]}"/>'
-    ),
+    legend_swatch=lambda a, ctx, x0, ym: rect(x0, ym - 5, 22, 10, fill=a["_color"]),
 ))
 
 

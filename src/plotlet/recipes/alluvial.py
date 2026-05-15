@@ -22,7 +22,7 @@ SUMMARY = "Categorical-state transitions over time: adjacent-layer flow ribbons 
 from pathlib import Path
 
 import plotlet as pt
-from plotlet.draw import text_path
+from plotlet.draw import path, rect, text_path
 
 
 _PALETTE = [
@@ -119,7 +119,7 @@ def alluvial_draw(a, ctx):
                  f"{fx(x_src):.2f},{fy(src_bot):.2f} Z")
             cat_idx = cats_a.index(a_) if a_ in cats_a else 0
             col = _PALETTE[cat_idx % len(_PALETTE)]
-            out.append(f'<path d="{d}" fill="{col}" fill-opacity="{ribbon_alpha}"/>')
+            out.append(path(d, fill=col, alpha=ribbon_alpha))
             out_cum[a_] += v
             in_cum[b] += v
     # Node bars on top.
@@ -127,11 +127,9 @@ def alluvial_draw(a, ctx):
         for j, c in enumerate(cats):
             y_t, y_b = pos[i][c]
             col = _PALETTE[j % len(_PALETTE)]
-            out.append(
-                f'<rect x="{fx(x_left[i]):.2f}" y="{fy(y_b):.2f}" '
-                f'width="{fx(x_left[i] + node_w) - fx(x_left[i]):.2f}" '
-                f'height="{fy(y_t) - fy(y_b):.2f}" fill="{col}"/>'
-            )
+            out.append(rect(fx(x_left[i]), fy(y_b),
+                            fx(x_left[i] + node_w) - fx(x_left[i]),
+                            fy(y_t) - fy(y_b), fill=col))
             # Label: left of first layer, right elsewhere.
             cy = fy((y_t + y_b) / 2) + 4
             if i == 0:

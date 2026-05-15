@@ -20,6 +20,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
+from plotlet.draw import segment, polyline, circle
 
 
 def calibration_record(args, kw):
@@ -67,29 +68,25 @@ def calibration_draw(a, ctx):
     out = []
     # Perfect-calibration diagonal (drawn once).
     if a["opts"].get("_first", True):
-        out.append(
-            f'<line x1="{ctx.x_scale(0):.2f}" y1="{ctx.y_scale(0):.2f}" '
-            f'x2="{ctx.x_scale(1):.2f}" y2="{ctx.y_scale(1):.2f}" '
-            f'stroke="#888" stroke-width="0.8" stroke-dasharray="4,3"/>'
-        )
+        out.append(segment(ctx.x_scale(0), ctx.y_scale(0),
+                           ctx.x_scale(1), ctx.y_scale(1),
+                           color="#888", width=0.8, dash="4,3"))
     pts = [(ctx.x_scale(p), ctx.y_scale(o)) for p, o in zip(a["_pred"], a["_obs"])]
     if len(pts) >= 2:
-        d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts)
-        out.append(f'<path d="{d}" fill="none" stroke="{col}" stroke-width="{lw}"/>')
+        out.append(polyline(pts, color=col, width=lw))
     # Dot per bin sized by count.
     max_cnt = max(a["_count"]) if a["_count"] else 1
     for (px, py), n in zip(pts, a["_count"]):
         r = 2 + 6 * (n / max_cnt) ** 0.5
-        out.append(f'<circle cx="{px:.2f}" cy="{py:.2f}" r="{r:.2f}" fill="{col}"/>')
+        out.append(circle(px, py, r, fill=col))
     return "".join(out)
 
 
 def calibration_legend_swatch(a, ctx, x0, y_mid):
     col = a["_color"]
     return (
-        f'<line x1="{x0}" x2="{x0 + 22}" y1="{y_mid}" y2="{y_mid}" '
-        f'stroke="{col}" stroke-width="1.6"/>'
-        f'<circle cx="{x0 + 11}" cy="{y_mid}" r="3" fill="{col}"/>'
+        segment(x0, y_mid, x0 + 22, y_mid, color=col, width=1.6)
+        + circle(x0 + 11, y_mid, 3, fill=col)
     )
 
 

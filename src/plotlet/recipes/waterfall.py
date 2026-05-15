@@ -15,7 +15,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
-from plotlet.draw import text_path
+from plotlet.draw import text_path, rect, segment
 
 
 def waterfall_record(args, kw):
@@ -60,22 +60,15 @@ def waterfall_draw(a, ctx):
         py_top = ctx.y_scale(max(y_lo, y_hi))
         py_bot = ctx.y_scale(min(y_lo, y_hi))
         col = pos if d >= 0 else neg
-        out.append(
-            f'<rect x="{x0:.2f}" y="{py_top:.2f}" '
-            f'width="{bar_w:.2f}" height="{abs(py_bot - py_top):.2f}" '
-            f'fill="{col}"/>'
-        )
+        out.append(rect(x0, py_top, bar_w, abs(py_bot - py_top), fill=col))
         if show_values:
             anchor_y = py_top - 3 if d >= 0 else py_bot + 11
             out.append(text_path(f"{d:+g}", cx, anchor_y, 10, anchor="middle"))
         # Dashed connector to the next bar's baseline.
         if last_x is not None:
             ly = ctx.y_scale(cum)
-            out.append(
-                f'<line x1="{last_x + bar_w / 2:.2f}" x2="{x0:.2f}" '
-                f'y1="{ly:.2f}" y2="{ly:.2f}" '
-                f'stroke="#888" stroke-width="0.7" stroke-dasharray="2,2"/>'
-            )
+            out.append(segment(last_x + bar_w / 2, ly, x0, ly,
+                               color="#888", width=0.7, dash="2,2"))
         last_x = cx
         cum = y_hi
     if show_total:
@@ -84,20 +77,13 @@ def waterfall_draw(a, ctx):
         x0 = cx - bar_w / 2
         y_top = ctx.y_scale(max(0, cum))
         y_bot = ctx.y_scale(min(0, cum))
-        out.append(
-            f'<rect x="{x0:.2f}" y="{y_top:.2f}" '
-            f'width="{bar_w:.2f}" height="{abs(y_bot - y_top):.2f}" '
-            f'fill="{tot}"/>'
-        )
+        out.append(rect(x0, y_top, bar_w, abs(y_bot - y_top), fill=tot))
         if show_values:
             out.append(text_path(f"{cum:g}", cx, y_top - 3, 10, anchor="middle"))
         if last_x is not None:
             ly = ctx.y_scale(cum)
-            out.append(
-                f'<line x1="{last_x + bar_w / 2:.2f}" x2="{x0:.2f}" '
-                f'y1="{ly:.2f}" y2="{ly:.2f}" '
-                f'stroke="#888" stroke-width="0.7" stroke-dasharray="2,2"/>'
-            )
+            out.append(segment(last_x + bar_w / 2, ly, x0, ly,
+                               color="#888", width=0.7, dash="2,2"))
     return "".join(out)
 
 

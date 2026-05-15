@@ -17,6 +17,7 @@ SUMMARY = 'Contour-line isolines on a 2-D scalar grid via marching squares.'
 from pathlib import Path
 
 import plotlet as pt
+from plotlet.draw import segment
 from plotlet.utils import to_list_2d
 from plotlet.draw.colormaps import colormap, _ContinuousNorm
 
@@ -121,13 +122,9 @@ def contour_draw(a, ctx):
                     # Map grid (col, row) -> data (x, y).
                     x1 = x0d + p1[0] * dxd; y1 = y0d + p1[1] * dyd
                     x2 = x0d + p2[0] * dxd; y2 = y0d + p2[1] * dyd
-                    out.append(
-                        f'<line x1="{ctx.x_scale(x1):.2f}" '
-                        f'y1="{ctx.y_scale(y1):.2f}" '
-                        f'x2="{ctx.x_scale(x2):.2f}" '
-                        f'y2="{ctx.y_scale(y2):.2f}" '
-                        f'stroke="{col}" stroke-width="{lw}"/>'
-                    )
+                    out.append(segment(ctx.x_scale(x1), ctx.y_scale(y1),
+                                       ctx.x_scale(x2), ctx.y_scale(y2),
+                                       color=col, width=lw))
     return "".join(out)
 
 

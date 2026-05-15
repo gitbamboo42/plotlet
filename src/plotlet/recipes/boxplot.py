@@ -14,6 +14,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
+from plotlet.draw import segment, rect, circle, errorbar_v
 
 
 def _quantile(xs, q):
@@ -68,35 +69,18 @@ def boxplot_draw(a, ctx):
         y_lo = ctx.y_scale(whisker_lo)
         y_hi = ctx.y_scale(whisker_hi)
         # Box (Q1-Q3), translucent fill + solid stroke.
-        out.append(
-            f'<rect x="{x0:.2f}" y="{min(y_q1, y_q3):.2f}" '
-            f'width="{box_w:.2f}" height="{abs(y_q3 - y_q1):.2f}" '
-            f'fill="{col}" fill-opacity="0.35" stroke="{col}" stroke-width="1"/>'
-        )
+        out.append(rect(x0, min(y_q1, y_q3), box_w, abs(y_q3 - y_q1),
+                        fill=col, stroke=col, stroke_width=1, alpha=0.35))
         # Median line.
-        out.append(
-            f'<line x1="{x0:.2f}" x2="{x1:.2f}" y1="{y_q2:.2f}" y2="{y_q2:.2f}" '
-            f'stroke="{col}" stroke-width="1.6"/>'
-        )
-        # Whiskers (vertical) + caps (short horizontal).
+        out.append(segment(x0, y_q2, x1, y_q2, color=col, width=1.6))
+        # Whiskers: an errorbar on each side of the box.
         cap_w = box_w * 0.4
-        out.append(
-            f'<line x1="{cx:.2f}" x2="{cx:.2f}" y1="{y_q3:.2f}" y2="{y_hi:.2f}" '
-            f'stroke="{col}" stroke-width="1"/>'
-            f'<line x1="{cx:.2f}" x2="{cx:.2f}" y1="{y_q1:.2f}" y2="{y_lo:.2f}" '
-            f'stroke="{col}" stroke-width="1"/>'
-            f'<line x1="{cx - cap_w / 2:.2f}" x2="{cx + cap_w / 2:.2f}" '
-            f'y1="{y_hi:.2f}" y2="{y_hi:.2f}" stroke="{col}" stroke-width="1"/>'
-            f'<line x1="{cx - cap_w / 2:.2f}" x2="{cx + cap_w / 2:.2f}" '
-            f'y1="{y_lo:.2f}" y2="{y_lo:.2f}" stroke="{col}" stroke-width="1"/>'
-        )
-        # Outlier dots.
+        out.append(errorbar_v(cx, y_q3, y_hi, capsize=cap_w, color=col))
+        out.append(errorbar_v(cx, y_q1, y_lo, capsize=cap_w, color=col))
+        # Outlier dots — outline-only so they read as "extreme" not "data".
         for v in outliers:
-            py = ctx.y_scale(v)
-            out.append(
-                f'<circle cx="{cx:.2f}" cy="{py:.2f}" r="2.2" '
-                f'fill="none" stroke="{col}" stroke-width="0.9"/>'
-            )
+            out.append(circle(cx, ctx.y_scale(v), 2.2,
+                              stroke=col, stroke_width=0.9))
     return "".join(out)
 
 

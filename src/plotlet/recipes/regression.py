@@ -23,6 +23,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
+from plotlet.draw import polygon, polyline, rect, segment
 from scipy.stats import t as _t_dist
 
 
@@ -85,21 +86,17 @@ def regression_draw(a, ctx):
     pts_top = [(ctx.x_scale(x), ctx.y_scale(y)) for x, y in upper]
     pts_bot = [(ctx.x_scale(x), ctx.y_scale(y)) for x, y in lower]
     band = pts_top + pts_bot[::-1]
-    d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in band) + " Z"
-    out = [f'<path d="{d}" fill="{col}" fill-opacity="{fill_alpha}"/>']
+    out = [polygon(band, fill=col, alpha=fill_alpha)]
     line_pts = [(ctx.x_scale(x), ctx.y_scale(y)) for x, y in mid]
-    d2 = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in line_pts)
-    out.append(f'<path d="{d2}" fill="none" stroke="{col}" stroke-width="{lw}"/>')
+    out.append(polyline(line_pts, color=col, width=lw))
     return "".join(out)
 
 
 def regression_legend_swatch(a, ctx, x0, y_mid):
     col = a["_color"]
     return (
-        f'<rect x="{x0}" y="{y_mid - 5}" width="22" height="10" '
-        f'fill="{col}" fill-opacity="0.2"/>'
-        f'<line x1="{x0}" x2="{x0 + 22}" y1="{y_mid}" y2="{y_mid}" '
-        f'stroke="{col}" stroke-width="1.8"/>'
+        rect(x0, y_mid - 5, 22, 10, fill=col, alpha=0.2)
+        + segment(x0, y_mid, x0 + 22, y_mid, color=col, width=1.8)
     )
 
 

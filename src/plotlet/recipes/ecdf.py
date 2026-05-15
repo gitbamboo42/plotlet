@@ -13,6 +13,7 @@ SUMMARY = 'Empirical CDF as a step function — no bin choice, every observation
 from pathlib import Path
 
 import plotlet as pt
+from plotlet.draw import polyline, segment
 from plotlet.utils import to_list
 
 
@@ -44,14 +45,12 @@ def ecdf_draw(a, ctx):
         pts.append((px, ctx.y_scale(prev_y)))
         pts.append((px, ctx.y_scale(y)))
         prev_y = y
-    d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts)
-    return (f'<path d="{d}" fill="none" stroke="{col}" stroke-width="{lw}"/>')
+    return polyline(pts, color=col, width=lw)
 
 
 def ecdf_legend_swatch(a, ctx, x0, y_mid):
     col = a["_color"]
-    return (f'<line x1="{x0}" x2="{x0 + 22}" y1="{y_mid}" y2="{y_mid}" '
-            f'stroke="{col}" stroke-width="1.5"/>')
+    return segment(x0, y_mid, x0 + 22, y_mid, color=col, width=1.5)
 
 
 pt.add_artist(pt.ArtistSpec(

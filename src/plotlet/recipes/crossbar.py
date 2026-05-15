@@ -16,6 +16,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
+from plotlet.draw import segment
 
 
 def crossbar_record(args, kw):
@@ -49,12 +50,9 @@ def crossbar_draw(a, ctx):
         x_l = cx - half_w; x_r = cx + half_w
         # Two outer + one inner horizontal line.
         out.append(
-            f'<line x1="{x_l:.2f}" x2="{x_r:.2f}" y1="{py_lo:.2f}" y2="{py_lo:.2f}" '
-            f'stroke="{col}" stroke-width="{lw_outer}"/>'
-            f'<line x1="{x_l:.2f}" x2="{x_r:.2f}" y1="{py_hi:.2f}" y2="{py_hi:.2f}" '
-            f'stroke="{col}" stroke-width="{lw_outer}"/>'
-            f'<line x1="{x_l:.2f}" x2="{x_r:.2f}" y1="{py_m:.2f}" y2="{py_m:.2f}" '
-            f'stroke="{col}" stroke-width="{lw_mid}"/>'
+            segment(x_l, py_lo, x_r, py_lo, color=col, width=lw_outer)
+            + segment(x_l, py_hi, x_r, py_hi, color=col, width=lw_outer)
+            + segment(x_l, py_m, x_r, py_m, color=col, width=lw_mid)
         )
     return "".join(out)
 

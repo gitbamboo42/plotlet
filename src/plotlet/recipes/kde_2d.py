@@ -18,6 +18,7 @@ import math
 from pathlib import Path
 
 import plotlet as pt
+from plotlet.draw import segment
 from plotlet.utils import to_list
 from plotlet.draw.colormaps import colormap, _ContinuousNorm
 
@@ -140,11 +141,8 @@ def kde2d_draw(a, ctx):
                     py1 = ctx.y_scale(y0 + p1[1] * dyd)
                     px2 = ctx.x_scale(x0 + p2[0] * dxd)
                     py2 = ctx.y_scale(y0 + p2[1] * dyd)
-                    out.append(
-                        f'<line x1="{px1:.2f}" y1="{py1:.2f}" '
-                        f'x2="{px2:.2f}" y2="{py2:.2f}" '
-                        f'stroke="{col}" stroke-width="{lw}"/>'
-                    )
+                    out.append(segment(px1, py1, px2, py2,
+                                       color=col, width=lw))
     return "".join(out)
 
 

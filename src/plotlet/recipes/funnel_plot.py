@@ -25,7 +25,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
-from plotlet.draw import text_path
+from plotlet.draw import text_path, segment, circle
 
 
 def funnel_plot_record(args, kw):
@@ -70,28 +70,18 @@ def funnel_plot_draw(a, ctx):
         px_top = ctx.x_scale(a["_pooled"]); py_top = ctx.y_scale(0)
         px_l = ctx.x_scale(x_left); py_b = ctx.y_scale(max_se)
         px_r = ctx.x_scale(x_right)
-        out.append(
-            f'<line x1="{px_top:.2f}" x2="{px_l:.2f}" y1="{py_top:.2f}" '
-            f'y2="{py_b:.2f}" stroke="#888" stroke-width="0.8" '
-            f'stroke-dasharray="4,3"/>'
-        )
-        out.append(
-            f'<line x1="{px_top:.2f}" x2="{px_r:.2f}" y1="{py_top:.2f}" '
-            f'y2="{py_b:.2f}" stroke="#888" stroke-width="0.8" '
-            f'stroke-dasharray="4,3"/>'
-        )
+        out.append(segment(px_top, py_top, px_l, py_b,
+                           color="#888", width=0.8, dash="4,3"))
+        out.append(segment(px_top, py_top, px_r, py_b,
+                           color="#888", width=0.8, dash="4,3"))
         # Pooled estimate vertical line.
-        out.append(
-            f'<line x1="{px_top:.2f}" x2="{px_top:.2f}" y1="{py_top:.2f}" '
-            f'y2="{py_b:.2f}" stroke="#444" stroke-width="0.8"/>'
-        )
+        out.append(segment(px_top, py_top, px_top, py_b,
+                           color="#444", width=0.8))
         out.append(text_path(f"pooled = {a['_pooled']:.2f}",
                               px_top + 4, py_top + 11, 9, anchor="start"))
     for e, s in zip(a["est"], a["ses"]):
-        out.append(
-            f'<circle cx="{ctx.x_scale(e):.2f}" cy="{ctx.y_scale(s):.2f}" '
-            f'r="{r}" fill="{col}" opacity="0.8"/>'
-        )
+        out.append(circle(ctx.x_scale(e), ctx.y_scale(s), r,
+                          fill=col, alpha=0.8))
     return "".join(out)
 
 
