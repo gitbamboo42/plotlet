@@ -298,6 +298,7 @@ def _natural_size(root: Chart) -> tuple[int, int]:
         if root._leaf_kind == "data":
             from .core import _effective_margin as _solo_margin
             st = _replay(root._calls)
+            st["insets"] = getattr(root, "_insets", [])
             M_eff = _solo_margin(root, st)
             root._canvas_width  = root._data_width  + M_eff["left"] + M_eff["right"]
             root._canvas_height = root._data_height + M_eff["top"]  + M_eff["bottom"]
@@ -670,7 +671,9 @@ def _build_panel_opts(root: Chart) -> tuple[dict[int, _PanelOpts], dict[int, dic
     states = {}
     for l in leaves:
         with active_theme(_extract_theme(l._calls)):
-            states[id(l)] = _replay(l._calls)
+            st = _replay(l._calls)
+            st["insets"] = getattr(l, "_insets", [])
+            states[id(l)] = st
     x_desc, y_desc = _build_axis_descriptors(leaves, states)
     panel_opts = {
         id(l): _PanelOpts(x_axis=x_desc[id(l)], y_axis=y_desc[id(l)])

@@ -164,6 +164,17 @@ class Chart:
         self._legend_names: dict = {}
         self._legend_group_by_chart: bool = True
 
+        # Inset axes — small charts embedded inside this leaf's data area
+        # at axes-fraction coordinates. Each entry is (rect, inset_chart).
+        self._insets: list[tuple[tuple[float, float, float, float], "Chart"]] = []
+        # Set on a Chart that has been registered as an inset of another.
+        # Suppresses standalone `.show()` / `.to_svg()` calls.
+        self._inset_owner: "Chart" | None = None
+        # Cache of the effective margin from the most recent render — read
+        # by an embedding parent (inset loop) to align this chart's data
+        # region, not its canvas.
+        self._last_M_eff: dict | None = None
+
         # Apply convenience constructor kwargs by recording. `self.title(...)`
         # etc. fall through __getattr__ → recorder; `self.legend(...)` hits
         # the special method below (which dispatches leaf vs parent).
@@ -204,6 +215,9 @@ class Chart:
         p._legend_sources = []
         p._legend_names = {}
         p._legend_group_by_chart = True
+        p._insets = []
+        p._inset_owner = None
+        p._last_M_eff = None
         return p
 
     @classmethod
@@ -239,6 +253,9 @@ class Chart:
         leaf._legend_sources = []
         leaf._legend_names = {}
         leaf._legend_group_by_chart = True
+        leaf._insets = []
+        leaf._inset_owner = None
+        leaf._last_M_eff = None
         return leaf
 
     @property
@@ -648,10 +665,41 @@ class Chart:
     # Frame-state methods (title/xlabel/ylabel/xlim/ylim/xscale/yscale/
     # grid/legend) forward through __getattr__ above.
 
+    def inset(self, rect, **chart_opts) -> "Chart":
+        """Embed a small Chart inside this leaf at axes-fraction coordinates.
+
+        `rect=(x, y, w, h)` is in axes-fraction units (0..1) of this leaf's
+        data area, with the origin at the *bottom-left* (matplotlib's
+        `inset_axes` convention). Returns a fresh Chart configured to
+        render at the requested pixel size — record artists on it normally.
+        Render the parent leaf; the inset draws on top of the parent's
+        artists with its own scales and frame."""
+        self._require_leaf("inset")
+        x, y, w, h = rect
+        if not (0 <= w <= 1 and 0 <= h <= 1):
+            raise ValueError(
+                f"inset rect width/height must be in [0, 1]; got {rect}"
+            )
+        dw = max(1, int(round(self._data_width  * w)))
+        dh = max(1, int(round(self._data_height * h)))
+        # Inset gets a tight margin by default — small canvas, no room
+        # for long axis labels unless the user sizes the inset bigger.
+        inset = Chart(data_width=dw, data_height=dh,
+                      margin={"top": 6, "right": 6, "bottom": 18, "left": 28},
+                      **chart_opts)
+        inset._inset_owner = self
+        self._insets.append((tuple(rect), inset))
+        return inset
+
     # ---------- render ----------
 
     def to_svg(self) -> str:
         self._require_render_root()
+        return self._to_svg_unchecked()
+
+    def _to_svg_unchecked(self) -> str:
+        """Render path that skips the root check — used by parents
+        embedding this chart (insets, layout panels)."""
         if self._is_parent:
             from .layout import _render_layout
             return _render_layout(self)
@@ -669,7 +717,12 @@ class Chart:
         # the override transparently.
         with active_theme(_extract_theme(self._calls)):
             st = _replay(self._calls)
+            st["insets"] = self._insets
             M_eff = _effective_margin(self, st)
+            # Stash the resolved margin so callers (specifically core's
+            # inset loop) can position this chart's *data region* — not
+            # its canvas — at the requested axes-fraction rect.
+            self._last_M_eff = M_eff
             W = self._data_width  + M_eff["left"] + M_eff["right"]
             H = self._data_height + M_eff["top"]  + M_eff["bottom"]
             return _render(st, W, H, M_eff)
@@ -772,6 +825,10 @@ class Chart:
         if self._parent is not None:
             raise RuntimeError(
                 "this chart is part of a composed parent; render the parent instead."
+            )
+        if self._inset_owner is not None:
+            raise RuntimeError(
+                "this chart is an inset; render the owning parent leaf instead."
             )
 
 

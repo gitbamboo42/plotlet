@@ -563,6 +563,22 @@ def chart_clip_data_area():
     return c
 
 
+def chart_inset_zoom():
+    # Long-tail bar distribution: the first two categories dwarf the rest,
+    # making the tail unreadable in the parent. The inset shows only the
+    # tail (C through J) at a zoomed y-range so those bars become legible.
+    labels = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
+    counts = [950, 320, 80, 45, 28, 18, 12, 8, 5, 3]
+    c = pt.chart(data_width=440, data_height=240,
+                 title="long-tail distribution",
+                 xlabel="category", ylabel="count")
+    c.bar(labels, counts)
+    inset = c.inset(rect=(0.4, 0.45, 0.55, 0.45),
+                    ylim=(0, 100))
+    inset.bar(labels[2:], counts[2:])
+    return c
+
+
 def chart_step():
     # step() sugar — all three where= modes.
     xs = list(range(8))
@@ -824,6 +840,7 @@ PLOTS = {
     "annotate":            chart_annotate,
     "text_bbox":           chart_text_bbox,
     "step":                chart_step,
+    "inset_zoom":          chart_inset_zoom,
     "clip_data_area":      chart_clip_data_area,
 }
 

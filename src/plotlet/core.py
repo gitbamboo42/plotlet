@@ -1307,4 +1307,39 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
                                         tick_size, anchor="start", color=text_color))
             parts.append('</g>')
 
+    # Inset axes — render each as its own SVG fragment positioned by
+    # axes-fraction within this leaf's data area. Drawn last so they
+    # sit on top of the data layer (and on top of the legend). Wrapped
+    # in a data-area clip so the inset's canvas can't paint over the
+    # parent's title/labels if its own margins overhang.
+    insets = st.get("insets") or []
+    if insets:
+        parts.append(f'<svg x="0" y="0" width="{iw}" height="{ih}" overflow="hidden">')
+    for rect, inset_chart in insets:
+        x_frac, y_frac, w_frac, h_frac = rect
+        # Render the inset first; this populates `_last_M_eff` so we can
+        # offset the translate to align the inset's data region (not its
+        # canvas) with the requested axes-fraction rect.
+        inset_svg = inset_chart._to_svg_unchecked()
+        inset_M = inset_chart._last_M_eff or {"left": 0, "right": 0, "top": 0, "bottom": 0}
+        # Bottom-left origin: y-frac 0 = bottom of data, 1 = top.
+        # Subtract the inset's own margin so its data region (not its
+        # canvas) lands at the requested fraction of the parent's data.
+        tx = x_frac * iw - inset_M["left"]
+        ty = (1 - y_frac - h_frac) * ih - inset_M["top"]
+        # Opaque background covering the inset's data area only — tick
+        # labels in the inset's margins stay transparent (matches
+        # matplotlib Axes facecolor and ggplot panel.background defaults).
+        bg_x = inset_M["left"]
+        bg_y = inset_M["top"]
+        bg_w = inset_chart._data_width
+        bg_h = inset_chart._data_height
+        parts.append(f'<g transform="translate({tx:.2f},{ty:.2f})" '
+                      f'data-plotlet-kind="inset">'
+                      f'<rect x="{bg_x}" y="{bg_y}" width="{bg_w}" height="{bg_h}" '
+                      f'fill="{SPEC["figure"]["background"]}"/>'
+                      f'{inset_svg}</g>')
+    if insets:
+        parts.append('</svg>')
+
     return "".join(parts)
