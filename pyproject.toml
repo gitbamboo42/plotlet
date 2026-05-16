@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "plotlet"
-version = "0.4.1"
+version = "0.4.2"
 description = "Python library for SVG plots, with multi-panel composition and an extension API for custom plot types."
 readme = "README.md"
 license = "MIT"
