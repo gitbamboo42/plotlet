@@ -55,7 +55,7 @@ _FRAME_METHODS = {
     "title", "xlabel", "ylabel", "xlim", "ylim",
     "xscale", "yscale", "grid", "legend",
     "xticks", "yticks", "spines", "theme",
-    "x_expand", "y_expand",
+    "x_expand", "y_expand", "clip",
 }
 
 
@@ -258,6 +258,11 @@ def _replay(calls):
         "spine_top_width": None, "spine_right_width": None,
         "spine_bottom_width": None, "spine_left_width": None,
         "grid": _GRIDSPEC.get("default_on", False), "legend": False,
+        # Data-area clipping on by default — artists past xlim/ylim get
+        # cropped at the data boundary. Set False (`c.clip(False)`) for
+        # matplotlib-default behavior where lines and large markers can
+        # bleed into the margin space.
+        "clip": True,
     }
     for name, args, kw in calls:
         spec = get_artist(name)
@@ -301,6 +306,7 @@ def _replay(calls):
                     st[f"spine_{side}"] = bool(v)
         elif name == "grid":   st["grid"] = (args[0] if args else True)
         elif name == "legend": st["legend"] = (args[0] if args else True)
+        elif name == "clip":   st["clip"] = bool(args[0]) if args else True
         elif name == "theme":
             # `theme` is applied outside replay (by `active_theme(...)` in
             # `Chart.to_svg`) so the spec dicts are already on the right
@@ -1100,11 +1106,25 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         spec = get_artist(a["type"])
         if spec is None: continue
         by_layer[spec.layer].append((idx, a))
+    clip_data = st.get("clip", True)
     for layer in ("background", "data", "foreground"):
+        if not by_layer[layer]:
+            continue
+        # Clip the data layer to the data area so an artist drawing
+        # outside the visible xlim/ylim (zoom insets, explicit xlim that
+        # excludes data) can't paint over tick labels or the parent.
+        # Nested <svg> with overflow="hidden" establishes the clip; SVG2
+        # makes that the default for nested-svg but SVG1.1 viewers leave
+        # overflow visible, so we set it explicitly. Caller can opt out
+        # via `c.clip(False)` for matplotlib-default no-clip behavior.
+        if layer == "data" and clip_data:
+            parts.append(f'<svg x="0" y="0" width="{iw}" height="{ih}" overflow="hidden">')
         for idx, a in by_layer[layer]:
             spec = get_artist(a["type"])
             body = spec.draw(a, _ctx_for(a))
             parts.append(_wrap_artist(a, idx, body))
+        if layer == "data" and clip_data:
+            parts.append('</svg>')
 
     # Spines — toggleable per side via `c.spines(top=False, right=False, ...)`,
     # restylable via `c.spines(top={"color": "red", "width": 1.5})`.

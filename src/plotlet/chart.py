@@ -88,6 +88,7 @@ class Chart:
                  x_expand: float | tuple | None = None,
                  y_expand: float | tuple | None = None,
                  legend: bool | None = None, grid: bool | None = None,
+                 clip: bool | None = None,
                  theme: str | None = None,
                  **kwargs):
         # Migration errors — surface the rename loudly rather than silently
@@ -179,6 +180,7 @@ class Chart:
             self.y_expand(*(y_expand if isinstance(y_expand, (tuple, list)) else (y_expand,)))
         if legend is not None: self.legend(legend)
         if grid   is not None: self.grid(grid)
+        if clip   is not None: self.clip(clip)
         if theme  is not None: self.theme(theme)
 
     # ---------- composition ----------

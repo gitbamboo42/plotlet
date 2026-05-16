@@ -541,6 +541,28 @@ def chart_long_rotated_xticks():
     return c
 
 
+def chart_clip_data_area():
+    # clip=False with full spines so the bleeding is visible — most
+    # markers sit inside the data area, but a handful near the
+    # upper-right edges extend past the spines into the margin space.
+    # The default clip=True crops those halves at the data boundary.
+    random.seed(3)
+    n = 24
+    xs = [random.uniform(0.5, 9.5) for _ in range(n)]
+    ys = [random.uniform(0.5, 9.5) for _ in range(n)]
+    sizes = [random.uniform(200, 400) for _ in range(n)]
+    # Deliberate bleeders along the upper-right edges.
+    xs    += [9.7, 9.5, 9.8, 8.6, 7.4]
+    ys    += [9.5, 9.8, 7.4, 9.7, 9.5]
+    sizes += [700, 800, 650, 750, 650]
+    c = pt.chart(data_width=320, data_height=240, clip=False,
+                 title="clip=False",
+                 xlabel="x", ylabel="y",
+                 xlim=(0, 10), ylim=(0, 10))
+    c.scatter(xs, ys, s=sizes, color="C0", alpha=0.6)
+    return c
+
+
 def chart_step():
     # step() sugar — all three where= modes.
     xs = list(range(8))
@@ -802,6 +824,7 @@ PLOTS = {
     "annotate":            chart_annotate,
     "text_bbox":           chart_text_bbox,
     "step":                chart_step,
+    "clip_data_area":      chart_clip_data_area,
 }
 
 

@@ -43,7 +43,7 @@ pip install plotlet
 
 Pass at construction or as chained setters:
 
-`title`, `xlabel`, `ylabel`, `xlim=(a, b)`, `ylim=(a, b)`, `xscale="linear"|"log"|"category"|"symlog"|"power"|"sqrt"`, `yscale=...`, `grid=True/False`, `legend=True/False`, `data_width`, `data_height`. Sizes accept bare pixels (`400`) or unit-suffixed strings (`"4in"`, `"10cm"`, `"100mm"`, `"72pt"`). `"symlog"` accepts `linthresh=` (default `1.0`) to size the linear region around zero; `"power"` accepts `exponent=`. `"sqrt"` is shorthand for `"power"` with `exponent=0.5`.
+`title`, `xlabel`, `ylabel`, `xlim=(a, b)`, `ylim=(a, b)`, `xscale="linear"|"log"|"category"|"symlog"|"power"|"sqrt"`, `yscale=...`, `grid=True/False`, `legend=True/False`, `clip=True/False`, `data_width`, `data_height`. Sizes accept bare pixels (`400`) or unit-suffixed strings (`"4in"`, `"10cm"`, `"100mm"`, `"72pt"`). `"symlog"` accepts `linthresh=` (default `1.0`) to size the linear region around zero; `"power"` accepts `exponent=`. `"sqrt"` is shorthand for `"power"` with `exponent=0.5`. `clip=False` lets artists bleed past the data area into the margin space (matplotlib's default); the plotlet default `True` clips at the data boundary so off-axis data can't paint over tick labels.
 
 The data region is the user-facing primitive — the canvas grows to fit titles and tick labels. To target a specific SVG canvas, chain `.fit(canvas_width=…, canvas_height=…)` after composing.
 
