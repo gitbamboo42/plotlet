@@ -541,6 +541,22 @@ def chart_long_rotated_xticks():
     return c
 
 
+def chart_ticks_step():
+    c = pt.chart(data_width=400, data_height=170,
+                 title="step=0.25", xlabel="x", ylabel="y", grid=True)
+    c.line([0, 0.5, 1.0, 1.5, 2.0], [0, 1, 4, 9, 16], marker="o")
+    c.xticks(step=0.25)
+    return c
+
+
+def chart_ticks_count():
+    c = pt.chart(data_width=400, data_height=170,
+                 title="count=4", xlabel="x", ylabel="y", grid=True)
+    c.line(list(range(11)), [i * i for i in range(11)], marker="o")
+    c.xticks(count=4)
+    return c
+
+
 def chart_minor_ticks_linear():
     c = pt.chart(data_width=400, data_height=180,
                  title="minor ticks", xlabel="x", ylabel="y", grid=True)
@@ -736,6 +752,8 @@ PLOTS = {
     "reverse_y":           chart_reverse_y,
     "minor_ticks_linear":  chart_minor_ticks_linear,
     "minor_ticks_log":     chart_minor_ticks_log,
+    "ticks_step":          chart_ticks_step,
+    "ticks_count":         chart_ticks_count,
 }
 
 

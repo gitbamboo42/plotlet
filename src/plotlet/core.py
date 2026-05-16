@@ -161,6 +161,8 @@ def _record_ticks(st, axis, args, kw):
     if "marks" in kw:     st[f"{axis}_marks"]     = bool(kw["marks"])
     if "format" in kw:    st[f"{axis}_format"]    = kw["format"]
     if "minor" in kw:     st[f"{axis}_minor"]     = kw["minor"]
+    if "step" in kw:      st[f"{axis}_step"]      = float(kw["step"])
+    if "count" in kw:     st[f"{axis}_count"]     = int(kw["count"])
     # Per-side opt-in for the secondary tick side: xticks(top=True) on the
     # x-axis, yticks(right=True) on the y-axis. Both default off so the
     # standard look is bottom + left only.
@@ -240,10 +242,12 @@ def _replay(calls):
         "x_direction": _FRAME["tick_direction"], "x_marks": True,
         "x_top":   _FRAME["tick_top"],
         "x_format": None, "x_minor": None,
+        "x_step": None, "x_count": None,
         "y_ticks": None, "y_labels": None, "y_rotation": 0, "y_fontsize": None,
         "y_direction": _FRAME["tick_direction"], "y_marks": True,
         "y_right": _FRAME["tick_right"],
         "y_format": None, "y_minor": None,
+        "y_step": None, "y_count": None,
         "spine_top": _FRAME["spine_top"], "spine_right": _FRAME["spine_right"],
         "spine_bottom": _FRAME["spine_bottom"], "spine_left": _FRAME["spine_left"],
         # Per-side color/width overrides; None = inherit spec.json frame defaults.
@@ -363,6 +367,30 @@ def _resolve_tick_formatter(user_fmt, scale):
         f"xticks/yticks(format=) expects a format string or a callable; "
         f"got {type(user_fmt).__name__}"
     )
+
+
+def _auto_major_ticks(scale, n, step, count):
+    """Major-tick positions for `scale`, with optional overrides.
+
+    `step` (numeric) forces a fixed step starting at `ceil(scale.d0 / step)
+    * step`. `count` (int) replaces the heuristic `n` (panel-size-derived)
+    with an exact tick count. Both default to None, meaning fall through
+    to the scale's own `ticks(n)` behavior."""
+    if step is not None:
+        lo, hi = (scale.d0, scale.d1) if scale.d0 <= scale.d1 else (scale.d1, scale.d0)
+        eps = abs(step) * 1e-9
+        start = math.ceil(lo / step - 1e-9) * step
+        out, t = [], start
+        # Guard runaway loops on bad inputs.
+        for _ in range(10000):
+            if t > hi + eps:
+                break
+            out.append(round(t, 10))
+            t += step
+        return out
+    if count is not None:
+        return scale.ticks(max(2, count))
+    return scale.ticks(n)
 
 
 def _auto_minor_ticks(scale, major_ticks):
@@ -742,8 +770,10 @@ def _required_margin(st, dw, dh) -> dict:
     # Same tick-density rule as `_render_inner`.
     x_n = max(2, min(8, int(dw // 65)))
     y_n = max(2, min(8, int(dh // 40)))
-    x_ticks  = st["x_ticks"]  if st["x_ticks"]  is not None else x_scale.ticks(x_n)
-    y_ticks  = st["y_ticks"]  if st["y_ticks"]  is not None else y_scale.ticks(y_n)
+    x_ticks  = (st["x_ticks"] if st["x_ticks"] is not None
+                else _auto_major_ticks(x_scale, x_n, st["x_step"], st["x_count"]))
+    y_ticks  = (st["y_ticks"] if st["y_ticks"] is not None
+                else _auto_major_ticks(y_scale, y_n, st["y_step"], st["y_count"]))
     x_fmt = _resolve_tick_formatter(st["x_format"], x_scale)
     y_fmt = _resolve_tick_formatter(st["y_format"], y_scale)
     x_labels = (st["x_labels"] if st["x_labels"] is not None
@@ -1011,8 +1041,10 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     # default but turns into a label crush on a 80-px-wide colorbar.
     x_n = max(2, min(8, int(iw // 65)))
     y_n = max(2, min(8, int(ih // 40)))
-    x_ticks = st["x_ticks"] if st["x_ticks"] is not None else x_scale.ticks(x_n)
-    y_ticks = st["y_ticks"] if st["y_ticks"] is not None else y_scale.ticks(y_n)
+    x_ticks = (st["x_ticks"] if st["x_ticks"] is not None
+               else _auto_major_ticks(x_scale, x_n, st["x_step"], st["x_count"]))
+    y_ticks = (st["y_ticks"] if st["y_ticks"] is not None
+               else _auto_major_ticks(y_scale, y_n, st["y_step"], st["y_count"]))
     x_fmt = _resolve_tick_formatter(st["x_format"], x_scale)
     y_fmt = _resolve_tick_formatter(st["y_format"], y_scale)
     x_labels = st["x_labels"] if st["x_labels"] is not None else [x_fmt(t) for t in x_ticks]

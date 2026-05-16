@@ -49,7 +49,7 @@ The data region is the user-facing primitive — the canvas grows to fit titles 
 
 String-valued data on either axis auto-switches to a categorical scale (alphabetical by default). `c.xscale("category", order=[...], padding=0)` for explicit ordering; `padding=0` makes bands contiguous (heatmap-track look).
 
-Tick overrides: `c.xticks([0, 5, 10], ["A","B","C"], rotation=45, fontsize=12, direction="out", marks=False)`. Pass `[]` to hide. `yticks(...)` same shape. `format="{:.0%}"` or `format=lambda v: f"${v/1000:.0f}K"` formats auto-generated tick labels — string and callable both work; explicit labels still override. `minor=True` adds auto-positioned minor ticks (5 per major-gap on linear scales; sub-decade on log); `minor=[v1, v2, ...]` for explicit positions.
+Tick overrides: `c.xticks([0, 5, 10], ["A","B","C"], rotation=45, fontsize=12, direction="out", marks=False)`. Pass `[]` to hide. `yticks(...)` same shape. `format="{:.0%}"` or `format=lambda v: f"${v/1000:.0f}K"` formats auto-generated tick labels — string and callable both work; explicit labels still override. `minor=True` adds auto-positioned minor ticks (5 per major-gap on linear scales; sub-decade on log); `minor=[v1, v2, ...]` for explicit positions. Density overrides: `step=0.25` forces a fixed spacing; `count=4` requests roughly that many major ticks (the nice-numbers algorithm still picks the actual values).
 
 ### Mark methods
 
