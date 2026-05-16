@@ -541,6 +541,42 @@ def chart_long_rotated_xticks():
     return c
 
 
+def chart_facet_scatter():
+    # Facet by category: one panel per unique value, shared axes, titles
+    # default to the group label.
+    random.seed(11)
+    species = ["setosa", "versicolor", "virginica"]
+    n_each = 24
+    df = {
+        "bill_length": [random.gauss(5, 1) + i * 2 for i in range(3) for _ in range(n_each)],
+        "bill_depth":  [random.gauss(3, 0.4) + i * 0.5 for i in range(3) for _ in range(n_each)],
+        "species":     [s for s in species for _ in range(n_each)],
+    }
+    g = pt.facet(df, by="species", col_wrap=3,
+                 data_width=180, data_height=140,
+                 xlabel="bill_length", ylabel="bill_depth")
+    g.scatter(x="bill_length", y="bill_depth", s=18)
+    return g
+
+
+def chart_facet_wrap_two_rows():
+    # 5 groups + col_wrap=3 → 2x3 grid with one empty trailing cell.
+    random.seed(12)
+    groups = ["A", "B", "C", "D", "E"]
+    n = 30
+    df = {
+        "x": [i * 0.2 for _ in groups for i in range(n)],
+        "y": [math.sin(i * 0.2) * (1.0 + gi * 0.3) + random.uniform(-0.3, 0.3)
+              for gi, _ in enumerate(groups) for i in range(n)],
+        "g": [grp for grp in groups for _ in range(n)],
+    }
+    g = pt.facet(df, by="g", col_wrap=3,
+                 data_width=160, data_height=110,
+                 xlabel="x", ylabel="y")
+    g.line(x="x", y="y")
+    return g
+
+
 def chart_scatter_size():
     # size= maps a numeric column to per-point area.
     random.seed(1)
@@ -643,6 +679,8 @@ PLOTS = {
     "tick_format_callable": chart_tick_format_callable,
     "scatter_size":        chart_scatter_size,
     "scatter_size_style_hue": chart_scatter_size_style_hue,
+    "facet_scatter":       chart_facet_scatter,
+    "facet_wrap_two_rows": chart_facet_wrap_two_rows,
 }
 
 

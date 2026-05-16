@@ -96,6 +96,16 @@ parent = (a | b); parent.legend()        # sugar for parent | pt.legend()
 
 A composed chart owns its children; render the parent. Calling `.show()` on a child raises. Full reference: [docs/SUBPLOTS.md](docs/SUBPLOTS.md).
 
+### Faceting
+
+```python
+g = pt.facet(df, by="species", col_wrap=3)   # one panel per unique value
+g.scatter(x="bill_length", y="bill_depth")    # replayed against each subset
+g.show()
+```
+
+`pt.facet` is a chart-shaped recorder: every mark / frame method you'd call on a `Chart` works the same way, but the call is replayed against each group's subset of `df`. `share_x` / `share_y` default to `True`; the per-panel title defaults to the group label (overridable with a recorded `.title(...)` call). `col_wrap` controls grid width; if omitted, the grid lays out as `ceil(sqrt(n_groups))` columns.
+
 ### Render / save
 
 ```python
