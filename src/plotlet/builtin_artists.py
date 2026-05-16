@@ -281,6 +281,7 @@ add_artist(ArtistSpec(
     draw=lambda a, ctx: _artist_bar(a, ctx.x_scale, ctx.y_scale, ctx.color),
     legend_swatch=_bar_legend_swatch,
     data_attrs=_bar_data_attrs,
+    force_zero_y=True,
 ))
 
 
@@ -294,6 +295,7 @@ add_artist(ArtistSpec(
     draw=lambda a, ctx: _artist_hist(a, ctx.x_scale, ctx.y_scale, ctx.ih, ctx.color),
     legend_swatch=_bar_legend_swatch,
     data_attrs=_hist_data_attrs,
+    force_zero_y=True,
 ))
 
 

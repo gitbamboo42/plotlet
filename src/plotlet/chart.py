@@ -85,6 +85,8 @@ class Chart:
                  xlabel: str | None = None, ylabel: str | None = None,
                  xlim: tuple | None = None, ylim: tuple | None = None,
                  xscale: str | None = None, yscale: str | None = None,
+                 x_expand: float | tuple | None = None,
+                 y_expand: float | tuple | None = None,
                  legend: bool | None = None, grid: bool | None = None,
                  theme: str | None = None,
                  **kwargs):
@@ -171,6 +173,10 @@ class Chart:
         if ylim   is not None: self.ylim(*ylim)
         if xscale is not None: self.xscale(xscale)
         if yscale is not None: self.yscale(yscale)
+        if x_expand is not None:
+            self.x_expand(*(x_expand if isinstance(x_expand, (tuple, list)) else (x_expand,)))
+        if y_expand is not None:
+            self.y_expand(*(y_expand if isinstance(y_expand, (tuple, list)) else (y_expand,)))
         if legend is not None: self.legend(legend)
         if grid   is not None: self.grid(grid)
         if theme  is not None: self.theme(theme)

@@ -74,6 +74,8 @@
     "bar_alpha": 1,
     "hist_alpha": 1,
     "category_padding": 0.2,
+    "x_expand": [0.05, 0.05],
+    "y_expand": [0.05, 0.05],
     "hist_gap": 1.0,
     "refline_color": "#000000",
     "refline_width": 0.8,

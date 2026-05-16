@@ -86,6 +86,7 @@ pt.add_artist(pt.ArtistSpec(
     ydomain=volcano_ydomain,
     draw=volcano_draw,
     uses_color_cycle=False,
+    force_zero_y=True,
 ))
 
 

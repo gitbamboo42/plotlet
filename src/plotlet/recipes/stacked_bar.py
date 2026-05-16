@@ -68,6 +68,7 @@ pt.add_artist(pt.ArtistSpec(
     ydomain=stacked_bar_ydomain,
     draw=stacked_bar_draw,
     legend_swatch=lambda a, ctx, x0, ym: rect(x0, ym - 5, 22, 10, fill=a["_color"]),
+    force_zero_y=True,
 ))
 
 

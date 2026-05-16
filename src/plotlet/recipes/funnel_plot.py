@@ -92,6 +92,7 @@ pt.add_artist(pt.ArtistSpec(
     ydomain=funnel_plot_ydomain,
     draw=funnel_plot_draw,
     uses_color_cycle=False,
+    force_zero_y=True,
     flips_y_axis=lambda a: True,  # invert: small SE (precise) at top
 ))
 

@@ -67,6 +67,7 @@ pt.add_artist(pt.ArtistSpec(
     ydomain=cdot_ydomain,
     draw=cdot_draw,
     legend_swatch=cdot_legend_swatch,
+    force_zero_x=True,
 ))
 
 

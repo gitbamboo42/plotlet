@@ -88,6 +88,7 @@ pt.add_artist(pt.ArtistSpec(
     ydomain=density_1d_ydomain,
     draw=density_1d_draw,
     legend_swatch=density_1d_legend_swatch,
+    force_zero_y=True,
 ))
 
 

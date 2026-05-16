@@ -64,6 +64,7 @@ pt.add_artist(pt.ArtistSpec(
     ydomain=stacked_area_ydomain,
     draw=stacked_area_draw,
     legend_swatch=stacked_area_legend_swatch,
+    force_zero_y=True,
 ))
 
 

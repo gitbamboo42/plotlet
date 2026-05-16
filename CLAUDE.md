@@ -22,6 +22,7 @@ and why-not-X live in [README.md](README.md) and [docs/PHILOSOPHY.md](docs/PHILO
 - **No interactivity. Forever, not deferred.** Hover, zoom, pan, click, animation kill byte-identical reproducibility — the foundation for baseline-image testing.
 - **No global state.** Themes, defaults, anything: per-chart, deterministic. Same script → byte-identical SVG everywhere.
 - **API names for clarity.** Equally-clear candidates → prefer the more conventional one for muscle memory. Don't pick a worse name just because someone else uses it.
+- **Variable/kwarg naming: reference popular plot libs first.** When naming a new kwarg or parameter, check matplotlib / seaborn / ggplot2 / d3 / plotly for prior art before inventing one. Only diverge with a concrete reason.
 - **Visual constants live in [`spec.json`](src/plotlet/spec.json); theme overrides in [`src/plotlet/themes/`](src/plotlet/themes/).** Typing a number into render code → ask whether it belongs in the spec.
 - **No premature abstraction.** Three uses before extracting.
 - **`draw.*` is the public SVG-emission API for recipes.** Don't hand-roll `<line>` / `<rect>` f-strings in recipes.

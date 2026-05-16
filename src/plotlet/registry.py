@@ -65,6 +65,13 @@ class ArtistSpec:
     data_attrs: Callable[[dict], dict | None] | None = None
     flips_y_axis: Callable[[dict], bool] | None = None
     tight_domain: bool = False
+    # Anchor an axis to zero: when the artist contributes to autoscaling and
+    # data lo > 0, push lo down to 0 so the visual sits on the baseline. Also
+    # suppresses the default `expand` on that side so bars don't float below
+    # zero. Built-in `bar` and `hist` set `force_zero_y=True`; recipes that
+    # implement bar-like artists (numeric_bar, horizontal_bar, ...) opt in.
+    force_zero_x: bool = False
+    force_zero_y: bool = False
     axis_order: Callable[[dict], dict | None] | None = None
     frame_defaults: Callable[[list, dict], list | None] | None = None
 

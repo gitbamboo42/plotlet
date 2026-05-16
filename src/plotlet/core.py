@@ -55,6 +55,7 @@ _FRAME_METHODS = {
     "title", "xlabel", "ylabel", "xlim", "ylim",
     "xscale", "yscale", "grid", "legend",
     "xticks", "yticks", "spines", "theme",
+    "x_expand", "y_expand",
 }
 
 
@@ -218,6 +219,9 @@ def _replay(calls):
         "xlim": None, "ylim": None, "xscale": "linear", "yscale": "linear",
         "x_order": None, "y_order": None,
         "x_padding": None, "y_padding": None,
+        # Data-range expansion (matches matplotlib `axes.xmargin` / ggplot `expand`).
+        # None = use spec default; (lo, hi) = explicit fractions of data span.
+        "x_expand": None, "y_expand": None,
         # xticks/yticks overrides (None = auto, [] = hide):
         "x_ticks": None, "x_labels": None, "x_rotation": 0, "x_fontsize": None,
         "x_direction": _FRAME["tick_direction"], "x_marks": True,
@@ -255,6 +259,8 @@ def _replay(calls):
             if "padding" in kw: st["y_padding"] = kw["padding"]
         elif name == "xticks": _record_ticks(st, "x", args, kw)
         elif name == "yticks": _record_ticks(st, "y", args, kw)
+        elif name == "x_expand": st["x_expand"] = _normalize_expand(args)
+        elif name == "y_expand": st["y_expand"] = _normalize_expand(args)
         elif name == "spines":
             # Per-side value: bool toggles visibility only; dict accepts
             # {"color": ..., "width": ..., "visible": ...} and implies
@@ -320,12 +326,39 @@ def _scan_domain(artists, axis):
     return lo, hi
 
 
-def _resolve_domain(lo, hi, user_lim, scale_kind, force_zero=False, tight=False):
-    """Apply user override, log snapping, and nice rounding.
+def _normalize_expand(args):
+    """Normalize x_expand/y_expand call args into `(lo, hi)` fractions.
+    Accepts a single number (symmetric) or two numbers (lo, hi)."""
+    if len(args) == 1:
+        v = float(args[0])
+        return (v, v)
+    if len(args) == 2:
+        return (float(args[0]), float(args[1]))
+    raise TypeError(
+        f"x_expand/y_expand expects 1 or 2 numbers, got {len(args)}"
+    )
 
-    `tight=True` skips the nice-numbers padding — for artists with hard
-    rectangular bounds (e.g. imshow) where extending the axis past the
-    data just leaves dead space."""
+
+def _resolve_expand(st_value, tight, axis):
+    """Effective `(lo, hi)` expand fractions for an axis.
+    None state → spec default for non-tight axes, zero for tight (so imshow
+    stays tight by default). Explicit user value wins in all cases."""
+    if st_value is not None:
+        return st_value
+    if tight:
+        return (0.0, 0.0)
+    return tuple(_D["x_expand" if axis == "x" else "y_expand"])
+
+
+def _resolve_domain(lo, hi, user_lim, scale_kind, force_zero=False, tight=False,
+                    expand=(0.0, 0.0)):
+    """Apply user override, log snapping, then either nice-rounding OR
+    expand padding (not both — they solve the same 'breathing room' problem
+    and stacking double-counts).
+
+    `tight=True` skips the nice path. `expand=(lo, hi)` adds a precise
+    symmetric buffer in data space; `force_zero` with `lo==0` skips
+    `expand_lo` so bars stay sat on the y=0 baseline."""
     if user_lim is not None:
         return user_lim
     if math.isinf(lo):
@@ -334,14 +367,31 @@ def _resolve_domain(lo, hi, user_lim, scale_kind, force_zero=False, tight=False)
         lo = 0
     if lo == hi:
         return (lo - 0.5, hi + 0.5)
+    expand_lo, expand_hi = expand
+    has_expand = expand_lo != 0.0 or expand_hi != 0.0
     if scale_kind == "log":
         if lo > 0 and hi > 0:
-            return (10 ** math.floor(math.log10(lo)),
-                    10 ** math.ceil(math.log10(hi)))
+            if has_expand:
+                lo_n, hi_n = lo, hi
+            else:
+                lo_n = 10 ** math.floor(math.log10(lo))
+                hi_n = 10 ** math.ceil(math.log10(hi))
+            log_span = math.log10(hi_n) - math.log10(lo_n)
+            if log_span > 0:
+                if not (force_zero and lo_n <= 0):
+                    lo_n = lo_n / (10 ** (expand_lo * log_span))
+                hi_n = hi_n * (10 ** (expand_hi * log_span))
+            return (lo_n, hi_n)
         return (lo, hi)
-    if tight:
-        return (lo, hi)
-    return _nice_domain(lo, hi)
+    if tight or has_expand:
+        lo_n, hi_n = lo, hi
+    else:
+        lo_n, hi_n = _nice_domain(lo, hi)
+    span = hi_n - lo_n
+    if not (force_zero and lo_n == 0):
+        lo_n -= expand_lo * span
+    hi_n += expand_hi * span
+    return (lo_n, hi_n)
 
 
 def _enforce_floors(M):
@@ -416,8 +466,12 @@ def _x_descriptor(st) -> _AxisDescriptor:
         return _AxisDescriptor(kind="category", cats=cats, padding=padding)
 
     x_lo, x_hi = _scan_domain(artists, "x")
+    x_tight = _axis_is_tight(artists, "x")
+    x_force_zero = _any_artist_force_zero(artists, "x")
     x_min, x_max = _resolve_domain(x_lo, x_hi, st["xlim"], st["xscale"],
-                                    tight=_axis_is_tight(artists, "x"))
+                                    force_zero=x_force_zero,
+                                    tight=x_tight,
+                                    expand=_resolve_expand(st["x_expand"], x_tight, "x"))
     return _AxisDescriptor(kind=st["xscale"], lo=x_min, hi=x_max)
 
 
@@ -427,6 +481,17 @@ def _any_artist_flips_y(artists) -> bool:
     for a in artists:
         spec = get_artist(a["type"])
         if spec is not None and spec.flips_y_axis is not None and spec.flips_y_axis(a):
+            return True
+    return False
+
+
+def _any_artist_force_zero(artists, axis: str) -> bool:
+    """True if any artist on the panel declares (via `force_zero_x` /
+    `force_zero_y` on its spec) that the axis should anchor at zero."""
+    attr = "force_zero_x" if axis == "x" else "force_zero_y"
+    for a in artists:
+        spec = get_artist(a["type"])
+        if spec is not None and getattr(spec, attr, False):
             return True
     return False
 
@@ -469,12 +534,13 @@ def _y_descriptor(st) -> _AxisDescriptor:
         padding = _D["category_padding"] if st["y_padding"] is None else st["y_padding"]
         return _AxisDescriptor(kind="category", cats=cats, padding=padding)
 
-    has_bar = any(a["type"] == "bar" for a in artists)
-    force_zero = has_bar or any(a["type"] == "hist" for a in artists)
+    force_zero = _any_artist_force_zero(artists, "y")
     y_lo, y_hi = _scan_domain(artists, "y")
+    y_tight = _axis_is_tight(artists, "y")
     y_min, y_max = _resolve_domain(y_lo, y_hi, st["ylim"], st["yscale"],
                                     force_zero=force_zero,
-                                    tight=_axis_is_tight(artists, "y"))
+                                    tight=y_tight,
+                                    expand=_resolve_expand(st["y_expand"], y_tight, "y"))
     return _AxisDescriptor(kind=st["yscale"], lo=y_min, hi=y_max,
                            flip=_any_artist_flips_y(artists))
 
@@ -502,8 +568,12 @@ def _x_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
         padding = _D["category_padding"] if anchor["x_padding"] is None else anchor["x_padding"]
         return _AxisDescriptor(kind="category", cats=cats, padding=padding)
     x_lo, x_hi = _scan_domain(all_artists, "x")
+    x_tight = _axis_is_tight(all_artists, "x")
+    x_force_zero = _any_artist_force_zero(all_artists, "x")
     x_min, x_max = _resolve_domain(x_lo, x_hi, anchor["xlim"], anchor["xscale"],
-                                    tight=_axis_is_tight(all_artists, "x"))
+                                    force_zero=x_force_zero,
+                                    tight=x_tight,
+                                    expand=_resolve_expand(anchor["x_expand"], x_tight, "x"))
     return _AxisDescriptor(kind=anchor["xscale"], lo=x_min, hi=x_max)
 
 
@@ -525,11 +595,13 @@ def _y_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
             cats = _artist_axis_order(all_artists, "y") or collect_categories(all_artists, "y")
         padding = _D["category_padding"] if anchor["y_padding"] is None else anchor["y_padding"]
         return _AxisDescriptor(kind="category", cats=cats, padding=padding)
-    force_zero = any(a["type"] in ("bar", "hist") for a in all_artists)
+    force_zero = _any_artist_force_zero(all_artists, "y")
     y_lo, y_hi = _scan_domain(all_artists, "y")
+    y_tight = _axis_is_tight(all_artists, "y")
     y_min, y_max = _resolve_domain(y_lo, y_hi, anchor["ylim"], anchor["yscale"],
                                     force_zero=force_zero,
-                                    tight=_axis_is_tight(all_artists, "y"))
+                                    tight=y_tight,
+                                    expand=_resolve_expand(anchor["y_expand"], y_tight, "y"))
     return _AxisDescriptor(kind=anchor["yscale"], lo=y_min, hi=y_max,
                            flip=_any_artist_flips_y(all_artists))
 
@@ -741,9 +813,9 @@ def _panel_attrs_and_meta(st, M, iw, ih, x_axis, y_axis,
     attrs["yscale"] = y_axis.kind
 
     if x_axis.kind != "category":
-        attrs["xlim"] = f"{repr(x_axis.lo)},{repr(x_axis.hi)}"
+        attrs["xlim"] = f"{x_axis.lo:.12g},{x_axis.hi:.12g}"
     if y_axis.kind != "category":
-        attrs["ylim"] = f"{repr(y_axis.lo)},{repr(y_axis.hi)}"
+        attrs["ylim"] = f"{y_axis.lo:.12g},{y_axis.hi:.12g}"
     if y_axis.flip:
         attrs["yflip"] = "true"
 
