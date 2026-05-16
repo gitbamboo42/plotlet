@@ -230,6 +230,7 @@ def _replay(calls):
         "x_padding": None, "y_padding": None,
         "x_linthresh": 1.0, "y_linthresh": 1.0,
         "x_exponent": 1.0, "y_exponent": 1.0,
+        "x_reverse": False, "y_reverse": False,
         # Data-range expansion (matches matplotlib `axes.xmargin` / ggplot `expand`).
         # None = use spec default; (lo, hi) = explicit fractions of data span.
         "x_expand": None, "y_expand": None,
@@ -268,12 +269,14 @@ def _replay(calls):
             if "padding" in kw:   st["x_padding"] = kw["padding"]
             if "linthresh" in kw: st["x_linthresh"] = float(kw["linthresh"])
             if "exponent" in kw:  st["x_exponent"] = float(kw["exponent"])
+            if "reverse" in kw:   st["x_reverse"] = bool(kw["reverse"])
         elif name == "yscale":
             st["yscale"] = args[0]
             if "order" in kw:     st["y_order"] = list(kw["order"])
             if "padding" in kw:   st["y_padding"] = kw["padding"]
             if "linthresh" in kw: st["y_linthresh"] = float(kw["linthresh"])
             if "exponent" in kw:  st["y_exponent"] = float(kw["exponent"])
+            if "reverse" in kw:   st["y_reverse"] = bool(kw["reverse"])
         elif name == "xticks": _record_ticks(st, "x", args, kw)
         elif name == "yticks": _record_ticks(st, "y", args, kw)
         elif name == "x_expand": st["x_expand"] = _normalize_expand(args)
@@ -508,6 +511,7 @@ def _x_descriptor(st) -> _AxisDescriptor:
                                     tight=x_tight,
                                     expand=_resolve_expand(st["x_expand"], x_tight, "x"))
     return _AxisDescriptor(kind=st["xscale"], lo=x_min, hi=x_max,
+                           flip=st["x_reverse"],
                            linthresh=st["x_linthresh"],
                            exponent=st["x_exponent"])
 
@@ -579,7 +583,7 @@ def _y_descriptor(st) -> _AxisDescriptor:
                                     tight=y_tight,
                                     expand=_resolve_expand(st["y_expand"], y_tight, "y"))
     return _AxisDescriptor(kind=st["yscale"], lo=y_min, hi=y_max,
-                           flip=_any_artist_flips_y(artists),
+                           flip=_any_artist_flips_y(artists) or st["y_reverse"],
                            linthresh=st["y_linthresh"],
                            exponent=st["y_exponent"])
 
@@ -614,6 +618,7 @@ def _x_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
                                     tight=x_tight,
                                     expand=_resolve_expand(anchor["x_expand"], x_tight, "x"))
     return _AxisDescriptor(kind=anchor["xscale"], lo=x_min, hi=x_max,
+                           flip=anchor["x_reverse"],
                            linthresh=anchor["x_linthresh"],
                            exponent=anchor["x_exponent"])
 
@@ -644,7 +649,7 @@ def _y_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
                                     tight=y_tight,
                                     expand=_resolve_expand(anchor["y_expand"], y_tight, "y"))
     return _AxisDescriptor(kind=anchor["yscale"], lo=y_min, hi=y_max,
-                           flip=_any_artist_flips_y(all_artists),
+                           flip=_any_artist_flips_y(all_artists) or anchor["y_reverse"],
                            linthresh=anchor["y_linthresh"],
                            exponent=anchor["y_exponent"])
 
@@ -686,7 +691,10 @@ def _required_margin(st, dw, dh) -> dict:
     # are decided up front, no iteration needed.
     x_axis = _x_descriptor(st)
     y_axis = _y_descriptor(st)
-    x_scale = x_axis.build(0, dw)
+    if x_axis.kind == "category" or not x_axis.flip:
+        x_scale = x_axis.build(0, dw)
+    else:
+        x_scale = x_axis.build(dw, 0)
     if y_axis.kind == "category" or y_axis.flip:
         y_scale = y_axis.build(0, dh)
     else:
@@ -784,7 +792,10 @@ def _build_xy_scales(st, iw, ih, panel_opts: _PanelOpts):
     y-linear/log runs cartesian unless the descriptor requested a flip."""
     x_axis = panel_opts.x_axis or _x_descriptor(st)
     y_axis = panel_opts.y_axis or _y_descriptor(st)
-    x_scale = x_axis.build(0, iw)
+    if x_axis.kind == "category" or not x_axis.flip:
+        x_scale = x_axis.build(0, iw)
+    else:
+        x_scale = x_axis.build(iw, 0)
     if y_axis.kind == "category":
         y_scale = y_axis.build(0, ih)
     elif y_axis.flip:

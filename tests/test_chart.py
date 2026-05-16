@@ -541,6 +541,17 @@ def chart_long_rotated_xticks():
     return c
 
 
+def chart_reverse_y():
+    # Reversed y axis: classic oceanography depth profile (0 on top).
+    times = list(range(8))
+    depths = [10, 28, 65, 130, 220, 360, 480, 620]
+    c = pt.chart(data_width=320, data_height=180,
+                 title="depth profile", xlabel="time", ylabel="depth (m)")
+    c.line(times, depths, marker="o")
+    c.yscale("linear", reverse=True)
+    return c
+
+
 def chart_sqrt_y():
     # sqrt scale on y compresses large counts while keeping small ones visible.
     c = pt.chart(data_width=320, data_height=180,
@@ -704,6 +715,7 @@ PLOTS = {
     "facet_wrap_two_rows": chart_facet_wrap_two_rows,
     "symlog_x":            chart_symlog_x,
     "sqrt_y":              chart_sqrt_y,
+    "reverse_y":           chart_reverse_y,
 }
 
 
