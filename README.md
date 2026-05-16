@@ -64,6 +64,7 @@ Tick overrides: `c.xticks([0, 5, 10], ["A","B","C"], rotation=45, fontsize=12, d
 | `.axhspan(ymin, ymax, **opts)` / `.axvspan(xmin, xmax, **opts)` | `color`, `alpha`, `label`, axes-fraction `xmin`/`xmax` (or `ymin`/`ymax`) |
 | `.imshow(data, **opts)` | `cmap` (any of ~180 vendored colormaps, default `"viridis"`), `vmin`, `vmax`, `extent=(left, right, bottom, top)` |
 | `.heatmap(df, **opts)` | `cmap`, `vmin`, `vmax`, `norm`, `center`, `xticklabels`, `yticklabels`, `legend` |
+| `.annotate(text, xy=, xytext=, **opts)` | `arrow=True/False`, `ha`, `va`, `fontsize`, `color`, `arrow_head`, `arrow_width` |
 
 `hue=<col>` splits into one call per unique value with auto-labels and tab10 colors. Reference lines / spans default to black, are drawn outside the data color cycle, and don't participate in autoscaling.
 

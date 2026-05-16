@@ -403,6 +403,61 @@ def _artist_imshow(a, xs_, ys_, col):
 _HA_TO_ANCHOR = {"left": "start", "center": "middle", "right": "end"}
 
 
+def _artist_annotate(a, xs_, ys_, col):
+    """Text label at `xytext`, optionally connected to `xy` by an arrow.
+
+    Pixel placement and arrow geometry both run through the panel's
+    scales — the user gives data coordinates, we draw in pixels. The
+    arrowhead is a small filled triangle; the line stops at the head's
+    base so the seam doesn't show through anti-aliasing.
+    """
+    opts = a["opts"]
+    fontsize = opts.get("fontsize", _D["text_size"])
+    ha = opts.get("ha", "left")
+    va = opts.get("va", "baseline")
+    color = opts.get("color") or col or _D["text_color"]
+    anchor = _HA_TO_ANCHOR.get(ha, "start")
+    if va == "top":      va_offset = fontsize * 0.78
+    elif va == "center": va_offset = fontsize * 0.34
+    elif va == "bottom": va_offset = 0.0
+    else:                va_offset = 0.0
+
+    x_xy, y_xy = a["xy"]
+    x_tx, y_tx = a["xytext"]
+    px_xy, py_xy = xs_(x_xy), ys_(y_xy)
+    px_tx, py_tx = xs_(x_tx), ys_(y_tx)
+    if not all(math.isfinite(v) for v in (px_xy, py_xy, px_tx, py_tx)):
+        return ""
+
+    out = []
+    if opts.get("arrow", True):
+        head_len = opts.get("arrow_head", 7.0)
+        line_w = opts.get("arrow_width", 0.9)
+        dx, dy = px_xy - px_tx, py_xy - py_tx
+        dist = math.hypot(dx, dy)
+        if dist > head_len:
+            ux, uy = dx / dist, dy / dist
+            # Line stops at the back of the arrowhead.
+            line_end_x = px_xy - ux * head_len
+            line_end_y = py_xy - uy * head_len
+            out.append(segment(px_tx, py_tx, line_end_x, line_end_y,
+                                color=color, width=line_w))
+            # Triangular head: tip at xy, base perpendicular to the line.
+            half = head_len * 0.45
+            base_cx = line_end_x
+            base_cy = line_end_y
+            perp_x, perp_y = -uy, ux
+            x1 = base_cx + perp_x * half
+            y1 = base_cy + perp_y * half
+            x2 = base_cx - perp_x * half
+            y2 = base_cy - perp_y * half
+            out.append(f'<path d="M{px_xy:.2f},{py_xy:.2f}L{x1:.2f},{y1:.2f}'
+                       f'L{x2:.2f},{y2:.2f}Z" fill="{color}"/>')
+    out.append(text_path(a["text"], px_tx, py_tx + va_offset,
+                          fontsize, anchor=anchor, color=color))
+    return "".join(out)
+
+
 def _artist_text(a, xs_, ys_, col):
     """Render text labels at data coordinates. Accepts parallel
     `xs` / `ys` / `labels` lists. Empty labels are skipped."""

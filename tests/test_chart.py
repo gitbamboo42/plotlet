@@ -541,6 +541,23 @@ def chart_long_rotated_xticks():
     return c
 
 
+def chart_annotate():
+    # Text label + arrow to a data point. Both endpoints in data coords.
+    xs = [i * 0.2 for i in range(40)]
+    ys = [math.sin(x) + math.sin(2 * x) * 0.4 for x in xs]
+    c = pt.chart(data_width=400, data_height=200,
+                 title="annotate", xlabel="x", ylabel="y")
+    c.line(xs, ys)
+    max_i = ys.index(max(ys))
+    c.annotate("global max",
+               xy=(xs[max_i], ys[max_i]),
+               xytext=(xs[max_i] + 1.5, ys[max_i] + 0.3))
+    c.annotate("first zero",
+               xy=(math.pi, 0),
+               xytext=(math.pi - 2, 0.6), ha="center")
+    return c
+
+
 def chart_ticks_step():
     c = pt.chart(data_width=400, data_height=170,
                  title="step=0.25", xlabel="x", ylabel="y", grid=True)
@@ -754,6 +771,7 @@ PLOTS = {
     "minor_ticks_log":     chart_minor_ticks_log,
     "ticks_step":          chart_ticks_step,
     "ticks_count":         chart_ticks_count,
+    "annotate":            chart_annotate,
 }
 
 

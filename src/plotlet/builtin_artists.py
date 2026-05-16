@@ -17,7 +17,7 @@ from .artists import (
     _artist_hlines, _artist_vlines,
     _artist_rect, _artist_polygon,
     _artist_imshow,
-    _artist_text, _artist_errorbar, _expand_err,
+    _artist_text, _artist_annotate, _artist_errorbar, _expand_err,
 )
 from .dendrogram import (
     _dendrogram_record,
@@ -620,6 +620,50 @@ add_artist(ArtistSpec(
     uses_color_cycle=False,
     default_color=_D["text_color"],
     data_attrs=_text_data_attrs,
+))
+
+
+# --- annotate ---------------------------------------------------------------
+# Text label at `xytext` with optional arrow to `xy` — matplotlib's
+# `ax.annotate(...)` staple. Both points are in data coordinates so the
+# arrow follows the axis through resizes / share_x scaling.
+
+def _annotate_record(args, kw):
+    # Don't mutate `kw` — record() is called on every re-render against
+    # the original recorded dict, so a destructive `kw.pop` would lose
+    # xy/xytext on the second to_svg() call.
+    text = args[0]
+    if "xy" not in kw:
+        raise TypeError("annotate() requires xy=(x, y)")
+    xy = tuple(kw["xy"])
+    xytext = tuple(kw.get("xytext", xy))
+    opts = {k: v for k, v in kw.items() if k not in ("xy", "xytext")}
+    return {"type": "annotate", "text": str(text),
+            "xy": xy, "xytext": xytext, "opts": opts}
+
+
+def _annotate_xdomain(a):  return [a["xy"][0], a["xytext"][0]]
+def _annotate_ydomain(a):  return [a["xy"][1], a["xytext"][1]]
+
+
+def _annotate_data_attrs(a):
+    return {
+        "x":  a["xy"][0],     "y":  a["xy"][1],
+        "tx": a["xytext"][0], "ty": a["xytext"][1],
+        "text": a["text"],
+    }
+
+
+add_artist(ArtistSpec(
+    name="annotate",
+    record=_annotate_record,
+    xdomain=_annotate_xdomain,
+    ydomain=_annotate_ydomain,
+    draw=lambda a, ctx: _artist_annotate(a, ctx.x_scale, ctx.y_scale, ctx.color),
+    layer="foreground",
+    uses_color_cycle=False,
+    default_color=_D["text_color"],
+    data_attrs=_annotate_data_attrs,
 ))
 
 
