@@ -541,6 +541,38 @@ def chart_long_rotated_xticks():
     return c
 
 
+def chart_scatter_size():
+    # size= maps a numeric column to per-point area.
+    random.seed(1)
+    df = {
+        "x":    list(range(40)),
+        "y":    [math.sin(i / 5) + random.uniform(-0.2, 0.2) for i in range(40)],
+        "mass": [abs(math.cos(i / 4)) * 50 + 5 for i in range(40)],
+    }
+    c = pt.chart(df, data_width=400, data_height=200,
+                 title="bubble", xlabel="x", ylabel="y")
+    c.scatter(x="x", y="y", size="mass", sizes=(15, 250))
+    return c
+
+
+def chart_scatter_size_style_hue():
+    # size + style + hue compose. Each column drives a separate aesthetic.
+    random.seed(2)
+    n = 36
+    groups = ["alpha", "beta", "gamma"]
+    df = {
+        "x":     [random.uniform(0, 10) for _ in range(n)],
+        "y":     [random.uniform(0, 10) for _ in range(n)],
+        "mass":  [random.uniform(5, 50) for _ in range(n)],
+        "group": [groups[i % 3] for i in range(n)],
+    }
+    c = pt.chart(df, data_width=400, data_height=240,
+                 title="hue + size + style", xlabel="x", ylabel="y",
+                 legend=True)
+    c.scatter(x="x", y="y", hue="group", size="mass", style="group")
+    return c
+
+
 def chart_tick_format_string():
     # Format string: '{:.0%}' renders y-ticks as percentages.
     c = pt.chart(data_width=320, data_height=180,
@@ -609,6 +641,8 @@ PLOTS = {
     "dendrogram_labeled":  chart_dendrogram_labeled,
     "tick_format_string":  chart_tick_format_string,
     "tick_format_callable": chart_tick_format_callable,
+    "scatter_size":        chart_scatter_size,
+    "scatter_size_style_hue": chart_scatter_size_style_hue,
 }
 
 

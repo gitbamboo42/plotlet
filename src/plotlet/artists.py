@@ -92,15 +92,21 @@ def _artist_line(a, xs_, ys_, col):
 
 def _artist_scatter(a, xs_, ys_, col):
     opts = a["opts"]
-    sz = math.sqrt(opts.get("s", _D["scatter_s"])) / 2
+    raw_s = opts.get("s", _D["scatter_s"])
+    raw_mk = opts.get("marker", "o")
     alpha = opts.get("alpha", _D["scatter_alpha"])
-    mk = opts.get("marker", "o")
+    n = len(a["xs"])
+    # `s` and `marker` accept either a scalar (one value for every point)
+    # or a per-point sequence (size=/style= mappings produce the list form).
+    sizes   = list(raw_s)  if isinstance(raw_s,  (list, tuple)) else [raw_s]  * n
+    markers = list(raw_mk) if isinstance(raw_mk, (list, tuple)) else [raw_mk] * n
     out = []
-    for x, y in zip(a["xs"], a["ys"]):
+    for i, (x, y) in enumerate(zip(a["xs"], a["ys"])):
         px, py = xs_(x), ys_(y)
         if not (math.isfinite(px) and math.isfinite(py)):
             continue
-        out.append(marker(mk, px, py, sz, col, alpha))
+        sz = math.sqrt(sizes[i]) / 2
+        out.append(marker(markers[i], px, py, sz, col, alpha))
     return "".join(out)
 
 

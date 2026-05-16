@@ -56,7 +56,7 @@ Tick overrides: `c.xticks([0, 5, 10], ["A","B","C"], rotation=45, fontsize=12, d
 | call | options |
 | --- | --- |
 | `.line(x=, y=, hue=, **opts)` | `color`, `label`, `linewidth`, `linestyle` (`"-"`, `"--"`, `":"`, `"-."`), `marker` (`"o"`, `"s"`, `"^"`, `"v"`, `"x"`, `"+"`), `markersize` |
-| `.scatter(x=, y=, hue=, **opts)` | `color`, `label`, `s` (size), `alpha`, `marker` |
+| `.scatter(x=, y=, hue=, size=, style=, **opts)` | `color`, `label`, `s` (size), `alpha`, `marker`, `sizes=(min, max)` |
 | `.bar(x=, y=, **opts)` | `color`, `label`, `alpha` |
 | `.hist(x=, **opts)` | `bins`, `color`, `alpha`, `label` |
 | `.fill_between(x=, y1=, y2=, **opts)` | `color`, `alpha`, `label` |
@@ -66,6 +66,8 @@ Tick overrides: `c.xticks([0, 5, 10], ["A","B","C"], rotation=45, fontsize=12, d
 | `.heatmap(df, **opts)` | `cmap`, `vmin`, `vmax`, `norm`, `center`, `xticklabels`, `yticklabels`, `legend` |
 
 `hue=<col>` splits into one call per unique value with auto-labels and tab10 colors. Reference lines / spans default to black, are drawn outside the data color cycle, and don't participate in autoscaling.
+
+On `scatter`, `size=<col>` maps a numeric column to per-point area (pixels², rescaled into `sizes=(min, max)` — default `(20, 200)`); `style=<col>` cycles markers per unique value (`o`, `s`, `^`, `v`, `x`, `+`). All three (`hue`, `size`, `style`) compose.
 
 `.imshow` emits one `<rect>` per cell for small grids (`≤10000` cells, vector-clean at any zoom) and a base64 PNG above that. `.heatmap` is the DataFrame-aware companion — `df.index` becomes row labels, `df.columns` becomes column labels; cells render at integer + 0.5 centers so a top/left dendrogram pairs cleanly via `share_x` / `share_y`.
 

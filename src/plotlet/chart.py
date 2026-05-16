@@ -447,13 +447,84 @@ class Chart:
             self._record("line", *args, **opts)
         return self
 
-    def scatter(self, *args, x=None, y=None, hue=None, data=None, **opts):
+    def scatter(self, *args, x=None, y=None, hue=None, size=None, style=None,
+                sizes=(20, 200), data=None, **opts):
+        """Plot points. `size=<col>` maps a numeric column to per-point area
+        in pixels², linearly rescaled into `sizes=(min, max)`. `style=<col>`
+        cycles markers (`o`, `s`, `^`, `v`, `x`, `+`) per unique value.
+        Both compose with `hue=<col>`."""
         self._require_leaf("scatter")
         if x is not None or y is not None:
-            self._tabular("scatter", "scatter", data, x, y, hue, opts)
+            if size is not None or style is not None:
+                self._scatter_with_aesthetics(data, x, y, hue, size, style, sizes, opts)
+            else:
+                self._tabular("scatter", "scatter", data, x, y, hue, opts)
         else:
             self._record("scatter", *args, **opts)
         return self
+
+    def _scatter_with_aesthetics(self, data, x_col, y_col, hue, size, style, sizes, opts):
+        """Compute per-point `s` and `marker` arrays from data columns, then
+        emit one scatter call per hue group (or one total when no hue).
+        Centralized so the hue/size/style combinatorics stay in one place."""
+        df = self._resolve_data(data, "scatter")
+        xs_all = to_list(df[x_col])
+        ys_all = to_list(df[y_col])
+        n = len(xs_all)
+        s_arr   = self._compute_size_array(df[size], sizes) if size is not None else None
+        mk_arr  = self._compute_style_array(df[style])      if style is not None else None
+
+        def slice_for(idx_list):
+            sub_opts = dict(opts)
+            if s_arr is not None:
+                sub_opts["s"] = [s_arr[i] for i in idx_list]
+            if mk_arr is not None:
+                sub_opts["marker"] = [mk_arr[i] for i in idx_list]
+            return sub_opts
+
+        if hue is None:
+            self._record("scatter", xs_all, ys_all, **slice_for(range(n)))
+            return
+
+        hue_vals = to_list(df[hue])
+        seen = []
+        for v in hue_vals:
+            if v not in seen:
+                seen.append(v)
+        opts.pop("label", None)
+        for v in seen:
+            idxs = [i for i, h in enumerate(hue_vals) if h == v]
+            xs_g = [xs_all[i] for i in idxs]
+            ys_g = [ys_all[i] for i in idxs]
+            sub_opts = slice_for(idxs)
+            sub_opts.pop("label", None)
+            self._record("scatter", xs_g, ys_g, label=str(v), **sub_opts)
+
+    @staticmethod
+    def _compute_size_array(values, sizes):
+        vals = to_list(values)
+        nums = [v for v in vals if isinstance(v, (int, float)) and v == v]
+        if not nums:
+            return [sizes[0]] * len(vals)
+        lo, hi = min(nums), max(nums)
+        span = hi - lo
+        s_lo, s_hi = float(sizes[0]), float(sizes[1])
+        if span == 0:
+            mid = (s_lo + s_hi) / 2
+            return [mid if isinstance(v, (int, float)) and v == v else s_lo for v in vals]
+        return [s_lo + (v - lo) / span * (s_hi - s_lo)
+                if isinstance(v, (int, float)) and v == v else s_lo for v in vals]
+
+    @staticmethod
+    def _compute_style_array(values):
+        cycle = ("o", "s", "^", "v", "x", "+")
+        vals = to_list(values)
+        seen = []
+        for v in vals:
+            if v not in seen:
+                seen.append(v)
+        mapping = {v: cycle[i % len(cycle)] for i, v in enumerate(seen)}
+        return [mapping[v] for v in vals]
 
     def bar(self, *args, x=None, y=None, data=None, **opts):
         self._require_leaf("bar")

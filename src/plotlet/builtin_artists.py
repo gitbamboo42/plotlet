@@ -69,9 +69,17 @@ def _refline_legend_swatch(a, ctx, x0, y_mid):
 
 def _scatter_legend_swatch(a, ctx, x0, y_mid):
     sw = _LEGSPEC["swatch_width"]
-    s_size = math.sqrt(a["opts"].get("s", ctx.defaults["scatter_s"])) / 2
-    return marker(a["opts"].get("marker", "o"),
-                      x0 + sw / 2, y_mid, s_size, a["_color"],
+    # When `s` or `marker` is per-point (size=/style= mappings), the legend
+    # swatch picks the median size and the first marker so the entry stays
+    # a single recognizable glyph.
+    raw_s = a["opts"].get("s", ctx.defaults["scatter_s"])
+    raw_mk = a["opts"].get("marker", "o")
+    s_val = sorted(raw_s)[len(raw_s) // 2] if isinstance(raw_s, (list, tuple)) and raw_s else (
+        raw_s if not isinstance(raw_s, (list, tuple)) else ctx.defaults["scatter_s"])
+    mk_val = raw_mk[0] if isinstance(raw_mk, (list, tuple)) and raw_mk else (
+        raw_mk if not isinstance(raw_mk, (list, tuple)) else "o")
+    s_size = math.sqrt(s_val) / 2
+    return marker(mk_val, x0 + sw / 2, y_mid, s_size, a["_color"],
                       a["opts"].get("alpha", ctx.defaults["scatter_alpha"]))
 
 
