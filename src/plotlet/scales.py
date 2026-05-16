@@ -1,10 +1,17 @@
-"""Coordinate scales: linear, log, category.
+"""Coordinate scales: linear, log, category, symlog, power, time.
 
 Each scale is a callable: `scale(data_value) -> pixel_position`. Each also
 exposes `.ticks(n)` for axis tick generation. `_CategoryScale` returns the
 band *center* for a category, with `.bandwidth` giving the band width — bar
 artists subtract `bandwidth/2` to get the rect's left edge.
+
+`_TimeScale` accepts `datetime.date` / `datetime.datetime` (or epoch-seconds
+floats) on the data side; ticks come back as datetime objects at sensible
+calendar boundaries (year, month, day, hour, minute, second) and the scale
+exposes `format_tick` so the caller can render labels at the matching
+resolution.
 """
+import datetime
 import math
 
 
@@ -203,6 +210,170 @@ class _CategoryScale:
 
 
 # ---------------------------------------------------------------------------
+# Time scale
+# ---------------------------------------------------------------------------
+# Internal representation is POSIX seconds (UTC). Inputs may be
+# `datetime.datetime` (tz-aware or naive — naive is treated as UTC so the
+# output stays byte-identical across machines), `datetime.date` (treated as
+# UTC midnight), or a raw float (interpreted as already-converted seconds).
+
+_UTC = datetime.timezone.utc
+
+_TICK_UNITS = [
+    # (unit name, approx seconds, "nice" multipliers used to step)
+    ("year",   365.25 * 86400, [1, 2, 5, 10, 20, 50, 100]),
+    ("month",  30.0 * 86400,   [1, 2, 3, 6]),
+    ("day",    86400,          [1, 2, 5, 10, 15]),
+    ("hour",   3600,           [1, 2, 3, 6, 12]),
+    ("minute", 60,             [1, 2, 5, 10, 15, 30]),
+    ("second", 1,              [1, 2, 5, 10, 15, 30]),
+]
+
+
+def _to_epoch(v):
+    """Datetime / date → POSIX seconds (UTC). Floats pass through."""
+    if isinstance(v, datetime.datetime):
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=_UTC)
+        return v.timestamp()
+    if isinstance(v, datetime.date):
+        return datetime.datetime.combine(v, datetime.time.min, tzinfo=_UTC).timestamp()
+    return float(v)
+
+
+def _from_epoch(s):
+    """POSIX seconds (UTC) → tz-aware `datetime`."""
+    return datetime.datetime.fromtimestamp(s, tz=_UTC)
+
+
+def _coerce_time_lim(lim):
+    """Coerce a `(lo, hi)` xlim/ylim pair to epoch seconds for a temporal
+    axis. Accepts None (passes through), datetime/date endpoints, or raw
+    floats (assumed already-converted)."""
+    if lim is None:
+        return None
+    return (_to_epoch(lim[0]), _to_epoch(lim[1]))
+
+
+def _pick_time_unit(span_seconds, n):
+    """Pick (unit_name, step_in_unit) so the axis gets roughly `n` ticks.
+
+    Strategy: enumerate every (unit × allowed_multiplier) the table permits,
+    sort by step duration, then take the smallest step whose duration is
+    >= target. That way a 12-month span lands on '3 months', not '1 year'."""
+    target_step = max(span_seconds / max(n, 1), 1e-9)
+    candidates = []
+    for unit, secs, multipliers in _TICK_UNITS:
+        for m in multipliers:
+            candidates.append((m * secs, unit, m))
+    candidates.sort()
+    for size, unit, m in candidates:
+        if size >= target_step:
+            return unit, m
+    return candidates[-1][1], candidates[-1][2]
+
+
+def _step_year(dt, n):
+    return dt.replace(year=dt.year + n)
+
+
+def _step_month(dt, n):
+    total = (dt.year * 12 + (dt.month - 1)) + n
+    return dt.replace(year=total // 12, month=(total % 12) + 1)
+
+
+def _floor_to_unit(dt, unit, step):
+    """Snap `dt` down to the nearest multiple of (unit × step) on the
+    calendar. The 'multiple' is taken relative to a natural origin:
+    year 1 for years/months, dt's own date for finer units."""
+    if unit == "year":
+        return datetime.datetime(dt.year - (dt.year - 1) % step, 1, 1, tzinfo=_UTC)
+    if unit == "month":
+        idx = (dt.year * 12 + (dt.month - 1))
+        idx -= idx % step
+        return datetime.datetime(idx // 12, (idx % 12) + 1, 1, tzinfo=_UTC)
+    if unit == "day":
+        return datetime.datetime(dt.year, dt.month, dt.day, tzinfo=_UTC)
+    if unit == "hour":
+        return datetime.datetime(dt.year, dt.month, dt.day,
+                                  (dt.hour // step) * step, tzinfo=_UTC)
+    if unit == "minute":
+        return datetime.datetime(dt.year, dt.month, dt.day, dt.hour,
+                                  (dt.minute // step) * step, tzinfo=_UTC)
+    return datetime.datetime(dt.year, dt.month, dt.day, dt.hour, dt.minute,
+                              (dt.second // step) * step, tzinfo=_UTC)
+
+
+def _advance(dt, unit, step):
+    if unit == "year":   return _step_year(dt, step)
+    if unit == "month":  return _step_month(dt, step)
+    if unit == "day":    return dt + datetime.timedelta(days=step)
+    if unit == "hour":   return dt + datetime.timedelta(hours=step)
+    if unit == "minute": return dt + datetime.timedelta(minutes=step)
+    return dt + datetime.timedelta(seconds=step)
+
+
+# strftime pattern for tick labels at each tick-unit resolution.
+_FMT_FOR_UNIT = {
+    "year":   "%Y",
+    "month":  "%Y-%m",
+    "day":    "%Y-%m-%d",
+    "hour":   "%Y-%m-%d %H:%M",
+    "minute": "%H:%M",
+    "second": "%H:%M:%S",
+}
+
+
+class _TimeScale:
+    """Time axis on POSIX seconds. Accepts datetime / date / float inputs;
+    `.ticks(n)` returns calendar-aligned datetimes; `.format_tick` formats
+    them at the resolution the tick spacing implies."""
+
+    def __init__(self, d0, d1, r0, r1):
+        self.d0 = float(d0)
+        self.d1 = float(d1)
+        self.r0, self.r1 = r0, r1
+        span = max(self.d1 - self.d0, 1.0)
+        self._unit, self._step = _pick_time_unit(span, 8)
+        self._fmt_pattern = _FMT_FOR_UNIT[self._unit]
+
+    def __call__(self, v):
+        s = _to_epoch(v)
+        if self.d1 == self.d0:
+            return self.r0
+        return self.r0 + (s - self.d0) * (self.r1 - self.r0) / (self.d1 - self.d0)
+
+    def ticks(self, n=8):
+        if self.d1 <= self.d0:
+            return [_from_epoch(self.d0)]
+        span = self.d1 - self.d0
+        unit, step = _pick_time_unit(span, n)
+        self._unit, self._step = unit, step
+        self._fmt_pattern = _FMT_FOR_UNIT[unit]
+        start = _floor_to_unit(_from_epoch(self.d0), unit, step)
+        end = _from_epoch(self.d1)
+        out = []
+        t = start
+        # Break *before* appending past `end` so the tick list stays
+        # bounded by the domain — otherwise the first tick past d1 lands
+        # in tick-label space past the data area's right/bottom edge.
+        for _ in range(1000):
+            if t > end:
+                break
+            if t.timestamp() >= self.d0:
+                out.append(t)
+            t = _advance(t, unit, step)
+        return out
+
+    def format_tick(self, t):
+        if isinstance(t, (datetime.date, datetime.datetime)):
+            if not isinstance(t, datetime.datetime):
+                t = datetime.datetime.combine(t, datetime.time.min, tzinfo=_UTC)
+            return t.strftime(self._fmt_pattern)
+        return _fmt_tick(t)
+
+
+# ---------------------------------------------------------------------------
 # Tick formatting
 # ---------------------------------------------------------------------------
 
@@ -210,6 +381,10 @@ def _fmt_tick(t):
     """Format a tick value: 'g' for typical values, scientific for extremes."""
     if isinstance(t, str):
         return t
+    if isinstance(t, datetime.datetime):
+        return t.strftime("%Y-%m-%d %H:%M")
+    if isinstance(t, datetime.date):
+        return t.strftime("%Y-%m-%d")
     if t == 0:
         return "0"
     a = abs(t)

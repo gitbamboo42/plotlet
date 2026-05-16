@@ -17,6 +17,7 @@ rendering passes None and behaves as before.
 """
 from __future__ import annotations
 
+import datetime
 import html
 import json
 import math
@@ -29,7 +30,9 @@ from ._spec import (
     SPEC, _SIZESPEC, _MARGIN_FLOOR, _FRAME, _GRIDSPEC, _FONTSPEC, _LEGSPEC, _D, _DASH,
 )
 from .draw.colors import _resolve_color, TAB10
-from .scales import _LinearScale, _LogScale, _CategoryScale, _SymlogScale, _PowerScale, _nice_domain, _fmt_tick
+from .scales import (_LinearScale, _LogScale, _CategoryScale, _SymlogScale,
+                      _PowerScale, _TimeScale, _nice_domain, _fmt_tick,
+                      _to_epoch, _coerce_time_lim)
 from .draw.font import _measure_text
 from .draw import text_path, segment
 from .utils import histogram, collect_categories
@@ -71,7 +74,7 @@ class _AxisDescriptor:
 
     `flip=True` means the panel renderer swaps `(r0, r1)` when calling
     `build()`, inverting the axis."""
-    kind: str           # "linear" | "log" | "category" | "symlog" | "power" | "sqrt"
+    kind: str           # "linear" | "log" | "category" | "symlog" | "power" | "sqrt" | "time"
     lo: float = 0.0
     hi: float = 1.0
     cats: list | None = None
@@ -91,6 +94,8 @@ class _AxisDescriptor:
             return _PowerScale(self.lo, self.hi, r0, r1, exponent=self.exponent)
         if self.kind == "sqrt":
             return _PowerScale(self.lo, self.hi, r0, r1, exponent=0.5)
+        if self.kind == "time":
+            return _TimeScale(self.lo, self.hi, r0, r1)
         return _LinearScale(self.lo, self.hi, r0, r1)
 
 
@@ -339,7 +344,10 @@ def _effective_margin(leaf, st=None) -> dict:
 # ---------------------------------------------------------------------------
 
 def _scan_domain(artists, axis):
-    """Collect all values an artist contributes to a given axis ('x' or 'y')."""
+    """Collect all values an artist contributes to a given axis ('x' or 'y').
+
+    `datetime.date` / `datetime.datetime` values are coerced to POSIX seconds
+    (UTC) so the rest of the autoscaling pipeline can stay numeric."""
     lo, hi = math.inf, -math.inf
     for a in artists:
         spec = get_artist(a["type"])
@@ -352,9 +360,27 @@ def _scan_domain(artists, axis):
         for v in vals:
             if v is None: continue
             if isinstance(v, float) and math.isnan(v): continue
+            if isinstance(v, (datetime.date, datetime.datetime)):
+                v = _to_epoch(v)
             if v < lo: lo = v
             if v > hi: hi = v
     return lo, hi
+
+
+def _is_temporal_axis(artists, axis):
+    """True when the first non-None value an artist contributes on `axis`
+    is a `datetime.date` or `datetime.datetime`. Mirrors the
+    `_is_categorical_axis` first-value-wins rule."""
+    for a in artists:
+        spec = get_artist(a["type"])
+        if spec is None: continue
+        fn = spec.xdomain if axis == "x" else spec.ydomain
+        vals = fn(a)
+        if vals is None: continue
+        for v in vals:
+            if v is None: continue
+            return isinstance(v, (datetime.date, datetime.datetime))
+    return False
 
 
 def _resolve_tick_formatter(user_fmt, scale):
@@ -576,14 +602,17 @@ def _x_descriptor(st) -> _AxisDescriptor:
         padding = _D["category_padding"] if st["x_padding"] is None else st["x_padding"]
         return _AxisDescriptor(kind="category", cats=cats, padding=padding)
 
+    is_time = st["xscale"] == "time" or _is_temporal_axis(artists, "x")
     x_lo, x_hi = _scan_domain(artists, "x")
     x_tight = _axis_is_tight(artists, "x")
     x_force_zero = _any_artist_force_zero(artists, "x")
-    x_min, x_max = _resolve_domain(x_lo, x_hi, st["xlim"], st["xscale"],
+    xlim = _coerce_time_lim(st["xlim"]) if is_time else st["xlim"]
+    x_scale_kind = "time" if is_time else st["xscale"]
+    x_min, x_max = _resolve_domain(x_lo, x_hi, xlim, x_scale_kind,
                                     force_zero=x_force_zero,
                                     tight=x_tight,
                                     expand=_resolve_expand(st["x_expand"], x_tight, "x"))
-    return _AxisDescriptor(kind=st["xscale"], lo=x_min, hi=x_max,
+    return _AxisDescriptor(kind=x_scale_kind, lo=x_min, hi=x_max,
                            flip=st["x_reverse"],
                            linthresh=st["x_linthresh"],
                            exponent=st["x_exponent"])
@@ -648,14 +677,17 @@ def _y_descriptor(st) -> _AxisDescriptor:
         padding = _D["category_padding"] if st["y_padding"] is None else st["y_padding"]
         return _AxisDescriptor(kind="category", cats=cats, padding=padding)
 
+    is_time = st["yscale"] == "time" or _is_temporal_axis(artists, "y")
     force_zero = _any_artist_force_zero(artists, "y")
     y_lo, y_hi = _scan_domain(artists, "y")
     y_tight = _axis_is_tight(artists, "y")
-    y_min, y_max = _resolve_domain(y_lo, y_hi, st["ylim"], st["yscale"],
+    ylim = _coerce_time_lim(st["ylim"]) if is_time else st["ylim"]
+    y_scale_kind = "time" if is_time else st["yscale"]
+    y_min, y_max = _resolve_domain(y_lo, y_hi, ylim, y_scale_kind,
                                     force_zero=force_zero,
                                     tight=y_tight,
                                     expand=_resolve_expand(st["y_expand"], y_tight, "y"))
-    return _AxisDescriptor(kind=st["yscale"], lo=y_min, hi=y_max,
+    return _AxisDescriptor(kind=y_scale_kind, lo=y_min, hi=y_max,
                            flip=_any_artist_flips_y(artists) or st["y_reverse"],
                            linthresh=st["y_linthresh"],
                            exponent=st["y_exponent"])
@@ -683,14 +715,17 @@ def _x_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
             cats = _artist_axis_order(all_artists, "x") or collect_categories(all_artists, "x")
         padding = _D["category_padding"] if anchor["x_padding"] is None else anchor["x_padding"]
         return _AxisDescriptor(kind="category", cats=cats, padding=padding)
+    is_time = anchor["xscale"] == "time" or _is_temporal_axis(all_artists, "x")
     x_lo, x_hi = _scan_domain(all_artists, "x")
     x_tight = _axis_is_tight(all_artists, "x")
     x_force_zero = _any_artist_force_zero(all_artists, "x")
-    x_min, x_max = _resolve_domain(x_lo, x_hi, anchor["xlim"], anchor["xscale"],
+    xlim = _coerce_time_lim(anchor["xlim"]) if is_time else anchor["xlim"]
+    x_scale_kind = "time" if is_time else anchor["xscale"]
+    x_min, x_max = _resolve_domain(x_lo, x_hi, xlim, x_scale_kind,
                                     force_zero=x_force_zero,
                                     tight=x_tight,
                                     expand=_resolve_expand(anchor["x_expand"], x_tight, "x"))
-    return _AxisDescriptor(kind=anchor["xscale"], lo=x_min, hi=x_max,
+    return _AxisDescriptor(kind=x_scale_kind, lo=x_min, hi=x_max,
                            flip=anchor["x_reverse"],
                            linthresh=anchor["x_linthresh"],
                            exponent=anchor["x_exponent"])
@@ -714,14 +749,17 @@ def _y_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
             cats = _artist_axis_order(all_artists, "y") or collect_categories(all_artists, "y")
         padding = _D["category_padding"] if anchor["y_padding"] is None else anchor["y_padding"]
         return _AxisDescriptor(kind="category", cats=cats, padding=padding)
+    is_time = anchor["yscale"] == "time" or _is_temporal_axis(all_artists, "y")
     force_zero = _any_artist_force_zero(all_artists, "y")
     y_lo, y_hi = _scan_domain(all_artists, "y")
     y_tight = _axis_is_tight(all_artists, "y")
-    y_min, y_max = _resolve_domain(y_lo, y_hi, anchor["ylim"], anchor["yscale"],
+    ylim = _coerce_time_lim(anchor["ylim"]) if is_time else anchor["ylim"]
+    y_scale_kind = "time" if is_time else anchor["yscale"]
+    y_min, y_max = _resolve_domain(y_lo, y_hi, ylim, y_scale_kind,
                                     force_zero=force_zero,
                                     tight=y_tight,
                                     expand=_resolve_expand(anchor["y_expand"], y_tight, "y"))
-    return _AxisDescriptor(kind=anchor["yscale"], lo=y_min, hi=y_max,
+    return _AxisDescriptor(kind=y_scale_kind, lo=y_min, hi=y_max,
                            flip=_any_artist_flips_y(all_artists) or anchor["y_reverse"],
                            linthresh=anchor["y_linthresh"],
                            exponent=anchor["y_exponent"])

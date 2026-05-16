@@ -9,6 +9,7 @@ The diff/update/gallery plumbing lives in `_runner.py`.
 """
 from __future__ import annotations
 
+import datetime
 import math
 import random
 import sys
@@ -780,6 +781,28 @@ def chart_tick_format_callable():
     return c
 
 
+def chart_time_axis_dates():
+    # Auto-detect: date values on x → time scale, calendar-aligned ticks.
+    dates = [datetime.date(2024, 1, 1) + datetime.timedelta(days=30 * i) for i in range(12)]
+    vals  = [10, 12, 9, 15, 18, 22, 25, 21, 17, 14, 12, 11]
+    c = pt.chart(data_width=400, data_height=180,
+                 title="2024 monthly units", ylabel="units", grid=True)
+    c.line(dates, vals, marker="o")
+    return c
+
+
+def chart_time_axis_hours():
+    # Hour-resolution datetimes on the y-axis — labels stack vertically so a
+    # full day's worth of "HH:MM" ticks have room without rotation.
+    base = datetime.datetime(2024, 6, 1, 0, 0, tzinfo=datetime.timezone.utc)
+    times = [base + datetime.timedelta(hours=i) for i in range(0, 25, 2)]
+    vals  = [math.sin(i / 4) * 5 + 10 for i in range(len(times))]
+    c = pt.chart(data_width=220, data_height=320,
+                 title="signal over a day", xlabel="value", ylabel="time (UTC)")
+    c.line(vals, times)
+    return c
+
+
 PLOTS = {
     "table":               chart_table,
     "hue":                 chart_hue,
@@ -826,6 +849,8 @@ PLOTS = {
     "dendrogram_labeled":  chart_dendrogram_labeled,
     "tick_format_string":  chart_tick_format_string,
     "tick_format_callable": chart_tick_format_callable,
+    "time_axis_dates":     chart_time_axis_dates,
+    "time_axis_hours":     chart_time_axis_hours,
     "scatter_size":        chart_scatter_size,
     "scatter_size_style_hue": chart_scatter_size_style_hue,
     "facet_scatter":       chart_facet_scatter,

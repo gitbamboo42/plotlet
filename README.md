@@ -43,11 +43,13 @@ pip install plotlet
 
 Pass at construction or as chained setters:
 
-`title`, `xlabel`, `ylabel`, `xlim=(a, b)`, `ylim=(a, b)`, `xscale="linear"|"log"|"category"|"symlog"|"power"|"sqrt"`, `yscale=...`, `grid=True/False`, `legend=True/False`, `clip=True/False`, `data_width`, `data_height`. Sizes accept bare pixels (`400`) or unit-suffixed strings (`"4in"`, `"10cm"`, `"100mm"`, `"72pt"`). `"symlog"` accepts `linthresh=` (default `1.0`) to size the linear region around zero; `"power"` accepts `exponent=`. `"sqrt"` is shorthand for `"power"` with `exponent=0.5`. `clip=False` lets artists bleed past the data area into the margin space; default `True` clips at the data boundary so off-axis data can't paint over tick labels.
+`title`, `xlabel`, `ylabel`, `xlim=(a, b)`, `ylim=(a, b)`, `xscale="linear"|"log"|"category"|"symlog"|"power"|"sqrt"|"time"`, `yscale=...`, `grid=True/False`, `legend=True/False`, `clip=True/False`, `data_width`, `data_height`. Sizes accept bare pixels (`400`) or unit-suffixed strings (`"4in"`, `"10cm"`, `"100mm"`, `"72pt"`). `"symlog"` accepts `linthresh=` (default `1.0`) to size the linear region around zero; `"power"` accepts `exponent=`. `"sqrt"` is shorthand for `"power"` with `exponent=0.5`. `clip=False` lets artists bleed past the data area into the margin space; default `True` clips at the data boundary so off-axis data can't paint over tick labels.
 
 The data region is the user-facing primitive — the canvas grows to fit titles and tick labels. To target a specific SVG canvas, chain `.fit(canvas_width=…, canvas_height=…)` after composing.
 
 String-valued data on either axis auto-switches to a categorical scale (alphabetical by default). `c.xscale("category", order=[...], padding=0)` for explicit ordering; `padding=0` makes bands contiguous (heatmap-track look).
+
+`datetime.date` / `datetime.datetime` values auto-switch to a time scale: tick positions snap to calendar boundaries (year, month, day, hour, minute, second) at a resolution matching the axis span, and labels format accordingly. `c.xscale("time")` forces the time scale when data is already epoch-seconds floats; `xlim` accepts datetime or epoch-seconds endpoints.
 
 Tick overrides: `c.xticks([0, 5, 10], ["A","B","C"], rotation=45, fontsize=12, direction="out", marks=False)`. Pass `[]` to hide. `yticks(...)` same shape. `format="{:.0%}"` or `format=lambda v: f"${v/1000:.0f}K"` formats auto-generated tick labels — string and callable both work; explicit labels still override. `minor=True` adds auto-positioned minor ticks (5 per major-gap on linear scales; sub-decade on log); `minor=[v1, v2, ...]` for explicit positions. Density overrides: `step=0.25` forces a fixed spacing; `count=4` requests roughly that many major ticks (the nice-numbers algorithm still picks the actual values).
 
