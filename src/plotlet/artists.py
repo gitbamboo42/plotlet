@@ -14,6 +14,7 @@ from .draw.colors import _resolve_color
 from .draw import (text_path, marker, op,
                     segment, rect as draw_rect, path as draw_path,
                     polygon as draw_polygon, errorbar_v, errorbar_h)
+from .draw.font import _measure_text
 from .utils import to_list, to_list_2d, histogram
 
 
@@ -403,6 +404,42 @@ def _artist_imshow(a, xs_, ys_, col):
 _HA_TO_ANCHOR = {"left": "start", "center": "middle", "right": "end"}
 
 
+def _resolve_bbox(bbox):
+    """Normalize a `bbox=` value into a dict (or None to skip).
+    `True` → default white-with-light-border background; dict → used
+    as-is with sensible per-key defaults."""
+    if bbox is None or bbox is False:
+        return None
+    if bbox is True:
+        bbox = {}
+    return {
+        "facecolor": bbox.get("facecolor", "#ffffff"),
+        "edgecolor": bbox.get("edgecolor", "none"),
+        "pad":       float(bbox.get("pad", 3.0)),
+        "alpha":     float(bbox.get("alpha", 0.85)),
+        "stroke_width": float(bbox.get("linewidth", 0.6)),
+    }
+
+
+def _text_bbox_rect(s, x, y_baseline, fontsize, anchor, bb):
+    """Emit the rectangle that sits behind a text label. `(x, y_baseline)`
+    is the same anchor SVG `text_path` uses; we recover the bounding box
+    from the anchor offsets plus the measured glyph width."""
+    w = _measure_text(s, fontsize)
+    if anchor == "middle":   rx = x - w / 2
+    elif anchor == "end":    rx = x - w
+    else:                    rx = x
+    # DejaVu ascent ≈ 0.78 * fontsize, descent ≈ 0.22.
+    ry = y_baseline - fontsize * 0.78
+    rh = fontsize * 1.0
+    pad = bb["pad"]
+    return draw_rect(rx - pad, ry - pad, w + 2 * pad, rh + 2 * pad,
+                      fill=bb["facecolor"],
+                      stroke=bb["edgecolor"] if bb["edgecolor"] != "none" else None,
+                      stroke_width=bb["stroke_width"],
+                      alpha=bb["alpha"])
+
+
 def _artist_annotate(a, xs_, ys_, col):
     """Text label at `xytext`, optionally connected to `xy` by an arrow.
 
@@ -453,7 +490,11 @@ def _artist_annotate(a, xs_, ys_, col):
             y2 = base_cy - perp_y * half
             out.append(f'<path d="M{px_xy:.2f},{py_xy:.2f}L{x1:.2f},{y1:.2f}'
                        f'L{x2:.2f},{y2:.2f}Z" fill="{color}"/>')
-    out.append(text_path(a["text"], px_tx, py_tx + va_offset,
+    bb = _resolve_bbox(opts.get("bbox"))
+    text_y = py_tx + va_offset
+    if bb is not None:
+        out.append(_text_bbox_rect(a["text"], px_tx, text_y, fontsize, anchor, bb))
+    out.append(text_path(a["text"], px_tx, text_y,
                           fontsize, anchor=anchor, color=color))
     return "".join(out)
 
@@ -480,6 +521,7 @@ def _artist_text(a, xs_, ys_, col):
         va_offset = 0.0
     else:  # baseline
         va_offset = 0.0
+    bb = _resolve_bbox(opts.get("bbox"))
     out = []
     for x, y, s in zip(a["xs"], a["ys"], a["labels"]):
         if s is None or s == "":
@@ -488,6 +530,8 @@ def _artist_text(a, xs_, ys_, col):
         py = ys_(y) + dy + va_offset
         if not (math.isfinite(px) and math.isfinite(py)):
             continue
+        if bb is not None:
+            out.append(_text_bbox_rect(str(s), px, py, fontsize, anchor, bb))
         out.append(text_path(str(s), px, py, fontsize, anchor=anchor, color=color))
     return "".join(out)
 

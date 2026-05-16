@@ -541,6 +541,22 @@ def chart_long_rotated_xticks():
     return c
 
 
+def chart_text_bbox():
+    # Text labels with a background box — readable over dense data.
+    xs = [i * 0.1 for i in range(120)]
+    ys = [math.sin(x * 3) * math.exp(-x * 0.1) for x in xs]
+    c = pt.chart(data_width=420, data_height=200, title="text bbox",
+                 xlabel="t", ylabel="y")
+    c.line(xs, ys)
+    c.text(2.0, 0.5, "plain", fontsize=12)
+    c.text(4.0, 0.5, "on white", fontsize=12, bbox=True)
+    c.text(6.0, 0.5, "tinted", fontsize=12,
+           bbox={"facecolor": "#ffe", "edgecolor": "#888", "pad": 4, "alpha": 0.95})
+    c.annotate("peak", xy=(xs[3], ys[3]), xytext=(0.6, 0.85),
+               bbox={"facecolor": "#fff", "edgecolor": "#555", "pad": 3})
+    return c
+
+
 def chart_annotate():
     # Text label + arrow to a data point. Both endpoints in data coords.
     xs = [i * 0.2 for i in range(40)]
@@ -772,6 +788,7 @@ PLOTS = {
     "ticks_step":          chart_ticks_step,
     "ticks_count":         chart_ticks_count,
     "annotate":            chart_annotate,
+    "text_bbox":           chart_text_bbox,
 }
 
 
