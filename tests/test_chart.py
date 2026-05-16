@@ -541,6 +541,24 @@ def chart_long_rotated_xticks():
     return c
 
 
+def chart_minor_ticks_linear():
+    c = pt.chart(data_width=400, data_height=180,
+                 title="minor ticks", xlabel="x", ylabel="y", grid=True)
+    c.line([0, 1, 2, 3, 4, 5], [0, 1, 4, 9, 16, 25], marker="o")
+    c.xticks(minor=True)
+    c.yticks(minor=True)
+    return c
+
+
+def chart_minor_ticks_log():
+    c = pt.chart(data_width=400, data_height=180,
+                 title="minor ticks log", xlabel="freq", ylabel="amp")
+    c.line([1, 10, 100, 1000, 10000], [1, 5, 12, 25, 60], marker="o")
+    c.xscale("log")
+    c.xticks(minor=True)
+    return c
+
+
 def chart_reverse_y():
     # Reversed y axis: classic oceanography depth profile (0 on top).
     times = list(range(8))
@@ -716,6 +734,8 @@ PLOTS = {
     "symlog_x":            chart_symlog_x,
     "sqrt_y":              chart_sqrt_y,
     "reverse_y":           chart_reverse_y,
+    "minor_ticks_linear":  chart_minor_ticks_linear,
+    "minor_ticks_log":     chart_minor_ticks_log,
 }
 
 

@@ -160,6 +160,7 @@ def _record_ticks(st, axis, args, kw):
     if "direction" in kw: st[f"{axis}_direction"] = kw["direction"]
     if "marks" in kw:     st[f"{axis}_marks"]     = bool(kw["marks"])
     if "format" in kw:    st[f"{axis}_format"]    = kw["format"]
+    if "minor" in kw:     st[f"{axis}_minor"]     = kw["minor"]
     # Per-side opt-in for the secondary tick side: xticks(top=True) on the
     # x-axis, yticks(right=True) on the y-axis. Both default off so the
     # standard look is bottom + left only.
@@ -238,11 +239,11 @@ def _replay(calls):
         "x_ticks": None, "x_labels": None, "x_rotation": 0, "x_fontsize": None,
         "x_direction": _FRAME["tick_direction"], "x_marks": True,
         "x_top":   _FRAME["tick_top"],
-        "x_format": None,
+        "x_format": None, "x_minor": None,
         "y_ticks": None, "y_labels": None, "y_rotation": 0, "y_fontsize": None,
         "y_direction": _FRAME["tick_direction"], "y_marks": True,
         "y_right": _FRAME["tick_right"],
-        "y_format": None,
+        "y_format": None, "y_minor": None,
         "spine_top": _FRAME["spine_top"], "spine_right": _FRAME["spine_right"],
         "spine_bottom": _FRAME["spine_bottom"], "spine_left": _FRAME["spine_left"],
         # Per-side color/width overrides; None = inherit spec.json frame defaults.
@@ -362,6 +363,44 @@ def _resolve_tick_formatter(user_fmt, scale):
         f"xticks/yticks(format=) expects a format string or a callable; "
         f"got {type(user_fmt).__name__}"
     )
+
+
+def _auto_minor_ticks(scale, major_ticks):
+    """Default minor-tick positions for `scale`. Linear-shaped scales:
+    4 subdivisions between adjacent majors; log: integer multipliers
+    (2..9) within each decade."""
+    kind = type(scale).__name__
+    out = []
+    if kind == "_LogScale":
+        a = math.floor(scale.l0)
+        b = math.ceil(scale.l1)
+        for k in range(int(a), int(b) + 1):
+            decade = 10 ** k
+            for m in range(2, 10):
+                v = m * decade
+                if scale.d0 <= v <= scale.d1:
+                    out.append(v)
+        return out
+    if len(major_ticks) < 2:
+        return []
+    nums = [float(t) for t in major_ticks]
+    for i in range(len(nums) - 1):
+        a, b = nums[i], nums[i + 1]
+        step = (b - a) / 5
+        for j in range(1, 5):
+            out.append(a + step * j)
+    return out
+
+
+def _resolve_minor_ticks(user_minor, scale, major_ticks):
+    """Map the user's `minor=` setting to a list of minor positions.
+    None/False → none; True → auto from `_auto_minor_ticks`; sequence →
+    use as-is."""
+    if user_minor is None or user_minor is False:
+        return []
+    if user_minor is True:
+        return _auto_minor_ticks(scale, major_ticks)
+    return list(user_minor)
 
 
 def _normalize_expand(args):
@@ -1109,6 +1148,30 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             parts.append(_rotated_text(str(lbl), x, ih + _FRAME["tick_length"] + _FRAME["tick_pad"] + 8,
                                        x_size, x_rot, axis="x"))
 
+    # Minor ticks — half-length, no labels. Emit only when the user
+    # opted in via xticks(minor=True) or xticks(minor=[...]).
+    x_minor = _resolve_minor_ticks(st["x_minor"], x_scale, x_ticks)
+    if x_minor and x_marks:
+        minor_len = _FRAME["tick_length"] * 0.55
+        for t in x_minor:
+            x = x_scale(t)
+            if not math.isfinite(x):
+                continue
+            if st["spine_bottom"]:
+                col, sw = _side_stroke("bottom")
+                if x_dir == "in":      y1, y2 = ih, ih - minor_len
+                elif x_dir == "out":   y1, y2 = ih, ih + minor_len
+                else:                  y1, y2 = ih + minor_len, ih - minor_len
+                parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{y1}" y2="{y2}" '
+                             f'stroke="{col}" stroke-width="{sw}"/>')
+            if st["spine_top"] and st["x_top"]:
+                col, sw = _side_stroke("top")
+                if x_dir == "in":      y1, y2 = 0, minor_len
+                elif x_dir == "out":   y1, y2 = 0, -minor_len
+                else:                  y1, y2 = -minor_len, minor_len
+                parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{y1}" y2="{y2}" '
+                             f'stroke="{col}" stroke-width="{sw}"/>')
+
     # y ticks + labels
     for t, lbl in zip(y_ticks, y_labels):
         y = y_scale(t)
@@ -1125,6 +1188,28 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
                              f'stroke="{col}" stroke-width="{sw}"/>')
         if not suppress_yt:
             parts.append(_rotated_text(str(lbl), y_label_x, y + 4, y_size, y_rot, axis="y"))
+
+    y_minor = _resolve_minor_ticks(st["y_minor"], y_scale, y_ticks)
+    if y_minor and y_marks:
+        minor_len = _FRAME["tick_length"] * 0.55
+        for t in y_minor:
+            y = y_scale(t)
+            if not math.isfinite(y):
+                continue
+            if st["spine_left"]:
+                col, sw = _side_stroke("left")
+                if y_dir == "in":      x1, x2 = 0, minor_len
+                elif y_dir == "out":   x1, x2 = 0, -minor_len
+                else:                  x1, x2 = -minor_len, minor_len
+                parts.append(f'<line x1="{x1}" x2="{x2}" y1="{y:.2f}" y2="{y:.2f}" '
+                             f'stroke="{col}" stroke-width="{sw}"/>')
+            if st["spine_right"] and st["y_right"]:
+                col, sw = _side_stroke("right")
+                if y_dir == "in":      x1, x2 = iw, iw - minor_len
+                elif y_dir == "out":   x1, x2 = iw, iw + minor_len
+                else:                  x1, x2 = iw + minor_len, iw - minor_len
+                parts.append(f'<line x1="{x1}" x2="{x2}" y1="{y:.2f}" y2="{y:.2f}" '
+                             f'stroke="{col}" stroke-width="{sw}"/>')
 
     # xlabel / ylabel / title live in margin space; drop when that margin
     # is collapsed against a joined neighbor.
