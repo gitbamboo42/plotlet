@@ -541,6 +541,15 @@ def chart_long_rotated_xticks():
     return c
 
 
+def chart_sqrt_y():
+    # sqrt scale on y compresses large counts while keeping small ones visible.
+    c = pt.chart(data_width=320, data_height=180,
+                 title="sqrt y", xlabel="bin", ylabel="count")
+    c.bar(["A", "B", "C", "D", "E", "F", "G"], [1, 9, 25, 49, 100, 256, 484])
+    c.yscale("sqrt")
+    return c
+
+
 def chart_symlog_x():
     # Symlog on x: spans both signs across many orders of magnitude, with
     # a linear band around 0. Volcano-style domains.
@@ -694,6 +703,7 @@ PLOTS = {
     "facet_scatter":       chart_facet_scatter,
     "facet_wrap_two_rows": chart_facet_wrap_two_rows,
     "symlog_x":            chart_symlog_x,
+    "sqrt_y":              chart_sqrt_y,
 }
 
 

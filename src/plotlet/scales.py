@@ -79,6 +79,42 @@ class _LogScale:
         return [10 ** k for k in range(int(a), int(b) + 1) if self.d0 <= 10 ** k <= self.d1]
 
 
+class _PowerScale:
+    """Power-transform scale: `t(x) = sign(x) * |x|**exponent`.
+
+    `exponent < 1` (typical 0.5 for square-root) compresses large values
+    and spreads small ones — useful for count data, areas, intensities.
+    Negative inputs are mapped through `sign * |x|**exponent` so the scale
+    works on both signs (matches d3 `scalePow`).
+    """
+
+    def __init__(self, d0, d1, r0, r1, exponent=0.5):
+        if exponent <= 0:
+            raise ValueError("power scale exponent must be > 0")
+        self.exponent = float(exponent)
+        self.d0, self.d1 = d0, d1
+        self.r0, self.r1 = r0, r1
+        self.t0 = self._fwd(d0)
+        self.t1 = self._fwd(d1)
+
+    def _fwd(self, x):
+        if x >= 0:
+            return x ** self.exponent
+        return -((-x) ** self.exponent)
+
+    def __call__(self, v):
+        t = self._fwd(v)
+        if self.t1 == self.t0:
+            return self.r0
+        return self.r0 + (t - self.t0) * (self.r1 - self.r0) / (self.t1 - self.t0)
+
+    def ticks(self, n=8):
+        """Ticks chosen via the linear nice-numbers algorithm on the data
+        domain — the algorithm picks human-readable values (0, 25, 100, …)
+        that happen to lie at non-uniform pixel positions on a sqrt axis."""
+        return _nice_ticks(self.d0, self.d1, n)
+
+
 class _SymlogScale:
     """Symmetric log: linear inside [-linthresh, +linthresh], log outside.
 

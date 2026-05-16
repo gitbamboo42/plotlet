@@ -43,7 +43,7 @@ pip install plotlet
 
 Pass at construction or as chained setters:
 
-`title`, `xlabel`, `ylabel`, `xlim=(a, b)`, `ylim=(a, b)`, `xscale="linear"|"log"|"category"|"symlog"`, `yscale=...`, `grid=True/False`, `legend=True/False`, `data_width`, `data_height`. Sizes accept bare pixels (`400`) or unit-suffixed strings (`"4in"`, `"10cm"`, `"100mm"`, `"72pt"`). `"symlog"` accepts `linthresh=` (default `1.0`) to size the linear region around zero.
+`title`, `xlabel`, `ylabel`, `xlim=(a, b)`, `ylim=(a, b)`, `xscale="linear"|"log"|"category"|"symlog"|"power"|"sqrt"`, `yscale=...`, `grid=True/False`, `legend=True/False`, `data_width`, `data_height`. Sizes accept bare pixels (`400`) or unit-suffixed strings (`"4in"`, `"10cm"`, `"100mm"`, `"72pt"`). `"symlog"` accepts `linthresh=` (default `1.0`) to size the linear region around zero; `"power"` accepts `exponent=`. `"sqrt"` is shorthand for `"power"` with `exponent=0.5`.
 
 The data region is the user-facing primitive — the canvas grows to fit titles and tick labels. To target a specific SVG canvas, chain `.fit(canvas_width=…, canvas_height=…)` after composing.
 
