@@ -1,27 +1,15 @@
 # Extending plotlet
 
-Adding a custom plot type is a 3-step recipe. You write three small functions,
-bundle them into an `ArtistSpec`, and hand it to `add_artist(...)`. After
-that, `c.<your_name>(...)` Just Works on any `Chart` — autoscaling, gridlines,
-color cycling, and the legend integrate for free.
-
-No edits to `core.py`. No monkey-patching of `Chart`. Custom artists live in
-your project (or in [`src/plotlet/recipes/`](../src/plotlet/recipes/) as
-reference), not upstream.
-
-> If your custom plot is generally useful, **publish it from your own project**;
-> see [`PHILOSOPHY.md`](PHILOSOPHY.md) for why we don't accept new plot types
-> into the core.
+Adding a custom plot type is a 3-step recipe: write three small functions,
+bundle them into an `ArtistSpec`, hand it to `add_artist(...)`. After that,
+`c.<your_name>(...)` Just Works on any `Chart` — autoscaling, gridlines,
+color cycling, and the legend integrate for free. No edits to `core.py`,
+no monkey-patching. Custom artists live in your project, or in
+[`src/plotlet/recipes/`](../src/plotlet/recipes/) as reference.
 
 ---
 
 ## The three steps
-
-The `draw` callback is where the SVG actually gets produced. Use the
-primitives in [`plotlet.draw`](../src/plotlet/draw/__init__.py) — they emit
-SVG at pixel coordinates, match the built-in look, and stay byte-stable as
-plotlet evolves. Hand-rolled `<line>`/`<rect>` f-strings work too, but the
-helpers are shorter and you inherit any future format changes for free.
 
 ```python
 import plotlet as pt
@@ -30,8 +18,8 @@ from plotlet.draw import segment, circle
 
 
 # 1. record(args, kwargs) -> dict
-#    Turn the positional/keyword args from c.<name>(...) into the artist
-#    dict that gets stored in Chart._calls. Pure data — no scales yet.
+#    Turn c.<name>(...) args into the artist dict stored in Chart._calls.
+#    Pure data — no scales yet.
 def my_record(args, kw):
     return {"type": "lollipop",
             "xs": to_list(args[0]),
@@ -47,12 +35,7 @@ def my_ydomain(a): return list(a["ys"]) + [0]   # always include 0 for stems
 
 
 # 3. draw(a, ctx) -> str
-#    Emit the SVG fragment for this artist. ctx carries everything you need:
-#      ctx.x_scale, ctx.y_scale     callables: data value -> pixel
-#      ctx.iw, ctx.ih               inner figure width / height (px)
-#      ctx.color                    the assigned color (None for non-cycling)
-#      ctx.defaults                 the spec.json defaults dict
-#      ctx.dash                     linestyle -> SVG dasharray map
+#    Emit the SVG fragment. ctx carries scales, dimensions, color, defaults.
 def my_draw(a, ctx):
     out = []
     y0 = ctx.y_scale(0)
@@ -63,57 +46,47 @@ def my_draw(a, ctx):
     return "".join(out)
 
 
-# Register it. After this line, every Chart has a .lollipop() method.
 pt.add_artist(pt.ArtistSpec(
     name="lollipop",
-    record=my_record,
-    xdomain=my_xdomain,
-    ydomain=my_ydomain,
-    draw=my_draw,
+    record=my_record, xdomain=my_xdomain, ydomain=my_ydomain, draw=my_draw,
 ))
 
-
-# Use it.
 c = pt.chart()
 c.lollipop([1, 2, 3, 4, 5], [3, 7, 2, 9, 4], label="A")
-c.title("Lollipop chart").grid(True).legend(True)
-c.save_svg("out.svg")
+c.title("Lollipop chart").grid(True).legend(True).save_svg("out.svg")
 ```
 
 Worked example: [`src/plotlet/recipes/lollipop.py`](../src/plotlet/recipes/lollipop.py) — basic
-artist plus an optional `legend_swatch` so the legend entry actually
-looks like a tiny lollipop.
+artist plus an optional `legend_swatch` so the legend entry looks like a
+tiny lollipop. Every recipe under [`src/plotlet/recipes/`](../src/plotlet/recipes/)
+is a working reference; skim a couple before writing your own.
 
 ---
 
-## Drawing helpers
+## Drawing helpers — `plotlet.draw`
 
-`plotlet.draw` exposes pixel-coordinate primitives matching the built-in
-look — same float precision, same opacity handling, same dash codes
-(`"--"`, `":"`, `"-."`, or any raw SVG dasharray). Compose them inside
-`draw` with `"".join(...)`; the framework wraps your fragment in a `<g>`
-that carries `data-plotlet-*` attrs.
+Pixel-coordinate primitives. Compose them in `draw` with `"".join(...)`; the
+framework wraps your fragment in a `<g>` that carries `data-plotlet-*` attrs.
 
 | Helper | What it emits |
 |---|---|
 | `segment(x1, y1, x2, y2, *, color, width, dash, alpha)` | One `<line>`. |
-| `rect(x, y, w, h, *, fill, stroke, stroke_width, alpha)` | One `<rect>`. Pass `fill=None` (default) for outline-only. |
-| `circle(cx, cy, r, *, fill, stroke, stroke_width, alpha)` | One `<circle>`. Pass `fill=` or `stroke=` (or both). |
-| `path(d, *, fill, stroke, stroke_width, dash, alpha)` | One `<path>` with an arbitrary `d` string. Use when `polyline` / `polygon` aren't shaped right. |
-| `polyline(points, *, color, width, dash, alpha)` | Stroked polyline through a list of `(x, y)` tuples. No fill. |
-| `polygon(points, *, fill, stroke, stroke_width, alpha)` | Closed shape (auto-trailing `Z`) through a list of `(x, y)` tuples. |
-| `errorbar_v(x, y_lo, y_hi, *, capsize, color, width, alpha)` | Vertical bar with two horizontal caps. `capsize=0` drops the caps. |
-| `errorbar_h(y, x_lo, x_hi, *, capsize, color, width, alpha)` | Horizontal bar with two vertical caps. |
-| `marker(marker, x, y, size, col, alpha)` | One of `"o" "s" "^" "v" "x" "+"` at pixel `(x, y)`. |
+| `rect(x, y, w, h, *, fill, stroke, stroke_width, alpha, fill_alpha, stroke_alpha)` | One `<rect>`. `fill=None` (default) → outline-only. |
+| `circle(cx, cy, r, *, fill, stroke, stroke_width, alpha, fill_alpha, stroke_alpha)` | One `<circle>`. |
+| `path(d, *, fill, stroke, stroke_width, dash, alpha, fill_alpha, stroke_alpha)` | `<path>` with arbitrary `d`. Use when polyline / polygon aren't shaped right. |
+| `polyline(points, *, color, width, dash, alpha)` | Stroked polyline through `[(x, y), …]`. No fill. |
+| `polygon(points, *, fill, stroke, stroke_width, alpha, fill_alpha, stroke_alpha)` | Closed shape (auto-trailing `Z`) through `[(x, y), …]`. |
+| `errorbar_v(x, y_lo, y_hi, *, capsize, color, width, alpha)` | Vertical bar with two caps; `capsize=0` drops the caps. |
+| `errorbar_h(y, x_lo, x_hi, *, capsize, color, width, alpha)` | Horizontal bar with two caps. |
+| `marker(kind, x, y, size, color, alpha)` | One of `"o" "s" "^" "v" "x" "+"` at pixel `(x, y)`. |
 | `text_path(s, x, y, size, anchor, color)` | Text as glyph paths (font-independent across machines). |
-| `op(alpha)` | The `opacity=...` attribute fragment — omitted entirely when `alpha == 1` so output stays lean. |
 
-The recipes under [`src/plotlet/recipes/`](../src/plotlet/recipes/) are the
-canonical worked examples — every one of them uses these helpers and only
-these helpers. Skim a couple before writing your own.
+`dash=` accepts matplotlib codes (`"--"`, `":"`, `"-."`) or a raw SVG
+dasharray (`"6,3"`). `fill_alpha` / `stroke_alpha` override `alpha` per
+channel — leave them `None` for the lean single-`opacity` path.
 
-When no helper fits — Bézier paths, custom SVG elements like `<text>` or
-`<image>`, gradients — drop down to a raw f-string. It's just SVG.
+When no helper fits — Bézier curves, `<text>`, `<image>`, gradients — drop
+to a raw f-string. It's just SVG.
 
 ---
 
@@ -124,11 +97,11 @@ ArtistSpec(
     name: str,
     record: (args, kwargs) -> dict,           # required
     draw: (artist_dict, ctx) -> str,          # required, returns SVG fragment
-    xdomain: (artist_dict) -> Iterable | None  = lambda a: None,
-    ydomain: (artist_dict) -> Iterable | None  = lambda a: None,
+    xdomain: (artist_dict) -> Iterable | None = lambda a: None,
+    ydomain: (artist_dict) -> Iterable | None = lambda a: None,
     layer: "background" | "data" | "foreground" = "data",
     uses_color_cycle: bool = True,
-    default_color: str | None = None,         # used when uses_color_cycle=False
+    default_color: str | None = None,
     legend_swatch: (a, ctx, x0, y_mid) -> str | None = None,
     legend_gradient: (a) -> dict | None = None,
     data_attrs: (a) -> dict | None = None,
@@ -137,66 +110,49 @@ ArtistSpec(
 )
 ```
 
-| Field | Default | When you need it |
-|---|---|---|
-| `xdomain` / `ydomain` | `None` | Set when your artist's data should drive axis limits. Return `None` for decorative artists that just sit on the frame (axhline, axvline). |
-| `layer` | `"data"` | `"background"` for fills and shaded spans (drawn first), `"foreground"` for reference lines (drawn last, on top). Same artist within a layer keeps insertion order. |
-| `uses_color_cycle` | `True` | Set `False` for artists that shouldn't consume a tab10 slot — reflines, image-based artists, anything that picks its own color. Set `default_color` to give it a fallback. |
-| `legend_swatch` | `None` | Provide to draw your own legend entry. Without it, the legend falls back to a colored line in the artist's color. Signature: `(a, ctx, x0, y_mid) -> svg_fragment`. Build it with the same `draw.*` helpers — see `lollipop_legend_swatch`. |
-| `legend_gradient` | `None` | Provide for artists with a continuous color mapping (heatmap-style). Returns `{"kind": "continuous", "cmap": ..., "vmin": ..., "vmax": ...}` so the layout-level legend can render a colorbar. |
-| `data_attrs` | `None` | AI-readable structural attrs. Returned dict keys land on the artist's `<g>` as `data-plotlet-<key>`. Common attrs (type, index, label, color) are added automatically without this field — declare it if you want type-specific attrs (`n`, ranges, marker, …). See [`AI_ATTRS.md`](AI_ATTRS.md). |
-| `axis_order` | `None` | Contribute a canonical order for a categorical axis. Returns `{"x": [...]}` or `{"y": [...]}`. Use when your artist's data has a load-bearing order that alphabetical sorting would destroy (e.g. dendrogram's leaf permutation). The user's explicit `xscale("category", order=...)` still wins. |
-| `frame_defaults` | `None` | Return a list of `(call_name, args, kwargs)` recorded *before* the artist itself. Use for strong conventional defaults — e.g. dendrogram hides all spines. Replay is in order, so user calls made *after* `c.<your_artist>()` still win. Signature: `(args, kwargs) -> list[tuple] \| None`. |
+| Field | When you need it |
+|---|---|
+| `xdomain` / `ydomain` | Your artist's data should drive axis limits. Return `None` for decorative artists (axhline, axvline). |
+| `layer` | `"background"` for fills (drawn first), `"foreground"` for reference lines (drawn last). Default `"data"`. |
+| `uses_color_cycle` | Set `False` for artists that pick their own color (reflines, image artists). Set `default_color` for the fallback. |
+| `legend_swatch` | Provide to draw your own legend entry; without it the legend falls back to a colored line. Signature: `(a, ctx, x0, y_mid) -> svg_fragment`. |
+| `legend_gradient` | For artists with a continuous color mapping. Returns `{"kind": "continuous", "cmap": ..., "vmin": ..., "vmax": ...}`. |
+| `data_attrs` | AI-readable type-specific attrs. Keys land on the artist's `<g>` as `data-plotlet-<key>`. Common attrs (type, index, label, color) are automatic — see [`AI_ATTRS.md`](AI_ATTRS.md). |
+| `axis_order` | Contribute a canonical order for a categorical axis. Returns `{"x": [...]}` / `{"y": [...]}`. Use when ordering is load-bearing (dendrogram leaves). User's explicit `xscale("category", order=...)` still wins. |
+| `frame_defaults` | Return a list of `(call_name, args, kwargs)` recorded *before* your artist. Use for strong defaults (e.g. dendrogram hides all spines). User calls *after* `c.<your_artist>()` still win. |
 
 ---
 
-## RenderContext reference
+## RenderContext
 
-`RenderContext` is the second argument to `draw` and to `legend_swatch`. It
-bundles every piece of render state an artist might need so the call sites
-stay short:
+Second argument to `draw` and `legend_swatch`. Bundles render state so call
+sites stay short.
 
-| Field | Type | Notes |
-|---|---|---|
-| `x_scale`, `y_scale` | callable | `scale(value) -> pixel`. On a categorical axis (bar, or `xscale="category"`/`yscale="category"`) the scale is a `_CategoryScale` returning the band *center*, with `.bandwidth` available — bars subtract `bandwidth/2` for the rect's left edge. |
-| `iw`, `ih` | float | Inner figure width and height in pixels (after margins). |
-| `color` | `str \| None` | The resolved color for this artist. `None` if `uses_color_cycle=False` *and* no `default_color` was set (e.g. `imshow`, which uses a colormap). |
-| `defaults` | dict | The `spec.json` defaults — `linewidth`, `markersize`, `scatter_s`, `refspan_alpha`, etc. Use these instead of hardcoded numbers. |
-| `dash` | dict | Linestyle codes (`"--"`, `":"`, `"-."`) → SVG `stroke-dasharray` strings. The `draw.*` helpers already accept these codes directly via `dash=`. |
+| Field | Notes |
+|---|---|
+| `x_scale`, `y_scale` | `scale(value) -> pixel`. On a categorical axis, returns the band *center*; `.bandwidth` is also available (bars subtract `bandwidth/2` for the rect's left edge). |
+| `iw`, `ih` | Inner figure width / height in pixels (after margins). |
+| `color` | The resolved color for this artist. `None` if `uses_color_cycle=False` and no `default_color` (e.g. `imshow`). |
+| `defaults` | The `spec.json` defaults dict (`linewidth`, `markersize`, `scatter_s`, …). Use these instead of literals. |
+| `dash` | Linestyle codes → SVG `stroke-dasharray` strings. The `draw.*` helpers already accept the codes directly via `dash=`. |
 
 ---
 
-## What goes in the artist dict
+## Artist-dict conventions
 
 Whatever you return from `record(args, kwargs)` ends up in `Chart._calls`
-and is passed to `xdomain`, `ydomain`, and `draw` as `a`. Two conventions:
+and is passed to `xdomain` / `ydomain` / `draw` as `a`. Two conventions:
 
-- **Always set `"type"` to your artist name.** The render layer uses it for
-  the registry lookup and a couple of small special-cases (`force_zero`
-  for bar/hist y-axes, histogram pre-binning).
-- **Always set `"opts"` to the kwargs dict.** Color resolution, label
-  collection (for the legend), `linestyle`, `linewidth`, `alpha`, `marker`,
-  and the rest of plotlet's matplotlib-flavored kwargs all live there.
+- **Always set `"type"` to your artist name** — used for the registry
+  lookup and small special-cases (`force_zero` for bar/hist y, hist
+  pre-binning).
+- **Always set `"opts"` to the kwargs dict** — color resolution, label
+  collection, `linestyle`, `linewidth`, `alpha`, `marker` etc. all live
+  there.
 
 Keys starting with `_` (e.g. `_bins`, `_data`, `_color`) are conventionally
 "computed during render, used during draw" — see how `imshow` and `hist`
 stash pre-processed data in [`builtin_artists.py`](../src/plotlet/builtin_artists.py).
 
----
-
-## Things to keep in mind
-
-- **Use the `draw.*` helpers.** Recipes under `src/plotlet/recipes/` are
-  the working examples; they're short because they don't hand-roll SVG.
-- **Reuse the visual spec.** Don't hardcode colors, font sizes, alphas.
-  Pull from `ctx.defaults` (or import `_D` from `plotlet._spec`) so your
-  artist matches the locked plotlet look.
-- **Respect deferred rendering.** `record` runs early; `draw` runs at
-  `to_svg()` time. Don't compute scales or colors in `record` — they don't
-  exist yet.
-- **No interactivity.** No event handlers, no `<script>`, no animation.
-  Static SVG is what makes plotlet's baseline-image testing possible — see
-  the non-goals section in [`PHILOSOPHY.md`](PHILOSOPHY.md).
-- **Custom plot types don't get added to `core.py`.** Live in your project,
-  or send a recipe to [`src/plotlet/recipes/`](../src/plotlet/recipes/) as
-  a reference for others.
+Respect deferred rendering: `record` runs early, `draw` runs at `to_svg()`
+time. Don't compute scales or colors in `record` — they don't exist yet.

@@ -4,8 +4,8 @@ A theme is a per-chart visual preset — background, spines, ticks, grid,
 font color. Conceptually the same idea as ggplot2's `theme_classic` /
 `theme_minimal` / `theme_dark`. plotlet ships four:
 
-| theme     | look                                                           |
-|-----------|----------------------------------------------------------------|
+| theme     | look                                                                |
+|-----------|---------------------------------------------------------------------|
 | `classic` | white background, black spines on all four sides, no grid (default) |
 | `minimal` | white background, no spines, light dashed gridlines on by default   |
 | `dark`    | dark gray background, light spines, soft grid on by default         |
@@ -37,10 +37,9 @@ b = pt.chart(theme="dark",    title="model").line(xs, fits)
 fig = a | b
 ```
 
-The outer SVG background comes from `figure.background` of whatever
-theme is active at the root render. For `a | b` (an unthemed parent),
-that's `classic` — set a theme on a wrapping chart if you want a
-non-default outer canvas.
+The outer SVG background comes from whatever theme is active at the
+root render. For an unthemed parent like `a | b`, that's `classic` — set
+a theme on a wrapping chart if you want a non-default outer canvas.
 
 ## What a theme controls
 
@@ -67,15 +66,18 @@ The full set of keys a theme can override:
                 "errorbar_capsize": 4 /* … see src/plotlet/spec.json */ },
   "legend":   { "background": "#ffffff", "opacity": 0.92,
                 "swatch_width": 22, "row_height": 16 /* … */ },
-  "linestyles": { "-": null, "--": "6,3", ":": "1,3", "-.": "6,3,1,3" },
-  "colors":   { "tab10": [ "#1f77b4", "..." ],
-                "named": { "blue": "#1f77b4", "k": "#000000", "..." } }
+  "linestyles": { "-": null, "--": "6,3", ":": "1,3", "-.": "6,3,1,3" }
 }
 ```
 
 Any of these can be overridden by a theme. Unspecified keys fall through
 to `classic` — which is just `spec.json` with no overrides. The full
 default spec lives in [`src/plotlet/spec.json`](../src/plotlet/spec.json).
+
+Convention: **palette (`colors.tab10`, `colors.named`) stays orthogonal
+to theme.** Themes change frame chrome; the data palette is for users
+to override at the chart / call level, not via theme. Same split as
+ggplot2's `theme_*` vs `scale_color_*`.
 
 ## Writing your own theme
 
@@ -101,33 +103,14 @@ pt.register_theme("paper", "themes/paper.json")
 `pt.available_themes()` lists everything registered, including the
 built-ins.
 
+> ⚠️ A theme that overrides `size.data_width` / `size.data_height`
+> changes the geometry of every chart that doesn't set its own — most
+> baselines assume the classic dimensions, so use sparingly.
+
 ## How theme application works
 
-Themes are applied via [`active_theme(name)`](../src/plotlet/_spec.py) —
-a context manager that *mutates the inner contents* of the live spec
-dicts (`_D`, `_FRAME`, …) for the duration of one render. Every
-existing module that imported `_D` / `_FRAME` at startup keeps using
-those references; they see the override transparently because we change
-contents, not identities.
-
-`Chart.to_svg()` scans `_calls` for the last `theme(...)` and wraps
-both replay (so `_replay`'s spine-visibility / tick-direction defaults
-pick up the theme) and render under `active_theme`. In layout
-rendering, each leaf's theme is applied independently — the swap is
-restored before the next leaf renders, so themes don't leak between
-panels.
-
-## Limitations
-
-- The outer-SVG background uses whatever theme is active at the root.
-  A parent layout (`a | b`) doesn't currently accept a theme; if you
-  want a dark figure background outside the panel rectangles, set the
-  same theme on every leaf and on the root chart.
-- Themes can't currently change `colors.tab10` and `colors.named` (the
-  data palette). They affect frame chrome only. Treat palette as
-  orthogonal to theme — same way ggplot2 separates `theme_*` from
-  `scale_color_*`.
-- A theme that resizes via `size.data_width` / `size.data_height` will
-  change the geometry of every chart that doesn't pass its own
-  `data_width=` / `data_height=`. Be careful — most baselines assume
-  the classic dimensions.
+`c.theme(name)` records the theme onto the chart's call list. At render
+time, the spec dicts (`_FRAME`, `_D`, …) are mutated in place with the
+theme's overrides for the duration of one render, then restored. In
+layout rendering each leaf's theme is applied independently — themes
+don't leak between panels.

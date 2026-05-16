@@ -4,9 +4,7 @@ A Python library for SVG plots — with multi-panel composition, shared-axis lay
 
 ## What it's for
 
-plotlet is built for **multi-panel scientific figures with custom plot types** — genome tracks, spike rasters, climate stacks, Manhattan plots, phylogenetic trees. The core ships ~5 standard plots plus multi-panel composition (`|`, `/`, `share_x()`).
-
-Custom plot types are a 3-step recipe (`record`, `xdomain`/`ydomain`, `draw`) and live in your own project (or [`src/plotlet/recipes/`](src/plotlet/recipes/)) rather than upstream. See [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) for the full framing.
+plotlet is built for **multi-panel scientific figures with custom plot types** — genome tracks, spike rasters, climate stacks, Manhattan plots, phylogenetic trees. The core ships ~5 standard plots plus multi-panel composition (`|`, `/`, `share_x()`). Custom plot types are a 3-step recipe and live in your own project (or [`src/plotlet/recipes/`](src/plotlet/recipes/)). See [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) for the framing.
 
 ```python
 import plotlet as pt
@@ -30,27 +28,28 @@ pip install plotlet
 
 ## Properties
 
-- **Minimal dependencies.** `fonttools` for font handling. numpy / pandas / polars inputs work transparently if you have them.
-- **Static SVG output.** No interactivity, no animation. Same script → byte-identical SVG.
-- **Cross-machine reproducible.** Bundled DejaVu Sans + text-as-paths means rendering is identical on Linux, macOS, Windows, headless CI.
+- **Minimal dependencies.** `fonttools` for font handling. numpy / pandas / polars inputs work transparently.
+- **Static and reproducible.** No interactivity, no animation. Same script → byte-identical SVG, identical across Linux / macOS / Windows / headless CI (bundled DejaVu Sans + text-as-paths).
 - **Jupyter-native.** `Chart._repr_html_` auto-renders the last expression in a cell.
 - **Compact output.** Each plot is ~50 KB SVG, self-contained.
-- **Compositional.** Multi-panel layouts via `|`, `/`, `pt.grid`; share scales with `(a | b).share_x()` or `pt.grid(..., share_x="col")`; layout-level legend with `pt.legend()` covering both discrete swatches and continuous gradients (the colorbar).
-- **AI-readable.** Every figure ships `data-plotlet-*` attributes describing plot type, axes, scales, ranges, and series labels — readable in one XML parse, no glyph-path OCR. Schema: [docs/AI_ATTRS.md](docs/AI_ATTRS.md).
+- **Compositional.** Multi-panel layouts via `|`, `/`, `pt.grid`; share scales with `(a | b).share_x()` or `pt.grid(..., share_x="col")`; layout-level legend covers both discrete swatches and continuous gradients (the colorbar) via one constructor.
+- **AI-readable.** Every figure ships `data-plotlet-*` attributes describing plot type, axes, scales, ranges, and series labels — readable in one XML parse. Schema: [docs/AI_ATTRS.md](docs/AI_ATTRS.md).
 
 ## API
 
-`pt.chart(data, **opts)` returns a `Chart` bound to a table — any object that supports `data[col_name]` returning an iterable (pandas / polars DataFrames, dict-of-lists, dict-of-arrays). All methods return `self`; `_repr_html_` makes the chart auto-render as the last expression in a Jupyter cell.
+`pt.chart(data, **opts)` returns a `Chart` bound to a table — any object that supports `data[col_name]` returning an iterable (pandas / polars / dict-of-lists / dict-of-arrays). All methods return `self`.
 
 ### Frame options
 
-Pass at construction (`pt.chart(data, title=..., grid=True, ...)`) or as chained setters (`c.title(...)`, etc.):
+Pass at construction or as chained setters:
 
-`title`, `xlabel`, `ylabel`, `xlim=(a, b)`, `ylim=(a, b)`, `xscale="linear"|"log"|"category"` (chained: `c.xscale("category", order=[...], padding=0)`), `yscale=...`, `grid=True/False`, `legend=True/False`, `data_width`, `data_height` (the data region — the figure canvas grows to fit titles, tick labels, and axis labels). Sizes accept bare pixels (`400`) or unit-suffixed strings (`"4in"`, `"10cm"`, `"100mm"`, `"72pt"`). To fit a composition into a target SVG canvas, chain `.fit(canvas_width=…, canvas_height=…)` after composing — it rescales data regions while keeping fonts, spines, and margins at their absolute pixel sizes.
+`title`, `xlabel`, `ylabel`, `xlim=(a, b)`, `ylim=(a, b)`, `xscale="linear"|"log"|"category"`, `yscale=...`, `grid=True/False`, `legend=True/False`, `data_width`, `data_height`. Sizes accept bare pixels (`400`) or unit-suffixed strings (`"4in"`, `"10cm"`, `"100mm"`, `"72pt"`).
 
-String-valued data on either axis (`scatter(["a","b","c"], ...)`, `bar`, …) auto-switches to a categorical scale, alphabetical by default. `padding=0` makes category bands contiguous (heatmap-track look).
+The data region is the user-facing primitive — the canvas grows to fit titles and tick labels. To target a specific SVG canvas, chain `.fit(canvas_width=…, canvas_height=…)` after composing.
 
-Tick customization: `c.xticks([0, 5, 10], ["A","B","C"], rotation=45, fontsize=12, direction="out", marks=False)`. Pass `[]` to hide. `yticks(...)` works the same way.
+String-valued data on either axis auto-switches to a categorical scale (alphabetical by default). `c.xscale("category", order=[...], padding=0)` for explicit ordering; `padding=0` makes bands contiguous (heatmap-track look).
+
+Tick overrides: `c.xticks([0, 5, 10], ["A","B","C"], rotation=45, fontsize=12, direction="out", marks=False)`. Pass `[]` to hide. `yticks(...)` same shape.
 
 ### Mark methods
 
@@ -63,52 +62,42 @@ Tick customization: `c.xticks([0, 5, 10], ["A","B","C"], rotation=45, fontsize=1
 | `.fill_between(x=, y1=, y2=, **opts)` | `color`, `alpha`, `label` |
 | `.axhline(y, **opts)` / `.axvline(x, **opts)` | `color`, `linewidth`, `linestyle`, `alpha`, `label`, axes-fraction `xmin`/`xmax` (or `ymin`/`ymax`) |
 | `.axhspan(ymin, ymax, **opts)` / `.axvspan(xmin, xmax, **opts)` | `color`, `alpha`, `label`, axes-fraction `xmin`/`xmax` (or `ymin`/`ymax`) |
-| `.imshow(data, **opts)` | `cmap` (any matplotlib name, default `"viridis"`), `vmin`, `vmax`, `extent=(left, right, bottom, top)` |
+| `.imshow(data, **opts)` | `cmap` (any of ~180 vendored colormaps, default `"viridis"`), `vmin`, `vmax`, `extent=(left, right, bottom, top)` |
 | `.heatmap(df, **opts)` | `cmap`, `vmin`, `vmax`, `norm`, `center`, `xticklabels`, `yticklabels`, `legend` |
 
-`hue=<col>` (on `.line` / `.scatter`) splits into one call per unique value with auto-labels and tab10 colors. Reference lines and spans default to black; spans use `alpha=0.2`. They're drawn outside the data color cycle and don't participate in autoscaling — they're decorations on the frame, not data.
+`hue=<col>` splits into one call per unique value with auto-labels and tab10 colors. Reference lines / spans default to black, are drawn outside the data color cycle, and don't participate in autoscaling.
 
-`.imshow(data)` renders a 2-D array as a colored grid. Small grids (`nrows × ncols ≤ 10000`) emit one `<rect>` per cell and stay vector-clean at any zoom; larger grids encode as a single base64 PNG and quantize to 256 levels. Image row 0 is rendered at the top of its rectangle; the y axis stays Cartesian (small at bottom). All ~180 matplotlib colormaps are vendored — see `pt.list_colormaps()`.
-
-`.heatmap(df)` is the DataFrame-aware companion to `.imshow`. A pandas DataFrame's `index` becomes the row tick labels and `columns` becomes the column tick labels; row 0 sits at the top. For a plain 2-D array, default labels are integer indices — pass `xticklabels=` / `yticklabels=` to override. Cells render at integer + 0.5 centers on a linear axis, which lines up with scipy's dendrogram leaf positions so a top/left dendrogram pairs cleanly via `share_x` / `share_y`.
+`.imshow` emits one `<rect>` per cell for small grids (`≤10000` cells, vector-clean at any zoom) and a base64 PNG above that. `.heatmap` is the DataFrame-aware companion — `df.index` becomes row labels, `df.columns` becomes column labels; cells render at integer + 0.5 centers so a top/left dendrogram pairs cleanly via `share_x` / `share_y`.
 
 ### Subplots
-
-Compose multi-panel layouts with operators on `Chart`:
 
 ```python
 a | b                  # side-by-side
 a / b                  # stacked
 a | b | c              # left-fold flatten — one row of three, not nested
 
-pt.grid([[a, b],       # 2-D grid; cells may be `None`
+pt.grid([[a, b],       # 2-D grid; cells may be None
          [c, d]])
 
 # Share x or y across panels — collapses the gap between them
-# and unions data ranges; the first leaf in reading order anchors
-# the scale, others are aspect-scaled to match.
-top  = pt.chart()
-main = pt.chart()
-(top / main).share_x()         # vertically stacked, x-axis joined
+# and unions data ranges; the first leaf is the anchor.
+(top / main).share_x()
 
-# Layout-level legend (covers colorbar and discrete swatches in
-# one constructor — geometry follows from the source's color mapping).
+# Layout-level legend — gradient strip for continuous sources,
+# swatch list for discrete, both in one constructor.
 hm = pt.chart(); hm.imshow(matrix, cmap="viridis")
-hm | pt.legend(hm)             # heatmap + colorbar (gradient strip)
+hm | pt.legend(hm)             # heatmap + colorbar
 
-# Multi-source: groups by chart, using each chart's title as
-# section header. `names={chart: "Override"}` renames a header,
-# `names={chart: None}` hides it, `group_by_chart=False` flattens.
-(hm | top) | pt.legend()       # auto-collects from siblings
-parent = a | b; parent.legend()  # sugar for parent | pt.legend()
+# Multi-source — groups by chart, each chart's title as section header.
+parent = (a | b); parent.legend()        # sugar for parent | pt.legend()
 ```
 
-A composed chart owns its children; render the parent (`(a | b).show()` or `.to_svg()` / `.save_svg(...)`). Calling `.show()` on a child raises. See [`docs/SUBPLOTS.md`](docs/SUBPLOTS.md) for the design rationale.
+A composed chart owns its children; render the parent. Calling `.show()` on a child raises. Full reference: [docs/SUBPLOTS.md](docs/SUBPLOTS.md).
 
 ### Render / save
 
 ```python
-c.show()                     # explicit display() inside a cell
+c.show()                     # explicit display() in a cell
 c.to_svg()                   # raw SVG string
 c.save_svg("plot.svg")       # SVG file
 c.write_html("plot.html")    # standalone HTML
@@ -116,14 +105,14 @@ c.write_html("plot.html")    # standalone HTML
 
 ### Color shortcuts
 
-- `"C0"`–`"C9"` → tab10 (matches matplotlib)
+- `"C0"`–`"C9"` → tab10 palette
 - Named: `"blue"`, `"orange"`, `"green"`, `"red"`, `"purple"`, `"brown"`, `"pink"`, `"gray"`, `"olive"`, `"cyan"`
 - Single-letter: `"k"`, `"w"`, `"b"`, `"g"`, `"r"`
 - Any hex / CSS color string passes through
 
 ### Themes
 
-Per-chart visual presets — background, spines, ticks, grid, font color. Ships four:
+Per-chart visual presets. Ships four:
 
 | `classic` (default) | `minimal` | `dark` | `void` |
 | --- | --- | --- | --- |
@@ -138,7 +127,7 @@ Multi-panel layouts may mix themes per leaf. Define your own with `pt.register_t
 
 ## Adding a new plot type
 
-plotlet is designed so that adding a new plot type is a 3-step recipe (~50–100 lines) that gets axes, scales, legend, grid, and composability for free. The `draw` callback composes pixel-coordinate helpers from `plotlet.draw` (`segment`, `rect`, `circle`, `path`, `polyline`, `polygon`, `errorbar_v`/`errorbar_h`, `marker`, `text_path`) — no hand-rolling SVG strings. The recommended home is your own project, or [`src/plotlet/recipes/`](src/plotlet/recipes/) as reference. Full guide: [docs/EXTENDING.md](docs/EXTENDING.md).
+A 3-step recipe (~50–100 lines) gets axes, scales, legend, grid, and composability for free. The `draw` callback uses pixel-coordinate helpers from `plotlet.draw` — no hand-rolling SVG. Recommended home: your own project, or [`src/plotlet/recipes/`](src/plotlet/recipes/) as reference. Full guide: [docs/EXTENDING.md](docs/EXTENDING.md).
 
 ## Testing
 
@@ -155,7 +144,7 @@ python tests/test_themes.py           # one chart × each shipped theme
 - No interactivity (hover, zoom, click). Static rendering is the point.
 - Not aiming for full coverage of standard statistical plots — those needs are well-served elsewhere.
 - Not a 3D plotter, not a dashboard tool.
-- Not a feature catalog — new plot types belong in user projects or `src/plotlet/recipes/` (or `cookbook/` for multi-file projects), not in the core.
+- Not a feature catalog — new plot types belong in user projects or `src/plotlet/recipes/`, not core.
 
 ## License
 

@@ -6,11 +6,11 @@ with AI assistance making the per-extension cost low.
 
 ## What's in the core
 
-- The deferred-render pipeline (Chart, _replay, _render)
+- The deferred-render pipeline (Chart, replay, render)
 - Scales: linear, log, category
-- Standard plots: line, scatter, bar, hist, fill_between
-- Font handling and text-as-paths rendering
-- The locked visual contract (`spec.json`)
+- A small set of standard plots (line, scatter, bar, hist, fill_between, area, imshow, …)
+- Text-as-paths rendering for cross-machine reproducibility
+- The locked visual contract (`spec.json`) and theming layer
 
 ## What's *not* in the core
 
@@ -18,9 +18,9 @@ with AI assistance making the per-extension cost low.
   trees, sankey, networks, maps, …)
 - Specialty scales beyond the basics
 
-These belong in **your project**, written for your specific data shape and
-needs. The [`cookbook/`](../cookbook/) directory has reference implementations
-to copy and adapt.
+These belong in **your project**. Reference implementations to copy and adapt
+live in [`src/plotlet/recipes/`](../src/plotlet/recipes/) (single-file artists)
+and [`cookbook/`](../cookbook/) (multi-file projects like annotated heatmaps).
 
 ## Why this shape
 
