@@ -113,6 +113,8 @@ g.show()
 c.show()                     # explicit display() in a cell
 c.to_svg()                   # raw SVG string
 c.save_svg("plot.svg")       # SVG file
+c.save_png("plot.png")       # PNG (needs `pip install cairosvg`); pass scale= or dpi=
+c.save_pdf("plot.pdf")       # PDF (needs `pip install cairosvg`)
 c.write_html("plot.html")    # standalone HTML
 ```
 

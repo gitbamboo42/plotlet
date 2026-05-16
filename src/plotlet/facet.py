@@ -146,6 +146,14 @@ class FacetGrid:
         self._materialize().save_svg(path)
         return self
 
+    def save_png(self, path, *, scale: float = 1.0, dpi: int | None = None):
+        self._materialize().save_png(path, scale=scale, dpi=dpi)
+        return self
+
+    def save_pdf(self, path):
+        self._materialize().save_pdf(path)
+        return self
+
     def write_html(self, path):
         self._materialize().write_html(path)
         return self

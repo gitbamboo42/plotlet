@@ -683,6 +683,19 @@ class Chart:
         Path(path).write_text(self.to_svg())
         return self
 
+    def save_png(self, path, *, scale: float = 1.0, dpi: int | None = None):
+        """Rasterize the chart to PNG. Requires `cairosvg` (`pip install
+        cairosvg`). `scale` multiplies the canvas pixel dimensions
+        uniformly (e.g. `scale=2` for retina); `dpi` overrides the
+        default 96 dpi rendering — both are passed straight through."""
+        _rasterize(self.to_svg(), path, "png", scale=scale, dpi=dpi)
+        return self
+
+    def save_pdf(self, path):
+        """Rasterize the chart to PDF. Requires `cairosvg`."""
+        _rasterize(self.to_svg(), path, "pdf")
+        return self
+
     def write_html(self, path):
         Path(path).write_text(self.to_html(full_page=True))
         return self
@@ -770,6 +783,24 @@ def _scale_data_dims(node: Chart, s: float) -> None:
     for child in node._children:
         if child is not None:
             _scale_data_dims(child, s)
+
+
+def _rasterize(svg: str, path, fmt: str, *, scale: float = 1.0, dpi: int | None = None):
+    """SVG → PNG/PDF via cairosvg. Imported lazily so users who only use
+    `save_svg` / `write_html` don't pay for a heavy dependency."""
+    try:
+        import cairosvg
+    except ImportError as e:
+        raise ImportError(
+            f"save_{fmt}() needs cairosvg. Install with: pip install cairosvg"
+        ) from e
+    fn = {"png": cairosvg.svg2png, "pdf": cairosvg.svg2pdf}[fmt]
+    kw = {"bytestring": svg.encode("utf-8"), "write_to": str(path)}
+    if fmt == "png":
+        kw["scale"] = float(scale)
+        if dpi is not None:
+            kw["dpi"] = int(dpi)
+    fn(**kw)
 
 
 def _normalize_share_mode(axis: str, mode) -> str:
