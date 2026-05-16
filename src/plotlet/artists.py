@@ -406,18 +406,19 @@ _HA_TO_ANCHOR = {"left": "start", "center": "middle", "right": "end"}
 
 def _resolve_bbox(bbox):
     """Normalize a `bbox=` value into a dict (or None to skip).
-    `True` → default white-with-light-border background; dict → used
-    as-is with sensible per-key defaults."""
+    `True` → spec-default background; dict → used as-is with per-key
+    defaults from `spec.json:defaults.text_bbox`."""
     if bbox is None or bbox is False:
         return None
     if bbox is True:
         bbox = {}
+    bb = _D["text_bbox"]
     return {
-        "facecolor": bbox.get("facecolor", "#ffffff"),
-        "edgecolor": bbox.get("edgecolor", "none"),
-        "pad":       float(bbox.get("pad", 3.0)),
-        "alpha":     float(bbox.get("alpha", 0.85)),
-        "stroke_width": float(bbox.get("linewidth", 0.6)),
+        "facecolor": bbox.get("facecolor", bb["facecolor"]),
+        "edgecolor": bbox.get("edgecolor", bb["edgecolor"]),
+        "pad":       float(bbox.get("pad", bb["pad"])),
+        "alpha":     float(bbox.get("alpha", bb["alpha"])),
+        "stroke_width": float(bbox.get("linewidth", bb["linewidth"])),
     }
 
 
@@ -468,8 +469,9 @@ def _artist_annotate(a, xs_, ys_, col):
 
     out = []
     if opts.get("arrow", True):
-        head_len = opts.get("arrow_head", 7.0)
-        line_w = opts.get("arrow_width", 0.9)
+        arr = _D["annotate"]
+        head_len = opts.get("arrow_head", arr["arrow_head"])
+        line_w = opts.get("arrow_width", arr["arrow_width"])
         dx, dy = px_xy - px_tx, py_xy - py_tx
         dist = math.hypot(dx, dy)
         if dist > head_len:
@@ -480,16 +482,14 @@ def _artist_annotate(a, xs_, ys_, col):
             out.append(segment(px_tx, py_tx, line_end_x, line_end_y,
                                 color=color, width=line_w))
             # Triangular head: tip at xy, base perpendicular to the line.
-            half = head_len * 0.45
-            base_cx = line_end_x
-            base_cy = line_end_y
+            half = head_len * arr["arrow_base_ratio"]
             perp_x, perp_y = -uy, ux
-            x1 = base_cx + perp_x * half
-            y1 = base_cy + perp_y * half
-            x2 = base_cx - perp_x * half
-            y2 = base_cy - perp_y * half
-            out.append(f'<path d="M{px_xy:.2f},{py_xy:.2f}L{x1:.2f},{y1:.2f}'
-                       f'L{x2:.2f},{y2:.2f}Z" fill="{color}"/>')
+            x1 = line_end_x + perp_x * half
+            y1 = line_end_y + perp_y * half
+            x2 = line_end_x - perp_x * half
+            y2 = line_end_y - perp_y * half
+            out.append(draw_polygon([(px_xy, py_xy), (x1, y1), (x2, y2)],
+                                    fill=color))
     bb = _resolve_bbox(opts.get("bbox"))
     text_y = py_tx + va_offset
     if bb is not None:

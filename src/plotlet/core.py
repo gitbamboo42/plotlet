@@ -31,7 +31,7 @@ from ._spec import (
 from .draw.colors import _resolve_color, TAB10
 from .scales import _LinearScale, _LogScale, _CategoryScale, _SymlogScale, _PowerScale, _nice_domain, _fmt_tick
 from .draw.font import _measure_text
-from .draw import text_path
+from .draw import text_path, segment
 from .utils import histogram, collect_categories
 from .registry import RenderContext, get_artist, all_artist_names
 from . import builtin_artists  # noqa: F401  — registers built-ins on import
@@ -1200,11 +1200,12 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             parts.append(_rotated_text(str(lbl), x, ih + _FRAME["tick_length"] + _FRAME["tick_pad"] + 8,
                                        x_size, x_rot, axis="x"))
 
-    # Minor ticks — half-length, no labels. Emit only when the user
-    # opted in via xticks(minor=True) or xticks(minor=[...]).
+    # Minor ticks — shorter than majors (frame.minor_tick_ratio), no
+    # labels. Emit only when the user opted in via xticks(minor=True) or
+    # xticks(minor=[...]).
     x_minor = _resolve_minor_ticks(st["x_minor"], x_scale, x_ticks)
     if x_minor and x_marks:
-        minor_len = _FRAME["tick_length"] * 0.55
+        minor_len = _FRAME["tick_length"] * _FRAME["minor_tick_ratio"]
         for t in x_minor:
             x = x_scale(t)
             if not math.isfinite(x):
@@ -1214,15 +1215,13 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
                 if x_dir == "in":      y1, y2 = ih, ih - minor_len
                 elif x_dir == "out":   y1, y2 = ih, ih + minor_len
                 else:                  y1, y2 = ih + minor_len, ih - minor_len
-                parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{y1}" y2="{y2}" '
-                             f'stroke="{col}" stroke-width="{sw}"/>')
+                parts.append(segment(x, y1, x, y2, color=col, width=sw))
             if st["spine_top"] and st["x_top"]:
                 col, sw = _side_stroke("top")
                 if x_dir == "in":      y1, y2 = 0, minor_len
                 elif x_dir == "out":   y1, y2 = 0, -minor_len
                 else:                  y1, y2 = -minor_len, minor_len
-                parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{y1}" y2="{y2}" '
-                             f'stroke="{col}" stroke-width="{sw}"/>')
+                parts.append(segment(x, y1, x, y2, color=col, width=sw))
 
     # y ticks + labels
     for t, lbl in zip(y_ticks, y_labels):
@@ -1243,7 +1242,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
 
     y_minor = _resolve_minor_ticks(st["y_minor"], y_scale, y_ticks)
     if y_minor and y_marks:
-        minor_len = _FRAME["tick_length"] * 0.55
+        minor_len = _FRAME["tick_length"] * _FRAME["minor_tick_ratio"]
         for t in y_minor:
             y = y_scale(t)
             if not math.isfinite(y):
@@ -1253,15 +1252,13 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
                 if y_dir == "in":      x1, x2 = 0, minor_len
                 elif y_dir == "out":   x1, x2 = 0, -minor_len
                 else:                  x1, x2 = -minor_len, minor_len
-                parts.append(f'<line x1="{x1}" x2="{x2}" y1="{y:.2f}" y2="{y:.2f}" '
-                             f'stroke="{col}" stroke-width="{sw}"/>')
+                parts.append(segment(x1, y, x2, y, color=col, width=sw))
             if st["spine_right"] and st["y_right"]:
                 col, sw = _side_stroke("right")
                 if y_dir == "in":      x1, x2 = iw, iw - minor_len
                 elif y_dir == "out":   x1, x2 = iw, iw + minor_len
                 else:                  x1, x2 = iw + minor_len, iw - minor_len
-                parts.append(f'<line x1="{x1}" x2="{x2}" y1="{y:.2f}" y2="{y:.2f}" '
-                             f'stroke="{col}" stroke-width="{sw}"/>')
+                parts.append(segment(x1, y, x2, y, color=col, width=sw))
 
     # xlabel / ylabel / title live in margin space; drop when that margin
     # is collapsed against a joined neighbor.

@@ -4,7 +4,8 @@
     "data_width": 524,
     "data_height": 322,
     "margin": {"top": 30, "right": 18, "bottom": 48, "left": 58},
-    "margin_floor": {"top": 24, "right": 4, "bottom": 20, "left": 20}
+    "margin_floor": {"top": 24, "right": 4, "bottom": 20, "left": 20},
+    "inset_margin": {"top": 6, "right": 6, "bottom": 18, "left": 28}
   },
   "figure": {
     "background": "#fff"
@@ -20,6 +21,7 @@
     "color": "#000000",
     "width": 0.8,
     "tick_length": 3.5,
+    "minor_tick_ratio": 0.55,
     "tick_pad": 4,
     "tick_direction": "out",
     "tick_top": false,
@@ -88,7 +90,19 @@
     "text_color": "#222222",
     "text_size": 11,
     "errorbar_linewidth": 1.2,
-    "errorbar_capsize": 4
+    "errorbar_capsize": 4,
+    "text_bbox": {
+      "facecolor": "#ffffff",
+      "edgecolor": "none",
+      "pad": 3.0,
+      "alpha": 0.85,
+      "linewidth": 0.6
+    },
+    "annotate": {
+      "arrow_head": 7.0,
+      "arrow_width": 0.9,
+      "arrow_base_ratio": 0.45
+    }
   },
   "legend": {
     "row_height": 16,

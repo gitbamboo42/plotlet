@@ -685,7 +685,7 @@ class Chart:
         # Inset gets a tight margin by default — small canvas, no room
         # for long axis labels unless the user sizes the inset bigger.
         inset = Chart(data_width=dw, data_height=dh,
-                      margin={"top": 6, "right": 6, "bottom": 18, "left": 28},
+                      margin=dict(_SIZESPEC["inset_margin"]),
                       **chart_opts)
         inset._inset_owner = self
         self._insets.append((tuple(rect), inset))
