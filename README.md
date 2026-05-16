@@ -49,7 +49,7 @@ The data region is the user-facing primitive — the canvas grows to fit titles 
 
 String-valued data on either axis auto-switches to a categorical scale (alphabetical by default). `c.xscale("category", order=[...], padding=0)` for explicit ordering; `padding=0` makes bands contiguous (heatmap-track look).
 
-Tick overrides: `c.xticks([0, 5, 10], ["A","B","C"], rotation=45, fontsize=12, direction="out", marks=False)`. Pass `[]` to hide. `yticks(...)` same shape.
+Tick overrides: `c.xticks([0, 5, 10], ["A","B","C"], rotation=45, fontsize=12, direction="out", marks=False)`. Pass `[]` to hide. `yticks(...)` same shape. `format="{:.0%}"` or `format=lambda v: f"${v/1000:.0f}K"` formats auto-generated tick labels — string and callable both work; explicit labels still override.
 
 ### Mark methods
 

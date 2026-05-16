@@ -541,6 +541,28 @@ def chart_long_rotated_xticks():
     return c
 
 
+def chart_tick_format_string():
+    # Format string: '{:.0%}' renders y-ticks as percentages.
+    c = pt.chart(data_width=320, data_height=180,
+                 title="completion rate", xlabel="week", ylabel="rate")
+    c.line(list(range(8)), [0.05, 0.12, 0.18, 0.27, 0.42, 0.55, 0.71, 0.88])
+    c.yticks(format="{:.0%}")
+    return c
+
+
+def chart_tick_format_callable():
+    # Callable format: turn dollars into compact K/M suffixed labels.
+    def _money(v):
+        if v >= 1_000_000: return f"${v/1_000_000:.1f}M"
+        if v >= 1_000:     return f"${v/1_000:.0f}K"
+        return f"${v:.0f}"
+    c = pt.chart(data_width=320, data_height=180,
+                 title="revenue", xlabel="month", ylabel="revenue")
+    c.line(list(range(8)), [1200, 4500, 8300, 18000, 45000, 92000, 410000, 1_250_000])
+    c.yticks(format=_money)
+    return c
+
+
 PLOTS = {
     "table":               chart_table,
     "hue":                 chart_hue,
@@ -585,6 +607,8 @@ PLOTS = {
     "dendrogram_left":     chart_dendrogram_left,
     "dendrogram_styled":   chart_dendrogram_styled,
     "dendrogram_labeled":  chart_dendrogram_labeled,
+    "tick_format_string":  chart_tick_format_string,
+    "tick_format_callable": chart_tick_format_callable,
 }
 
 

@@ -151,6 +151,7 @@ def _record_ticks(st, axis, args, kw):
     if "fontsize" in kw:  st[f"{axis}_fontsize"]  = kw["fontsize"]
     if "direction" in kw: st[f"{axis}_direction"] = kw["direction"]
     if "marks" in kw:     st[f"{axis}_marks"]     = bool(kw["marks"])
+    if "format" in kw:    st[f"{axis}_format"]    = kw["format"]
     # Per-side opt-in for the secondary tick side: xticks(top=True) on the
     # x-axis, yticks(right=True) on the y-axis. Both default off so the
     # standard look is bottom + left only.
@@ -226,9 +227,11 @@ def _replay(calls):
         "x_ticks": None, "x_labels": None, "x_rotation": 0, "x_fontsize": None,
         "x_direction": _FRAME["tick_direction"], "x_marks": True,
         "x_top":   _FRAME["tick_top"],
+        "x_format": None,
         "y_ticks": None, "y_labels": None, "y_rotation": 0, "y_fontsize": None,
         "y_direction": _FRAME["tick_direction"], "y_marks": True,
         "y_right": _FRAME["tick_right"],
+        "y_format": None,
         "spine_top": _FRAME["spine_top"], "spine_right": _FRAME["spine_right"],
         "spine_bottom": _FRAME["spine_bottom"], "spine_left": _FRAME["spine_left"],
         # Per-side color/width overrides; None = inherit spec.json frame defaults.
@@ -324,6 +327,24 @@ def _scan_domain(artists, axis):
             if v < lo: lo = v
             if v > hi: hi = v
     return lo, hi
+
+
+def _resolve_tick_formatter(user_fmt, scale):
+    """Pick the formatter for tick labels on `scale`.
+
+    Precedence: user-supplied `format=` (from `xticks(format=...)`) >
+    scale's own `format_tick` > the package default `_fmt_tick`. A user
+    format-string is wrapped in a callable; a callable is used directly."""
+    if user_fmt is None:
+        return getattr(scale, "format_tick", _fmt_tick)
+    if callable(user_fmt):
+        return user_fmt
+    if isinstance(user_fmt, str):
+        return user_fmt.format
+    raise TypeError(
+        f"xticks/yticks(format=) expects a format string or a callable; "
+        f"got {type(user_fmt).__name__}"
+    )
 
 
 def _normalize_expand(args):
@@ -654,10 +675,12 @@ def _required_margin(st, dw, dh) -> dict:
     y_n = max(2, min(8, int(dh // 40)))
     x_ticks  = st["x_ticks"]  if st["x_ticks"]  is not None else x_scale.ticks(x_n)
     y_ticks  = st["y_ticks"]  if st["y_ticks"]  is not None else y_scale.ticks(y_n)
+    x_fmt = _resolve_tick_formatter(st["x_format"], x_scale)
+    y_fmt = _resolve_tick_formatter(st["y_format"], y_scale)
     x_labels = (st["x_labels"] if st["x_labels"] is not None
-                else [_fmt_tick(t) for t in x_ticks])
+                else [x_fmt(t) for t in x_ticks])
     y_labels = (st["y_labels"] if st["y_labels"] is not None
-                else [_fmt_tick(t) for t in y_ticks])
+                else [y_fmt(t) for t in y_ticks])
 
     x_size = st["x_fontsize"] if st["x_fontsize"] is not None else tick_size
     y_size = st["y_fontsize"] if st["y_fontsize"] is not None else tick_size
@@ -918,8 +941,10 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     y_n = max(2, min(8, int(ih // 40)))
     x_ticks = st["x_ticks"] if st["x_ticks"] is not None else x_scale.ticks(x_n)
     y_ticks = st["y_ticks"] if st["y_ticks"] is not None else y_scale.ticks(y_n)
-    x_labels = st["x_labels"] if st["x_labels"] is not None else [_fmt_tick(t) for t in x_ticks]
-    y_labels = st["y_labels"] if st["y_labels"] is not None else [_fmt_tick(t) for t in y_ticks]
+    x_fmt = _resolve_tick_formatter(st["x_format"], x_scale)
+    y_fmt = _resolve_tick_formatter(st["y_format"], y_scale)
+    x_labels = st["x_labels"] if st["x_labels"] is not None else [x_fmt(t) for t in x_ticks]
+    y_labels = st["y_labels"] if st["y_labels"] is not None else [y_fmt(t) for t in y_ticks]
 
     hide_l, hide_r = panel_opts.hide_left, panel_opts.hide_right
     hide_t, hide_b = panel_opts.hide_top, panel_opts.hide_bottom
