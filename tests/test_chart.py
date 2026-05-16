@@ -541,6 +541,18 @@ def chart_long_rotated_xticks():
     return c
 
 
+def chart_symlog_x():
+    # Symlog on x: spans both signs across many orders of magnitude, with
+    # a linear band around 0. Volcano-style domains.
+    xs = [-2000, -250, -25, -2, -0.5, 0, 0.5, 2, 25, 250, 2000]
+    ys = [abs(x) ** 0.5 for x in xs]
+    c = pt.chart(data_width=400, data_height=180,
+                 title="symlog axis", xlabel="signed magnitude", ylabel="sqrt(|x|)")
+    c.scatter(xs, ys, s=24)
+    c.xscale("symlog", linthresh=1.0)
+    return c
+
+
 def chart_facet_scatter():
     # Facet by category: one panel per unique value, shared axes, titles
     # default to the group label.
@@ -681,6 +693,7 @@ PLOTS = {
     "scatter_size_style_hue": chart_scatter_size_style_hue,
     "facet_scatter":       chart_facet_scatter,
     "facet_wrap_two_rows": chart_facet_wrap_two_rows,
+    "symlog_x":            chart_symlog_x,
 }
 
 

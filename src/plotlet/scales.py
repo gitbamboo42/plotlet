@@ -79,6 +79,65 @@ class _LogScale:
         return [10 ** k for k in range(int(a), int(b) + 1) if self.d0 <= 10 ** k <= self.d1]
 
 
+class _SymlogScale:
+    """Symmetric log: linear inside [-linthresh, +linthresh], log outside.
+
+    Mirrors matplotlib's `symlog` semantics. The forward map is
+    `t(x) = sign(x) * (linthresh + log10(|x|/linthresh) * linthresh)` for
+    `|x| > linthresh`, and `x` itself inside the linear region. Useful for
+    fold-change axes (volcano / MA plots) where both signs matter and the
+    range spans several orders of magnitude.
+    """
+
+    def __init__(self, d0, d1, r0, r1, linthresh=1.0):
+        if linthresh <= 0:
+            raise ValueError("symlog linthresh must be > 0")
+        self.linthresh = float(linthresh)
+        self.d0, self.d1 = d0, d1
+        self.r0, self.r1 = r0, r1
+        self.t0 = self._fwd(d0)
+        self.t1 = self._fwd(d1)
+
+    def _fwd(self, x):
+        a = abs(x)
+        if a <= self.linthresh:
+            return float(x)
+        sign = 1.0 if x > 0 else -1.0
+        return sign * (self.linthresh + math.log10(a / self.linthresh) * self.linthresh)
+
+    def __call__(self, v):
+        t = self._fwd(v)
+        if self.t1 == self.t0:
+            return self.r0
+        return self.r0 + (t - self.t0) * (self.r1 - self.r0) / (self.t1 - self.t0)
+
+    def ticks(self, n=8):
+        """Ticks at decade boundaries on both sides plus 0 (and ±linthresh
+        if outside the decade grid). Filtered to the domain."""
+        thr = self.linthresh
+        out = set([0.0])
+        # Positive side decades: linthresh, 10*linthresh, 100*linthresh, ...
+        if self.d1 > thr:
+            k = 0
+            while True:
+                v = thr * 10 ** k
+                if v > self.d1:
+                    break
+                out.add(v)
+                k += 1
+        # Negative side mirrors.
+        if self.d0 < -thr:
+            k = 0
+            while True:
+                v = -thr * 10 ** k
+                if v < self.d0:
+                    break
+                out.add(v)
+                k += 1
+        ticks = sorted(t for t in out if self.d0 <= t <= self.d1)
+        return ticks
+
+
 class _CategoryScale:
     """Categorical scale — mirrors d3.scaleBand().padding(p) (inner = outer = p).
 

@@ -29,7 +29,7 @@ from ._spec import (
     SPEC, _SIZESPEC, _MARGIN_FLOOR, _FRAME, _GRIDSPEC, _FONTSPEC, _LEGSPEC, _D, _DASH,
 )
 from .draw.colors import _resolve_color, TAB10
-from .scales import _LinearScale, _LogScale, _CategoryScale, _nice_domain, _fmt_tick
+from .scales import _LinearScale, _LogScale, _CategoryScale, _SymlogScale, _nice_domain, _fmt_tick
 from .draw.font import _measure_text
 from .draw import text_path
 from .utils import histogram, collect_categories
@@ -71,18 +71,21 @@ class _AxisDescriptor:
 
     `flip=True` means the panel renderer swaps `(r0, r1)` when calling
     `build()`, inverting the axis."""
-    kind: str           # "linear" | "log" | "category"
+    kind: str           # "linear" | "log" | "category" | "symlog"
     lo: float = 0.0
     hi: float = 1.0
     cats: list | None = None
     padding: float = field(default_factory=lambda: _D["category_padding"])  # category only; 0 = contiguous bands
     flip: bool = False
+    linthresh: float = 1.0  # symlog only
 
     def build(self, r0, r1):
         if self.kind == "log":
             return _LogScale(self.lo, self.hi, r0, r1)
         if self.kind == "category":
             return _CategoryScale(self.cats or [], r0, r1, padding=self.padding)
+        if self.kind == "symlog":
+            return _SymlogScale(self.lo, self.hi, r0, r1, linthresh=self.linthresh)
         return _LinearScale(self.lo, self.hi, r0, r1)
 
 
@@ -220,6 +223,7 @@ def _replay(calls):
         "xlim": None, "ylim": None, "xscale": "linear", "yscale": "linear",
         "x_order": None, "y_order": None,
         "x_padding": None, "y_padding": None,
+        "x_linthresh": 1.0, "y_linthresh": 1.0,
         # Data-range expansion (matches matplotlib `axes.xmargin` / ggplot `expand`).
         # None = use spec default; (lo, hi) = explicit fractions of data span.
         "x_expand": None, "y_expand": None,
@@ -254,12 +258,14 @@ def _replay(calls):
         elif name == "ylim":   st["ylim"] = (args[0], args[1])
         elif name == "xscale":
             st["xscale"] = args[0]
-            if "order" in kw:   st["x_order"] = list(kw["order"])
-            if "padding" in kw: st["x_padding"] = kw["padding"]
+            if "order" in kw:     st["x_order"] = list(kw["order"])
+            if "padding" in kw:   st["x_padding"] = kw["padding"]
+            if "linthresh" in kw: st["x_linthresh"] = float(kw["linthresh"])
         elif name == "yscale":
             st["yscale"] = args[0]
-            if "order" in kw:   st["y_order"] = list(kw["order"])
-            if "padding" in kw: st["y_padding"] = kw["padding"]
+            if "order" in kw:     st["y_order"] = list(kw["order"])
+            if "padding" in kw:   st["y_padding"] = kw["padding"]
+            if "linthresh" in kw: st["y_linthresh"] = float(kw["linthresh"])
         elif name == "xticks": _record_ticks(st, "x", args, kw)
         elif name == "yticks": _record_ticks(st, "y", args, kw)
         elif name == "x_expand": st["x_expand"] = _normalize_expand(args)
@@ -493,7 +499,8 @@ def _x_descriptor(st) -> _AxisDescriptor:
                                     force_zero=x_force_zero,
                                     tight=x_tight,
                                     expand=_resolve_expand(st["x_expand"], x_tight, "x"))
-    return _AxisDescriptor(kind=st["xscale"], lo=x_min, hi=x_max)
+    return _AxisDescriptor(kind=st["xscale"], lo=x_min, hi=x_max,
+                           linthresh=st["x_linthresh"])
 
 
 def _any_artist_flips_y(artists) -> bool:
@@ -563,7 +570,8 @@ def _y_descriptor(st) -> _AxisDescriptor:
                                     tight=y_tight,
                                     expand=_resolve_expand(st["y_expand"], y_tight, "y"))
     return _AxisDescriptor(kind=st["yscale"], lo=y_min, hi=y_max,
-                           flip=_any_artist_flips_y(artists))
+                           flip=_any_artist_flips_y(artists),
+                           linthresh=st["y_linthresh"])
 
 
 def _x_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
@@ -595,7 +603,8 @@ def _x_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
                                     force_zero=x_force_zero,
                                     tight=x_tight,
                                     expand=_resolve_expand(anchor["x_expand"], x_tight, "x"))
-    return _AxisDescriptor(kind=anchor["xscale"], lo=x_min, hi=x_max)
+    return _AxisDescriptor(kind=anchor["xscale"], lo=x_min, hi=x_max,
+                           linthresh=anchor["x_linthresh"])
 
 
 def _y_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
@@ -624,7 +633,8 @@ def _y_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
                                     tight=y_tight,
                                     expand=_resolve_expand(anchor["y_expand"], y_tight, "y"))
     return _AxisDescriptor(kind=anchor["yscale"], lo=y_min, hi=y_max,
-                           flip=_any_artist_flips_y(all_artists))
+                           flip=_any_artist_flips_y(all_artists),
+                           linthresh=anchor["y_linthresh"])
 
 
 def _rotated_label_bbox(label_w: float, label_h: float, rot_deg: float) -> tuple[float, float]:
