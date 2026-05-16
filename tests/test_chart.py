@@ -541,6 +541,18 @@ def chart_long_rotated_xticks():
     return c
 
 
+def chart_step():
+    # step() sugar — all three where= modes.
+    xs = list(range(8))
+    c = pt.chart(data_width=400, data_height=180,
+                 title="step modes", xlabel="x", ylabel="y", legend=True)
+    c.step(xs, [1, 3, 2, 5, 4, 3, 6, 5], where="post", label="post")
+    c.step(xs, [1.5, 3.5, 2.5, 5.5, 4.5, 3.5, 6.5, 5.5], where="pre",
+           label="pre", color="C1")
+    c.step(xs, [2, 4, 3, 6, 5, 4, 7, 6], where="mid", label="mid", color="C2")
+    return c
+
+
 def chart_text_bbox():
     # Text labels with a background box — readable over dense data.
     xs = [i * 0.1 for i in range(120)]
@@ -789,6 +801,7 @@ PLOTS = {
     "ticks_count":         chart_ticks_count,
     "annotate":            chart_annotate,
     "text_bbox":           chart_text_bbox,
+    "step":                chart_step,
 }
 
 

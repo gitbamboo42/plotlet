@@ -55,7 +55,8 @@ Tick overrides: `c.xticks([0, 5, 10], ["A","B","C"], rotation=45, fontsize=12, d
 
 | call | options |
 | --- | --- |
-| `.line(x=, y=, hue=, **opts)` | `color`, `label`, `linewidth`, `linestyle` (`"-"`, `"--"`, `":"`, `"-."`), `marker` (`"o"`, `"s"`, `"^"`, `"v"`, `"x"`, `"+"`), `markersize` |
+| `.line(x=, y=, hue=, **opts)` | `color`, `label`, `linewidth`, `linestyle` (`"-"`, `"--"`, `":"`, `"-."`), `marker` (`"o"`, `"s"`, `"^"`, `"v"`, `"x"`, `"+"`), `markersize`, `curve` (`"linear"`, `"step-before"`, `"step-after"`, `"step-mid"`) |
+| `.step(x=, y=, where=, **opts)` | sugar over `line(curve=...)`; `where=` is `"pre"` / `"post"` (default) / `"mid"` |
 | `.scatter(x=, y=, hue=, size=, style=, **opts)` | `color`, `label`, `s` (size), `alpha`, `marker`, `sizes=(min, max)` |
 | `.bar(x=, y=, **opts)` | `color`, `label`, `alpha` |
 | `.hist(x=, **opts)` | `bins`, `color`, `alpha`, `label` |

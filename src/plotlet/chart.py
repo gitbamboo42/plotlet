@@ -447,6 +447,20 @@ class Chart:
             self._record("line", *args, **opts)
         return self
 
+    def step(self, *args, x=None, y=None, hue=None, where="post", data=None, **opts):
+        """Step plot — sugar over `line(curve=...)`. `where="pre"`,
+        `"post"` (default), or `"mid"` map to plotlet's curve names
+        (`step-before`, `step-after`, `step-mid`). matplotlib convention."""
+        self._require_leaf("step")
+        curve = {"pre": "step-before", "post": "step-after", "mid": "step-mid"}.get(where)
+        if curve is None:
+            raise ValueError(
+                f"step() where= expects 'pre', 'post', or 'mid'; got {where!r}"
+            )
+        opts = dict(opts)
+        opts["curve"] = curve
+        return self.line(*args, x=x, y=y, hue=hue, data=data, **opts)
+
     def scatter(self, *args, x=None, y=None, hue=None, size=None, style=None,
                 sizes=(20, 200), data=None, **opts):
         """Plot points. `size=<col>` maps a numeric column to per-point area
