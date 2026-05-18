@@ -75,9 +75,14 @@ def roc_draw(a, ctx):
     return "".join(out)
 
 
-def roc_legend_swatch(a, ctx, x0, y_mid):
-    col = a["_color"]
-    return segment(x0, y_mid, x0 + 22, y_mid, color=col, width=1.6)
+def roc_legend_entries(a):
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    def paint(a, ctx, x0, y_mid):
+        col = a["_color"]
+        return segment(x0, y_mid, x0 + 22, y_mid, color=col, width=1.6)
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
 pt.add_artist(pt.ArtistSpec(
@@ -86,7 +91,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=roc_xdomain,
     ydomain=roc_ydomain,
     draw=roc_draw,
-    legend_entries=pt.legend_from_swatch(roc_legend_swatch),
+    legend_entries=roc_legend_entries,
 ))
 
 

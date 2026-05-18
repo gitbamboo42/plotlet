@@ -52,12 +52,17 @@ def cdot_draw(a, ctx):
     return "".join(out)
 
 
-def cdot_legend_swatch(a, ctx, x0, y_mid):
-    col = a["_color"]
-    return (
-        segment(x0, y_mid, x0 + 22, y_mid, color="#bbbbbb", width=1)
-        + circle(x0 + 22, y_mid, 4, fill=col)
-    )
+def cdot_legend_entries(a):
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    def paint(a, ctx, x0, y_mid):
+        col = a["_color"]
+        return (
+            segment(x0, y_mid, x0 + 22, y_mid, color="#bbbbbb", width=1)
+            + circle(x0 + 22, y_mid, 4, fill=col)
+        )
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
 pt.add_artist(pt.ArtistSpec(
@@ -66,7 +71,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=cdot_xdomain,
     ydomain=cdot_ydomain,
     draw=cdot_draw,
-    legend_entries=pt.legend_from_swatch(cdot_legend_swatch),
+    legend_entries=cdot_legend_entries,
     force_zero_x=True,
 ))
 

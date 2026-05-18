@@ -81,26 +81,6 @@ class ArtistSpec:
     frame_defaults: Callable[[list, dict], list | None] | None = None
 
 
-def legend_from_swatch(paint):
-    """Wrap a `(a, ctx, x0, y_mid) -> str` paint function as a
-    `legend_entries` callable that emits zero or one entry per call,
-    skipping calls with no `label` option. The standard wrapper for
-    one-series-per-call artists (line, bar, scatter, ...).
-
-    Multi-entry artists (sankey, mosaic, dag, ...) should write their
-    own `legend_entries` returning multiple dicts directly.
-    """
-    def entries(a):
-        label = a["opts"].get("label")
-        if not label:
-            return []
-        # `_color` is assigned by the render-pass color-cycle pass; the
-        # sizing pass calls this before that, so fall back to None for
-        # entries built during sizing (only `label` is read at sizing time).
-        return [{"label": label, "color": a.get("_color"), "paint": paint}]
-    return entries
-
-
 @dataclass
 class RenderContext:
     """Everything an artist's draw() function might need."""

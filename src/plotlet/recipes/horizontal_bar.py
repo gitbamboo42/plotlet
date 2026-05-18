@@ -40,8 +40,13 @@ def barh_draw(a, ctx):
     return "".join(out)
 
 
-def barh_legend_swatch(a, ctx, x0, y_mid):
-    return rect(x0, y_mid - 5, 22, 10, fill=a["_color"])
+def barh_legend_entries(a):
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    def paint(a, ctx, x0, y_mid):
+        return rect(x0, y_mid - 5, 22, 10, fill=a["_color"])
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
 pt.add_artist(pt.ArtistSpec(
@@ -50,7 +55,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=barh_xdomain,
     ydomain=barh_ydomain,
     draw=barh_draw,
-    legend_entries=pt.legend_from_swatch(barh_legend_swatch),
+    legend_entries=barh_legend_entries,
     force_zero_x=True,
 ))
 

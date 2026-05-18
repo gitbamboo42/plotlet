@@ -57,7 +57,7 @@ c.title("Lollipop chart").grid(True).legend(True).save_svg("out.svg")
 ```
 
 Worked example: [`src/plotlet/recipes/lollipop.py`](../src/plotlet/recipes/lollipop.py) — basic
-artist plus an optional `legend_swatch` so the legend entry looks like a
+artist plus an optional `legend_entries` so the legend entry looks like a
 tiny lollipop. Every recipe under [`src/plotlet/recipes/`](../src/plotlet/recipes/)
 is a working reference; skim a couple before writing your own.
 
@@ -102,7 +102,7 @@ ArtistSpec(
     layer: "background" | "data" | "foreground" = "data",
     uses_color_cycle: bool = True,
     default_color: str | None = None,
-    legend_swatch: (a, ctx, x0, y_mid) -> str | None = None,
+    legend_entries: (a) -> list[dict] | None = None,
     legend_gradient: (a) -> dict | None = None,
     data_attrs: (a) -> dict | None = None,
     axis_order: (a) -> dict | None = None,
@@ -115,7 +115,7 @@ ArtistSpec(
 | `xdomain` / `ydomain` | Your artist's data should drive axis limits. Return `None` for decorative artists (axhline, axvline). |
 | `layer` | `"background"` for fills (drawn first), `"foreground"` for reference lines (drawn last). Default `"data"`. |
 | `uses_color_cycle` | Set `False` for artists that pick their own color (reflines, image artists). Set `default_color` for the fallback. |
-| `legend_swatch` | Provide to draw your own legend entry; without it the legend falls back to a colored line. Signature: `(a, ctx, x0, y_mid) -> svg_fragment`. |
+| `legend_entries` | Return the legend entries this artist contributes (zero or more). Each entry is a `{"label": str, "color": str, "paint": callable}` dict where `paint(a, ctx, x0, y_mid) -> svg_fragment` draws the swatch. Most one-series-per-call artists return zero or one entry depending on whether `label=` was set. |
 | `legend_gradient` | For artists with a continuous color mapping. Returns `{"kind": "continuous", "cmap": ..., "vmin": ..., "vmax": ...}`. |
 | `data_attrs` | AI-readable type-specific attrs. Keys land on the artist's `<g>` as `data-plotlet-<key>`. Common attrs (type, index, label, color) are automatic — see [`AI_ATTRS.md`](AI_ATTRS.md). |
 | `axis_order` | Contribute a canonical order for a categorical axis. Returns `{"x": [...]}` / `{"y": [...]}`. Use when ordering is load-bearing (dendrogram leaves). User's explicit `xscale("category", order=...)` still wins. |
@@ -125,8 +125,8 @@ ArtistSpec(
 
 ## RenderContext
 
-Second argument to `draw` and `legend_swatch`. Bundles render state so call
-sites stay short.
+Second argument to `draw` and to legend-entry `paint` callbacks. Bundles
+render state so call sites stay short.
 
 | Field | Notes |
 |---|---|

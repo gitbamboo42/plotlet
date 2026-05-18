@@ -6,11 +6,11 @@ for sparse comparisons (rankings, deltas, GWAS-style hits).
 The whole recipe is below: no edits to plotlet's source. After registration,
 `c.lollipop(xs, ys, ...)` Just Works on any `Chart` — autoscaling, gridlines,
 color cycling, and the legend integrate for free. The optional
-`legend_swatch` hook lets the legend entry actually look like a tiny
+`legend_entries` hook lets the legend entry actually look like a tiny
 lollipop instead of the default colored line.
 """
 
-SUMMARY = 'Stem-and-circle chart for sparse comparisons; optional mini-lollipop legend swatch.'
+SUMMARY = 'Stem-and-circle chart for sparse comparisons; optional mini-lollipop legend entry.'
 from pathlib import Path
 
 import plotlet as pt
@@ -48,15 +48,20 @@ def lollipop_draw(a, ctx):
     return "".join(out)
 
 
-# 4. (optional) legend_swatch(): draw a mini lollipop in the legend swatch
+# 4. (optional) legend_entries(): draw a mini lollipop in the legend swatch
 #    area instead of the default colored line. Without this, the legend
 #    falls back to a small line segment in the artist's color.
-def lollipop_legend_swatch(a, ctx, x0, y_mid):
-    col = a["_color"]
-    return (
-        segment(x0 + 11, y_mid + 5, x0 + 11, y_mid - 4, color=col, width=1.5)
-        + circle(x0 + 11, y_mid - 4, 3.5, fill=col)
-    )
+def lollipop_legend_entries(a):
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    def paint(a, ctx, x0, y_mid):
+        col = a["_color"]
+        return (
+            segment(x0 + 11, y_mid + 5, x0 + 11, y_mid - 4, color=col, width=1.5)
+            + circle(x0 + 11, y_mid - 4, 3.5, fill=col)
+        )
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
 # Register. After this line, every Chart has a .lollipop() method.
@@ -66,7 +71,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=lollipop_xdomain,
     ydomain=lollipop_ydomain,
     draw=lollipop_draw,
-    legend_entries=pt.legend_from_swatch(lollipop_legend_swatch),
+    legend_entries=lollipop_legend_entries,
     force_zero_y=True,
 ))
 

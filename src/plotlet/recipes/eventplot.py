@@ -61,14 +61,19 @@ def eventplot_draw(a, ctx):
     return "".join(out)
 
 
-def eventplot_legend_swatch(a, ctx, x0, y_mid):
-    col = a["_color"]
-    return (
-        segment(x0 + 4, y_mid - 5, x0 + 4, y_mid + 5, color=col)
-        + segment(x0 + 10, y_mid - 5, x0 + 10, y_mid + 5, color=col)
-        + segment(x0 + 14, y_mid - 5, x0 + 14, y_mid + 5, color=col)
-        + segment(x0 + 19, y_mid - 5, x0 + 19, y_mid + 5, color=col)
-    )
+def eventplot_legend_entries(a):
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    def paint(a, ctx, x0, y_mid):
+        col = a["_color"]
+        return (
+            segment(x0 + 4, y_mid - 5, x0 + 4, y_mid + 5, color=col)
+            + segment(x0 + 10, y_mid - 5, x0 + 10, y_mid + 5, color=col)
+            + segment(x0 + 14, y_mid - 5, x0 + 14, y_mid + 5, color=col)
+            + segment(x0 + 19, y_mid - 5, x0 + 19, y_mid + 5, color=col)
+        )
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
 pt.add_artist(pt.ArtistSpec(
@@ -77,7 +82,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=eventplot_xdomain,
     ydomain=eventplot_ydomain,
     draw=eventplot_draw,
-    legend_entries=pt.legend_from_swatch(eventplot_legend_swatch),
+    legend_entries=eventplot_legend_entries,
 ))
 
 

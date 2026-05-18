@@ -73,12 +73,17 @@ def pband_draw(a, ctx):
     return "".join(out)
 
 
-def pband_legend_swatch(a, ctx, x0, y_mid):
-    col = a["_color"]
-    return (
-        rect(x0, y_mid - 5, 22, 10, fill=col, alpha=0.25)
-        + segment(x0, y_mid, x0 + 22, y_mid, color=col, width=1.6)
-    )
+def pband_legend_entries(a):
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    def paint(a, ctx, x0, y_mid):
+        col = a["_color"]
+        return (
+            rect(x0, y_mid - 5, 22, 10, fill=col, alpha=0.25)
+            + segment(x0, y_mid, x0 + 22, y_mid, color=col, width=1.6)
+        )
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
 pt.add_artist(pt.ArtistSpec(
@@ -87,7 +92,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=pband_xdomain,
     ydomain=pband_ydomain,
     draw=pband_draw,
-    legend_entries=pt.legend_from_swatch(pband_legend_swatch),
+    legend_entries=pband_legend_entries,
 ))
 
 

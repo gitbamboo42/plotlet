@@ -48,9 +48,14 @@ def ecdf_draw(a, ctx):
     return polyline(pts, color=col, width=lw)
 
 
-def ecdf_legend_swatch(a, ctx, x0, y_mid):
-    col = a["_color"]
-    return segment(x0, y_mid, x0 + 22, y_mid, color=col, width=1.5)
+def ecdf_legend_entries(a):
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    def paint(a, ctx, x0, y_mid):
+        col = a["_color"]
+        return segment(x0, y_mid, x0 + 22, y_mid, color=col, width=1.5)
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
 pt.add_artist(pt.ArtistSpec(
@@ -59,7 +64,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=ecdf_xdomain,
     ydomain=ecdf_ydomain,
     draw=ecdf_draw,
-    legend_entries=pt.legend_from_swatch(ecdf_legend_swatch),
+    legend_entries=ecdf_legend_entries,
 ))
 
 

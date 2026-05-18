@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 
-from .registry import ArtistSpec, RenderContext, add_artist, legend_from_swatch
+from .registry import ArtistSpec, RenderContext, add_artist
 from .draw import marker, segment, rect, circle
 from .utils import to_list, to_list_2d, broadcast, histogram
 from .artists import (
@@ -41,60 +41,83 @@ def _bin_xs(a): return [b["x0"] for b in a["_bins"]] + [b["x1"] for b in a["_bin
 def _bin_ys(a): return [b["count"] for b in a["_bins"]] + [0]
 
 
-# --- legend swatch helpers --------------------------------------------------
+# --- legend entries helpers -------------------------------------------------
 # Each built-in artist registers one of these so the legend dispatch in
-# `_render` can stay generic — no type-string matching.
+# `_render` can stay generic — no type-string matching. Paint logic is a
+# nested closure; there are no shared swatch helpers.
 
-def _line_swatch(a, ctx, x0, y_mid, default_lw):
-    sw = _LEGSPEC["swatch_width"]
-    return segment(x0, y_mid, x0 + sw, y_mid,
-                   color=a["_color"],
-                   width=a["opts"].get("linewidth", default_lw),
-                   dash=a["opts"].get("linestyle"))
-
-
-def _line_legend_swatch(a, ctx, x0, y_mid):
-    out = _line_swatch(a, ctx, x0, y_mid, ctx.defaults["linewidth"])
-    if a["opts"].get("marker"):
+def _line_legend_entries(a):
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    def paint(a, ctx, x0, y_mid):
         sw = _LEGSPEC["swatch_width"]
-        out += marker(a["opts"]["marker"], x0 + sw / 2, y_mid,
+        out = segment(x0, y_mid, x0 + sw, y_mid,
+                      color=a["_color"],
+                      width=a["opts"].get("linewidth", ctx.defaults["linewidth"]),
+                      dash=a["opts"].get("linestyle"))
+        if a["opts"].get("marker"):
+            out += marker(a["opts"]["marker"], x0 + sw / 2, y_mid,
                           a["opts"].get("markersize", ctx.defaults["markersize"]),
                           a["_color"], 1)
-    return out
+        return out
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
-def _refline_legend_swatch(a, ctx, x0, y_mid):
-    return _line_swatch(a, ctx, x0, y_mid, ctx.defaults["refline_width"])
+def _refline_legend_entries(a):
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    def paint(a, ctx, x0, y_mid):
+        sw = _LEGSPEC["swatch_width"]
+        return segment(x0, y_mid, x0 + sw, y_mid,
+                       color=a["_color"],
+                       width=a["opts"].get("linewidth", ctx.defaults["refline_width"]),
+                       dash=a["opts"].get("linestyle"))
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
-def _scatter_legend_swatch(a, ctx, x0, y_mid):
-    sw = _LEGSPEC["swatch_width"]
-    # When `s` or `marker` is per-point (size=/style= mappings), the legend
-    # swatch picks the median size and the first marker so the entry stays
-    # a single recognizable glyph.
-    raw_s = a["opts"].get("s", ctx.defaults["scatter_s"])
-    raw_mk = a["opts"].get("marker", "o")
-    s_val = sorted(raw_s)[len(raw_s) // 2] if isinstance(raw_s, (list, tuple)) and raw_s else (
-        raw_s if not isinstance(raw_s, (list, tuple)) else ctx.defaults["scatter_s"])
-    mk_val = raw_mk[0] if isinstance(raw_mk, (list, tuple)) and raw_mk else (
-        raw_mk if not isinstance(raw_mk, (list, tuple)) else "o")
-    s_size = math.sqrt(s_val) / 2
-    return marker(mk_val, x0 + sw / 2, y_mid, s_size, a["_color"],
+def _scatter_legend_entries(a):
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    def paint(a, ctx, x0, y_mid):
+        sw = _LEGSPEC["swatch_width"]
+        # When `s` or `marker` is per-point (size=/style= mappings), the legend
+        # swatch picks the median size and the first marker so the entry stays
+        # a single recognizable glyph.
+        raw_s = a["opts"].get("s", ctx.defaults["scatter_s"])
+        raw_mk = a["opts"].get("marker", "o")
+        s_val = sorted(raw_s)[len(raw_s) // 2] if isinstance(raw_s, (list, tuple)) and raw_s else (
+            raw_s if not isinstance(raw_s, (list, tuple)) else ctx.defaults["scatter_s"])
+        mk_val = raw_mk[0] if isinstance(raw_mk, (list, tuple)) and raw_mk else (
+            raw_mk if not isinstance(raw_mk, (list, tuple)) else "o")
+        s_size = math.sqrt(s_val) / 2
+        return marker(mk_val, x0 + sw / 2, y_mid, s_size, a["_color"],
                       a["opts"].get("alpha", ctx.defaults["scatter_alpha"]))
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
-def _rect_swatch(a, x0, y_mid, default_alpha):
-    sw = _LEGSPEC["swatch_width"]
-    return rect(x0, y_mid - 5, sw, 10, fill=a["_color"],
-                alpha=a["opts"].get("alpha", default_alpha))
+def _bar_legend_entries(a):
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    def paint(a, ctx, x0, y_mid):
+        sw = _LEGSPEC["swatch_width"]
+        return rect(x0, y_mid - 5, sw, 10, fill=a["_color"],
+                    alpha=a["opts"].get("alpha", 1))
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
-def _bar_legend_swatch(a, ctx, x0, y_mid):
-    return _rect_swatch(a, x0, y_mid, 1)
-
-
-def _refspan_legend_swatch(a, ctx, x0, y_mid):
-    return _rect_swatch(a, x0, y_mid, ctx.defaults["refspan_alpha"])
+def _refspan_legend_entries(a):
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    def paint(a, ctx, x0, y_mid):
+        sw = _LEGSPEC["swatch_width"]
+        return rect(x0, y_mid - 5, sw, 10, fill=a["_color"],
+                    alpha=a["opts"].get("alpha", ctx.defaults["refspan_alpha"]))
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
 # --- AI-readable structural attrs + payloads (0.3.0) ------------------------
@@ -257,7 +280,7 @@ add_artist(ArtistSpec(
     xdomain=_xs_of,
     ydomain=_ys_of,
     draw=lambda a, ctx: _artist_line(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_entries=legend_from_swatch(_line_legend_swatch),
+    legend_entries=_line_legend_entries,
     data_attrs=_line_data_attrs,
 ))
 
@@ -271,7 +294,7 @@ add_artist(ArtistSpec(
     xdomain=_xs_of,
     ydomain=_ys_of,
     draw=lambda a, ctx: _artist_scatter(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_entries=legend_from_swatch(_scatter_legend_swatch),
+    legend_entries=_scatter_legend_entries,
     data_attrs=_scatter_data_attrs,
 ))
 
@@ -287,7 +310,7 @@ add_artist(ArtistSpec(
     xdomain=lambda a: a["cats"],
     ydomain=_vals_of,
     draw=lambda a, ctx: _artist_bar(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_entries=legend_from_swatch(_bar_legend_swatch),
+    legend_entries=_bar_legend_entries,
     data_attrs=_bar_data_attrs,
     force_zero_y=True,
 ))
@@ -301,7 +324,7 @@ add_artist(ArtistSpec(
     xdomain=_bin_xs,
     ydomain=_bin_ys,
     draw=lambda a, ctx: _artist_hist(a, ctx.x_scale, ctx.y_scale, ctx.ih, ctx.color),
-    legend_entries=legend_from_swatch(_bar_legend_swatch),
+    legend_entries=_bar_legend_entries,
     data_attrs=_hist_data_attrs,
     force_zero_y=True,
 ))
@@ -319,7 +342,7 @@ add_artist(ArtistSpec(
     xdomain=_xs_of,
     ydomain=_y1y2_of,
     draw=lambda a, ctx: _artist_fill_between(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_entries=legend_from_swatch(_line_legend_swatch),
+    legend_entries=_line_legend_entries,
     data_attrs=_fill_between_data_attrs,
 ))
 
@@ -346,7 +369,7 @@ add_artist(ArtistSpec(
     xdomain=_xs_of,
     ydomain=_y1y2_of,
     draw=lambda a, ctx: _artist_fill_between(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_entries=legend_from_swatch(_bar_legend_swatch),
+    legend_entries=_bar_legend_entries,
     data_attrs=_area_data_attrs,
 ))
 
@@ -377,7 +400,7 @@ add_artist(ArtistSpec(
     xdomain=_rect_xdomain,
     ydomain=_rect_ydomain,
     draw=lambda a, ctx: _artist_rect(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_entries=legend_from_swatch(_bar_legend_swatch),
+    legend_entries=_bar_legend_entries,
     data_attrs=_rect_data_attrs,
 ))
 
@@ -395,7 +418,7 @@ add_artist(ArtistSpec(
     xdomain=_xs_of,
     ydomain=_ys_of,
     draw=lambda a, ctx: _artist_polygon(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_entries=legend_from_swatch(_bar_legend_swatch),
+    legend_entries=_bar_legend_entries,
     data_attrs=_polygon_data_attrs,
 ))
 
@@ -411,7 +434,7 @@ add_artist(ArtistSpec(
     layer="foreground",
     uses_color_cycle=False,
     default_color=_D["refline_color"],
-    legend_entries=legend_from_swatch(_refline_legend_swatch),
+    legend_entries=_refline_legend_entries,
     data_attrs=_axhline_data_attrs,
 ))
 
@@ -423,7 +446,7 @@ add_artist(ArtistSpec(
     layer="foreground",
     uses_color_cycle=False,
     default_color=_D["refline_color"],
-    legend_entries=legend_from_swatch(_refline_legend_swatch),
+    legend_entries=_refline_legend_entries,
     data_attrs=_axvline_data_attrs,
 ))
 
@@ -435,7 +458,7 @@ add_artist(ArtistSpec(
     layer="background",
     uses_color_cycle=False,
     default_color=_D["refspan_color"],
-    legend_entries=legend_from_swatch(_refspan_legend_swatch),
+    legend_entries=_refspan_legend_entries,
     data_attrs=_axhspan_data_attrs,
 ))
 
@@ -447,7 +470,7 @@ add_artist(ArtistSpec(
     layer="background",
     uses_color_cycle=False,
     default_color=_D["refspan_color"],
-    legend_entries=legend_from_swatch(_refspan_legend_swatch),
+    legend_entries=_refspan_legend_entries,
     data_attrs=_axvspan_data_attrs,
 ))
 
@@ -473,7 +496,7 @@ add_artist(ArtistSpec(
     xdomain=lambda a: a["xmins"] + a["xmaxs"],
     ydomain=lambda a: a["ys"],
     draw=lambda a, ctx: _artist_hlines(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_entries=legend_from_swatch(_refline_legend_swatch),
+    legend_entries=_refline_legend_entries,
     data_attrs=_hlines_data_attrs,
 ))
 
@@ -484,7 +507,7 @@ add_artist(ArtistSpec(
     xdomain=lambda a: a["xs"],
     ydomain=lambda a: a["ymins"] + a["ymaxs"],
     draw=lambda a, ctx: _artist_vlines(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_entries=legend_from_swatch(_refline_legend_swatch),
+    legend_entries=_refline_legend_entries,
     data_attrs=_vlines_data_attrs,
 ))
 
@@ -691,15 +714,20 @@ def _errorbar_data_attrs(a):
     return out
 
 
-def _errorbar_legend_swatch(a, ctx, x0, y_mid):
-    col = a["_color"]
-    msize = a["opts"].get("markersize", ctx.defaults["markersize"])
-    cx = x0 + _LEGSPEC["swatch_width"] / 2
-    return (
-        segment(cx, y_mid - 5, cx, y_mid + 5,
-                color=col, width=_D["errorbar_linewidth"])
-        + marker(a["opts"].get("marker", "o"), cx, y_mid, msize, col, 1)
-    )
+def _errorbar_legend_entries(a):
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    def paint(a, ctx, x0, y_mid):
+        col = a["_color"]
+        msize = a["opts"].get("markersize", ctx.defaults["markersize"])
+        cx = x0 + _LEGSPEC["swatch_width"] / 2
+        return (
+            segment(cx, y_mid - 5, cx, y_mid + 5,
+                    color=col, width=_D["errorbar_linewidth"])
+            + marker(a["opts"].get("marker", "o"), cx, y_mid, msize, col, 1)
+        )
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
 add_artist(ArtistSpec(
@@ -711,6 +739,6 @@ add_artist(ArtistSpec(
     xdomain=_errorbar_xdomain,
     ydomain=_errorbar_ydomain,
     draw=lambda a, ctx: _artist_errorbar(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_entries=legend_from_swatch(_errorbar_legend_swatch),
+    legend_entries=_errorbar_legend_entries,
     data_attrs=_errorbar_data_attrs,
 ))

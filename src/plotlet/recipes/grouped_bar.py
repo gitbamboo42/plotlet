@@ -55,8 +55,13 @@ def grouped_bar_draw(a, ctx):
     return "".join(out)
 
 
-def grouped_bar_legend_swatch(a, ctx, x0, y_mid):
-    return rect(x0, y_mid - 5, 22, 10, fill=a["_color"])
+def grouped_bar_legend_entries(a):
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    def paint(a, ctx, x0, y_mid):
+        return rect(x0, y_mid - 5, 22, 10, fill=a["_color"])
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
 def grouped_bars(c, cats, series_vals, labels=None, colors=None, **opts):
@@ -76,7 +81,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=grouped_bar_xdomain,
     ydomain=grouped_bar_ydomain,
     draw=grouped_bar_draw,
-    legend_entries=pt.legend_from_swatch(grouped_bar_legend_swatch),
+    legend_entries=grouped_bar_legend_entries,
     force_zero_y=True,
 ))
 

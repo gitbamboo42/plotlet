@@ -92,12 +92,17 @@ def regression_draw(a, ctx):
     return "".join(out)
 
 
-def regression_legend_swatch(a, ctx, x0, y_mid):
-    col = a["_color"]
-    return (
-        rect(x0, y_mid - 5, 22, 10, fill=col, alpha=0.2)
-        + segment(x0, y_mid, x0 + 22, y_mid, color=col, width=1.8)
-    )
+def regression_legend_entries(a):
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    def paint(a, ctx, x0, y_mid):
+        col = a["_color"]
+        return (
+            rect(x0, y_mid - 5, 22, 10, fill=col, alpha=0.2)
+            + segment(x0, y_mid, x0 + 22, y_mid, color=col, width=1.8)
+        )
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
 pt.add_artist(pt.ArtistSpec(
@@ -106,7 +111,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=regression_xdomain,
     ydomain=regression_ydomain,
     draw=regression_draw,
-    legend_entries=pt.legend_from_swatch(regression_legend_swatch),
+    legend_entries=regression_legend_entries,
 ))
 
 

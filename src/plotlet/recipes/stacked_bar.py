@@ -61,13 +61,22 @@ def stacked_bar_draw(a, ctx):
     return "".join(out)
 
 
+def stacked_bar_legend_entries(a):
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    def paint(a, ctx, x0, y_mid):
+        return rect(x0, y_mid - 5, 22, 10, fill=a["_color"])
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
+
+
 pt.add_artist(pt.ArtistSpec(
     name="stacked_bar",
     record=stacked_bar_record,
     xdomain=stacked_bar_xdomain,
     ydomain=stacked_bar_ydomain,
     draw=stacked_bar_draw,
-    legend_entries=pt.legend_from_swatch(lambda a, ctx, x0, ym: rect(x0, ym - 5, 22, 10, fill=a["_color"])),
+    legend_entries=stacked_bar_legend_entries,
     force_zero_y=True,
 ))
 

@@ -64,10 +64,15 @@ def annotation_strip_draw(a, ctx):
     return "".join(parts)
 
 
-def annotation_strip_legend_swatch(a, ctx, x0, y_mid):
-    col = a["opts"].get("color") or a["_color"]
-    return (f'<rect x="{x0}" y="{y_mid - 5}" width="22" height="10" '
-            f'fill="{col}"/>')
+def annotation_strip_legend_entries(a):
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    def paint(a, ctx, x0, y_mid):
+        col = a["opts"].get("color") or a["_color"]
+        return (f'<rect x="{x0}" y="{y_mid - 5}" width="22" height="10" '
+                f'fill="{col}"/>')
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
 pt.add_artist(pt.ArtistSpec(
@@ -76,7 +81,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=annotation_strip_xdomain,
     ydomain=annotation_strip_ydomain,
     draw=annotation_strip_draw,
-    legend_entries=pt.legend_from_swatch(annotation_strip_legend_swatch),
+    legend_entries=annotation_strip_legend_entries,
     uses_color_cycle=False,
 ))
 

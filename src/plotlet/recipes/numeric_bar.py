@@ -58,10 +58,15 @@ def numeric_bar_draw(a, ctx):
     return "".join(out)
 
 
-def numeric_bar_legend_swatch(a, ctx, x0, y_mid):
-    col = a["_color"]
-    alpha = a["opts"].get("alpha", _D["bar_alpha"])
-    return rect(x0, y_mid - 5, 22, 10, fill=col, alpha=alpha)
+def numeric_bar_legend_entries(a):
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    def paint(a, ctx, x0, y_mid):
+        col = a["_color"]
+        alpha = a["opts"].get("alpha", _D["bar_alpha"])
+        return rect(x0, y_mid - 5, 22, 10, fill=col, alpha=alpha)
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
 pt.add_artist(pt.ArtistSpec(
@@ -70,7 +75,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=numeric_bar_xdomain,
     ydomain=numeric_bar_ydomain,
     draw=numeric_bar_draw,
-    legend_entries=pt.legend_from_swatch(numeric_bar_legend_swatch),
+    legend_entries=numeric_bar_legend_entries,
     force_zero_y=True,
 ))
 

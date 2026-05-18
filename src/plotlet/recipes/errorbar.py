@@ -72,14 +72,19 @@ def errorbar_draw(a, ctx):
     return "".join(out)
 
 
-def errorbar_legend_swatch(a, ctx, x0, y_mid):
-    col = a["_color"]
-    msize = a["opts"].get("markersize", ctx.defaults["markersize"])
-    cx = x0 + 11
-    return (
-        segment(cx, y_mid - 5, cx, y_mid + 5, color=col, width=1.2)
-        + marker(a["opts"].get("marker", "o"), cx, y_mid, msize, col, 1)
-    )
+def errorbar_legend_entries(a):
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    def paint(a, ctx, x0, y_mid):
+        col = a["_color"]
+        msize = a["opts"].get("markersize", ctx.defaults["markersize"])
+        cx = x0 + 11
+        return (
+            segment(cx, y_mid - 5, cx, y_mid + 5, color=col, width=1.2)
+            + marker(a["opts"].get("marker", "o"), cx, y_mid, msize, col, 1)
+        )
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
 pt.add_artist(pt.ArtistSpec(
@@ -88,7 +93,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=errorbar_xdomain,
     ydomain=errorbar_ydomain,
     draw=errorbar_draw,
-    legend_entries=pt.legend_from_swatch(errorbar_legend_swatch),
+    legend_entries=errorbar_legend_entries,
 ))
 
 

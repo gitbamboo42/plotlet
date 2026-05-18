@@ -79,8 +79,13 @@ def pr_draw(a, ctx):
     return out
 
 
-def pr_legend_swatch(a, ctx, x0, y_mid):
-    return segment(x0, y_mid, x0 + 22, y_mid, color=a["_color"], width=1.6)
+def pr_legend_entries(a):
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    def paint(a, ctx, x0, y_mid):
+        return segment(x0, y_mid, x0 + 22, y_mid, color=a["_color"], width=1.6)
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
 pt.add_artist(pt.ArtistSpec(
@@ -89,7 +94,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=pr_xdomain,
     ydomain=pr_ydomain,
     draw=pr_draw,
-    legend_entries=pt.legend_from_swatch(pr_legend_swatch),
+    legend_entries=pr_legend_entries,
 ))
 
 
