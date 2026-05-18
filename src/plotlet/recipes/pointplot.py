@@ -128,7 +128,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=pointplot_xdomain,
     ydomain=pointplot_ydomain,
     draw=pointplot_draw,
-    legend_swatch=pointplot_legend_swatch,
+    legend_entries=pt.legend_from_swatch(pointplot_legend_swatch),
 ))
 
 

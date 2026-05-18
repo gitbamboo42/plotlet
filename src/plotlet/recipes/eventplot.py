@@ -77,7 +77,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=eventplot_xdomain,
     ydomain=eventplot_ydomain,
     draw=eventplot_draw,
-    legend_swatch=eventplot_legend_swatch,
+    legend_entries=pt.legend_from_swatch(eventplot_legend_swatch),
 ))
 
 

@@ -60,7 +60,12 @@ class ArtistSpec:
     layer: str = "data"  # "background" | "data" | "foreground"
     uses_color_cycle: bool = True
     default_color: str | None = None  # used when uses_color_cycle is False
-    legend_swatch: Callable[[dict, "RenderContext", float, float], str] | None = None
+    # Each entry: {"label": str, "color": str, "paint"?: callable, "_a"?: dict}
+    # `paint(a, ctx, x0, y_mid) -> str` is optional; default is a colored rect
+    # swatch using entry["color"]. `_a` is auto-attached by the harvester so
+    # paint functions have the original recorded artist for context (linewidth,
+    # alpha, marker kind, etc.).
+    legend_entries: Callable[[dict], list[dict]] | None = None
     legend_gradient: Callable[[dict], dict | None] | None = None
     data_attrs: Callable[[dict], dict | None] | None = None
     flips_y_axis: Callable[[dict], bool] | None = None
@@ -74,6 +79,26 @@ class ArtistSpec:
     force_zero_y: bool = False
     axis_order: Callable[[dict], dict | None] | None = None
     frame_defaults: Callable[[list, dict], list | None] | None = None
+
+
+def legend_from_swatch(paint):
+    """Wrap a `(a, ctx, x0, y_mid) -> str` paint function as a
+    `legend_entries` callable that emits zero or one entry per call,
+    skipping calls with no `label` option. The standard wrapper for
+    one-series-per-call artists (line, bar, scatter, ...).
+
+    Multi-entry artists (sankey, mosaic, dag, ...) should write their
+    own `legend_entries` returning multiple dicts directly.
+    """
+    def entries(a):
+        label = a["opts"].get("label")
+        if not label:
+            return []
+        # `_color` is assigned by the render-pass color-cycle pass; the
+        # sizing pass calls this before that, so fall back to None for
+        # entries built during sizing (only `label` is read at sizing time).
+        return [{"label": label, "color": a.get("_color"), "paint": paint}]
+    return entries
 
 
 @dataclass

@@ -58,6 +58,16 @@ def diverging_bar_draw(a, ctx):
     return "".join(out)
 
 
+def diverging_bar_legend_entries(a):
+    opts = a["opts"]
+    return [
+        {"label": opts.get("pos_label", "positive"),
+         "color": opts.get("pos_color", "#1f77b4")},
+        {"label": opts.get("neg_label", "negative"),
+         "color": opts.get("neg_color", "#d62728")},
+    ]
+
+
 pt.add_artist(pt.ArtistSpec(
     name="diverging_bar",
     record=diverging_bar_record,
@@ -65,6 +75,7 @@ pt.add_artist(pt.ArtistSpec(
     ydomain=diverging_bar_ydomain,
     draw=diverging_bar_draw,
     uses_color_cycle=False,
+    legend_entries=diverging_bar_legend_entries,
 ))
 
 
@@ -78,7 +89,7 @@ def demo():
     c = pt.chart(data_width=420)
     c.yscale("category", order=items)
     c.diverging_bar(items, nps)
-    c.title("Net promoter by area").xlabel("NPS")
+    c.title("Net promoter by area").xlabel("NPS").legend(True)
     return c
 
 

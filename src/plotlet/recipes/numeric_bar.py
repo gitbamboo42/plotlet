@@ -70,7 +70,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=numeric_bar_xdomain,
     ydomain=numeric_bar_ydomain,
     draw=numeric_bar_draw,
-    legend_swatch=numeric_bar_legend_swatch,
+    legend_entries=pt.legend_from_swatch(numeric_bar_legend_swatch),
     force_zero_y=True,
 ))
 

@@ -79,6 +79,18 @@ def volcano_draw(a, ctx):
     return "".join(out)
 
 
+def volcano_legend_entries(a):
+    opts = a["opts"]
+    return [
+        {"label": opts.get("up_label", "up"),
+         "color": opts.get("up_color", "#d62728")},
+        {"label": opts.get("down_label", "down"),
+         "color": opts.get("down_color", "#1f77b4")},
+        {"label": opts.get("ns_label", "n.s."),
+         "color": opts.get("ns_color", "#999999")},
+    ]
+
+
 pt.add_artist(pt.ArtistSpec(
     name="volcano",
     record=volcano_record,
@@ -87,6 +99,7 @@ pt.add_artist(pt.ArtistSpec(
     draw=volcano_draw,
     uses_color_cycle=False,
     force_zero_y=True,
+    legend_entries=volcano_legend_entries,
 ))
 
 
@@ -110,7 +123,7 @@ def demo():
     labels = [f"g{i:04d}" for i in range(n)]
     c = pt.chart()
     c.volcano(fc, pvals, labels, fc_threshold=1.0, p_threshold=0.01, n_label=8)
-    c.title("Differential expression").xlabel("log₂ fold change").ylabel("−log₁₀(p)")
+    c.title("Differential expression").xlabel("log₂ fold change").ylabel("−log₁₀(p)").legend(True)
     return c
 
 

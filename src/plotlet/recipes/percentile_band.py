@@ -87,7 +87,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=pband_xdomain,
     ydomain=pband_ydomain,
     draw=pband_draw,
-    legend_swatch=pband_legend_swatch,
+    legend_entries=pt.legend_from_swatch(pband_legend_swatch),
 ))
 
 

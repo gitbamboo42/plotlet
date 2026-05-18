@@ -18,7 +18,7 @@ from .draw.colormaps import colormap, list_colormaps
 from .chart import Chart, chart
 from .layout import grid
 from .legend import legend
-from .registry import ArtistSpec, add_artist
+from .registry import ArtistSpec, add_artist, legend_from_swatch
 from .layout_diagram import layout_diagram
 from .themes import load_theme, available_themes, register_theme
 from .facet import facet, FacetGrid
@@ -26,7 +26,7 @@ from . import draw, utils
 
 __all__ = ["chart", "Chart", "SPEC", "TAB10", "colors",
            "colormap", "list_colormaps", "grid", "legend",
-           "ArtistSpec", "add_artist", "layout_diagram",
+           "ArtistSpec", "add_artist", "legend_from_swatch", "layout_diagram",
            "load_theme", "available_themes", "register_theme",
            "facet", "FacetGrid",
            "draw", "utils"]

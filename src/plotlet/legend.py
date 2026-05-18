@@ -10,8 +10,11 @@ Two render paths share one panel:
   - Continuous: each source artist's `spec.legend_gradient` returns a
     {cmap, vmin, vmax, label, ticks} descriptor; the legend draws a
     vertical gradient strip with ticks (vmax at top).
-  - Discrete: each labeled artist's `spec.legend_swatch` paints its own
-    swatch (today's behavior, factored out of the in-frame overlay).
+  - Discrete: each source artist's `spec.legend_entries` returns a list
+    of `{"label", "color", "paint"?}` dicts — one per legend row. An
+    artist may emit zero, one, or many entries from a single call,
+    which lets multi-category artists (sankey, mosaic, dag, ...) carry
+    their own legend without forcing the caller into a fan-out loop.
 Mixed sources stack continuous-first, discrete-second.
 """
 from __future__ import annotations
@@ -91,7 +94,7 @@ def legend(*sources: Chart, names: dict | None = None,
 
 
 def _swatch_ctx(a: dict) -> RenderContext:
-    """Minimal context for `legend_swatch` — only the fields swatch helpers
+    """Minimal context for an entry's `paint` callback — only the fields swatch helpers
     actually read (defaults, dash, color). x/y scales aren't relevant."""
     return RenderContext(
         x_scale=None, y_scale=None, iw=0, ih=0,
@@ -123,8 +126,11 @@ def _build_groups(sources: list[Chart], states: dict[int, dict],
                 desc = spec.legend_gradient(a)
                 if desc is not None:
                     cont.append(desc)
-            if a["opts"].get("label") and spec.legend_swatch is not None:
-                disc.append(a)
+            if spec.legend_entries is not None:
+                for entry in spec.legend_entries(a):
+                    entry = dict(entry)
+                    entry.setdefault("_a", a)
+                    disc.append(entry)
         if not cont and not disc:
             continue
         if not group_by_chart:
@@ -259,8 +265,8 @@ def _legend_content_size(leaf: Chart, sources: list[Chart],
             total_h += _LEGSPEC["gradient_height"]
         if g["cont"] and g["disc"]:
             total_h += _LEGSPEC["section_gap"]
-        for a in g["disc"]:
-            disc_w = sw + 6 + _measure_text(a["opts"]["label"], tick_size)
+        for entry in g["disc"]:
+            disc_w = sw + 6 + _measure_text(entry["label"], tick_size)
             max_w = max(max_w, disc_w)
         total_h += len(g["disc"]) * row_h
         if gi < len(groups) - 1:
@@ -330,15 +336,16 @@ def _render_legend(leaf: Chart, w: float, h: float,
             cy += entry_label_h + _LEGSPEC["gradient_height"]
         if g["cont"] and g["disc"]:
             cy += _LEGSPEC["section_gap"]
-        for i, a in enumerate(g["disc"]):
+        for i, entry in enumerate(g["disc"]):
             ry = cy + i * row_h + row_h / 2
-            spec = get_artist(a["type"])
-            if spec is not None and spec.legend_swatch is not None:
-                parts.append(spec.legend_swatch(a, _swatch_ctx(a), pad_x, ry))
+            paint = entry.get("paint")
+            if paint is not None:
+                a = entry["_a"]
+                parts.append(paint(a, _swatch_ctx(a), pad_x, ry))
             else:
-                parts.append(f'<line x1="{pad_x}" x2="{pad_x + sw}" y1="{ry}" y2="{ry}" '
-                             f'stroke="{a["_color"]}" stroke-width="{_D["linewidth"]}"/>')
-            parts.append(text_path(a["opts"]["label"], pad_x + sw + 6, ry + 4,
+                parts.append(f'<rect x="{pad_x}" y="{ry - 5}" width="{sw}" height="10" '
+                             f'fill="{entry["color"]}"/>')
+            parts.append(text_path(entry["label"], pad_x + sw + 6, ry + 4,
                                     tick_size, anchor="start", color=text_color))
         cy += len(g["disc"]) * row_h
         if gi < len(groups) - 1:

@@ -61,7 +61,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=loess_xdomain,
     ydomain=loess_ydomain,
     draw=loess_draw,
-    legend_swatch=loess_legend_swatch,
+    legend_entries=pt.legend_from_swatch(loess_legend_swatch),
 ))
 
 

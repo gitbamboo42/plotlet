@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 
-from .registry import ArtistSpec, RenderContext, add_artist
+from .registry import ArtistSpec, RenderContext, add_artist, legend_from_swatch
 from .draw import marker, segment, rect, circle
 from .utils import to_list, to_list_2d, broadcast, histogram
 from .artists import (
@@ -257,7 +257,7 @@ add_artist(ArtistSpec(
     xdomain=_xs_of,
     ydomain=_ys_of,
     draw=lambda a, ctx: _artist_line(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_swatch=_line_legend_swatch,
+    legend_entries=legend_from_swatch(_line_legend_swatch),
     data_attrs=_line_data_attrs,
 ))
 
@@ -271,7 +271,7 @@ add_artist(ArtistSpec(
     xdomain=_xs_of,
     ydomain=_ys_of,
     draw=lambda a, ctx: _artist_scatter(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_swatch=_scatter_legend_swatch,
+    legend_entries=legend_from_swatch(_scatter_legend_swatch),
     data_attrs=_scatter_data_attrs,
 ))
 
@@ -287,7 +287,7 @@ add_artist(ArtistSpec(
     xdomain=lambda a: a["cats"],
     ydomain=_vals_of,
     draw=lambda a, ctx: _artist_bar(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_swatch=_bar_legend_swatch,
+    legend_entries=legend_from_swatch(_bar_legend_swatch),
     data_attrs=_bar_data_attrs,
     force_zero_y=True,
 ))
@@ -301,7 +301,7 @@ add_artist(ArtistSpec(
     xdomain=_bin_xs,
     ydomain=_bin_ys,
     draw=lambda a, ctx: _artist_hist(a, ctx.x_scale, ctx.y_scale, ctx.ih, ctx.color),
-    legend_swatch=_bar_legend_swatch,
+    legend_entries=legend_from_swatch(_bar_legend_swatch),
     data_attrs=_hist_data_attrs,
     force_zero_y=True,
 ))
@@ -319,7 +319,7 @@ add_artist(ArtistSpec(
     xdomain=_xs_of,
     ydomain=_y1y2_of,
     draw=lambda a, ctx: _artist_fill_between(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_swatch=_line_legend_swatch,
+    legend_entries=legend_from_swatch(_line_legend_swatch),
     data_attrs=_fill_between_data_attrs,
 ))
 
@@ -346,7 +346,7 @@ add_artist(ArtistSpec(
     xdomain=_xs_of,
     ydomain=_y1y2_of,
     draw=lambda a, ctx: _artist_fill_between(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_swatch=_bar_legend_swatch,
+    legend_entries=legend_from_swatch(_bar_legend_swatch),
     data_attrs=_area_data_attrs,
 ))
 
@@ -377,7 +377,7 @@ add_artist(ArtistSpec(
     xdomain=_rect_xdomain,
     ydomain=_rect_ydomain,
     draw=lambda a, ctx: _artist_rect(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_swatch=_bar_legend_swatch,
+    legend_entries=legend_from_swatch(_bar_legend_swatch),
     data_attrs=_rect_data_attrs,
 ))
 
@@ -395,7 +395,7 @@ add_artist(ArtistSpec(
     xdomain=_xs_of,
     ydomain=_ys_of,
     draw=lambda a, ctx: _artist_polygon(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_swatch=_bar_legend_swatch,
+    legend_entries=legend_from_swatch(_bar_legend_swatch),
     data_attrs=_polygon_data_attrs,
 ))
 
@@ -411,7 +411,7 @@ add_artist(ArtistSpec(
     layer="foreground",
     uses_color_cycle=False,
     default_color=_D["refline_color"],
-    legend_swatch=_refline_legend_swatch,
+    legend_entries=legend_from_swatch(_refline_legend_swatch),
     data_attrs=_axhline_data_attrs,
 ))
 
@@ -423,7 +423,7 @@ add_artist(ArtistSpec(
     layer="foreground",
     uses_color_cycle=False,
     default_color=_D["refline_color"],
-    legend_swatch=_refline_legend_swatch,
+    legend_entries=legend_from_swatch(_refline_legend_swatch),
     data_attrs=_axvline_data_attrs,
 ))
 
@@ -435,7 +435,7 @@ add_artist(ArtistSpec(
     layer="background",
     uses_color_cycle=False,
     default_color=_D["refspan_color"],
-    legend_swatch=_refspan_legend_swatch,
+    legend_entries=legend_from_swatch(_refspan_legend_swatch),
     data_attrs=_axhspan_data_attrs,
 ))
 
@@ -447,7 +447,7 @@ add_artist(ArtistSpec(
     layer="background",
     uses_color_cycle=False,
     default_color=_D["refspan_color"],
-    legend_swatch=_refspan_legend_swatch,
+    legend_entries=legend_from_swatch(_refspan_legend_swatch),
     data_attrs=_axvspan_data_attrs,
 ))
 
@@ -473,7 +473,7 @@ add_artist(ArtistSpec(
     xdomain=lambda a: a["xmins"] + a["xmaxs"],
     ydomain=lambda a: a["ys"],
     draw=lambda a, ctx: _artist_hlines(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_swatch=_refline_legend_swatch,
+    legend_entries=legend_from_swatch(_refline_legend_swatch),
     data_attrs=_hlines_data_attrs,
 ))
 
@@ -484,7 +484,7 @@ add_artist(ArtistSpec(
     xdomain=lambda a: a["xs"],
     ydomain=lambda a: a["ymins"] + a["ymaxs"],
     draw=lambda a, ctx: _artist_vlines(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_swatch=_refline_legend_swatch,
+    legend_entries=legend_from_swatch(_refline_legend_swatch),
     data_attrs=_vlines_data_attrs,
 ))
 
@@ -711,6 +711,6 @@ add_artist(ArtistSpec(
     xdomain=_errorbar_xdomain,
     ydomain=_errorbar_ydomain,
     draw=lambda a, ctx: _artist_errorbar(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_swatch=_errorbar_legend_swatch,
+    legend_entries=legend_from_swatch(_errorbar_legend_swatch),
     data_attrs=_errorbar_data_attrs,
 ))

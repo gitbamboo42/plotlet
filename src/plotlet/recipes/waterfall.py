@@ -87,6 +87,20 @@ def waterfall_draw(a, ctx):
     return "".join(out)
 
 
+def waterfall_legend_entries(a):
+    opts = a["opts"]
+    entries = [
+        {"label": opts.get("pos_label", "increase"),
+         "color": opts.get("pos_color", "#2ca02c")},
+        {"label": opts.get("neg_label", "decrease"),
+         "color": opts.get("neg_color", "#d62728")},
+    ]
+    if opts.get("show_total", True):
+        entries.append({"label": opts.get("total_label", "Total"),
+                        "color": opts.get("total_color", "#7f7f7f")})
+    return entries
+
+
 pt.add_artist(pt.ArtistSpec(
     name="waterfall",
     record=waterfall_record,
@@ -94,6 +108,7 @@ pt.add_artist(pt.ArtistSpec(
     ydomain=waterfall_ydomain,
     draw=waterfall_draw,
     uses_color_cycle=False,
+    legend_entries=waterfall_legend_entries,
 ))
 
 
@@ -106,7 +121,7 @@ def demo():
     c = pt.chart()
     c.xscale("category", order=labels + ["Total"])
     c.waterfall(labels, deltas)
-    c.title("Net income breakdown").ylabel("$M")
+    c.title("Net income breakdown").ylabel("$M").legend(True)
     return c
 
 

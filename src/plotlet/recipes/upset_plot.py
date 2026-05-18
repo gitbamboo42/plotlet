@@ -103,6 +103,16 @@ def upset_draw(a, ctx):
     return "".join(out)
 
 
+def upset_legend_entries(a):
+    opts = a["opts"]
+    return [
+        {"label": opts.get("on_label", "in set"),
+         "color": opts.get("on_color", "#333333")},
+        {"label": opts.get("off_label", "not in set"),
+         "color": opts.get("off_color", "#dddddd")},
+    ]
+
+
 pt.add_artist(pt.ArtistSpec(
     name="upset",
     record=upset_record,
@@ -110,6 +120,7 @@ pt.add_artist(pt.ArtistSpec(
     ydomain=upset_ydomain,
     draw=upset_draw,
     uses_color_cycle=False,
+    legend_entries=upset_legend_entries,
 ))
 
 
@@ -130,7 +141,7 @@ def demo():
     }
     c = pt.chart(data_width=520, data_height=300)
     c.upset(list(sets), sets, n_top=12)
-    c.title("UpSet — hits per assay combination").ylabel("intersection size")
+    c.title("UpSet — hits per assay combination").ylabel("intersection size").legend(True)
     c.xticks([])
     return c
 

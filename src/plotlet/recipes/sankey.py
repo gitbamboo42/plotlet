@@ -194,6 +194,12 @@ def sankey_draw(a, ctx):
     return "".join(out)
 
 
+def sankey_legend_entries(a):
+    node_colors = a["opts"].get("node_colors") or {}
+    return [{"label": str(name), "color": color}
+            for name, color in node_colors.items()]
+
+
 pt.add_artist(pt.ArtistSpec(
     name="sankey",
     record=sankey_record,
@@ -202,6 +208,7 @@ pt.add_artist(pt.ArtistSpec(
     draw=sankey_draw,
     uses_color_cycle=False,
     tight_domain=True,
+    legend_entries=sankey_legend_entries,
 ))
 
 
@@ -232,9 +239,16 @@ def demo():
         ("Heat","Losses",        3),
     ]
     c = pt.chart(data_width=600, data_height=360)
-    c.sankey(nodes, flows)
+    node_colors = {
+        "Coal":    "#7f7f7f",
+        "Gas":     "#ff7f0e",
+        "Solar":   "#ffbb33",
+        "Wind":    "#1f77b4",
+        "Nuclear": "#2ca02c",
+    }
+    c.sankey(nodes, flows, node_colors=node_colors)
     c.xticks([]); c.yticks([])
-    c.title("Energy flow (TWh)")
+    c.title("Energy flow (TWh)").legend(True)
     return c
 
 

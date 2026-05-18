@@ -86,7 +86,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=roc_xdomain,
     ydomain=roc_ydomain,
     draw=roc_draw,
-    legend_swatch=roc_legend_swatch,
+    legend_entries=pt.legend_from_swatch(roc_legend_swatch),
 ))
 
 

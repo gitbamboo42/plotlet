@@ -136,7 +136,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=split_violin_xdomain,
     ydomain=split_violin_ydomain,
     draw=split_violin_draw,
-    legend_swatch=split_violin_legend_swatch,
+    legend_entries=pt.legend_from_swatch(split_violin_legend_swatch),
 ))
 
 

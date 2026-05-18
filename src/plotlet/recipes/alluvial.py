@@ -144,6 +144,22 @@ def alluvial_draw(a, ctx):
     return "".join(out)
 
 
+def alluvial_legend_entries(a):
+    # Categories are colored by their position within each layer (palette index
+    # = j). Enumerate unique categories in first-seen order, assigning each
+    # the color of its first appearance.
+    entries = []
+    seen = set()
+    for _, cats in a["layers"]:
+        for j, c in enumerate(cats):
+            if c in seen:
+                continue
+            seen.add(c)
+            entries.append({"label": str(c),
+                            "color": _PALETTE[j % len(_PALETTE)]})
+    return entries
+
+
 pt.add_artist(pt.ArtistSpec(
     name="alluvial",
     record=alluvial_record,
@@ -152,6 +168,7 @@ pt.add_artist(pt.ArtistSpec(
     draw=alluvial_draw,
     uses_color_cycle=False,
     tight_domain=True,
+    legend_entries=alluvial_legend_entries,
 ))
 
 
@@ -175,7 +192,7 @@ def demo():
     c = pt.chart(data_width=560, data_height=320)
     c.alluvial(layers, transitions)
     c.xticks([]); c.yticks([])
-    c.title("Customer-segment migration")
+    c.title("Customer-segment migration").legend(True)
     return c
 
 

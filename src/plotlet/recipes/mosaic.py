@@ -98,6 +98,13 @@ def mosaic_draw(a, ctx):
     return "".join(out)
 
 
+def mosaic_legend_entries(a):
+    color_by = a["opts"].get("color_by", "row")
+    names = a["row_names"] if color_by == "row" else a["col_names"]
+    return [{"label": str(name), "color": _PALETTE[i % len(_PALETTE)]}
+            for i, name in enumerate(names)]
+
+
 pt.add_artist(pt.ArtistSpec(
     name="mosaic",
     record=mosaic_record,
@@ -106,6 +113,7 @@ pt.add_artist(pt.ArtistSpec(
     draw=mosaic_draw,
     uses_color_cycle=False,
     tight_domain=True,
+    legend_entries=mosaic_legend_entries,
 ))
 
 
@@ -125,7 +133,7 @@ def demo():
     c = pt.chart(data_width=440, data_height=300)
     c.mosaic(table, classes, outcomes, color_by="col")
     c.xticks([]); c.yticks([])
-    c.title("Titanic survival × class")
+    c.title("Titanic survival × class").legend(True)
     return c
 
 

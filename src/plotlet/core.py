@@ -1313,32 +1313,40 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         parts.append(text_path(st["title"], iw / 2, -10, title_size,
                                 anchor="middle", color=text_color))
 
-    # legend — each artist's spec supplies its own swatch via legend_swatch.
-    # Custom artists that don't define one fall back to a colored line.
+    # legend — gather entries from every artist's legend_entries(a).
+    # Multi-entry artists (sankey, mosaic, ...) contribute one row per
+    # category; single-entry artists (line, bar, scatter, ...) contribute
+    # zero or one row depending on whether they were passed a label.
     if st["legend"]:
-        labeled = [a for a in st["artists"] if a["opts"].get("label")]
-        if labeled:
+        gathered = []  # list of (a, entry)
+        for a in st["artists"]:
+            spec = get_artist(a["type"])
+            if spec is None or spec.legend_entries is None:
+                continue
+            for entry in spec.legend_entries(a):
+                gathered.append((a, entry))
+        if gathered:
             row_h = _LEGSPEC["row_height"]
             pad_x = _LEGSPEC["pad_x"]
             pad_y = _LEGSPEC["pad_y"]
             sw    = _LEGSPEC["swatch_width"]
-            max_text = max(_measure_text(a["opts"]["label"], tick_size) for a in labeled)
+            max_text = max(_measure_text(e["label"], tick_size) for _, e in gathered)
             lw = sw + 6 + max_text + 2 * pad_x
-            lh = len(labeled) * row_h + 2 * pad_y
+            lh = len(gathered) * row_h + 2 * pad_y
             lx, ly = iw - lw - _LEGSPEC["border_offset"], _LEGSPEC["border_offset"]
             parts.append(f'<g transform="translate({lx:.2f},{ly})">')
             parts.append(f'<rect x="0" y="0" width="{lw:.2f}" height="{lh}" '
                          f'fill="{_LEGSPEC["background"]}" stroke="{_FRAME["color"]}" '
                          f'stroke-width="{_FRAME["width"]}" opacity="{_LEGSPEC["opacity"]}"/>')
-            for i, a in enumerate(labeled):
+            for i, (a, entry) in enumerate(gathered):
                 ry = pad_y + i * row_h + row_h / 2
-                spec = get_artist(a["type"])
-                if spec is not None and spec.legend_swatch is not None:
-                    parts.append(spec.legend_swatch(a, _ctx_for(a), pad_x, ry))
+                paint = entry.get("paint")
+                if paint is not None:
+                    parts.append(paint(a, _ctx_for(a), pad_x, ry))
                 else:
-                    parts.append(f'<line x1="{pad_x}" x2="{pad_x + sw}" y1="{ry}" y2="{ry}" '
-                                 f'stroke="{a["_color"]}" stroke-width="{_D["linewidth"]}"/>')
-                parts.append(text_path(a["opts"]["label"], pad_x + sw + 6, ry + 4,
+                    parts.append(f'<rect x="{pad_x}" y="{ry - 5}" width="{sw}" '
+                                 f'height="10" fill="{entry["color"]}"/>')
+                parts.append(text_path(entry["label"], pad_x + sw + 6, ry + 4,
                                         tick_size, anchor="start", color=text_color))
             parts.append('</g>')
 

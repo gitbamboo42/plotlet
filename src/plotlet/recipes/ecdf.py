@@ -59,7 +59,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=ecdf_xdomain,
     ydomain=ecdf_ydomain,
     draw=ecdf_draw,
-    legend_swatch=ecdf_legend_swatch,
+    legend_entries=pt.legend_from_swatch(ecdf_legend_swatch),
 ))
 
 

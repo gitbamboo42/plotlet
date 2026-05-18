@@ -106,7 +106,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=regression_xdomain,
     ydomain=regression_ydomain,
     draw=regression_draw,
-    legend_swatch=regression_legend_swatch,
+    legend_entries=pt.legend_from_swatch(regression_legend_swatch),
 ))
 
 

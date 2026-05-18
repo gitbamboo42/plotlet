@@ -80,7 +80,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=freqpoly_xdomain,
     ydomain=freqpoly_ydomain,
     draw=freqpoly_draw,
-    legend_swatch=freqpoly_legend_swatch,
+    legend_entries=pt.legend_from_swatch(freqpoly_legend_swatch),
     force_zero_y=True,
 ))
 

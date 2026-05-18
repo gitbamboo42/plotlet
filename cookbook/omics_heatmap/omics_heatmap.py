@@ -76,7 +76,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=annotation_strip_xdomain,
     ydomain=annotation_strip_ydomain,
     draw=annotation_strip_draw,
-    legend_swatch=annotation_strip_legend_swatch,
+    legend_entries=pt.legend_from_swatch(annotation_strip_legend_swatch),
     uses_color_cycle=False,
 ))
 

@@ -96,7 +96,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=calibration_xdomain,
     ydomain=calibration_ydomain,
     draw=calibration_draw,
-    legend_swatch=calibration_legend_swatch,
+    legend_entries=pt.legend_from_swatch(calibration_legend_swatch),
 ))
 
 
