@@ -7,12 +7,14 @@ one `<g transform>` per leaf — each calling `_render_inner` from `core.py`.
 Composition is component-first: a parent's total size is the sum of its
 children plus gaps; leaf size hints (`pt.chart(data_width=…)` —
 preferred — or `canvas_width=…`) act as relative ratios when a parent
-allocates space. The auto-zero-gap rule
-collapses the gap between two leaves connected by `share_x=` / `share_y=`,
-and the share pre-pass forces both panels onto a single shared scale so
-domains line up. Inner-edge tick labels and axis labels on the joined
-side are dropped; spines and tick marks remain so each panel still reads
-as a closed rectangle. See `docs/SUBPLOTS.md` for the design rationale.
+allocates space. When two leaves are connected by `share_x=` / `share_y=`,
+the share pre-pass forces both panels onto a single shared scale so
+domains line up, and inner-edge tick labels and axis labels on the
+joined side are dropped — the joined-side margin collapses to just the
+floor via the content-aware `_required_margin`. Spines and tick marks
+remain so each panel still reads as a closed rectangle. Parent `gap`
+applies uniformly (joined or not). See `docs/SUBPLOTS.md` for the
+design rationale.
 """
 from __future__ import annotations
 
@@ -25,13 +27,12 @@ from .core import (
     _AxisDescriptor, _PanelOpts,
     _figure_root_attrs, _panel_open,
 )
-from .chart import Chart, _normalize_inner_gap, _extract_theme
+from .chart import Chart, _extract_theme
 
 # Layout gaps stay captured — they're parent-level positional, not
 # per-leaf-themable. Font family and background read live from the spec
 # so a leaf's `c.theme(...)` propagates to the surrounding canvas.
 _GAP = _LAYOUTSPEC["gap"]
-_INNER_GAP = _normalize_inner_gap(_LAYOUTSPEC["inner_gap"])
 _LEGEND_GAP = _LAYOUTSPEC["legend_gap"]
 
 
@@ -43,7 +44,6 @@ def grid(cells: list[list],
          share_x: bool | str = False,
          share_y: bool | str = False,
          gap: int | float | None = None,
-         inner_gap=None,
          **kwargs) -> Chart:
     """Build a grid-layout parent Chart from a list-of-lists of cells.
 
@@ -114,8 +114,6 @@ def grid(cells: list[list],
             cell._parent = parent
     if gap is not None:
         parent._gap = float(gap)
-    if inner_gap is not None:
-        parent._inner_gap = _normalize_inner_gap(inner_gap)
     parent.share_x(share_x)
     parent.share_y(share_y)
     return parent
@@ -154,35 +152,20 @@ def _resolve_gap(a: Chart | None, b: Chart | None) -> float:
     return _GAP
 
 
-def _resolve_inner_gap(leaf: Chart, axis: str) -> float:
-    """Pull the per-parent `inner_gap` override off the leaf's immediate
-    parent; fall back to `spec.json:layout.inner_gap`. `axis="v"` returns
-    the vertical-arrangement (share_x) value, `axis="h"` the horizontal-
-    arrangement (share_y) value. Cross-layout shares (rare) read from each
-    leaf's *own* parent — explicit per-parent setting wins on whichever
-    side it's declared."""
-    parent = leaf._parent
-    if parent is not None and parent._inner_gap is not None:
-        v, h = parent._inner_gap
-    else:
-        v, h = _INNER_GAP
-    return v if axis == "v" else h
-
-
 def _pair_gap(a: Chart | None, b: Chart | None, *, axis: str) -> float:
     """Gap between two adjacent cells.
 
-    Three regimes:
-      - Same share-equivalence class on the orthogonal axis (direct
-        share OR shared via a common reference, e.g. `B.share_y=A` and
-        `C.share_y=A` in `A | B | C`) → 0, panels butt up to read as
-        coordinated.
+    Two regimes:
       - Legend ↔ its source (or any data sibling, if the legend has no
         explicit source) → `legend_gap`, a small intentional separation
         that's not a share-pair joint and doesn't trigger spine/label
         suppression.
       - Anything else → the parent's gap (set via `(a | b).gap(N)` or
-        `pt.grid(..., gap=N)`), or the spec default if unset.
+        `pt.grid(..., gap=N)`), or the spec default if unset. Joined
+        share-pairs use this same gap too: their close-side breathing
+        comes from the floor + content-aware `_required_margin` (joined
+        sides have no tick labels / axis labels / title → just floor),
+        so `gap` is genuinely extra inter-panel space layered on top.
     """
     default_gap = _resolve_gap(a, b)
     if a is None or b is None or a._is_parent or b._is_parent:
@@ -194,10 +177,6 @@ def _pair_gap(a: Chart | None, b: Chart | None, *, axis: str) -> float:
         other = b if a_leg else a
         if not leg._legend_sources or other in leg._legend_sources:
             return leg._legend_gap if leg._legend_gap is not None else _LEGEND_GAP
-        return default_gap
-    share_axis = "y" if axis == "h" else "x"
-    if _share_root(a, share_axis) is _share_root(b, share_axis):
-        return 0.0
     return default_gap
 
 
@@ -556,9 +535,12 @@ def _build_axis_descriptors(leaves: list[Chart],
 
 
 # ---------------------------------------------------------------------------
-# Per-leaf hide flags — wherever auto-zero-gap fires, the inner side of
-# each panel of the pair drops its spine + ticks + tick labels. The matching
-# margin shrinks to inner_gap so the data areas truly butt up.
+# Per-leaf hide flags — wherever a joined share-pair fires (two adjacent
+# leaves on the same share-equivalence class on the orthogonal axis),
+# the inner side of each panel drops its tick labels / axis label / title.
+# The matching margin naturally shrinks to the floor (`_required_margin`
+# reads these flags via `panel_opts` so it doesn't reserve space for
+# content the renderer will skip).
 # ---------------------------------------------------------------------------
 
 def _mark_joined_pair(a: Chart | None, b: Chart | None, *, axis: str,
@@ -587,7 +569,8 @@ def _mark_joined_pair(a: Chart | None, b: Chart | None, *, axis: str,
 
 
 def _annotate_collapses(node: Chart, out: dict[int, _PanelOpts]) -> None:
-    """Walk the tree, marking joined-pair flags wherever auto-zero-gap fires."""
+    """Walk the tree, marking joined-pair flags on every adjacent pair of
+    leaves that share an axis (orthogonal to the layout direction)."""
     if not node._is_parent:
         return
     if node._layout_kind in ("h", "v"):
@@ -690,31 +673,21 @@ def _build_panel_opts(root: Chart) -> tuple[dict[int, _PanelOpts], dict[int, dic
 def _compute_measured_margins(leaves: list[Chart],
                               states: dict[int, dict],
                               panel_opts: dict[int, _PanelOpts]) -> None:
-    """Per-leaf preliminary effective margin = max(floor, content-required),
-    with `hide_*` collapses applied so the canvas sizing computed downstream
-    matches what gets rendered.
+    """Per-leaf preliminary effective margin = floor + content-required.
 
-    Why apply hide_* here rather than at render time: the canvas-sizing
-    pre-pass writes `canvas = data + M_eff`, and render-time `iw =
-    canvas - M_eff_rendered`. If render collapses sides that the pre-pass
-    didn't, `iw` ends up wider than `data_width` for any joined panel —
-    breaking the user-facing contract that `data_width=N` produces an
-    N-wide data area. Folding the collapse into M_eff before canvas-sizing
-    keeps `iw == data_width` regardless of join state."""
+    `_required_margin` reads the leaf's `panel_opts` so joined share-pair
+    sides naturally drop their tick-label / xlabel / ylabel / title
+    reservations (the renderer suppresses these via `hide_*` /
+    `suppress_*_labels`). No separate joined-side override needed — the
+    floor is what's left, just like any other empty side."""
     for leaf in leaves:
         po = panel_opts[id(leaf)]
         M_floor = _enforce_floors(leaf._margin)
         M_req = _required_margin(states[id(leaf)],
                                  leaf._data_width,
-                                 leaf._data_height)
-        M_eff = {side: max(M_floor[side], M_req[side]) for side in M_floor}
-        ig_v = _resolve_inner_gap(leaf, axis="v")
-        ig_h = _resolve_inner_gap(leaf, axis="h")
-        if po.hide_left:   M_eff["left"]   = ig_h
-        if po.hide_right:  M_eff["right"]  = ig_h
-        if po.hide_top:    M_eff["top"]    = ig_v
-        if po.hide_bottom: M_eff["bottom"] = ig_v
-        po.M_eff = M_eff
+                                 leaf._data_height,
+                                 po=po)
+        po.M_eff = {side: M_floor[side] + M_req[side] for side in M_floor}
 
 
 def _body_cell(cell: Chart | None, panel_opts: dict[int, _PanelOpts]) -> bool:
@@ -752,9 +725,9 @@ def _coordinate_margins(node: Chart, panel_opts: dict[int, _PanelOpts]) -> None:
 
     Canvas-first cells, parents, and legend leaves are excluded — they
     have their own margin policy and shouldn't pull body-first siblings
-    around. After coordination the hide_* collapse (applied in
-    `_effective_margin`) still wins, so joined share-pair sides become
-    `inner_gap` regardless of the coordinated value."""
+    around. Joined share-pair sides already collapsed naturally during
+    `_compute_measured_margins` (hide-aware `_required_margin`), so a max
+    here just picks up the smaller-margin side as expected."""
     if not node._is_parent:
         return
     if node._layout_kind == "h":
@@ -835,20 +808,13 @@ def _update_canvases_for_margins(leaves: list[Chart],
 
 def _effective_margin(leaf: Chart, po: _PanelOpts, w: float, h: float) -> dict:
     """Margin used at render time. Data leaves read the coordinated margin
-    from `po.M_eff` (which already includes hide_* collapse from the
-    pre-pass — see `_compute_measured_margins`). The fallback path
-    (`M_eff is None`) is reachable only if a leaf slipped through the
-    pre-pass; it preserves the hide_* collapse semantics defensively."""
+    from `po.M_eff` (computed by `_compute_measured_margins` with hide-
+    aware `_required_margin`). The fallback path (`M_eff is None`) is
+    reachable only if a leaf slipped through the pre-pass; falls back to
+    the floor alone."""
     if po.M_eff is not None:
         return dict(po.M_eff)
-    M_eff = _enforce_floors(leaf._margin)
-    ig_v = _resolve_inner_gap(leaf, axis="v")
-    ig_h = _resolve_inner_gap(leaf, axis="h")
-    if po.hide_left:   M_eff["left"]   = ig_h
-    if po.hide_right:  M_eff["right"]  = ig_h
-    if po.hide_top:    M_eff["top"]    = ig_v
-    if po.hide_bottom: M_eff["bottom"] = ig_v
-    return M_eff
+    return _enforce_floors(leaf._margin)
 
 
 def _render_layout(root: Chart) -> str:

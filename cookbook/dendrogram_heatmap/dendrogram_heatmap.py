@@ -63,10 +63,11 @@ if __name__ == "__main__":
                cmap="viridis")
     hm.xticks(rotation=45)
 
-    # share_x collapses the inter-panel gap; inner_gap(0) drops the
-    # joined-side margin so the dendrogram leaves butt up against the
-    # heatmap cells with no whitespace between them.
-    fig = (top / hm).share_x().inner_gap(0)
+    # share_x collapses the inter-panel gap; the joined-side margins of
+    # both panels (top's bottom, hm's top) collapse to the floor since no
+    # content is rendered there, so the dendrogram butts up against the
+    # heatmap cells with just the floor's worth of breathing room.
+    fig = (top / hm).share_x()
 
     out = Path(__file__).with_suffix(".svg")
     fig.save_svg(out)

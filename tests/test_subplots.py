@@ -191,17 +191,6 @@ def custom_gap_grid_kwarg():
     return pt.grid([[a, b, c]], gap=8)
 
 
-def custom_inner_gap():
-    # `inner_gap(2)` shrinks the share-pair joint margin from default 12.
-    # Two body-first leaves sharing y; the right leaf's left margin and
-    # the left leaf's right margin both collapse to 2 px (was 12).
-    main = pt.chart(title="main", data_width=240, data_height=180)
-    main.line([1,2,3], [1,4,9])
-    side = pt.chart(title="side", data_width=80,  data_height=180)
-    side.line([1,1,1], [1,4,9])
-    return (main | side).share_y().inner_gap(2)
-
-
 def complex_grid_shares():
     # Annotated-heatmap shape via grid with column/row sharing:
     # `share_x="col"` → top↔main share x (column 1); `share_y="row"` →
@@ -255,7 +244,6 @@ PLOTS = {
     "complex_grid":        complex_grid_shares,
     "gap_method":          custom_gap_method,
     "gap_grid_kwarg":      custom_gap_grid_kwarg,
-    "inner_gap_override":  custom_inner_gap,
     "fit_to_canvas":       fit_to_canvas,
     "fit_width_only":      fit_width_only,
 }
@@ -336,7 +324,7 @@ def _run_invariants():
         if "leaf" not in str(ex).lower():
             failures.append(f"expected leaf-share message; got: {ex}")
 
-    # 7b. parent-level gap() / inner_gap() reject on a leaf, same as share().
+    # 7b. parent-level gap() rejects on a leaf, same as share().
     leaf = pt.chart(); leaf.line([1,2],[1,2])
     try:
         leaf.gap(0)
@@ -344,12 +332,6 @@ def _run_invariants():
     except TypeError as ex:
         if "leaf" not in str(ex).lower():
             failures.append(f"expected leaf-gap message; got: {ex}")
-    try:
-        leaf.inner_gap(0)
-        failures.append("expected TypeError calling inner_gap() on a leaf")
-    except TypeError as ex:
-        if "leaf" not in str(ex).lower():
-            failures.append(f"expected leaf-inner_gap message; got: {ex}")
 
     # 8. share scale plumbing — leaves in same share class get the same
     # descriptor, and the y range is the UNION of all leaves' data.

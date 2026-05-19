@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ._spec import _SIZESPEC, active_theme
+from ._spec import _SIZESPEC, _MARGIN_FLOOR, active_theme
 from .core import (
     _FRAME_METHODS, _replay, _effective_margin, _render,
     _to_px,
@@ -48,32 +48,6 @@ def _extract_theme(calls) -> str | None:
         if call_name == "theme":
             name = args[0] if args else None
     return name
-
-
-def _normalize_inner_gap(value) -> tuple[float, float]:
-    """Normalize an `inner_gap` value to an internal `(vertical, horizontal)`
-    tuple. Scalars are duplicated to both directions; a 2-tuple/list is
-    coerced element-wise. Negative values reject."""
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        v = float(value)
-        if v < 0:
-            raise ValueError(f"inner_gap must be non-negative; got {value!r}")
-        return (v, v)
-    if isinstance(value, (tuple, list)) and len(value) == 2:
-        try:
-            v, h = float(value[0]), float(value[1])
-        except (TypeError, ValueError):
-            raise TypeError(
-                "inner_gap tuple must contain two numbers; "
-                f"got {value!r}"
-            ) from None
-        if v < 0 or h < 0:
-            raise ValueError(f"inner_gap values must be non-negative; got {value!r}")
-        return (v, h)
-    raise TypeError(
-        "inner_gap must be a number or a 2-tuple (vertical, horizontal); "
-        f"got {type(value).__name__}: {value!r}"
-    )
 
 
 class Chart:
@@ -121,7 +95,13 @@ class Chart:
         data_height = _to_px(data_height)
 
         self._calls: list[tuple[str, list, dict]] = []
-        self._margin = dict(margin) if margin is not None else dict(_SIZESPEC["margin"])
+        # Default to the spec floor — render-time pre-pass grows this as
+        # `_required_margin` reports what title / tick / label content
+        # actually needs, so a content-light leaf (e.g. `xticks([])` cells
+        # in a pair plot) doesn't reserve breathing room it won't use.
+        # Explicit `margin=` raises the lower bound for users who want
+        # pre-reserved space.
+        self._margin = dict(margin) if margin is not None else dict(_MARGIN_FLOOR)
 
         # User picks the data region exactly. Margin is used unscaled (only
         # floored). Canvas falls out as data + margin; render-time pre-pass
@@ -147,12 +127,11 @@ class Chart:
         # (or pt.grid(share_x=...)); not user-settable on the leaf directly.
         self._share_x: Chart | None = None
         self._share_y: Chart | None = None
-        # Per-parent gap overrides. None = use spec.json default. Only read
+        # Per-parent gap override. None = use spec.json default. Only read
         # off parents (read sites are layout.py's gap-resolution helpers);
-        # leaving them on leaves too keeps `_new_parent` and `__init__`
+        # leaving it on leaves too keeps `_new_parent` and `__init__`
         # symmetric without a separate slot type.
         self._gap: float | None = None
-        self._inner_gap: tuple[float, float] | None = None
         # Leaf discriminator. Values: "data" (default — normal chart leaf
         # with axes and artists), "legend" (set by pt.legend(...), bypasses
         # the frame+artists render path; see legend.py), "diagram" (set by
@@ -210,7 +189,6 @@ class Chart:
         p._share_x = None
         p._share_y = None
         p._gap = None
-        p._inner_gap = None
         p._leaf_kind = "data"
         p._legend_sources = []
         p._legend_names = {}
@@ -232,7 +210,7 @@ class Chart:
         body-first margin path in `__init__`."""
         leaf = cls.__new__(cls)
         leaf._calls = []
-        leaf._margin = dict(margin) if margin is not None else dict(_SIZESPEC["margin"])
+        leaf._margin = dict(margin) if margin is not None else dict(_MARGIN_FLOOR)
         leaf._canvas_width  = int(canvas_width)
         leaf._canvas_height = int(canvas_height)
         # Non-data leaves carry no real data region; keep zeros so any
@@ -248,7 +226,6 @@ class Chart:
         leaf._share_x = None
         leaf._share_y = None
         leaf._gap = None
-        leaf._inner_gap = None
         leaf._leaf_kind = leaf_kind
         leaf._legend_sources = []
         leaf._legend_names = {}
@@ -282,8 +259,9 @@ class Chart:
 
     def gap(self, value: int | float) -> "Chart":
         """Override the inter-panel gap for this parent's children. Falls
-        back to `spec.json:layout.gap` (default 20) when unset. Coordinated
-        share-pair joints still collapse to 0 regardless."""
+        back to `spec.json:layout.gap` (default 0) when unset. Applies
+        uniformly — joined share-pairs get the same gap as non-joined
+        siblings. Negative values are accepted (panels overlap)."""
         if not self._is_parent:
             raise TypeError(
                 "Chart.gap() requires a parent Chart, not a leaf. "
@@ -292,19 +270,19 @@ class Chart:
         self._gap = float(value)
         return self
 
-    def inner_gap(self, value) -> "Chart":
-        """Override the inner-margin collapse value for share-pair joints
-        among this parent's body-first leaves. Accepts a scalar (applies to
-        both directions) or a 2-tuple `(vertical, horizontal)` to set
-        per-direction values — `vertical` controls joints in a vertical
-        stack (share_x), `horizontal` controls joints in a horizontal row
-        (share_y). Falls back to `spec.json:layout.inner_gap` when unset."""
+    def touch(self) -> "Chart":
+        """Set the parent gap so adjacent panels' spines coincide. Useful
+        for joined share-pairs whose joined-side margins are pure floor:
+        the negative gap `-2 * margin_floor` cancels both floors exactly,
+        making the two spines render as one continuous line.
+
+        Auto-adapts to the active theme's `margin_floor`."""
         if not self._is_parent:
             raise TypeError(
-                "Chart.inner_gap() requires a parent Chart, not a leaf. "
-                "Compose first (e.g. (a | b).share_x().inner_gap(4)) then call."
+                "Chart.touch() requires a parent Chart, not a leaf. "
+                "Compose first (e.g. (a / b).share_x().touch()) then call."
             )
-        self._inner_gap = _normalize_inner_gap(value)
+        self._gap = -2.0 * _MARGIN_FLOOR["top"]
         return self
 
     def _apply_share(self, axis: str, mode) -> None:

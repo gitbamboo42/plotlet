@@ -27,13 +27,14 @@ from importlib.metadata import version as _pkg_version
 from pathlib import Path
 
 from ._spec import (
-    SPEC, _SIZESPEC, _MARGIN_FLOOR, _FRAME, _GRIDSPEC, _FONTSPEC, _LEGSPEC, _D, _DASH,
+    SPEC, _SIZESPEC, _MARGIN_FLOOR, _FRAME, _GRIDSPEC, _FONTSPEC, _LEGSPEC,
+    _PADSPEC, _D, _DASH,
 )
 from .draw.colors import _resolve_color, TAB10
 from .scales import (_LinearScale, _LogScale, _CategoryScale, _SymlogScale,
                       _PowerScale, _TimeScale, _nice_domain, _fmt_tick,
                       _to_epoch, _coerce_time_lim)
-from .draw.font import _measure_text
+from .draw.font import _measure_text, _cap_height, _descender
 from .draw import text_path, segment
 from .utils import histogram, collect_categories
 from .registry import RenderContext, get_artist, all_artist_names
@@ -324,17 +325,17 @@ def _effective_margin(leaf, st=None) -> dict:
     """Margin used at render time. Reads dimension state directly off the
     leaf Chart.
 
-    Combines `_enforce_floors(spec/user margin)` with the content-driven
-    `_required_margin(st, data_w, data_h)` by taking the per-side max —
-    so the canvas grows as needed to fit long tick labels, titles, and
-    axis labels rather than letting them overflow. Caller passes the
-    replayed `st`; callers without one get only the floor-applied spec
-    margin."""
+    Sums `_enforce_floors(spec/user margin)` with the content-driven
+    `_required_margin(st, data_w, data_h)` per side — the floor is the
+    breathing buffer always added past content, so a labelled side gets
+    `content + floor` and an empty side gets just the floor. Caller passes
+    the replayed `st`; callers without one get only the floor (no content
+    is known yet)."""
     M_floor = _enforce_floors(leaf._margin)
     if st is None:
         return M_floor
     M_req = _required_margin(st, leaf._data_width, leaf._data_height)
-    return {side: max(M_floor[side], M_req[side]) for side in M_floor}
+    return {side: M_floor[side] + M_req[side] for side in M_floor}
 
 
 
@@ -532,9 +533,12 @@ def _resolve_domain(lo, hi, user_lim, scale_kind, force_zero=False, tight=False,
 
 
 def _enforce_floors(M):
-    """Apply per-side margin floors without any scaling. Used by the
-    data-region path: the user (or spec) declared the margin in absolute
-    pixels, so we just round and floor — never shrink."""
+    """Per-side breathing buffer for the data-region path. Returns
+    `max(_MARGIN_FLOOR, M)` per side — the spec floor is the minimum
+    breathing past content; a user passing `margin=` raises that buffer.
+    `_effective_margin` adds this to `_required_margin` (content size),
+    so a labelled side gets `content + floor` and an empty side gets the
+    floor alone."""
     return {
         "top":    max(_MARGIN_FLOOR["top"],    int(round(M["top"]))),
         "bottom": max(_MARGIN_FLOOR["bottom"], int(round(M["bottom"]))),
@@ -778,25 +782,25 @@ def _rotated_label_bbox(label_w: float, label_h: float, rot_deg: float) -> tuple
             label_w * sin_r + label_h * cos_r)
 
 
-def _required_margin(st, dw, dh) -> dict:
+def _required_margin(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     """Margin a body-first leaf actually needs to fit its title, axis
     labels, and tick labels without overflow.
 
     Returns a plain dict with the same keys as `_margin` — the caller
-    combines this with the user/spec margin (and the per-side floor) by
-    taking max per side. Body-first specifically: data dims are fixed,
-    so tick density and labels are deterministic and the computation is
-    a single pass (no chicken-and-egg with margin).
+    adds this to the per-side floor. Body-first specifically: data dims
+    are fixed, so tick density and labels are deterministic and the
+    computation is a single pass (no chicken-and-egg with margin).
+
+    `po` (optional) lets the formula drop reservations for content the
+    renderer is going to suppress (joined share-pair sides): tick labels
+    via `suppress_*_labels`, xlabel/ylabel/title via `hide_*`. Solo and
+    non-joined renders can pass `None` — no suppression applied.
 
     The geometry mirrors `_render_inner`'s placement formulas — keep them
     in sync if either changes."""
     tick_size  = _FONTSPEC["tick_size"]
     label_size = _FONTSPEC["label_size"]
     title_size = _FONTSPEC["title_size"]
-
-    # Title sits at y = -10 from the data top (see _render_inner), so it
-    # needs ≥ title_size + ~4 px of top margin to clear.
-    top = title_size + 6 if st["title"] else 0
 
     # Provisional scales at the fixed data dims — body-first means iw/ih
     # are decided up front, no iteration needed.
@@ -833,11 +837,18 @@ def _required_margin(st, dw, dh) -> dict:
     x_marks, y_marks = st["x_marks"], st["y_marks"]
 
     # Outward / inout tick marks reach past the spine; "in" is internal only.
-    out_x = _FRAME["tick_length"] if x_marks and x_dir != "in" else 0
-    out_y = _FRAME["tick_length"] if y_marks and y_dir != "in" else 0
+    # Only reserve clearance when marks are enabled, the direction reaches past
+    # the spine, AND there's at least one tick position to actually draw.
+    out_x = _FRAME["tick_length"] if (x_marks and x_ticks and x_dir != "in") else 0
+    out_y = _FRAME["tick_length"] if (y_marks and y_ticks and y_dir != "in") else 0
 
-    # X-tick label bbox (after rotation).
-    if x_labels:
+    # Tick labels render via `text_path`, which short-circuits on empty
+    # strings — so a side with all-blank labels visually contributes nothing.
+    # On a joined share-pair side, `suppress_*_labels` also drops them.
+    suppress_xt = po is not None and po.suppress_bottom_labels
+    suppress_yt = po is not None and po.suppress_left_labels
+    has_xtl = (not suppress_xt) and any(str(l) for l in x_labels)
+    if has_xtl:
         max_xtl_w = max((_measure_text(str(l), x_size) for l in x_labels), default=0.0)
         last_xtl_w = _measure_text(str(x_labels[-1]), x_size)
         _, xtl_bbox_h = _rotated_label_bbox(max_xtl_w, x_size, x_rot)
@@ -846,48 +857,77 @@ def _required_margin(st, dw, dh) -> dict:
         xtl_bbox_h = 0.0
         last_bbox_w = 0.0
 
-    # Y-tick label width (after rotation).
-    if y_labels:
+    has_ytl = (not suppress_yt) and any(str(l) for l in y_labels)
+    if has_ytl:
         max_ytl_w = max((_measure_text(str(l), y_size) for l in y_labels), default=0.0)
         ytl_bbox_w, _ = _rotated_label_bbox(max_ytl_w, y_size, y_rot)
     else:
         ytl_bbox_w = 0.0
 
-    # Bottom: outward tick + tick_pad + 8 px buffer + tick label bbox + xlabel.
-    # The "+8" mirrors the literal in _render_inner's tick-label baseline y.
-    bottom = out_x + _FRAME["tick_pad"] + 8 + xtl_bbox_h
-    if st["xlabel"]:
-        bottom += label_size + 8
+    # Joined-side hide flags — drop reservations the renderer skips.
+    # `hide_*` suppresses title / xlabel / ylabel on that side; the
+    # rightmost x-tick label overhang is allowed to bleed into the
+    # collapsed joined neighbor on the right.
+    hide_t = po is not None and po.hide_top
+    hide_b = po is not None and po.hide_bottom
+    hide_l = po is not None and po.hide_left
+    hide_r = po is not None and po.hide_right
 
-    # Left: outward tick + tick_pad + tick label bbox + ylabel allowance.
-    # ylabel sits at canvas-left + 12 px (rotated -90), so it occupies
-    # roughly `label_size` in the horizontal direction.
-    left = out_y + _FRAME["tick_pad"] + ytl_bbox_w
-    if st["ylabel"]:
-        left += label_size + 8
+    # Per-side tick-mark reservation: on a hidden joined side the renderer
+    # also drops the mark (along with labels/title/etc.), so the side
+    # contributes no `out_x`/`out_y`.
+    top_marks    = out_x if (st["x_top"]   and not hide_t) else 0
+    bottom_marks = out_x if not hide_b else 0
+    left_marks   = out_y if not hide_l else 0
+    right_marks  = out_y if (st["y_right"] and not hide_r) else 0
+
+    # Top: title content + outward top tick (if `xticks(top=True)`).
+    # Title baseline sits at y = -pad.title (see _render_inner); the glyph
+    # ascender extends ~title_size upward, so its top is at -(pad.title + title_size).
+    # The caller adds `_MARGIN_FLOOR.top` past this for breathing.
+    title_top = _PADSPEC["title"] + title_size if (st["title"] and not hide_t) else 0
+    top = max(title_top, top_marks)
+
+    # Bottom: each term only contributes when its element actually renders.
+    # tick marks → bottom_marks; tick labels → tick_pad + xtl_bbox_h (only
+    # when labels exist); xlabel → 2 px visual gap, full glyph
+    # (≈ label_size), pad.xlabel.
+    bottom = bottom_marks
+    if has_xtl:
+        bottom += _FRAME["tick_pad"] + xtl_bbox_h
+    if st["xlabel"] and not hide_b:
+        bottom += 2 + label_size + _PADSPEC["xlabel"]
+
+    # Left: same shape mirrored on the y-axis.
+    left = left_marks
+    if has_ytl:
+        left += _FRAME["tick_pad"] + ytl_bbox_w
+    if st["ylabel"] and not hide_l:
+        left += 2 + label_size + _PADSPEC["ylabel"]
 
     # Right: outward tick OR the rightmost x-tick label's overhang past
     # the spine (centered text extends half its width past the tick).
-    # Right ticks default off (publication look); only reserve tick
-    # clearance when the user opted back in via `yticks(right=True)`.
-    right_overhang = last_bbox_w / 2.0
-    right = max(out_y if st["y_right"] else 0, right_overhang)
+    # On a joined right side (hide_r), the overhang is allowed to bleed
+    # into the collapsed neighbor's margin — drop the reservation.
+    right_overhang = 0.0 if hide_r else last_bbox_w / 2.0
+    right = max(right_marks, right_overhang)
 
     # Long-text overflow: a title / xlabel longer than `dw` is centered on
     # `iw/2`, so it sticks out past the data area on both left and right
     # by `(text_w - dw) / 2`. A ylabel (rotated -90, centered on `ih/2`)
     # is the same story but vertical: text longer than `dh` spills past
     # top and bottom equally. Margins grow by the overhang amount so the
-    # rendered text fits inside the canvas.
-    if st["title"]:
+    # rendered text fits inside the canvas. Skip when the label/title is
+    # hidden (joined side) since the renderer won't draw it.
+    if st["title"] and not hide_t:
         title_overhang = max(0.0, (_measure_text(st["title"], title_size) - dw) / 2.0)
         left  = max(left,  title_overhang)
         right = max(right, title_overhang)
-    if st["xlabel"]:
+    if st["xlabel"] and not hide_b:
         xlabel_overhang = max(0.0, (_measure_text(st["xlabel"], label_size) - dw) / 2.0)
         left  = max(left,  xlabel_overhang)
         right = max(right, xlabel_overhang)
-    if st["ylabel"]:
+    if st["ylabel"] and not hide_l:
         ylabel_overhang = max(0.0, (_measure_text(st["ylabel"], label_size) - dh) / 2.0)
         top    = max(top,    ylabel_overhang)
         bottom = max(bottom, ylabel_overhang)
@@ -1167,10 +1207,10 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     # Spines — toggleable per side via `c.spines(top=False, right=False, ...)`,
     # restylable via `c.spines(top={"color": "red", "width": 1.5})`.
     # Tick marks on a hidden side are dropped too (an unanchored tick mark
-    # reads as a render bug). Tick *labels* are independent — hiding a
-    # spine doesn't remove the labels that side carries.
-    # Joined share-pairs show two parallel spines (one per panel)
-    # `inner_gap` pixels apart, by design.
+    # reads as a render bug). On a joined share-pair side (hide_*), tick
+    # marks AND tick labels are dropped — the panels read as merged, with
+    # only the two parallel spines remaining (separated by the per-panel
+    # floor on each joined side).
     def _side_stroke(side):
         c = st[f"spine_{side}_color"]
         w = st[f"spine_{side}_width"]
@@ -1222,12 +1262,15 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     for t, lbl in zip(x_ticks, x_labels):
         x = x_scale(t)
         if x_marks:
-            if st["spine_bottom"]:
+            # Hidden sides (joined share-pair) drop tick marks too — marks
+            # bleeding into the inter-panel gap read as visual clutter
+            # when the two panels are meant to merge.
+            if st["spine_bottom"] and not hide_b:
                 y1, y2 = x_bot_endpoints
                 col, sw = _side_stroke("bottom")
                 parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{y1}" y2="{y2}" '
                              f'stroke="{col}" stroke-width="{sw}"/>')
-            if st["spine_top"] and st["x_top"]:
+            if st["spine_top"] and st["x_top"] and not hide_t:
                 y1, y2 = x_top_endpoints
                 col, sw = _side_stroke("top")
                 parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{y1}" y2="{y2}" '
@@ -1235,7 +1278,10 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         # Drop only labels redundant with a sharing sibling. A small label
         # overflow into a joined neighbor's collapsed margin is acceptable.
         if not suppress_xt:
-            parts.append(_rotated_text(str(lbl), x, ih + _FRAME["tick_length"] + _FRAME["tick_pad"] + 8,
+            # baseline = tick_end + tick_pad + cap_height, so the label's cap
+            # top sits flush with `tick_pad` past the tick mark.
+            parts.append(_rotated_text(str(lbl), x,
+                                       ih + _FRAME["tick_length"] + _FRAME["tick_pad"] + _cap_height(x_size),
                                        x_size, x_rot, axis="x"))
 
     # Minor ticks — shorter than majors (frame.minor_tick_ratio), no
@@ -1248,13 +1294,13 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             x = x_scale(t)
             if not math.isfinite(x):
                 continue
-            if st["spine_bottom"]:
+            if st["spine_bottom"] and not hide_b:
                 col, sw = _side_stroke("bottom")
                 if x_dir == "in":      y1, y2 = ih, ih - minor_len
                 elif x_dir == "out":   y1, y2 = ih, ih + minor_len
                 else:                  y1, y2 = ih + minor_len, ih - minor_len
                 parts.append(segment(x, y1, x, y2, color=col, width=sw))
-            if st["spine_top"] and st["x_top"]:
+            if st["spine_top"] and st["x_top"] and not hide_t:
                 col, sw = _side_stroke("top")
                 if x_dir == "in":      y1, y2 = 0, minor_len
                 elif x_dir == "out":   y1, y2 = 0, -minor_len
@@ -1265,18 +1311,21 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     for t, lbl in zip(y_ticks, y_labels):
         y = y_scale(t)
         if y_marks:
-            if st["spine_left"]:
+            if st["spine_left"] and not hide_l:
                 x1, x2 = y_left_endpoints
                 col, sw = _side_stroke("left")
                 parts.append(f'<line x1="{x1}" x2="{x2}" y1="{y:.2f}" y2="{y:.2f}" '
                              f'stroke="{col}" stroke-width="{sw}"/>')
-            if st["spine_right"] and st["y_right"]:
+            if st["spine_right"] and st["y_right"] and not hide_r:
                 x1, x2 = y_right_endpoints
                 col, sw = _side_stroke("right")
                 parts.append(f'<line x1="{x1}" x2="{x2}" y1="{y:.2f}" y2="{y:.2f}" '
                              f'stroke="{col}" stroke-width="{sw}"/>')
         if not suppress_yt:
-            parts.append(_rotated_text(str(lbl), y_label_x, y + 4, y_size, y_rot, axis="y"))
+            # `y + cap_height/2` places the baseline so the cap is vertically
+            # centered on the tick line (cap top at y - cap/2, cap bottom at y + cap/2).
+            parts.append(_rotated_text(str(lbl), y_label_x, y + _cap_height(y_size) / 2,
+                                       y_size, y_rot, axis="y"))
 
     y_minor = _resolve_minor_ticks(st["y_minor"], y_scale, y_ticks)
     if y_minor and y_marks:
@@ -1285,13 +1334,13 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             y = y_scale(t)
             if not math.isfinite(y):
                 continue
-            if st["spine_left"]:
+            if st["spine_left"] and not hide_l:
                 col, sw = _side_stroke("left")
                 if y_dir == "in":      x1, x2 = 0, minor_len
                 elif y_dir == "out":   x1, x2 = 0, -minor_len
                 else:                  x1, x2 = -minor_len, minor_len
                 parts.append(segment(x1, y, x2, y, color=col, width=sw))
-            if st["spine_right"] and st["y_right"]:
+            if st["spine_right"] and st["y_right"] and not hide_r:
                 col, sw = _side_stroke("right")
                 if y_dir == "in":      x1, x2 = iw, iw - minor_len
                 elif y_dir == "out":   x1, x2 = iw, iw + minor_len
@@ -1302,15 +1351,23 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     # is collapsed against a joined neighbor.
     text_color = _FONTSPEC["color"]
     if st["xlabel"] and not hide_b:
-        parts.append(text_path(st["xlabel"], iw / 2, ih + M["bottom"] - 8,
+        # pad.xlabel is the gap from canvas bottom to xlabel's descender bottom;
+        # shift baseline up by descender(label_size) to land the visible glyph
+        # bottom exactly `pad.xlabel` above the canvas edge.
+        parts.append(text_path(st["xlabel"], iw / 2,
+                                ih + M["bottom"] - _PADSPEC["xlabel"] - _descender(label_size),
                                 label_size, anchor="middle", color=text_color))
     if st["ylabel"] and not hide_l:
+        # pad.ylabel is the gap from canvas left to ylabel's left visible edge;
+        # shift center right by label_size/2 (the rotated-text half-width) to
+        # land the left edge exactly `pad.ylabel` inside the canvas.
         ylabel_path = text_path(st["ylabel"], 0, 0, label_size,
                                 anchor="middle", color=text_color)
-        parts.append(f'<g transform="translate({-(M["left"] - 12)},{ih/2}) rotate(-90)">'
+        ylabel_cx = -(M["left"] - _PADSPEC["ylabel"] - label_size / 2)
+        parts.append(f'<g transform="translate({ylabel_cx},{ih/2}) rotate(-90)">'
                      f'{ylabel_path}</g>')
     if st["title"] and not hide_t:
-        parts.append(text_path(st["title"], iw / 2, -10, title_size,
+        parts.append(text_path(st["title"], iw / 2, -_PADSPEC["title"], title_size,
                                 anchor="middle", color=text_color))
 
     # legend — gather entries from every artist's legend_entries(a).

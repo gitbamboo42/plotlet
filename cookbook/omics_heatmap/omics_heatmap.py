@@ -166,15 +166,16 @@ if __name__ == "__main__":
     # Annotated-heatmap grid:
     #   share_x="col" → top ↔ hm share x (column 1)
     #   share_y="row" → tree ↔ hm share y (row 1)
-    # The share rules already auto-zero the inter-panel gap; `inner_gap=0`
-    # also collapses the joint-side inner margins so the strip and tree
-    # butt up against the heatmap with no whitespace. pt.legend() in the
-    # bottom-right auto-harvests from every leaf and groups entries by
-    # source chart (header = chart.title).
+    # The share rules already auto-zero the inter-panel gap; joined-side
+    # margins also drop to the floor (no content rendered on the joined
+    # side), so the strip and tree butt up against the heatmap with just
+    # the floor's worth of breathing room. pt.legend() in the bottom-right
+    # auto-harvests from every leaf and groups entries by source chart
+    # (header = chart.title).
     fig = pt.grid([
         [None, top, None         ],
         [tree, hm,  pt.legend()  ],
-    ], share_x="col", share_y="row", inner_gap=0)
+    ], share_x="col", share_y="row")
 
     out = Path(__file__).with_suffix(".svg")
     fig.save_svg(out)

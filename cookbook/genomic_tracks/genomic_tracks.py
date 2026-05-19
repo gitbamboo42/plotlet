@@ -12,18 +12,15 @@ of which chromosome it's in.
 
 Mechanics:
 
-- `pt.grid(rows, share_x="col", share_y="row", inner_gap=(0, 8))` does
-  three things in one call:
+- `pt.grid(rows, share_x="col", share_y="row")` does the layout:
     * `share_x="col"` — each column's three tracks share their x scale,
       so they read as one continuous panel per chromosome.
     * `share_y="row"` — each row's panels share their y scale across
       chromosomes; only the leftmost (chr1) draws y-tick labels, the
       ylabel, and the left spine. The rest auto-suppress.
-    * `inner_gap=(TRACK_GAP, INTER_CHROM_GAP)` — 8 px between adjacent
-      tracks within a chromosome (vertical joints) and 8 px between
-      adjacent chromosomes (horizontal joints). The two directions can
-      carry different values because `inner_gap` accepts a
-      `(vertical, horizontal)` tuple.
+    * Inter-track and inter-chromosome gaps come from the per-panel
+      `_MARGIN_FLOOR` (4 px each side → 8 px joined) — joined sides
+      drop their content reservations naturally, leaving just the floor.
 - Top and right spines are off everywhere; x-axis tick marks and
   labels are hidden on every panel (whole-genome scale makes per-Mb
   numbering illegible). The chromosome name sits as the xlabel of the
@@ -64,8 +61,6 @@ CHROMS = [
 
 PX_PER_MB = 1.0      # pixel scale: how many px per Mb of chromosome
 TRACK_HEIGHT = 60    # px per track row's data region
-TRACK_GAP = 8        # px between adjacent tracks within a chromosome
-INTER_CHROM_GAP = 8  # px between adjacent chromosomes
 
 
 # ---------- synthetic data ---------------------------------------------
@@ -157,7 +152,6 @@ if __name__ == "__main__":
         [scatter_row, line_row, meth_row],
         share_x="col",                                  # tracks within a chromosome share x
         share_y="row",                                  # chromosomes within a row share y
-        inner_gap=(TRACK_GAP, INTER_CHROM_GAP),         # vertical / horizontal
     )
 
     out = Path(__file__).with_suffix(".svg")
