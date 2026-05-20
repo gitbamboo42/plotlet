@@ -315,30 +315,30 @@ def _run_invariants():
         if "cycle" not in str(ex).lower():
             failures.append(f"expected cycle message; got: {ex}")
 
-    # 7. parent-level share() rejects on a leaf
+    # 7. parent-level share() doesn't exist on a leaf — Chart has no such
+    # method; the parent flavor lives on Layout. AttributeError is the
+    # expected outcome (post Phase 3 leaf/parent type split).
     leaf = pt.chart(); leaf.line([1,2],[1,2])
     try:
         leaf.share_x()
-        failures.append("expected TypeError calling share_x() on a leaf")
-    except TypeError as ex:
-        if "leaf" not in str(ex).lower():
-            failures.append(f"expected leaf-share message; got: {ex}")
+        failures.append("expected AttributeError calling share_x() on a leaf")
+    except AttributeError:
+        pass
 
-    # 7b. parent-level gap() rejects on a leaf, same as share().
+    # 7b. parent-level gap() doesn't exist on a leaf, same as share().
     leaf = pt.chart(); leaf.line([1,2],[1,2])
     try:
         leaf.gap(0)
-        failures.append("expected TypeError calling gap() on a leaf")
-    except TypeError as ex:
-        if "leaf" not in str(ex).lower():
-            failures.append(f"expected leaf-gap message; got: {ex}")
+        failures.append("expected AttributeError calling gap() on a leaf")
+    except AttributeError:
+        pass
 
     # 8. share scale plumbing — leaves in same share class get the same
     # descriptor, and the y range is the UNION of all leaves' data.
     src = pt.chart(); src.line([0, 10], [0, 100])
     shr = pt.chart(); shr.line([0, 10], [-5, 5])
     parent = (src | shr).share_y()
-    from plotlet.layout import _build_panel_opts
+    from plotlet._layout_engine import _build_panel_opts
     panel_opts, _ = _build_panel_opts(parent)
     src_y = panel_opts[id(src)].y_axis
     shr_y = panel_opts[id(shr)].y_axis

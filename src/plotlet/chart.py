@@ -1,30 +1,34 @@
-"""Chart — the user-facing object. Leaf for one panel, parent when composed.
+"""Public API surface: the `Chart` and `Layout` types plus their constructors.
 
-A `Chart` is one of two things:
+This module owns plotlet's user-facing classes:
 
-  * **Leaf** — records artist calls into `_calls` and carries the dimensions
-    + margin needed to render one panel. This is the surface returned by
-    `pt.chart(...)`. `_layout_kind is None`.
+  * **`Chart`** — single panel, leaf in any composition tree. Records artist
+    calls into `_calls` and carries the data dimensions + margin needed to
+    render one panel. Returned by `pt.chart(...)`.
 
-  * **Parent** — composed from other Charts. Holds a list of children and a
-    layout direction ("h" | "v" | "grid"). Carries no per-leaf render state;
-    rendering walks the tree (see `layout.py`).
+  * **`Layout`** — a composition of `Chart`s (and other `Layout`s). Holds a
+    list of children and a layout direction ("h" | "v" | "grid"). Carries no
+    per-leaf render state; rendering walks the tree.
 
-Composition operators:
+  * **`chart(...)`** / **`grid([[...]])`** — public factory functions.
 
-  * `a | b` → horizontal parent. Flattens when LHS is already a same-direction
-    parent with no own parent (so `a | b | c` is a single 3-cell row, not
-    nested). Mutates the LHS parent in place; LHS should not be reused after.
+Composition operators (defined on both Chart and Layout):
 
-  * `a / b` → vertical parent. Same flattening rule.
+  * `a | b` → horizontal `Layout`. Flattens when LHS is already a
+    same-direction `Layout` (so `a | b | c` is a single 3-cell row, not
+    nested). Mutates LHS in place; LHS should not be reused after.
 
-  * `pt.grid([[a, b], [c, d]])` → grid parent. Lives in `layout.py`.
+  * `a / b` → vertical `Layout`. Same flattening rule.
+
+The render pipeline (margin coordination, share-pre-pass, allocation,
+SVG emission) lives in the private `_layout_engine.py`. Chart and Layout
+both lazy-import from there in their render methods.
 
 Invariants:
 
-  * Single parent — composing a chart that already has a `_parent` raises.
+  * Single parent — composing a node that already has a `_parent` raises.
   * Show-on-child raises — calling `.show()` / `.to_svg()` / `_repr_html_`
-    on a parented chart raises with a pointer to the parent.
+    on a node with a non-None `_parent` raises with a pointer up.
 """
 from __future__ import annotations
 
@@ -32,7 +36,7 @@ from pathlib import Path
 
 from ._spec import _SIZESPEC, _MARGIN_FLOOR, active_theme
 from .core import (
-    _FRAME_METHODS, _replay, _effective_margin, _render,
+    _FRAME_METHODS, _replay, _render,
     _to_px,
 )
 from .utils import to_list, to_list_2d
@@ -119,25 +123,16 @@ class Chart:
 
         # ---- Composition state ---------------------------------------------
         self._data = data
-        # Leaves: _layout_kind is None, _children is empty.
-        self._parent: Chart | None = None
-        self._layout_kind: str | None = None
-        self._children: list[Chart] = []
+        self._parent: "Layout | None" = None
         # Share-class membership. Set by parent-level .share_x() / .share_y()
         # (or pt.grid(share_x=...)); not user-settable on the leaf directly.
-        self._share_x: Chart | None = None
-        self._share_y: Chart | None = None
-        # Per-parent gap override. None = use spec.json default. Only read
-        # off parents (read sites are layout.py's gap-resolution helpers);
-        # leaving it on leaves too keeps `_new_parent` and `__init__`
-        # symmetric without a separate slot type.
-        self._gap: float | None = None
+        self._share_x: "Chart | None" = None
+        self._share_y: "Chart | None" = None
         # Leaf discriminator. Values: "data" (default — normal chart leaf
         # with axes and artists), "legend" (set by pt.legend(...), bypasses
         # the frame+artists render path; see legend.py), "diagram" (set by
-        # pt.layout_diagram(...) from layout_diagram.py — embeds a
-        # pre-rendered SVG with no panel decorations). Parents leave this
-        # at "data"; for them `_layout_kind` is the discriminator.
+        # pt.layout_diagram(...) — embeds a pre-rendered SVG with no panel
+        # decorations).
         self._leaf_kind: str = "data"
         self._legend_sources: list[Chart] = []
         self._legend_names: dict = {}
@@ -176,29 +171,6 @@ class Chart:
     # ---------- composition ----------
 
     @classmethod
-    def _new_parent(cls, kind: str, children: list["Chart"]) -> "Chart":
-        """Construct a parent Chart. Parents carry no render-state of their
-        own — `_calls`, `_data_width`, `_margin`, etc. are leaf-only. The
-        parent's total size is derived from its children at render time
-        (sum-sizes; see `docs/SUBPLOTS.md`)."""
-        p = cls.__new__(cls)
-        p._data = None
-        p._parent = None
-        p._layout_kind = kind
-        p._children = list(children)
-        p._share_x = None
-        p._share_y = None
-        p._gap = None
-        p._leaf_kind = "data"
-        p._legend_sources = []
-        p._legend_names = {}
-        p._legend_group_by_chart = True
-        p._insets = []
-        p._inset_owner = None
-        p._last_M_eff = None
-        return p
-
-    @classmethod
     def _new_sized_leaf(cls, *,
                         canvas_width: int, canvas_height: int,
                         leaf_kind: str,
@@ -221,11 +193,8 @@ class Chart:
         leaf._orig_data_height = 0
         leaf._data = None
         leaf._parent = None
-        leaf._layout_kind = None
-        leaf._children = []
         leaf._share_x = None
         leaf._share_y = None
-        leaf._gap = None
         leaf._leaf_kind = leaf_kind
         leaf._legend_sources = []
         leaf._legend_names = {}
@@ -235,180 +204,63 @@ class Chart:
         leaf._last_M_eff = None
         return leaf
 
-    @property
-    def _is_parent(self) -> bool:
-        return self._layout_kind is not None
+    # `Chart` is always a leaf; the field is a compatibility shim so
+    # tree-walking code in `layout.py` can use `if x._is_parent:` against
+    # either `Chart` or `Layout` interchangeably. `Layout` overrides it.
+    _is_parent: bool = False
 
-    def __or__(self, other: "Chart") -> "Chart":
+    def __or__(self, other) -> "Layout":
         return _compose(self, other, "h")
 
-    def __truediv__(self, other: "Chart") -> "Chart":
+    def __truediv__(self, other) -> "Layout":
         return _compose(self, other, "v")
 
-    def share_x(self, mode: bool | str = "all") -> "Chart":
-        """Wire up x-axis sharing across this parent's leaves. Mutates the
-        leaves' private share state so layout's pre-pass coordinates them.
-        Returns self for chaining."""
-        self._apply_share("x", mode)
-        return self
+    def legend(self, *args, position: str | None = None, **kwargs) -> "Chart":
+        """Toggle the in-frame overlay legend.
 
-    def share_y(self, mode: bool | str = "all") -> "Chart":
-        """Wire up y-axis sharing across this parent's leaves. See `share_x`."""
-        self._apply_share("y", mode)
-        return self
+        `chart.legend()` or `chart.legend(True)` turns it on; `False` off.
+        `position=` places the block: `"inside"` (default) paints it
+        inside the data area at top-right; `"right"`, `"left"`, `"top"`,
+        `"bottom"` paint it outside the data region in reserved margin
+        space.
 
-    def gap(self, value: int | float) -> "Chart":
-        """Override the inter-panel gap for this parent's children. Falls
-        back to `spec.json:layout.gap` (default 0) when unset. Applies
-        uniformly — joined share-pairs get the same gap as non-joined
-        siblings. Negative values are accepted (panels overlap)."""
-        if not self._is_parent:
-            raise TypeError(
-                "Chart.gap() requires a parent Chart, not a leaf. "
-                "Compose first (e.g. (a | b).gap(0)) then call."
-            )
-        self._gap = float(value)
-        return self
-
-    def touch(self) -> "Chart":
-        """Set the parent gap so adjacent panels' spines coincide. Useful
-        for joined share-pairs whose joined-side margins are pure floor:
-        the negative gap `-2 * margin_floor` cancels both floors exactly,
-        making the two spines render as one continuous line.
-
-        Auto-adapts to the active theme's `margin_floor`."""
-        if not self._is_parent:
-            raise TypeError(
-                "Chart.touch() requires a parent Chart, not a leaf. "
-                "Compose first (e.g. (a / b).share_x().touch()) then call."
-            )
-        self._gap = -2.0 * _MARGIN_FLOOR["top"]
-        return self
-
-    def _apply_share(self, axis: str, mode) -> None:
-        norm = _normalize_share_mode(axis, mode)
-        if norm == "none":
-            return
-        if not self._is_parent:
-            raise TypeError(
-                f"share_{axis}() requires a parent Chart, not a leaf. "
-                f"Compose first (e.g. (a | b).share_{axis}()) then call."
-            )
-        if norm in ("col", "row") and self._layout_kind != "grid":
-            raise ValueError(
-                f"share_{axis}={norm!r} requires a pt.grid parent; got "
-                f"{self._layout_kind!r} layout. Use share_{axis}=True for "
-                f"all-leaves sharing on h/v compositions."
-            )
-        classes = self._compute_share_classes(norm)
-        attr = "_share_x" if axis == "x" else "_share_y"
-        for cls in classes:
-            if len(cls) < 2:
-                continue
-            anchor = cls[0]
-            for leaf in cls[1:]:
-                setattr(leaf, attr, anchor)
-
-    def _compute_share_classes(self, mode: str) -> list[list["Chart"]]:
-        from .layout import _iter_leaves
-
-        def cell_leaves(cell):
-            if cell is None:
-                return []
-            if cell._is_parent:
-                return [l for l in _iter_leaves(cell) if l._leaf_kind == "data"]
-            return [cell] if cell._leaf_kind == "data" else []
-
-        if mode == "all":
-            return [[l for l in _iter_leaves(self) if l._leaf_kind == "data"]]
-        rows, cols = self._grid_rows, self._grid_cols
-        children = self._children
-        if mode == "col":
-            return [
-                [l for r in range(rows) for l in cell_leaves(children[r * cols + c])]
-                for c in range(cols)
-            ]
-        # mode == "row"
-        return [
-            [l for c in range(cols) for l in cell_leaves(children[r * cols + c])]
-            for r in range(rows)
-        ]
-
-    def legend(self, *args, names: dict | None = None,
-               group_by_chart: bool | None = None,
-               canvas_width: int | float | str | None = None,
-               canvas_height: int | float | str | None = None,
-               legend_gap: int | float | None = None,
-               **kwargs) -> "Chart":
-        """Toggle the in-frame overlay (leaf) or attach a layout-level legend (parent).
-
-        On a leaf, this is the existing `chart.legend([bool])` toggle for
-        the in-frame overlay — args must be a single optional bool.
-
-        On a parent, this is sugar for the panel form: `parent.legend(*sources)`
-        is equivalent to `parent | pt.legend(*sources)` (or `parent / ...` for
-        a vertical parent), with `names=` / `group_by_chart=` / `canvas_width=` /
-        `canvas_height=` / `legend_gap=` forwarded to the constructor. Grids
-        raise — place `pt.legend(...)` in an explicit cell instead. Returns
-        `self` for chaining; remember that further composition (`|` / `/`)
-        appends children *after* the legend, so decorate last."""
+        For a separate, layout-level legend leaf (the kind that lives in
+        its own panel and harvests entries from sibling charts), use
+        `pt.legend(...)` or `parent.legend(...)` on a `Layout`."""
         if "width" in kwargs or "height" in kwargs:
             raise TypeError(
                 "Chart.legend() no longer accepts `width=` / `height=` "
                 "(changed in 0.2.0). Use `canvas_width=` / `canvas_height=` "
-                "instead — legend leaves have no data axes, so the canvas "
-                "is the only meaningful dimension."
+                "on `pt.legend(...)` instead — those are layout-legend "
+                "options, not in-frame ones."
             )
         if kwargs:
             raise TypeError(
                 f"Chart.legend() got unexpected keyword arguments: {list(kwargs)!r}"
-            )
-        if self._is_parent:
-            if self._layout_kind == "grid":
-                raise ValueError(
-                    "parent.legend() doesn't apply to grid layouts; "
-                    "place pt.legend() in a grid cell explicitly."
-                )
-            from .legend import legend as _make_legend
-            gbc = True if group_by_chart is None else group_by_chart
-            leg = _make_legend(*args, names=names, group_by_chart=gbc,
-                               canvas_width=canvas_width, canvas_height=canvas_height,
-                               legend_gap=legend_gap)
-            self._children.append(leg)
-            leg._parent = self
-            return self
-        # Leaf: today's in-frame overlay toggle. Reject parent-only kwargs.
-        if (names is not None or group_by_chart is not None
-                or canvas_width is not None or canvas_height is not None
-                or legend_gap is not None):
-            raise TypeError(
-                "names=, group_by_chart=, canvas_width=, canvas_height=, "
-                "legend_gap= are layout-level options for parent.legend(); "
-                "on a leaf, chart.legend() takes an optional bool. To attach "
-                "a layout-level legend to a single chart, compose first: "
-                "(chart | pt.legend()).show()."
             )
         if args and not isinstance(args[0], bool):
             raise TypeError(
                 f"chart.legend() (leaf in-frame overlay) takes an optional bool; "
                 f"got {type(args[0]).__name__}."
             )
+        if position is not None and position not in (
+                "inside", "right", "left", "top", "bottom"):
+            raise ValueError(
+                f"chart.legend(position={position!r}) — must be one of "
+                f"'inside', 'right', 'left', 'top', 'bottom'."
+            )
         # Record directly — `legend` is in _FRAME_METHODS but our specialized
         # method above shadows __getattr__, so we use `_record` explicitly.
-        return self._record("legend", *args)
+        kw = {"position": position} if position is not None else {}
+        return self._record("legend", *args, **kw)
 
     # ---------- recording (leaf only) ----------
 
     def __getattr__(self, name):
         # __getattr__ is only called when normal lookup fails, so this won't
-        # interfere with _layout_kind / _children / _calls etc.
+        # interfere with _calls / _data_width / etc.
         if name.startswith("_"):
             raise AttributeError(name)
-        if self._layout_kind is not None:
-            raise AttributeError(
-                f"{name!r} is not available on a parent Chart "
-                f"(layout={self._layout_kind!r}). Call it on a leaf chart instead."
-            )
         spec = get_artist(name)
         if name in _FRAME_METHODS or spec is not None:
             def recorder(*args, **kwargs):
@@ -437,7 +289,6 @@ class Chart:
         return self
 
     def line(self, *args, x=None, y=None, hue=None, data=None, **opts):
-        self._require_leaf("line")
         if x is not None or y is not None:
             self._tabular("line", "line", data, x, y, hue, opts)
         else:
@@ -448,7 +299,6 @@ class Chart:
         """Step plot — sugar over `line(curve=...)`. `where="pre"`,
         `"post"` (default), or `"mid"` map to plotlet's curve names
         (`step-before`, `step-after`, `step-mid`). matplotlib convention."""
-        self._require_leaf("step")
         curve = {"pre": "step-before", "post": "step-after", "mid": "step-mid"}.get(where)
         if curve is None:
             raise ValueError(
@@ -464,7 +314,6 @@ class Chart:
         in pixels², linearly rescaled into `sizes=(min, max)`. `style=<col>`
         cycles markers (`o`, `s`, `^`, `v`, `x`, `+`) per unique value.
         Both compose with `hue=<col>`."""
-        self._require_leaf("scatter")
         if x is not None or y is not None:
             if size is not None or style is not None:
                 self._scatter_with_aesthetics(data, x, y, hue, size, style, sizes, opts)
@@ -538,7 +387,6 @@ class Chart:
         return [mapping[v] for v in vals]
 
     def bar(self, *args, x=None, y=None, data=None, **opts):
-        self._require_leaf("bar")
         if x is not None or y is not None:
             df = self._resolve_data(data, "bar")
             self._record("bar", to_list(df[x]), to_list(df[y]), **opts)
@@ -547,7 +395,6 @@ class Chart:
         return self
 
     def hist(self, *args, x=None, data=None, **opts):
-        self._require_leaf("hist")
         if x is not None:
             df = self._resolve_data(data, "hist")
             self._record("hist", to_list(df[x]), **opts)
@@ -556,7 +403,6 @@ class Chart:
         return self
 
     def fill_between(self, *args, x=None, y1=None, y2=None, data=None, **opts):
-        self._require_leaf("fill_between")
         if x is not None or y1 is not None or y2 is not None:
             df = self._resolve_data(data, "fill_between")
             self._record("fill_between",
@@ -573,7 +419,6 @@ class Chart:
         # land at integer + 0.5 so a future top/left dendrogram pairs cleanly
         # via share_x / share_y. Pure pre-processing — no separate artist;
         # the rendering goes through imshow.
-        self._require_leaf("heatmap")
         if hasattr(df, "values") and hasattr(df, "columns") and hasattr(df, "index"):
             cols = list(df.columns) if xticklabels is None else list(xticklabels)
             rows = list(df.index)   if yticklabels is None else list(yticklabels)
@@ -605,13 +450,6 @@ class Chart:
     # __getattr__ above. They take raw lists/values, not column names.
 
     # ---------- helpers ----------
-
-    def _require_leaf(self, public_name):
-        if self._layout_kind is not None:
-            raise TypeError(
-                f"Chart.{public_name}() is only valid on a leaf chart, not a parent "
-                f"(layout={self._layout_kind!r})."
-            )
 
     def _resolve_data(self, data, public_name):
         df = data if data is not None else self._data
@@ -652,7 +490,6 @@ class Chart:
         render at the requested pixel size — record artists on it normally.
         Render the parent leaf; the inset draws on top of the parent's
         artists with its own scales and frame."""
-        self._require_leaf("inset")
         x, y, w, h = rect
         if not (0 <= w <= 1 and 0 <= h <= 1):
             raise ValueError(
@@ -678,32 +515,29 @@ class Chart:
     def _to_svg_unchecked(self) -> str:
         """Render path that skips the root check — used by parents
         embedding this chart (insets, layout panels)."""
-        if self._is_parent:
-            from .layout import _render_layout
-            return _render_layout(self)
         if self._leaf_kind == "legend":
             from .legend import _render_standalone_legend
             return _render_standalone_legend(self)
         if self._leaf_kind == "diagram":
             from .layout_diagram import _render_standalone_diagram
             return _render_standalone_diagram(self)
-        # Data leaf. Canvas grows to fit the (possibly measure-driven-
-        # expanded) margin — data region stays at the user-requested size.
-        # Theme is applied around the whole replay+render pipeline so
-        # `_replay` picks up the right defaults (spine visibility, tick
-        # direction) and every module reading from the spec dicts sees
-        # the override transparently.
+        # Data leaf. Route through the same pre-pass parents use — single
+        # leaf is a degenerate single-cell case; share-scaling, collapse
+        # annotation, and margin coordination all no-op for it, leaving
+        # just the measure-driven margin computation. One pipeline means
+        # outside-legend reservation and similar layout-level concerns can
+        # live in one place. `_build_panel_opts` applies theme per leaf
+        # during replay; the final `_render` call is themed again because
+        # `_render` reads `_FONTSPEC` / `SPEC` inline.
+        from ._layout_engine import _build_panel_opts
+        panel_opts, states = _build_panel_opts(self)
+        po = panel_opts[id(self)]
+        M_eff = po.M_eff
+        self._last_M_eff = M_eff
+        W = self._data_width  + M_eff["left"] + M_eff["right"]
+        H = self._data_height + M_eff["top"]  + M_eff["bottom"]
         with active_theme(_extract_theme(self._calls)):
-            st = _replay(self._calls)
-            st["insets"] = self._insets
-            M_eff = _effective_margin(self, st)
-            # Stash the resolved margin so callers (specifically core's
-            # inset loop) can position this chart's *data region* — not
-            # its canvas — at the requested axes-fraction rect.
-            self._last_M_eff = M_eff
-            W = self._data_width  + M_eff["left"] + M_eff["right"]
-            H = self._data_height + M_eff["top"]  + M_eff["bottom"]
-            return _render(st, W, H, M_eff)
+            return _render(states[id(self)], W, H, M_eff)
 
     def to_html(self, full_page: bool = False) -> str:
         svg = self.to_svg()
@@ -763,7 +597,7 @@ class Chart:
 
         Returns a fresh Chart; the original is unchanged."""
         from copy import deepcopy
-        from .layout import _natural_size, _data_total_size
+        from ._layout_engine import _natural_size, _data_total_size
         W = _to_px(canvas_width)
         H = _to_px(canvas_height)
         if W is None and H is None:
@@ -810,16 +644,330 @@ class Chart:
             )
 
 
+class Layout:
+    """A composition of charts — the parent type returned by `|`, `/`,
+    and `pt.grid()`. Layouts coordinate panel margins, share scales
+    across leaves, and emit one outer SVG containing each leaf rendered
+    into its allocated rect.
+
+    `Layout` has no data of its own; record artists on the individual
+    `Chart` leaves inside the layout, not on the layout itself. Layouts
+    compose further with `|` and `/` to nest layouts (one set of gaps
+    per nesting level).
+    """
+
+    # Layout-as-parent counterpart to `Chart._is_parent`; the constant is
+    # what lets layout-walking code in `layout.py` distinguish parents
+    # from leaves without `isinstance` checks at every site.
+    _is_parent: bool = True
+
+    def __init__(self, kind: str, children: list):
+        self._layout_kind: str = kind          # "h" | "v" | "grid"
+        self._children: list = list(children)
+        self._parent: "Layout | None" = None
+        self._gap: float | None = None
+        # Grid-specific shape; left at None for h/v parents.
+        self._grid_rows: int | None = None
+        self._grid_cols: int | None = None
+        # Wire children's back-link so `_require_render_root` and share
+        # resolution can walk up.
+        for child in self._children:
+            if child is not None:
+                child._parent = self
+
+    # ---------- composition ----------
+
+    def __or__(self, other) -> "Layout":
+        return _compose(self, other, "h")
+
+    def __truediv__(self, other) -> "Layout":
+        return _compose(self, other, "v")
+
+    # ---------- parent-only ----------
+
+    def share_x(self, mode: bool | str = "all") -> "Layout":
+        """Wire up x-axis sharing across this layout's leaves. Mutates
+        the leaves' private share state so layout.py's pre-pass
+        coordinates them. Returns self for chaining."""
+        self._apply_share("x", mode)
+        return self
+
+    def share_y(self, mode: bool | str = "all") -> "Layout":
+        """Wire up y-axis sharing across this layout's leaves. See `share_x`."""
+        self._apply_share("y", mode)
+        return self
+
+    def gap(self, value: int | float) -> "Layout":
+        """Override the inter-panel gap. Falls back to
+        `spec.json:layout.gap` (default 0) when unset. Applies uniformly
+        — joined share-pairs get the same gap as non-joined siblings.
+        Negative values are accepted (panels overlap)."""
+        self._gap = float(value)
+        return self
+
+    def touch(self) -> "Layout":
+        """Set the gap so adjacent panels' spines coincide. Useful for
+        joined share-pairs whose joined-side margins are pure floor:
+        the negative gap `-2 * margin_floor` cancels both floors exactly,
+        making the two spines render as one continuous line.
+
+        Auto-adapts to the active theme's `margin_floor`."""
+        self._gap = -2.0 * _MARGIN_FLOOR["top"]
+        return self
+
+    def _apply_share(self, axis: str, mode) -> None:
+        norm = _normalize_share_mode(axis, mode)
+        if norm == "none":
+            return
+        if norm in ("col", "row") and self._layout_kind != "grid":
+            raise ValueError(
+                f"share_{axis}={norm!r} requires a pt.grid layout; got "
+                f"{self._layout_kind!r}. Use share_{axis}=True for "
+                f"all-leaves sharing on h/v compositions."
+            )
+        classes = self._compute_share_classes(norm)
+        attr = "_share_x" if axis == "x" else "_share_y"
+        for cls in classes:
+            if len(cls) < 2:
+                continue
+            anchor = cls[0]
+            for leaf in cls[1:]:
+                setattr(leaf, attr, anchor)
+
+    def _compute_share_classes(self, mode: str) -> list[list]:
+        from ._layout_engine import _iter_leaves
+
+        def cell_leaves(cell):
+            if cell is None:
+                return []
+            if cell._is_parent:
+                return [l for l in _iter_leaves(cell) if l._leaf_kind == "data"]
+            return [cell] if cell._leaf_kind == "data" else []
+
+        if mode == "all":
+            return [[l for l in _iter_leaves(self) if l._leaf_kind == "data"]]
+        rows, cols = self._grid_rows, self._grid_cols
+        children = self._children
+        if mode == "col":
+            return [
+                [l for r in range(rows) for l in cell_leaves(children[r * cols + c])]
+                for c in range(cols)
+            ]
+        # mode == "row"
+        return [
+            [l for c in range(cols) for l in cell_leaves(children[r * cols + c])]
+            for r in range(rows)
+        ]
+
+    def legend(self, *sources,
+               names: dict | None = None,
+               group_by_chart: bool | None = None,
+               canvas_width: int | float | str | None = None,
+               canvas_height: int | float | str | None = None,
+               legend_gap: int | float | None = None,
+               **kwargs) -> "Layout":
+        """Attach a layout-level legend leaf. Sugar for `self | pt.legend(*sources)`
+        (or `/` for a vertical parent). `names=` / `group_by_chart=` /
+        `canvas_width=` / `canvas_height=` / `legend_gap=` forward to the
+        constructor. Grids must place `pt.legend(...)` in an explicit
+        cell instead. Returns self for chaining; remember that further
+        composition appends children *after* the legend, so decorate last."""
+        if "width" in kwargs or "height" in kwargs:
+            raise TypeError(
+                "Layout.legend() no longer accepts `width=` / `height=` "
+                "(changed in 0.2.0). Use `canvas_width=` / `canvas_height=` instead."
+            )
+        if kwargs:
+            raise TypeError(
+                f"Layout.legend() got unexpected keyword arguments: {list(kwargs)!r}"
+            )
+        if self._layout_kind == "grid":
+            raise ValueError(
+                "Layout.legend() doesn't apply to grid layouts; "
+                "place pt.legend() in a grid cell explicitly."
+            )
+        from .legend import legend as _make_legend
+        gbc = True if group_by_chart is None else group_by_chart
+        leg = _make_legend(*sources, names=names, group_by_chart=gbc,
+                           canvas_width=canvas_width, canvas_height=canvas_height,
+                           legend_gap=legend_gap)
+        self._children.append(leg)
+        leg._parent = self
+        return self
+
+    # ---------- render ----------
+
+    def to_svg(self) -> str:
+        self._require_render_root()
+        return self._to_svg_unchecked()
+
+    def _to_svg_unchecked(self) -> str:
+        from ._layout_engine import _render_layout
+        return _render_layout(self)
+
+    def to_html(self, full_page: bool = False) -> str:
+        svg = self.to_svg()
+        if full_page:
+            return ('<!doctype html><html><head><meta charset="utf-8">'
+                    '<title>plotlet</title></head>'
+                    f'<body style="margin:24px">{svg}</body></html>')
+        return svg
+
+    def _repr_html_(self) -> str:
+        return self.to_svg()
+
+    def show(self):
+        self._require_render_root()
+        svg = self.to_svg()
+        try:
+            from IPython.display import HTML, display
+        except ImportError:
+            print(self.to_html(full_page=True))
+            return
+        display(HTML(svg))
+
+    def save_svg(self, path):
+        Path(path).write_text(self.to_svg())
+        return self
+
+    def save_png(self, path, *, scale: float = 1.0, dpi: int | None = None):
+        _rasterize(self.to_svg(), path, "png", scale=scale, dpi=dpi)
+        return self
+
+    def save_pdf(self, path):
+        _rasterize(self.to_svg(), path, "pdf")
+        return self
+
+    def write_html(self, path):
+        Path(path).write_text(self.to_html(full_page=True))
+        return self
+
+    def fit(self, canvas_width=None, canvas_height=None) -> "Layout":
+        """Return a copy of this layout with every data leaf's data
+        region scaled so the rendered SVG fits within `canvas_width ×
+        canvas_height` pixels. See `Chart.fit()` — same semantics."""
+        from copy import deepcopy
+        from ._layout_engine import _natural_size, _data_total_size
+        W = _to_px(canvas_width)
+        H = _to_px(canvas_height)
+        if W is None and H is None:
+            raise ValueError(
+                "Layout.fit() requires at least one of canvas_width=, canvas_height=."
+            )
+        if (W is not None and W <= 0) or (H is not None and H <= 0):
+            raise ValueError("Layout.fit() canvas dimensions must be positive.")
+        layout = deepcopy(self)
+        layout._parent = None
+        for _ in range(6):
+            W_nat, H_nat = _natural_size(layout)
+            D_w, D_h = _data_total_size(layout)
+            ratios = []
+            if W is not None and D_w > 0:
+                overhead_w = W_nat - D_w
+                ratios.append(max(1e-3, (W - overhead_w) / D_w))
+            if H is not None and D_h > 0:
+                overhead_h = H_nat - D_h
+                ratios.append(max(1e-3, (H - overhead_h) / D_h))
+            if not ratios:
+                break
+            s = min(ratios)
+            if abs(s - 1.0) < 5e-4:
+                break
+            _scale_data_dims(layout, s)
+        return layout
+
+    def _require_render_root(self):
+        if self._parent is not None:
+            raise RuntimeError(
+                "this layout is part of a composed parent; render the parent instead."
+            )
+
+
 def chart(data=None, **opts) -> Chart:
     """Construct a table-bound Chart. See `Chart` for keyword arguments."""
     return Chart(data, **opts)
 
 
-def _scale_data_dims(node: Chart, s: float) -> None:
+def grid(cells: list[list],
+         share_x: bool | str = False,
+         share_y: bool | str = False,
+         gap: int | float | None = None,
+         **kwargs) -> "Layout":
+    """Build a grid-layout `Layout` from a list-of-lists of cells.
+
+    Each cell is either a `Chart` or `None` (empty). All rows must have
+    the same number of columns. The grid does **no proportional
+    redistribution** — each column's width is the max natural canvas
+    width across cells in that column; each row's height is the max
+    natural canvas height across cells in that row. To make a column
+    twice as wide as another, set `data_width=` directly on the leaf
+    charts; the grid then sums their natural canvases plus per-boundary
+    gaps.
+
+    Sharing kwargs (matching matplotlib's `subplots(sharex=...)` semantics):
+
+    * `share_x=True` (or `"all"`) — every leaf in the grid shares x with
+      the first leaf (top-left).
+    * `share_x="col"` — each column is its own share class; the topmost
+      leaf in each column is the anchor.
+    * `share_x="row"` — each row is its own share class.
+    * `share_x=False` (default) or `"none"` — no sharing.
+
+    `share_y=` is symmetric. When sharing is active, non-anchor leaves'
+    aspect ratios are preserved and scaled so the shared dimension matches
+    the anchor's.
+    """
+    # Migration error — `widths=` / `heights=` were canvas-ratio overrides
+    # in 0.1.x. With body-size-first composition there's no longer a
+    # well-defined "redistribute the canvas" operation: leaves carry data,
+    # parents derive canvas. Set per-leaf `data_width=` to control sizing.
+    if "widths" in kwargs or "heights" in kwargs:
+        raise TypeError(
+            "pt.grid() no longer accepts `widths=` / `heights=` (changed "
+            "in 0.2.0). To make a column 2× wider than another, set "
+            "`data_width=` on each leaf — e.g. "
+            "`pt.chart(data_width=200) | pt.chart(data_width=100)`. The grid "
+            "sums each cell's natural canvas; per-leaf data sizes give you "
+            "all the control ratios used to."
+        )
+    if kwargs:
+        raise TypeError(f"pt.grid() got unexpected keyword arguments: {list(kwargs)!r}")
+    if not cells or not isinstance(cells, list):
+        raise ValueError("pt.grid expects a non-empty list of rows.")
+    rows = len(cells)
+    cols = len(cells[0])
+    if any(len(row) != cols for row in cells):
+        raise ValueError("pt.grid rows must all have the same number of columns.")
+
+    flat: list[Chart | None] = []
+    for row in cells:
+        for cell in row:
+            if cell is not None and not isinstance(cell, Chart):
+                raise TypeError(
+                    f"pt.grid cells must be Chart or None; got {type(cell).__name__}."
+                )
+            if cell is not None and cell._parent is not None:
+                raise ValueError(
+                    "Each chart can be in at most one parent. "
+                    "Compose fresh charts, or copy your sub-assembly."
+                )
+            flat.append(cell)
+
+    parent = Layout("grid", flat)      # row-major; may contain None
+    parent._grid_rows = rows
+    parent._grid_cols = cols
+    if gap is not None:
+        parent._gap = float(gap)
+    parent.share_x(share_x)
+    parent.share_y(share_y)
+    return parent
+
+
+def _scale_data_dims(node, s: float) -> None:
     """Multiply every data leaf's `_data_width` / `_data_height` by `s`,
     rederiving `_canvas_*`. Non-data leaves (legend, diagram) keep their
     explicitly-sized canvases — their dimensional primitive isn't the
-    data region. Used by `Chart.fit()` after measuring natural size."""
+    data region. Used by `Chart.fit()` / `Layout.fit()`."""
     if not node._is_parent:
         if node._leaf_kind == "data":
             new_w = max(1, int(round(node._data_width * s)))
@@ -870,16 +1018,18 @@ def _normalize_share_mode(axis: str, mode) -> str:
     )
 
 
-def _compose(left: Chart, right: Chart, kind: str) -> Chart:
-    """Implement `|` / `/`. Flattens same-direction parents in place on LHS."""
-    if not isinstance(right, Chart):
+def _compose(left, right, kind: str):
+    """Implement `|` / `/`. Either operand may be a `Chart` (leaf) or a
+    `Layout` (parent). Flattens same-direction parents in place on LHS
+    so `a | b | c` is one row of three rather than nested pairs."""
+    if not isinstance(right, (Chart, Layout)):
         return NotImplemented
     if left._parent is not None or right._parent is not None:
         raise ValueError(
             "Each chart can be in at most one parent. "
             "Compose fresh charts, or copy your sub-assembly."
         )
-    # Flatten LHS if it's a same-direction parent (so `a | b | c` is one row of 3).
+    # Flatten LHS if it's a same-direction parent.
     if left._is_parent and left._layout_kind == kind:
         if right._is_parent and right._layout_kind == kind:
             for child in right._children:
@@ -889,7 +1039,6 @@ def _compose(left: Chart, right: Chart, kind: str) -> Chart:
             left._children.append(right)
             right._parent = left
         return left
-    parent = Chart._new_parent(kind, [left, right])
-    left._parent = parent
-    right._parent = parent
-    return parent
+    return Layout(kind, [left, right])
+
+

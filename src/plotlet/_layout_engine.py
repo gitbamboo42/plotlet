@@ -1,20 +1,38 @@
-"""Subplot layout: rect computation + multi-panel SVG assembly.
+"""Private render engine — walks a tree of `Chart` / `Layout` nodes,
+coordinates margins, allocates pixel rects, and emits the SVG.
 
-A composed (parent) `Chart` is a tree of Charts. This module walks that tree,
-allocates a pixel rect to each leaf, and emits one outer `<svg>` containing
-one `<g transform>` per leaf — each calling `_render_inner` from `core.py`.
+Used by both single-chart and multi-panel renders: a single `Chart` is
+treated as a degenerate single-cell tree by `_build_panel_opts`, sharing
+the same coordination pipeline that multi-panel `Layout`s use. This is
+what makes the outside-legend reservation and the per-leaf theme scoping
+have one source of truth.
 
-Composition is component-first: a parent's total size is the sum of its
-children plus gaps; leaf size hints (`pt.chart(data_width=…)` —
-preferred — or `canvas_width=…`) act as relative ratios when a parent
-allocates space. When two leaves are connected by `share_x=` / `share_y=`,
-the share pre-pass forces both panels onto a single shared scale so
-domains line up, and inner-edge tick labels and axis labels on the
-joined side are dropped — the joined-side margin collapses to just the
-floor via the content-aware `_required_margin`. Spines and tick marks
-remain so each panel still reads as a closed rectangle. Parent `gap`
-applies uniformly (joined or not). See `docs/SUBPLOTS.md` for the
-design rationale.
+Pipeline (in order):
+
+  * **Share pre-pass** — `_apply_share_scaling`, `_build_axis_descriptors`.
+    Leaves connected by `share_x=` / `share_y=` get their data dims
+    coordinated and share one axis descriptor per equivalence class.
+
+  * **Joined-side annotation** — `_annotate_collapses`,
+    `_propagate_grid_joins`. Mark `hide_*` / `suppress_*_labels` so
+    inner-edge tick labels and axis labels drop where adjacent panels
+    join, and the joined-side margin collapses to the floor.
+
+  * **Measure-driven margin** — `_compute_measured_margins`,
+    `_coordinate_margins`, `_pad_canvases`. Per-leaf preliminary margin,
+    then per-column/row coordination so cells in the same column/row
+    have aligned data regions. Each leaf's measurement runs under its
+    own `active_theme` so spec values affecting margins (tick_length,
+    font sizes) reflect that leaf's theme.
+
+  * **Allocation** — `_measure`, `_natural_size`, `_allocate`. Sum-sizes
+    composition derives the parent's total from its children plus gaps;
+    `_allocate` walks the tree and assigns each leaf a pixel rect.
+
+  * **Emit** — `_render_layout` writes one outer `<svg>` with one
+    `<g transform>` per leaf, calling `_render_inner` from `core.py`.
+
+See `docs/SUBPLOTS.md` for the design rationale.
 """
 from __future__ import annotations
 
@@ -34,89 +52,6 @@ from .chart import Chart, _extract_theme
 # so a leaf's `c.theme(...)` propagates to the surrounding canvas.
 _GAP = _LAYOUTSPEC["gap"]
 _LEGEND_GAP = _LAYOUTSPEC["legend_gap"]
-
-
-# ---------------------------------------------------------------------------
-# pt.grid — irregular grid constructor
-# ---------------------------------------------------------------------------
-
-def grid(cells: list[list],
-         share_x: bool | str = False,
-         share_y: bool | str = False,
-         gap: int | float | None = None,
-         **kwargs) -> Chart:
-    """Build a grid-layout parent Chart from a list-of-lists of cells.
-
-    Each cell is either a `Chart` or `None` (empty). All rows must have
-    the same number of columns. The grid does **no proportional
-    redistribution** — each column's width is the max natural canvas
-    width across cells in that column; each row's height is the max
-    natural canvas height across cells in that row. To make a column
-    twice as wide as another, set `data_width=` directly on the leaf
-    charts; the grid then sums their natural canvases plus per-boundary
-    gaps.
-
-    Sharing kwargs (matching matplotlib's `subplots(sharex=...)` semantics):
-
-    * `share_x=True` (or `"all"`) — every leaf in the grid shares x with
-      the first leaf (top-left).
-    * `share_x="col"` — each column is its own share class; the topmost
-      leaf in each column is the anchor.
-    * `share_x="row"` — each row is its own share class.
-    * `share_x=False` (default) or `"none"` — no sharing.
-
-    `share_y=` is symmetric. When sharing is active, non-anchor leaves'
-    aspect ratios are preserved and scaled so the shared dimension matches
-    the anchor's.
-    """
-    # Migration error — `widths=` / `heights=` were canvas-ratio overrides
-    # in 0.1.x. With body-size-first composition there's no longer a
-    # well-defined "redistribute the canvas" operation: leaves carry data,
-    # parents derive canvas. Set per-leaf `data_width=` to control sizing.
-    if "widths" in kwargs or "heights" in kwargs:
-        raise TypeError(
-            "pt.grid() no longer accepts `widths=` / `heights=` (changed "
-            "in 0.2.0). To make a column 2× wider than another, set "
-            "`data_width=` on each leaf — e.g. "
-            "`pt.chart(data_width=200) | pt.chart(data_width=100)`. The grid "
-            "sums each cell's natural canvas; per-leaf data sizes give you "
-            "all the control ratios used to."
-        )
-    if kwargs:
-        raise TypeError(f"pt.grid() got unexpected keyword arguments: {list(kwargs)!r}")
-    if not cells or not isinstance(cells, list):
-        raise ValueError("pt.grid expects a non-empty list of rows.")
-    rows = len(cells)
-    cols = len(cells[0])
-    if any(len(row) != cols for row in cells):
-        raise ValueError("pt.grid rows must all have the same number of columns.")
-
-    flat: list[Chart | None] = []
-    for row in cells:
-        for cell in row:
-            if cell is not None and not isinstance(cell, Chart):
-                raise TypeError(
-                    f"pt.grid cells must be Chart or None; got {type(cell).__name__}."
-                )
-            if cell is not None and cell._parent is not None:
-                raise ValueError(
-                    "Each chart can be in at most one parent. "
-                    "Compose fresh charts, or copy your sub-assembly."
-                )
-            flat.append(cell)
-
-    parent = Chart._new_parent("grid", [])
-    parent._children = flat            # row-major; may contain None
-    parent._grid_rows = rows
-    parent._grid_cols = cols
-    for cell in flat:
-        if cell is not None:
-            cell._parent = parent
-    if gap is not None:
-        parent._gap = float(gap)
-    parent.share_x(share_x)
-    parent.share_y(share_y)
-    return parent
 
 
 # ---------------------------------------------------------------------------
@@ -270,17 +205,9 @@ def _natural_size(root: Chart) -> tuple[int, int]:
 
     Mutates `root` — pass a deep copy if you need a non-destructive
     measurement. Used by `Chart.fit()`."""
-    if not root._is_parent:
-        # Single-leaf root: data leaves grow their canvas to fit content
-        # via the solo `_effective_margin`; non-data leaves keep the
-        # canvas they were constructed with.
-        if root._leaf_kind == "data":
-            from .core import _effective_margin as _solo_margin
-            st = _replay(root._calls)
-            st["insets"] = getattr(root, "_insets", [])
-            M_eff = _solo_margin(root, st)
-            root._canvas_width  = root._data_width  + M_eff["left"] + M_eff["right"]
-            root._canvas_height = root._data_height + M_eff["top"]  + M_eff["bottom"]
+    if not root._is_parent and root._leaf_kind != "data":
+        # Non-data leaf root (legend, diagram): no measure-driven growth;
+        # keep the canvas the leaf was constructed with.
         return _measure(root)
     _, states = _build_panel_opts(root)
     # Legend leaves harvest their content size from sibling data leaves;
@@ -679,14 +606,19 @@ def _compute_measured_margins(leaves: list[Chart],
     sides naturally drop their tick-label / xlabel / ylabel / title
     reservations (the renderer suppresses these via `hide_*` /
     `suppress_*_labels`). No separate joined-side override needed — the
-    floor is what's left, just like any other empty side."""
+    floor is what's left, just like any other empty side.
+
+    Each leaf's measurement runs under its own `active_theme` so spec
+    values that affect margins (tick_length, font sizes, pad spec)
+    reflect the leaf's theme overrides, not the ambient theme."""
     for leaf in leaves:
         po = panel_opts[id(leaf)]
-        M_floor = _enforce_floors(leaf._margin)
-        M_req = _required_margin(states[id(leaf)],
-                                 leaf._data_width,
-                                 leaf._data_height,
-                                 po=po)
+        with active_theme(_extract_theme(leaf._calls)):
+            M_floor = _enforce_floors(leaf._margin)
+            M_req = _required_margin(states[id(leaf)],
+                                     leaf._data_width,
+                                     leaf._data_height,
+                                     po=po)
         po.M_eff = {side: M_floor[side] + M_req[side] for side in M_floor}
 
 

@@ -279,7 +279,7 @@ def _size_legends(root: Chart, states: dict[int, dict]) -> None:
     """Pre-render pass: override each legend leaf's intrinsic _fig canvas
     size with its content-driven size, except where the user passed
     explicit `canvas_width=` / `canvas_height=` to `pt.legend(...)`."""
-    from .layout import _iter_leaves  # avoid circular import at module load
+    from ._layout_engine import _iter_leaves  # avoid circular import at module load
     data_leaves = [l for l in _iter_leaves(root) if l._leaf_kind == "data"]
     for leaf in _iter_leaves(root):
         if leaf._leaf_kind != "legend":

@@ -803,6 +803,27 @@ def chart_time_axis_hours():
     return c
 
 
+def _legend_position_chart(position):
+    """A two-line chart with an outside-positioned in-frame legend. Used
+    by the legend_outside_* baselines to exercise each `position=` value
+    — the data region stays at the user-requested size; the canvas grows
+    on the named side to accommodate the legend block."""
+    xs = _xs()
+    c = pt.chart(title=f"legend {position}",
+                 xlabel="t", ylabel="value", grid=True,
+                 data_width=300, data_height=180)
+    c.line(xs, [math.sin(x) for x in xs], label="sin(t)")
+    c.line(xs, [math.cos(x) for x in xs], label="cos(t)", linestyle="--")
+    c.legend(position=position)
+    return c
+
+
+def chart_legend_outside_right():  return _legend_position_chart("right")
+def chart_legend_outside_left():   return _legend_position_chart("left")
+def chart_legend_outside_top():    return _legend_position_chart("top")
+def chart_legend_outside_bottom(): return _legend_position_chart("bottom")
+
+
 PLOTS = {
     "table":               chart_table,
     "hue":                 chart_hue,
@@ -867,6 +888,10 @@ PLOTS = {
     "step":                chart_step,
     "inset_zoom":          chart_inset_zoom,
     "clip_data_area":      chart_clip_data_area,
+    "legend_outside_right":  chart_legend_outside_right,
+    "legend_outside_left":   chart_legend_outside_left,
+    "legend_outside_top":    chart_legend_outside_top,
+    "legend_outside_bottom": chart_legend_outside_bottom,
 }
 
 

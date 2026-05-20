@@ -20,8 +20,7 @@ from __future__ import annotations
 
 import math
 
-from .chart import Chart, chart
-from .layout import grid
+from .chart import Chart, chart, grid
 
 
 def facet(data, *, by, col_wrap=None, share_x=True, share_y=True,

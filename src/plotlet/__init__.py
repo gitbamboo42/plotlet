@@ -15,8 +15,7 @@ For non-tabular use, the chained form works directly on the same Chart:
 from ._spec import SPEC
 from .draw.colors import TAB10, colors
 from .draw.colormaps import colormap, list_colormaps
-from .chart import Chart, chart
-from .layout import grid
+from .chart import Chart, Layout, chart, grid
 from .legend import legend
 from .registry import ArtistSpec, add_artist
 from .layout_diagram import layout_diagram
@@ -24,7 +23,7 @@ from .themes import load_theme, available_themes, register_theme
 from .facet import facet, FacetGrid
 from . import draw, utils
 
-__all__ = ["chart", "Chart", "SPEC", "TAB10", "colors",
+__all__ = ["chart", "Chart", "Layout", "SPEC", "TAB10", "colors",
            "colormap", "list_colormaps", "grid", "legend",
            "ArtistSpec", "add_artist", "layout_diagram",
            "load_theme", "available_themes", "register_theme",

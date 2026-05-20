@@ -28,7 +28,7 @@ from pathlib import Path
 
 from ._spec import (
     SPEC, _SIZESPEC, _MARGIN_FLOOR, _FRAME, _GRIDSPEC, _FONTSPEC, _LEGSPEC,
-    _PADSPEC, _D, _DASH,
+    _LAYOUTSPEC, _PADSPEC, _D, _DASH,
 )
 from .draw.colors import _resolve_color, TAB10
 from .scales import (_LinearScale, _LogScale, _CategoryScale, _SymlogScale,
@@ -264,6 +264,10 @@ def _replay(calls):
         "spine_top_width": None, "spine_right_width": None,
         "spine_bottom_width": None, "spine_left_width": None,
         "grid": _GRIDSPEC.get("default_on", False), "legend": False,
+        # Inline-legend placement. `"inside"` (default) paints inside the
+        # data area, top-right; `"right"/"left"/"top"/"bottom"` paint in
+        # reserved margin space outside the data region.
+        "legend_position": "inside",
         # Data-area clipping on by default — artists past xlim/ylim get
         # cropped at the data boundary. Set False (`c.clip(False)`) for
         # matplotlib-default behavior where lines and large markers can
@@ -311,7 +315,10 @@ def _replay(calls):
                 else:
                     st[f"spine_{side}"] = bool(v)
         elif name == "grid":   st["grid"] = (args[0] if args else True)
-        elif name == "legend": st["legend"] = (args[0] if args else True)
+        elif name == "legend":
+            st["legend"] = (args[0] if args else True)
+            if "position" in kw:
+                st["legend_position"] = kw["position"]
         elif name == "clip":   st["clip"] = bool(args[0]) if args else True
         elif name == "theme":
             # `theme` is applied outside replay (by `active_theme(...)` in
@@ -319,25 +326,6 @@ def _replay(calls):
             # values by the time we get here. No state to record.
             pass
     return st
-
-
-def _effective_margin(leaf, st=None) -> dict:
-    """Margin used at render time. Reads dimension state directly off the
-    leaf Chart.
-
-    Sums `_enforce_floors(spec/user margin)` with the content-driven
-    `_required_margin(st, data_w, data_h)` per side — the floor is the
-    breathing buffer always added past content, so a labelled side gets
-    `content + floor` and an empty side gets just the floor. Caller passes
-    the replayed `st`; callers without one get only the floor (no content
-    is known yet)."""
-    M_floor = _enforce_floors(leaf._margin)
-    if st is None:
-        return M_floor
-    M_req = _required_margin(st, leaf._data_width, leaf._data_height)
-    return {side: M_floor[side] + M_req[side] for side in M_floor}
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -536,9 +524,9 @@ def _enforce_floors(M):
     """Per-side breathing buffer for the data-region path. Returns
     `max(_MARGIN_FLOOR, M)` per side — the spec floor is the minimum
     breathing past content; a user passing `margin=` raises that buffer.
-    `_effective_margin` adds this to `_required_margin` (content size),
-    so a labelled side gets `content + floor` and an empty side gets the
-    floor alone."""
+    `_compute_measured_margins` adds this to `_required_margin` (content
+    size), so a labelled side gets `content + floor` and an empty side
+    gets the floor alone."""
     return {
         "top":    max(_MARGIN_FLOOR["top"],    int(round(M["top"]))),
         "bottom": max(_MARGIN_FLOOR["bottom"], int(round(M["bottom"]))),
@@ -782,22 +770,56 @@ def _rotated_label_bbox(label_w: float, label_h: float, rot_deg: float) -> tuple
             label_w * sin_r + label_h * cos_r)
 
 
-def _required_margin(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
-    """Margin a body-first leaf actually needs to fit its title, axis
-    labels, and tick labels without overflow.
+def _inline_legend_layout(st):
+    """Geometry for the in-frame legend a leaf paints.
 
-    Returns a plain dict with the same keys as `_margin` — the caller
-    adds this to the per-side floor. Body-first specifically: data dims
-    are fixed, so tick density and labels are deterministic and the
-    computation is a single pass (no chicken-and-egg with margin).
+    Returns `(gathered, lw, lh, horizontal)` — list of `(artist, entry)`
+    pairs, block width/height, and a flag indicating whether entries lay
+    out left-to-right (top/bottom positions) or top-to-bottom (inside,
+    left, right). Returns `None` if there's nothing to draw. Called by
+    `_required_margin` (to reserve outside-legend margin space) and by
+    `_render_inner`'s legend block (to paint), so the two stay in sync —
+    change geometry here, both paths follow."""
+    if not st["legend"]:
+        return None
+    gathered = []
+    for a in st["artists"]:
+        spec = get_artist(a["type"])
+        if spec is None or spec.legend_entries is None:
+            continue
+        for entry in spec.legend_entries(a):
+            gathered.append((a, entry))
+    if not gathered:
+        return None
+    row_h = _LEGSPEC["row_height"]
+    pad_x = _LEGSPEC["pad_x"]
+    pad_y = _LEGSPEC["pad_y"]
+    sw    = _LEGSPEC["swatch_width"]
+    tick_size = _FONTSPEC["tick_size"]
+    pos = st.get("legend_position", "inside")
+    horizontal = pos in ("top", "bottom")
+    if horizontal:
+        # Entries arranged left-to-right in one row.
+        entry_ws = [sw + 6 + _measure_text(e["label"], tick_size) for _, e in gathered]
+        spacer = 2 * pad_x
+        lw = 2 * pad_x + sum(entry_ws) + (len(gathered) - 1) * spacer
+        lh = row_h + 2 * pad_y
+    else:
+        max_text = max(_measure_text(e["label"], tick_size) for _, e in gathered)
+        lw = sw + 6 + max_text + 2 * pad_x
+        lh = len(gathered) * row_h + 2 * pad_y
+    return gathered, lw, lh, horizontal
 
-    `po` (optional) lets the formula drop reservations for content the
-    renderer is going to suppress (joined share-pair sides): tick labels
-    via `suppress_*_labels`, xlabel/ylabel/title via `hide_*`. Solo and
-    non-joined renders can pass `None` — no suppression applied.
 
-    The geometry mirrors `_render_inner`'s placement formulas — keep them
-    in sync if either changes."""
+def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
+    """Per-side space (float px) needed for title, xlabel, ylabel, and
+    tick marks/labels on each canvas edge — `_required_margin` *without*
+    the outside-legend reservation.
+
+    Used by `_required_margin` (so the legend reservation is additive
+    with the label band, not max-with) and by `_render_inner` (so the
+    outside-legend block can be positioned beyond the label band rather
+    than overlapping the title/labels)."""
     tick_size  = _FONTSPEC["tick_size"]
     label_size = _FONTSPEC["label_size"]
     title_size = _FONTSPEC["title_size"]
@@ -931,6 +953,47 @@ def _required_margin(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
         ylabel_overhang = max(0.0, (_measure_text(st["ylabel"], label_size) - dh) / 2.0)
         top    = max(top,    ylabel_overhang)
         bottom = max(bottom, ylabel_overhang)
+
+    return {"top": top, "right": right, "bottom": bottom, "left": left}
+
+
+def _required_margin(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
+    """Margin a body-first leaf actually needs to fit its title, axis
+    labels, tick labels, and any outside-positioned in-frame legend.
+
+    Returns a plain dict with the same keys as `_margin` — the caller
+    adds this to the per-side floor. Body-first specifically: data dims
+    are fixed, so tick density and labels are deterministic and the
+    computation is a single pass (no chicken-and-egg with margin).
+
+    `po` (optional) lets the formula drop reservations for content the
+    renderer is going to suppress (joined share-pair sides): tick labels
+    via `suppress_*_labels`, xlabel/ylabel/title via `hide_*`. Solo and
+    non-joined renders can pass `None` — no suppression applied.
+
+    The geometry mirrors `_render_inner`'s placement formulas — keep them
+    in sync if either changes."""
+    bands = _label_band_sizes(st, dw, dh, po)
+    top, right, bottom, left = bands["top"], bands["right"], bands["bottom"], bands["left"]
+
+    # Outside-legend reservation is *additive* with the label band so the
+    # legend block sits beyond the title/labels rather than overlapping
+    # them. "inside" paints over the data area and reserves nothing
+    # extra.
+    pos = st.get("legend_position", "inside")
+    if pos != "inside":
+        leg = _inline_legend_layout(st)
+        if leg is not None:
+            _, lw, lh, _ = leg
+            gap = _LAYOUTSPEC["legend_gap"]
+            if pos == "right":
+                right = right + gap + lw
+            elif pos == "left":
+                left = left + gap + lw
+            elif pos == "top":
+                top = top + gap + lh
+            elif pos == "bottom":
+                bottom = bottom + gap + lh
 
     return {"top":    int(round(top)),
             "right":  int(round(right)),
@@ -1094,10 +1157,11 @@ def _panel_open(st, panel_opts: _PanelOpts | None, transform: str,
 
 def _render(st, W, H, M):
     """Emit one SVG. (W, H) = canvas dims; M = effective margin already
-    resolved by the caller (`_effective_margin` for single-panel,
-    `layout._effective_margin` for multi-panel). Splitting margin
-    resolution out of `_render` is what lets the data-path skip
-    canvas-based scaling."""
+    resolved by the caller via `layout._build_panel_opts` →
+    `_compute_measured_margins`. Single-panel and multi-panel paths
+    share that pre-pass; this function just paints one panel into its
+    own outer `<svg>`. Splitting margin resolution out of `_render` is
+    what lets the data-path skip canvas-based scaling."""
     iw = W - M["left"] - M["right"]
     ih = H - M["top"] - M["bottom"]
     transform = f'translate({M["left"]},{M["top"]})'
@@ -1138,6 +1202,24 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     hide_t, hide_b = panel_opts.hide_top, panel_opts.hide_bottom
     suppress_yt = panel_opts.suppress_left_labels
     suppress_xt = panel_opts.suppress_bottom_labels
+
+    # In-frame legend geometry is computed up front because a top-position
+    # legend sits between the title and the data area — the title's y
+    # offset depends on it. For other positions / inside / no legend, the
+    # title stays at `_PADSPEC["title"]`.
+    leg = _inline_legend_layout(st)
+    legend_pos = st.get("legend_position", "inside") if leg is not None else "inside"
+    legend_gap = _LAYOUTSPEC["legend_gap"]
+    # `inner_gap_top` is the data-side gap below the top-position legend
+    # — at least `legend_gap`, but expands to clear outward top tick marks
+    # when `xticks(top=True)`. None when no top legend is in play.
+    inner_gap_top = None
+    if leg is not None and legend_pos == "top":
+        out_x_for_legend = (_FRAME["tick_length"]
+                            if (st["x_marks"] and x_ticks and st["x_direction"] != "in")
+                            else 0)
+        top_marks_size = out_x_for_legend if (st["x_top"] and not hide_t) else 0
+        inner_gap_top = max(top_marks_size, legend_gap)
 
     # ---- emit body fragment ----
     parts = []
@@ -1367,34 +1449,71 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         parts.append(f'<g transform="translate({ylabel_cx},{ih/2}) rotate(-90)">'
                      f'{ylabel_path}</g>')
     if st["title"] and not hide_t:
-        parts.append(text_path(st["title"], iw / 2, -_PADSPEC["title"], title_size,
+        # Top-position legend sits between title and data, pushing the
+        # title's baseline up by (legend block + outer gap to legend).
+        if inner_gap_top is not None:
+            _, _, lh_for_title, _ = leg
+            title_y = -(inner_gap_top + lh_for_title + legend_gap)
+        else:
+            title_y = -_PADSPEC["title"]
+        parts.append(text_path(st["title"], iw / 2, title_y, title_size,
                                 anchor="middle", color=text_color))
 
     # legend — gather entries from every artist's legend_entries(a).
     # Multi-entry artists (sankey, mosaic, ...) contribute one row per
     # category; single-entry artists (line, bar, scatter, ...) contribute
     # zero or one row depending on whether they were passed a label.
-    if st["legend"]:
-        gathered = []  # list of (a, entry)
-        for a in st["artists"]:
-            spec = get_artist(a["type"])
-            if spec is None or spec.legend_entries is None:
-                continue
-            for entry in spec.legend_entries(a):
-                gathered.append((a, entry))
-        if gathered:
-            row_h = _LEGSPEC["row_height"]
-            pad_x = _LEGSPEC["pad_x"]
-            pad_y = _LEGSPEC["pad_y"]
-            sw    = _LEGSPEC["swatch_width"]
-            max_text = max(_measure_text(e["label"], tick_size) for _, e in gathered)
-            lw = sw + 6 + max_text + 2 * pad_x
-            lh = len(gathered) * row_h + 2 * pad_y
+    if leg is not None:
+        gathered, lw, lh, horizontal = leg
+        row_h = _LEGSPEC["row_height"]
+        pad_x = _LEGSPEC["pad_x"]
+        pad_y = _LEGSPEC["pad_y"]
+        sw    = _LEGSPEC["swatch_width"]
+        pos = legend_pos
+        gap = legend_gap
+        if pos in ("right", "left", "top", "bottom"):
+            # `top` puts the legend *between* the title (outer edge) and
+            # data (inner edge); other sides put it beyond the label
+            # band. Hidden sides naturally collapse via `_label_band_sizes`
+            # — when a side's title/labels are dropped (joined share-pair
+            # or unset), the band shrinks and the legend moves inward.
+            bands = _label_band_sizes(st, iw, ih, panel_opts)
+            if pos == "right":
+                lx, ly = iw + bands["right"] + gap, (ih - lh) / 2
+            elif pos == "left":
+                lx, ly = -(bands["left"] + gap + lw), (ih - lh) / 2
+            elif pos == "top":
+                lx, ly = (iw - lw) / 2, -(inner_gap_top + lh)
+            else:  # "bottom"
+                lx, ly = (iw - lw) / 2, ih + bands["bottom"] + gap
+            transform = f'translate({lx:.2f},{ly:.2f})'
+        else:  # "inside" — `ly` is the integer border_offset; preserve
+            # the historical `{ly}` formatting (no `.2f`) for byte-identical
+            # output. Inside-position is the default for all existing charts.
             lx, ly = iw - lw - _LEGSPEC["border_offset"], _LEGSPEC["border_offset"]
-            parts.append(f'<g transform="translate({lx:.2f},{ly})">')
-            parts.append(f'<rect x="0" y="0" width="{lw:.2f}" height="{lh}" '
-                         f'fill="{_LEGSPEC["background"]}" stroke="{_FRAME["color"]}" '
-                         f'stroke-width="{_FRAME["width"]}" opacity="{_LEGSPEC["opacity"]}"/>')
+            transform = f'translate({lx:.2f},{ly})'
+        parts.append(f'<g transform="{transform}">')
+        parts.append(f'<rect x="0" y="0" width="{lw:.2f}" height="{lh}" '
+                     f'fill="{_LEGSPEC["background"]}" stroke="{_FRAME["color"]}" '
+                     f'stroke-width="{_FRAME["width"]}" opacity="{_LEGSPEC["opacity"]}"/>')
+        if horizontal:
+            # Entries left-to-right, vertically centered in the single
+            # row. Spacer matches `_inline_legend_layout`.
+            spacer = 2 * pad_x
+            cx = pad_x
+            ry = pad_y + row_h / 2
+            for a, entry in gathered:
+                paint = entry.get("paint")
+                if paint is not None:
+                    parts.append(paint(a, _ctx_for(a), cx, ry))
+                else:
+                    parts.append(f'<rect x="{cx}" y="{ry - 5}" width="{sw}" '
+                                 f'height="10" fill="{entry["color"]}"/>')
+                tx = cx + sw + 6
+                parts.append(text_path(entry["label"], tx, ry + 4,
+                                        tick_size, anchor="start", color=text_color))
+                cx = tx + _measure_text(entry["label"], tick_size) + spacer
+        else:
             for i, (a, entry) in enumerate(gathered):
                 ry = pad_y + i * row_h + row_h / 2
                 paint = entry.get("paint")
@@ -1405,7 +1524,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
                                  f'height="10" fill="{entry["color"]}"/>')
                 parts.append(text_path(entry["label"], pad_x + sw + 6, ry + 4,
                                         tick_size, anchor="start", color=text_color))
-            parts.append('</g>')
+        parts.append('</g>')
 
     # Inset axes — render each as its own SVG fragment positioned by
     # axes-fraction within this leaf's data area. Drawn last so they
