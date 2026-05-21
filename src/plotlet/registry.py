@@ -77,8 +77,11 @@ class ArtistSpec:
     # suppresses the default `expand` on that side so bars don't float below
     # zero. Built-in `bar` and `hist` set `force_zero_y=True`; recipes that
     # implement bar-like artists (numeric_bar, horizontal_bar, ...) opt in.
-    force_zero_x: bool = False
-    force_zero_y: bool = False
+    # Either field may also be a callable `(artist_dict) -> bool` so an
+    # artist can decide per-instance based on its opts (e.g., a bar with
+    # `orientation='h'` forces zero on x, not y).
+    force_zero_x: bool | Callable[[dict], bool] = False
+    force_zero_y: bool | Callable[[dict], bool] = False
     axis_order: Callable[[dict], dict | None] | None = None
     frame_defaults: Callable[[list, dict], list | None] | None = None
 

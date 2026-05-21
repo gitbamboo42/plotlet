@@ -303,30 +303,42 @@ add_artist(ArtistSpec(
 # Bar contributes its categories on x; the descriptor's auto-categorical
 # detection picks them up the same way it would for any string-valued x.
 
+def _bar_horizontal(a): return a["opts"].get("orientation") == "h"
+def _bar_xdomain(a): return list(a["vals"]) + [0] if _bar_horizontal(a) else a["cats"]
+def _bar_ydomain(a): return a["cats"] if _bar_horizontal(a) else list(a["vals"]) + [0]
+
+
 add_artist(ArtistSpec(
     name="bar",
     record=lambda args, kw: {"type": "bar", "cats": to_list(args[0]),
                               "vals": to_list(args[1]), "opts": kw},
-    xdomain=lambda a: a["cats"],
-    ydomain=_vals_of,
+    xdomain=_bar_xdomain,
+    ydomain=_bar_ydomain,
     draw=lambda a, ctx: _artist_bar(a, ctx.x_scale, ctx.y_scale, ctx.color),
     legend_entries=_bar_legend_entries,
     data_attrs=_bar_data_attrs,
-    force_zero_y=True,
+    force_zero_y=lambda a: not _bar_horizontal(a),
+    force_zero_x=_bar_horizontal,
 ))
 
 
 # --- hist -------------------------------------------------------------------
 
+def _hist_horizontal(a): return a["opts"].get("orientation") == "h"
+def _hist_xdomain(a): return _bin_ys(a) if _hist_horizontal(a) else _bin_xs(a)
+def _hist_ydomain(a): return _bin_xs(a) if _hist_horizontal(a) else _bin_ys(a)
+
+
 add_artist(ArtistSpec(
     name="hist",
     record=lambda args, kw: {"type": "hist", "data": to_list(args[0]), "opts": kw},
-    xdomain=_bin_xs,
-    ydomain=_bin_ys,
-    draw=lambda a, ctx: _artist_hist(a, ctx.x_scale, ctx.y_scale, ctx.ih, ctx.color),
+    xdomain=_hist_xdomain,
+    ydomain=_hist_ydomain,
+    draw=lambda a, ctx: _artist_hist(a, ctx.x_scale, ctx.y_scale, ctx.color),
     legend_entries=_bar_legend_entries,
     data_attrs=_hist_data_attrs,
-    force_zero_y=True,
+    force_zero_y=lambda a: not _hist_horizontal(a),
+    force_zero_x=_hist_horizontal,
 ))
 
 

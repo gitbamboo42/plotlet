@@ -98,18 +98,43 @@ def _artist_scatter(a, xs_, ys_, col):
     alpha = opts.get("alpha", _D["scatter_alpha"])
     edgecolor = opts.get("edgecolor")
     linewidth = opts.get("linewidth")
+    c_vals = opts.get("c")
     n = len(a["xs"])
     # `s` and `marker` accept either a scalar (one value for every point)
     # or a per-point sequence (size=/style= mappings produce the list form).
     sizes   = list(raw_s)  if isinstance(raw_s,  (list, tuple)) else [raw_s]  * n
     markers = list(raw_mk) if isinstance(raw_mk, (list, tuple)) else [raw_mk] * n
+
+    # Per-point numeric color via colormap LUT. When `c=` is unset every
+    # point uses the artist's single `col`; when set, each point's value
+    # maps through `_ContinuousNorm` → LUT → rgb(...).
+    if c_vals is not None:
+        from .draw.colormaps import colormap_lut, _ContinuousNorm
+        cmap_name = opts.get("cmap", _D["default_cmap"])
+        lut = colormap_lut(cmap_name)
+        numeric = [v for v in c_vals if isinstance(v, (int, float)) and v == v]
+        vmin = opts.get("vmin")
+        vmax = opts.get("vmax")
+        if vmin is None: vmin = min(numeric) if numeric else 0.0
+        if vmax is None: vmax = max(numeric) if numeric else 1.0
+        normalizer = _ContinuousNorm(vmin, vmax, kind=opts.get("norm", "linear"))
+        point_colors = []
+        for v in c_vals:
+            if not (isinstance(v, (int, float)) and v == v):
+                point_colors.append("rgb(0,0,0)")
+            else:
+                idx = int(normalizer.to_unit(v) * 255 + 0.5) * 3
+                point_colors.append(f"rgb({lut[idx]},{lut[idx+1]},{lut[idx+2]})")
+    else:
+        point_colors = [col] * n
+
     out = []
     for i, (x, y) in enumerate(zip(a["xs"], a["ys"])):
         px, py = xs_(x), ys_(y)
         if not (math.isfinite(px) and math.isfinite(py)):
             continue
         sz = math.sqrt(sizes[i]) / 2
-        out.append(marker(markers[i], px, py, sz, col, alpha,
+        out.append(marker(markers[i], px, py, sz, point_colors[i], alpha,
                           edgecolor=edgecolor, edgewidth=linewidth))
     return "".join(out)
 
@@ -117,8 +142,10 @@ def _artist_scatter(a, xs_, ys_, col):
 def _artist_bar(a, xs_, ys_, col):
     out = []
     opts = a["opts"]
-    bw = xs_.bandwidth
-    y0 = ys_(0)
+    horizontal = opts.get("orientation") == "h"
+    cat_scale, val_scale = (ys_, xs_) if horizontal else (xs_, ys_)
+    band = cat_scale.bandwidth
+    base = val_scale(0)
     alpha = opts.get("alpha", _D["bar_alpha"])
     edgecolor = opts.get("edgecolor")
     lw = opts.get("linewidth", _D["linewidth"]) if edgecolor else 1
@@ -127,33 +154,74 @@ def _artist_bar(a, xs_, ys_, col):
     # shape-rendering="crispEdges" pixel-aligns the borders so the cells
     # really butt up. Skip it for normal bars where the visible inner
     # padding makes anti-aliased edges look smoother.
-    sr = "crispEdges" if getattr(xs_, "padding", 0.2) == 0 else None
+    sr = "crispEdges" if getattr(cat_scale, "padding", 0.2) == 0 else None
     for c, v in zip(a["cats"], a["vals"]):
-        x = xs_(c) - bw / 2
-        y = ys_(v)
-        out.append(draw_rect(x, min(y0, y), bw, abs(y - y0),
+        cp = cat_scale(c) - band / 2  # left edge (vert) or top edge (horiz)
+        vp = val_scale(v)
+        if horizontal:
+            x, y, w, h = min(base, vp), cp, abs(vp - base), band
+        else:
+            x, y, w, h = cp, min(base, vp), band, abs(vp - base)
+        out.append(draw_rect(x, y, w, h,
                              fill=col, stroke=edgecolor, stroke_width=lw,
                              dash=opts.get("linestyle"),
                              alpha=alpha, shape_rendering=sr))
     return "".join(out)
 
 
-def _artist_hist(a, xs_, ys_, ih, col):
+def _artist_hist(a, xs_, ys_, col):
     out = []
     opts = a["opts"]
+    horizontal = opts.get("orientation") == "h"
+    bin_scale, count_scale = (ys_, xs_) if horizontal else (xs_, ys_)
+    base = count_scale(0)
     alpha = opts.get("alpha", _D["hist_alpha"])
     edgecolor = opts.get("edgecolor")
     lw = opts.get("linewidth", _D["linewidth"]) if edgecolor else 1
-    half_gap = _D["hist_gap"] / 2
-    for b in a["_bins"]:
-        x0 = xs_(b["x0"]) + half_gap
-        x1 = xs_(b["x1"]) - half_gap
-        w = max(0, x1 - x0)
-        y = ys_(b["count"])
-        h = ih - y
-        out.append(draw_rect(x0, y, w, h, fill=col,
-                             stroke=edgecolor, stroke_width=lw,
-                             dash=opts.get("linestyle"), alpha=alpha))
+    histtype = opts.get("histtype", "bar")
+    if histtype not in ("bar", "step", "stepfilled"):
+        raise ValueError(
+            f"hist histtype={histtype!r} — must be 'bar', 'step', or 'stepfilled'."
+        )
+    bins = a["_bins"]
+
+    if histtype == "bar":
+        half_gap = _D["hist_gap"] / 2
+        for b in bins:
+            bp0 = bin_scale(b["x0"]); bp1 = bin_scale(b["x1"])
+            bp_lo, bp_hi = min(bp0, bp1), max(bp0, bp1)
+            bp_lo += half_gap; bp_hi -= half_gap
+            bin_size = max(0, bp_hi - bp_lo)
+            cp = count_scale(b["count"])
+            count_lo, count_hi = min(base, cp), max(base, cp)
+            count_size = count_hi - count_lo
+            if horizontal:
+                x, y, w, h = count_lo, bp_lo, count_size, bin_size
+            else:
+                x, y, w, h = bp_lo, count_lo, bin_size, count_size
+            out.append(draw_rect(x, y, w, h, fill=col,
+                                 stroke=edgecolor, stroke_width=lw,
+                                 dash=opts.get("linestyle"), alpha=alpha))
+        return "".join(out)
+
+    # step / stepfilled — walk bin tops as one connected path.
+    if not bins:
+        return ""
+    pts = [(bin_scale(bins[0]["x0"]), base)]
+    for b in bins:
+        cp = count_scale(b["count"])
+        pts.append((bin_scale(b["x0"]), cp))
+        pts.append((bin_scale(b["x1"]), cp))
+    pts.append((bin_scale(bins[-1]["x1"]), base))
+    if horizontal:
+        pts = [(p, q) for q, p in pts]
+    d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts)
+    stroke = edgecolor or col
+    stroke_w = lw if edgecolor else _D["linewidth"]
+    fill = col if histtype == "stepfilled" else None
+    out.append(draw_path(d + " Z", fill=fill,
+                         stroke=stroke, stroke_width=stroke_w,
+                         dash=opts.get("linestyle"), alpha=alpha))
     return "".join(out)
 
 

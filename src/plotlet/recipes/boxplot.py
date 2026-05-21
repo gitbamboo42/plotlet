@@ -32,7 +32,7 @@ from pathlib import Path
 import plotlet as pt
 from plotlet.utils import (to_list, quantile, hue_color,
                             dodge_positions, categorical_groups)
-from plotlet.draw import segment, rect, circle, errorbar_v
+from plotlet.draw import segment, rect, circle, errorbar_v, errorbar_h
 from plotlet._spec import _FRAME
 
 
@@ -61,9 +61,17 @@ def boxplot_record(args, kw):
             "groups": groups, "opts": kw}
 
 
-def boxplot_xdomain(a): return a["cats"]
-def boxplot_ydomain(a):
+def _boxplot_horizontal(a): return a["opts"].get("orientation") == "h"
+def _boxplot_values(a):
     return [v for row in a["groups"] for g in row for v in g]
+
+
+def boxplot_xdomain(a):
+    return _boxplot_values(a) if _boxplot_horizontal(a) else a["cats"]
+
+
+def boxplot_ydomain(a):
+    return a["cats"] if _boxplot_horizontal(a) else _boxplot_values(a)
 
 
 def boxplot_draw(a, ctx):
@@ -79,6 +87,9 @@ def boxplot_draw(a, ctx):
     whis       = opts.get("whis", 1.5)
     flier_size = opts.get("flier_size", 2.2)
     show_fliers = opts.get("showfliers", True)
+    horizontal = _boxplot_horizontal(a)
+    cat_scale, val_scale = (ctx.y_scale, ctx.x_scale) if horizontal else (ctx.x_scale, ctx.y_scale)
+    eb_along_val = errorbar_h if horizontal else errorbar_v
     line = _FRAME["color"]
     out = []
     for i, cat in enumerate(cats):
@@ -87,10 +98,10 @@ def boxplot_draw(a, ctx):
             if not vals:
                 continue
             fill = hue_color(hues, palette, j, ctx.color)
-            cx, box_w = dodge_positions(ctx.x_scale, cat, n_hues, j,
+            cp, box_w = dodge_positions(cat_scale, cat, n_hues, j,
                                         band_frac=bw_frac, gap=gap)
-            x0 = cx - box_w / 2
-            x1 = cx + box_w / 2
+            cp_lo = cp - box_w / 2
+            cp_hi = cp + box_w / 2
             q1 = quantile(vals, 0.25)
             q2 = quantile(vals, 0.50)
             q3 = quantile(vals, 0.75)
@@ -101,22 +112,33 @@ def boxplot_draw(a, ctx):
             outliers = [v for v in vals if v < lo_fence or v > hi_fence] if show_fliers else []
             whisker_lo = min(inliers) if inliers else q1
             whisker_hi = max(inliers) if inliers else q3
-            y_q1 = ctx.y_scale(q1)
-            y_q2 = ctx.y_scale(q2)
-            y_q3 = ctx.y_scale(q3)
-            y_lo = ctx.y_scale(whisker_lo)
-            y_hi = ctx.y_scale(whisker_hi)
-            out.append(rect(x0, min(y_q1, y_q3), box_w, abs(y_q3 - y_q1),
+            vp_q1 = val_scale(q1)
+            vp_q2 = val_scale(q2)
+            vp_q3 = val_scale(q3)
+            vp_lo = val_scale(whisker_lo)
+            vp_hi = val_scale(whisker_hi)
+            if horizontal:
+                rect_xy = (min(vp_q1, vp_q3), cp_lo)
+                rect_wh = (abs(vp_q3 - vp_q1), box_w)
+                median = (vp_q2, cp_lo, vp_q2, cp_hi)
+            else:
+                rect_xy = (cp_lo, min(vp_q1, vp_q3))
+                rect_wh = (box_w, abs(vp_q3 - vp_q1))
+                median = (cp_lo, vp_q2, cp_hi, vp_q2)
+            out.append(rect(rect_xy[0], rect_xy[1], rect_wh[0], rect_wh[1],
                             fill=fill, stroke=line, stroke_width=lw,
                             fill_alpha=fill_alpha))
-            out.append(segment(x0, y_q2, x1, y_q2, color=line, width=median_lw))
+            out.append(segment(median[0], median[1], median[2], median[3],
+                               color=line, width=median_lw))
             cap_w = box_w * 0.4
-            out.append(errorbar_v(cx, y_q3, y_hi, capsize=cap_w,
-                                  color=line, width=lw))
-            out.append(errorbar_v(cx, y_q1, y_lo, capsize=cap_w,
-                                  color=line, width=lw))
+            out.append(eb_along_val(cp, vp_q3, vp_hi, capsize=cap_w,
+                                    color=line, width=lw))
+            out.append(eb_along_val(cp, vp_q1, vp_lo, capsize=cap_w,
+                                    color=line, width=lw))
             for v in outliers:
-                out.append(circle(cx, ctx.y_scale(v), flier_size,
+                vp = val_scale(v)
+                cx_dot, cy_dot = (vp, cp) if horizontal else (cp, vp)
+                out.append(circle(cx_dot, cy_dot, flier_size,
                                   stroke=line, stroke_width=lw * 0.9))
     return "".join(out)
 

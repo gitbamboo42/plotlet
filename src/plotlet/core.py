@@ -547,7 +547,8 @@ def _prebin_hist(st):
     scanning. Idempotent (guarded by `_bins` presence)."""
     for a in st["artists"]:
         if a["type"] == "hist" and "_bins" not in a:
-            a["_bins"] = histogram(a["data"], a["opts"].get("bins", 10))
+            a["_bins"] = histogram(a["data"], a["opts"].get("bins", 10),
+                                   density=a["opts"].get("density", False))
 
 
 def _artist_axis_order(artists, axis):
@@ -629,11 +630,17 @@ def _any_artist_flips_y(artists) -> bool:
 
 def _any_artist_force_zero(artists, axis: str) -> bool:
     """True if any artist on the panel declares (via `force_zero_x` /
-    `force_zero_y` on its spec) that the axis should anchor at zero."""
+    `force_zero_y` on its spec) that the axis should anchor at zero.
+    The spec value may be a bool or a callable `(artist_dict) -> bool`,
+    so an artist like `bar` can flip its zero-axis based on orientation."""
     attr = "force_zero_x" if axis == "x" else "force_zero_y"
     for a in artists:
         spec = get_artist(a["type"])
-        if spec is not None and getattr(spec, attr, False):
+        if spec is None: continue
+        flag = getattr(spec, attr, False)
+        if callable(flag):
+            flag = flag(a)
+        if flag:
             return True
     return False
 

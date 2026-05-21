@@ -441,17 +441,46 @@ class Chart(_Renderable):
         return self.line(*args, x=x, y=y, hue=hue, palette=palette, data=data, **opts)
 
     def scatter(self, *args, x=None, y=None, hue=None, palette=None,
+                c=None, cmap=None, vmin=None, vmax=None, norm=None,
                 size=None, style=None, sizes=(20, 200), data=None, **opts):
         """Plot points. `size=<col>` maps a numeric column to per-point area
         in pixels², linearly rescaled into `sizes=(min, max)`. `style=<col>`
         cycles markers (`o`, `s`, `^`, `v`, `x`, `+`) per unique value.
         Both compose with `hue=<col>`. `palette=` pins hue categories to
         colors — accepts a dict (`{"A": "#3F97C5", ...}`) or a list indexed
-        by category-appearance order."""
+        by category-appearance order.
+
+        For numeric color mapping use `c=<col_or_list>` + `cmap=`, with
+        optional `vmin`/`vmax`/`norm='linear'|'log'`. `c=` is mutually
+        exclusive with `hue=` — they're alternative color sources."""
+        if c is not None and hue is not None:
+            raise ValueError(
+                "scatter accepts either hue= (categorical) or c= (numeric), "
+                "not both — they're alternative color sources."
+            )
+        if c is not None:
+            df = data if data is not None else self._data
+            if isinstance(c, str):
+                if df is None:
+                    raise ValueError(
+                        "scatter c=<col_name> requires a bound table or data= kwarg."
+                    )
+                c = to_list(df[c])
+            else:
+                c = to_list(c)
+            opts = dict(opts)
+            opts["c"] = c
+            if cmap is not None: opts["cmap"] = cmap
+            if vmin is not None: opts["vmin"] = vmin
+            if vmax is not None: opts["vmax"] = vmax
+            if norm is not None: opts["norm"] = norm
         if x is not None or y is not None:
             if size is not None or style is not None:
                 self._scatter_with_aesthetics(data, x, y, hue, palette,
                                               size, style, sizes, opts)
+            elif c is not None:
+                df = self._resolve_data(data, "scatter")
+                self._record("scatter", to_list(df[x]), to_list(df[y]), **opts)
             else:
                 self._tabular("scatter", "scatter", data, x, y, hue, palette, opts)
         else:

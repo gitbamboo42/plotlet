@@ -67,8 +67,11 @@ def broadcast(*vals):
     return out
 
 
-def histogram(data, bins):
-    """Equal-width binning. Returns list of {'x0', 'x1', 'count'} dicts."""
+def histogram(data, bins, density=False):
+    """Equal-width binning. Returns list of {'x0', 'x1', 'count'} dicts.
+    With `density=True`, `count` is the probability density (count divided
+    by `total × bin_width`) so the integral over bins equals 1 — matches
+    matplotlib `hist(density=True)` / numpy `histogram(density=True)`."""
     data = [v for v in to_list(data)
             if v is not None and not (isinstance(v, float) and math.isnan(v))]
     if not data:
@@ -86,6 +89,10 @@ def histogram(data, bins):
             i = int((v - lo) / width)
             if 0 <= i < n:
                 counts[i] += 1
+    if density:
+        total = sum(counts)
+        scale = 1.0 / (total * width) if total and width else 0.0
+        counts = [c * scale for c in counts]
     return [{"x0": lo + i * width, "x1": lo + (i + 1) * width, "count": counts[i]}
             for i in range(n)]
 
@@ -130,19 +137,21 @@ def hue_color(hues, palette, j, fallback):
     return palette_color(palette, hues[j], j) or TAB10[j % 10]
 
 
-def dodge_positions(x_scale, cat, n_hues, j, *, band_frac=0.6, gap=0.1):
-    """Compute the centered-dodge x position and box width for sub-box
-    `j` of `n_hues` within category `cat`.
+def dodge_positions(cat_scale, cat, n_hues, j, *, band_frac=0.6, gap=0.1):
+    """Compute the centered-dodge position and box size for sub-box `j`
+    of `n_hues` within category `cat`.
 
-    `band_frac` is the total dodge-group width as a fraction of the
-    category band; `gap` is the fraction of each slot left as spacing
-    between adjacent boxes (ignored when `n_hues == 1` — nothing to
-    space from). Returns `(cx, box_w)` in pixel coordinates."""
-    band = getattr(x_scale, "bandwidth", 1.0)
+    `cat_scale` is the scale of whichever axis holds the categories
+    (x_scale in vertical mode, y_scale in horizontal). `band_frac` is
+    the total dodge-group size as a fraction of the category band; `gap`
+    is the fraction of each slot left as spacing between adjacent boxes
+    (ignored when `n_hues == 1`). Returns `(center, box_size)` in pixel
+    coordinates along the categorical axis."""
+    band = getattr(cat_scale, "bandwidth", 1.0)
     slot_w = band * band_frac / n_hues
     box_w = slot_w * (1 - gap) if n_hues > 1 else slot_w
-    cx = x_scale(cat) + (j - (n_hues - 1) / 2) * slot_w
-    return cx, box_w
+    center = cat_scale(cat) + (j - (n_hues - 1) / 2) * slot_w
+    return center, box_w
 
 
 def categorical_groups(data, x_col, y_col, hue_col=None):
