@@ -696,6 +696,11 @@ class Layout(_Renderable):
         # Grid-specific shape; left at None for h/v parents.
         self._grid_rows: int | None = None
         self._grid_cols: int | None = None
+        # Set by `share_x("col")` / `share_y("row")` on h/v compositions
+        # — tells the layout engine to treat this node as a virtual grid
+        # and coordinate margins per column/row across sub-layouts.
+        # Opt-in so plain `(a | b) / (c | d)` keeps natural per-row sizing.
+        self._virtual_grid_aligned: bool = False
         # Wire children's back-link so `_require_render_root` and share
         # resolution can walk up.
         for child in self._children:
@@ -739,11 +744,22 @@ class Layout(_Renderable):
         if norm == "none":
             return
         if norm in ("col", "row") and self._layout_kind != "grid":
-            raise ValueError(
-                f"share_{axis}={norm!r} requires a pt.grid layout; got "
-                f"{self._layout_kind!r}. Use share_{axis}=True for "
-                f"all-leaves sharing on h/v compositions."
-            )
+            # Also accepted: v-of-h composition with share_x("col"), or
+            # h-of-v composition with share_y("row"). These are virtual
+            # grids where each child is a row (or column) of equal length;
+            # `_compute_share_classes` validates the shape match.
+            expected_outer = "v" if norm == "col" else "h"
+            if self._layout_kind != expected_outer:
+                raise ValueError(
+                    f"share_{axis}={norm!r} requires a pt.grid layout, or "
+                    f"a {expected_outer!r} composition of "
+                    f"{'h' if norm == 'col' else 'v'}-sub-layouts; got "
+                    f"{self._layout_kind!r}."
+                )
+            # Mark for `_coordinate_margins` to run the per-column /
+            # per-row coordination — alignment is opt-in so the user
+            # can't be surprised when sub-layout widths differ.
+            self._virtual_grid_aligned = True
         classes = self._compute_share_classes(norm)
         attr = "_share_x" if axis == "x" else "_share_y"
         for cls in classes:
@@ -765,141 +781,56 @@ class Layout(_Renderable):
 
         if mode == "all":
             return [[l for l in _iter_leaves(self) if l._leaf_kind == "data"]]
-        rows, cols = self._grid_rows, self._grid_cols
-        children = self._children
-        if mode == "col":
+
+        # Grid layout: original semantics — children laid out in row-major
+        # order with explicit (rows, cols) shape.
+        if self._layout_kind == "grid":
+            rows, cols = self._grid_rows, self._grid_cols
+            children = self._children
+            if mode == "col":
+                return [
+                    [l for r in range(rows) for l in cell_leaves(children[r * cols + c])]
+                    for c in range(cols)
+                ]
             return [
-                [l for r in range(rows) for l in cell_leaves(children[r * cols + c])]
-                for c in range(cols)
+                [l for c in range(cols) for l in cell_leaves(children[r * cols + c])]
+                for r in range(rows)
             ]
-        # mode == "row"
+
+        # Composition layout treated as a virtual grid:
+        #   share_x("col") on v-of-h → group by column index across rows.
+        #   share_y("row") on h-of-v → group by row index across columns.
+        # Every child must be a same-kind parent and all must agree on
+        # cell count — otherwise the column/row mapping is ambiguous.
+        inner = "h" if self._layout_kind == "v" else "v"
+        axis_word = "x" if mode == "col" else "y"
+        counts = []
+        for ch in self._children:
+            if not ch._is_parent or ch._layout_kind != inner:
+                what = (f"{ch._layout_kind!r} layout" if ch._is_parent
+                        else "bare chart")
+                raise ValueError(
+                    f"share_{axis_word}({mode!r}) on a {self._layout_kind!r} "
+                    f"composition requires every child to be an {inner!r} "
+                    f"sub-layout; found a {what}."
+                )
+            counts.append(len(ch._children))
+        if len(set(counts)) != 1:
+            raise ValueError(
+                f"share_{axis_word}({mode!r}): every sub-layout must have "
+                f"the same number of cells; got {counts}."
+            )
+        n = counts[0]
         return [
-            [l for c in range(cols) for l in cell_leaves(children[r * cols + c])]
-            for r in range(rows)
+            [l for ch in self._children for l in cell_leaves(ch._children[i])]
+            for i in range(n)
         ]
 
-    def legend(self, *sources,
-               names: dict | None = None,
-               group_by_chart: bool | None = None,
-               canvas_width: int | float | str | None = None,
-               canvas_height: int | float | str | None = None,
-               legend_gap: int | float | None = None,
-               **kwargs) -> "Layout":
-        """Attach a layout-level legend leaf. Sugar for `self | pt.legend(*sources)`
-        (or `/` for a vertical parent). `names=` / `group_by_chart=` /
-        `canvas_width=` / `canvas_height=` / `legend_gap=` forward to the
-        constructor. Grids must place `pt.legend(...)` in an explicit
-        cell instead. Returns self for chaining; remember that further
-        composition appends children *after* the legend, so decorate last."""
-        if "width" in kwargs or "height" in kwargs:
-            raise TypeError(
-                "Layout.legend() no longer accepts `width=` / `height=` "
-                "(changed in 0.2.0). Use `canvas_width=` / `canvas_height=` instead."
-            )
-        if kwargs:
-            raise TypeError(
-                f"Layout.legend() got unexpected keyword arguments: {list(kwargs)!r}"
-            )
-        if self._layout_kind == "grid":
-            raise ValueError(
-                "Layout.legend() doesn't apply to grid layouts; "
-                "place pt.legend() in a grid cell explicitly."
-            )
-        from .legend import legend as _make_legend
-        gbc = True if group_by_chart is None else group_by_chart
-        leg = _make_legend(*sources, names=names, group_by_chart=gbc,
-                           canvas_width=canvas_width, canvas_height=canvas_height,
-                           legend_gap=legend_gap)
-        self._children.append(leg)
-        leg._parent = self
-        return self
-
     # ---------- render ----------
-
-    def to_svg(self) -> str:
-        self._require_render_root()
-        return self._to_svg_unchecked()
 
     def _to_svg_unchecked(self) -> str:
         from ._layout_engine import _render_layout
         return _render_layout(self)
-
-    def to_html(self, full_page: bool = False) -> str:
-        svg = self.to_svg()
-        if full_page:
-            return ('<!doctype html><html><head><meta charset="utf-8">'
-                    '<title>plotlet</title></head>'
-                    f'<body style="margin:24px">{svg}</body></html>')
-        return svg
-
-    def _repr_html_(self) -> str:
-        return self.to_svg()
-
-    def show(self):
-        self._require_render_root()
-        svg = self.to_svg()
-        try:
-            from IPython.display import HTML, display
-        except ImportError:
-            print(self.to_html(full_page=True))
-            return
-        display(HTML(svg))
-
-    def save_svg(self, path):
-        Path(path).write_text(self.to_svg())
-        return self
-
-    def save_png(self, path, *, scale: float = 1.0, dpi: int | None = None):
-        _rasterize(self.to_svg(), path, "png", scale=scale, dpi=dpi)
-        return self
-
-    def save_pdf(self, path):
-        _rasterize(self.to_svg(), path, "pdf")
-        return self
-
-    def write_html(self, path):
-        Path(path).write_text(self.to_html(full_page=True))
-        return self
-
-    def fit(self, canvas_width=None, canvas_height=None) -> "Layout":
-        """Return a copy of this layout with every data leaf's data
-        region scaled so the rendered SVG fits within `canvas_width ×
-        canvas_height` pixels. See `Chart.fit()` — same semantics."""
-        from copy import deepcopy
-        from ._layout_engine import _natural_size, _data_total_size
-        W = _to_px(canvas_width)
-        H = _to_px(canvas_height)
-        if W is None and H is None:
-            raise ValueError(
-                "Layout.fit() requires at least one of canvas_width=, canvas_height=."
-            )
-        if (W is not None and W <= 0) or (H is not None and H <= 0):
-            raise ValueError("Layout.fit() canvas dimensions must be positive.")
-        layout = deepcopy(self)
-        layout._parent = None
-        for _ in range(6):
-            W_nat, H_nat = _natural_size(layout)
-            D_w, D_h = _data_total_size(layout)
-            ratios = []
-            if W is not None and D_w > 0:
-                overhead_w = W_nat - D_w
-                ratios.append(max(1e-3, (W - overhead_w) / D_w))
-            if H is not None and D_h > 0:
-                overhead_h = H_nat - D_h
-                ratios.append(max(1e-3, (H - overhead_h) / D_h))
-            if not ratios:
-                break
-            s = min(ratios)
-            if abs(s - 1.0) < 5e-4:
-                break
-            _scale_data_dims(layout, s)
-        return layout
-
-    def _require_render_root(self):
-        if self._parent is not None:
-            raise RuntimeError(
-                "this layout is part of a composed parent; render the parent instead."
-            )
 
 
 def chart(data=None, **opts) -> Chart:

@@ -477,8 +477,22 @@ def _mark_joined_pair(a: Chart | None, b: Chart | None, *, axis: str,
     `suppress_*_labels` on the side whose tick labels would duplicate the
     neighbor's. h-axis: y-tick labels live on the left, so the right panel
     suppresses. v-axis: x-tick labels live on the bottom, so the top panel
-    suppresses."""
-    if a is None or b is None or a._is_parent or b._is_parent:
+    suppresses.
+
+    Recurses on parent-vs-parent pairs of the orthogonal direction with
+    equal cell counts (e.g., two h-rows in a v-stack pair column-by-column),
+    so a composed "v-of-h" with cross-row x-sharing collapses spines
+    between vertically-adjacent panels at matching positions."""
+    if a is None or b is None:
+        return
+    if a._is_parent and b._is_parent:
+        inner = "h" if axis == "v" else "v"
+        if (a._layout_kind == inner and b._layout_kind == inner
+                and len(a._children) == len(b._children)):
+            for ac, bc in zip(a._children, b._children):
+                _mark_joined_pair(ac, bc, axis=axis, out=out)
+        return
+    if a._is_parent or b._is_parent:
         return
     if a._leaf_kind != "data" or b._leaf_kind != "data":
         return
@@ -647,6 +661,26 @@ def _coordinate_pair(cells: list[Chart], panel_opts: dict[int, _PanelOpts],
         po.M_eff = {**po.M_eff, s1: m1, s2: m2}
 
 
+def _virtual_grid_children(node: Chart, inner_kind: str) -> list[Chart] | None:
+    """If `node` has been marked as a virtual grid (via `share_x("col")`
+    or `share_y("row")`) and every child is a same-kind parent with
+    equal cell count, return the children. Otherwise None — composition
+    keeps its "two independent rows" semantics by default; alignment is
+    opt-in via share so the user can't be surprised by phantom padding
+    when their per-cell widths happen not to match across rows."""
+    if not getattr(node, "_virtual_grid_aligned", False):
+        return None
+    kids = node._children
+    if not kids:
+        return None
+    if not all(c is not None and c._is_parent and c._layout_kind == inner_kind
+               for c in kids):
+        return None
+    if len(set(len(c._children) for c in kids)) != 1:
+        return None
+    return kids
+
+
 def _coordinate_margins(node: Chart, panel_opts: dict[int, _PanelOpts]) -> None:
     """Walk the tree; at each parent, push body-first cells in the same
     column/row to share the wider margin so their data regions align.
@@ -654,6 +688,12 @@ def _coordinate_margins(node: Chart, panel_opts: dict[int, _PanelOpts]) -> None:
     Horizontal parents share top/bottom across all children (one row).
     Vertical parents share left/right (one column). Grids share
     left/right per column and top/bottom per row.
+
+    v-of-h and h-of-v compositions that have been marked
+    `_virtual_grid_aligned` (by `share_x("col")` / `share_y("row")`)
+    get an extra column-/row-wise pass so leaves at matching positions
+    across sub-layouts coordinate margins and canvas widths — making
+    the same column line up across rows.
 
     Canvas-first cells, parents, and legend leaves are excluded — they
     have their own margin policy and shouldn't pull body-first siblings
@@ -666,6 +706,14 @@ def _coordinate_margins(node: Chart, panel_opts: dict[int, _PanelOpts]) -> None:
         cells = [c for c in node._children if _body_cell(c, panel_opts)]
         _coordinate_pair(cells, panel_opts, ("top", "bottom"))
         _pad_canvases(cells, panel_opts, axis="h")
+        v_kids = _virtual_grid_children(node, "v")
+        if v_kids is not None:
+            n_rows = len(v_kids[0]._children)
+            for r in range(n_rows):
+                row_cells = [col._children[r] for col in v_kids]
+                body = [cell for cell in row_cells if _body_cell(cell, panel_opts)]
+                _coordinate_pair(body, panel_opts, ("top", "bottom"))
+                _pad_canvases(body, panel_opts, axis="h")
         for c in node._children:
             if c is not None:
                 _coordinate_margins(c, panel_opts)
@@ -674,6 +722,14 @@ def _coordinate_margins(node: Chart, panel_opts: dict[int, _PanelOpts]) -> None:
         cells = [c for c in node._children if _body_cell(c, panel_opts)]
         _coordinate_pair(cells, panel_opts, ("left", "right"))
         _pad_canvases(cells, panel_opts, axis="v")
+        h_kids = _virtual_grid_children(node, "h")
+        if h_kids is not None:
+            n_cols = len(h_kids[0]._children)
+            for c in range(n_cols):
+                col_cells = [row._children[c] for row in h_kids]
+                body = [cell for cell in col_cells if _body_cell(cell, panel_opts)]
+                _coordinate_pair(body, panel_opts, ("left", "right"))
+                _pad_canvases(body, panel_opts, axis="v")
         for c in node._children:
             if c is not None:
                 _coordinate_margins(c, panel_opts)

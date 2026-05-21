@@ -227,6 +227,23 @@ def fit_width_only():
     return (_sin(data_width=220) | _cos(data_width=220)).fit(canvas_width=400)
 
 
+def share_x_col_v_of_h():
+    # v-of-h composition with cross-row column-wise x-sharing — the
+    # canonical "stacked tracks across a genome" shape. Each row uses
+    # share_y().touch() to collapse inner spines within the row; the
+    # outer `share_x("col")` aligns the same column across rows (column
+    # widths differ on purpose to match the genome-tracks use case).
+    def row(name):
+        a = pt.chart(title=f"{name}-c1", data_width=160, data_height=70)
+        b = pt.chart(title=f"{name}-c2", data_width=110, data_height=70)
+        c = pt.chart(title=f"{name}-c3", data_width= 70, data_height=70)
+        a.line([0, 1, 2, 3, 4],     [0, 1, 2, 1, 0])
+        b.line([0, 1, 2, 3],        [2, 1, 3, 1])
+        c.line([0, 1, 2],           [1, 2, 1])
+        return (a | b | c).share_y().touch()
+    return (row("r1") / row("r2") / row("r3")).share_x("col")
+
+
 PLOTS = {
     "row_two":             row_two,
     "col_two":             col_two,
@@ -246,6 +263,7 @@ PLOTS = {
     "gap_grid_kwarg":      custom_gap_grid_kwarg,
     "fit_to_canvas":       fit_to_canvas,
     "fit_width_only":      fit_width_only,
+    "share_x_col_v_of_h":  share_x_col_v_of_h,
 }
 
 
@@ -353,11 +371,45 @@ def _run_invariants():
             f"got [{shr_y.lo}, {shr_y.hi}]"
         )
 
+    # 9. Cross-layout share_x("col") on v-of-h with ragged rows raises
+    # with a useful message — every sub-row must have the same number
+    # of cells for the column mapping to be unambiguous.
+    a1 = pt.chart(); a1.line([1],[1])
+    a2 = pt.chart(); a2.line([1],[1])
+    a3 = pt.chart(); a3.line([1],[1])
+    b1 = pt.chart(); b1.line([1],[1])
+    b2 = pt.chart(); b2.line([1],[1])
+    r_long  = a1 | a2 | a3
+    r_short = b1 | b2
+    try:
+        (r_long / r_short).share_x("col")
+        failures.append("expected ValueError on ragged v-of-h share_x('col')")
+    except ValueError as ex:
+        msg = str(ex).lower()
+        if "same number of cells" not in msg:
+            failures.append(f"expected 'same number of cells' message; got: {ex}")
+
+    # 10. Cross-layout share_x("col") errors when a child isn't an h-layout
+    # (e.g., a bare chart sneaking into the vertical stack).
+    p1 = pt.chart(); p1.line([1],[1])
+    p2 = pt.chart(); p2.line([1],[1])
+    q = pt.chart(); q.line([1],[1])
+    r_ok = p1 | p2
+    try:
+        (r_ok / q).share_x("col")
+        failures.append(
+            "expected ValueError on share_x('col') with a bare-chart child"
+        )
+    except ValueError as ex:
+        msg = str(ex).lower()
+        if "'h' sub-layout" not in msg:
+            failures.append(f"expected sub-layout message; got: {ex}")
+
     if failures:
         for f in failures:
             print(f"FAIL invariant: {f}")
         return 1
-    print(f"OK     invariants ({10} checks)")
+    print(f"OK     invariants ({12} checks)")
     return 0
 
 
