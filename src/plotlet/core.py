@@ -35,7 +35,7 @@ from .scales import (_LinearScale, _LogScale, _CategoryScale, _SymlogScale,
                       _PowerScale, _TimeScale, _nice_domain, _fmt_tick,
                       _to_epoch, _coerce_time_lim)
 from .draw.font import _measure_text, _cap_height, _descender
-from .draw import text_path, segment
+from .draw import text_path, segment, _dash_attr
 from .utils import histogram, collect_categories
 from .registry import RenderContext, get_artist, all_artist_names
 from . import builtin_artists  # noqa: F401  — registers built-ins on import
@@ -59,7 +59,7 @@ _FRAME_METHODS = {
     "title", "xlabel", "ylabel", "xlim", "ylim",
     "xscale", "yscale", "grid", "legend",
     "xticks", "yticks", "spines", "theme",
-    "x_expand", "y_expand", "clip",
+    "x_expand", "y_expand", "clip", "facecolor",
 }
 
 
@@ -263,6 +263,8 @@ def _replay(calls):
         "spine_bottom_color": None, "spine_left_color": None,
         "spine_top_width": None, "spine_right_width": None,
         "spine_bottom_width": None, "spine_left_width": None,
+        "spine_top_linestyle": None, "spine_right_linestyle": None,
+        "spine_bottom_linestyle": None, "spine_left_linestyle": None,
         "grid": _GRIDSPEC.get("default_on", False), "legend": False,
         # Inline-legend placement. `"inside"` (default) paints inside the
         # data area, top-right; `"right"/"left"/"top"/"bottom"` paint in
@@ -273,6 +275,7 @@ def _replay(calls):
         # matplotlib-default behavior where lines and large markers can
         # bleed into the margin space.
         "clip": True,
+        "facecolor": None,
     }
     for name, args, kw in calls:
         spec = get_artist(name)
@@ -312,6 +315,7 @@ def _replay(calls):
                     st[f"spine_{side}"] = bool(v.get("visible", True))
                     if "color" in v: st[f"spine_{side}_color"] = v["color"]
                     if "width" in v: st[f"spine_{side}_width"] = v["width"]
+                    if "linestyle" in v: st[f"spine_{side}_linestyle"] = v["linestyle"]
                 else:
                     st[f"spine_{side}"] = bool(v)
         elif name == "grid":   st["grid"] = (args[0] if args else True)
@@ -320,6 +324,7 @@ def _replay(calls):
             if "position" in kw:
                 st["legend_position"] = kw["position"]
         elif name == "clip":   st["clip"] = bool(args[0]) if args else True
+        elif name == "facecolor": st["facecolor"] = args[0] if args else None
         elif name == "theme":
             # `theme` is applied outside replay (by `active_theme(...)` in
             # `Chart.to_svg`) so the spec dicts are already on the right
@@ -1224,6 +1229,10 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     # ---- emit body fragment ----
     parts = []
 
+    if st["facecolor"] is not None:
+        parts.append(f'<rect x="0" y="0" width="{iw}" height="{ih}" '
+                     f'fill="{_resolve_color(st["facecolor"])}"/>')
+
     # grid
     if st["grid"]:
         gw = _GRIDSPEC["width"]; gd = _GRIDSPEC["dasharray"]
@@ -1299,6 +1308,9 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         col = _resolve_color(c) if c is not None else _FRAME["color"]
         return col, (w if w is not None else _FRAME["width"])
 
+    def _side_dash(side):
+        return st[f"spine_{side}_linestyle"]
+
     for side, (x1, y1, x2, y2) in (
         ("top",    (0, 0, iw, 0)),
         ("bottom", (0, ih, iw, ih)),
@@ -1309,7 +1321,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             continue
         col, w = _side_stroke(side)
         parts.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" '
-                     f'stroke="{col}" stroke-width="{w}"/>')
+                     f'stroke="{col}" stroke-width="{w}"{_dash_attr(_side_dash(side))}/>')
 
     tick_size = _FONTSPEC["tick_size"]
     label_size = _FONTSPEC["label_size"]
