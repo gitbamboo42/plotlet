@@ -47,6 +47,19 @@ from .utils import to_list, to_list_2d
 from .registry import get_artist, all_artist_names
 
 
+def _palette_color(palette, value, index):
+    """Resolve a hue-category value to a color via `palette`. Returns
+    `None` when `palette` is `None` or doesn't cover `value`, in which
+    case the caller falls through to the internal cycle. Accepts a dict
+    (category → color) or a sequence indexed by category-appearance order
+    (wraps modulo length, matching the cycle convention)."""
+    if palette is None:
+        return None
+    if isinstance(palette, dict):
+        return palette.get(value)
+    return palette[index % len(palette)]
+
+
 def _extract_theme(calls) -> str | None:
     """Last-call-wins scan for the active theme. Returns `None` when the
     chart never set a theme — `active_theme(None)` is a passthrough that
@@ -419,14 +432,15 @@ class Chart(_Renderable):
         self._calls.append((name, list(args), dict(kwargs)))
         return self
 
-    def line(self, *args, x=None, y=None, hue=None, data=None, **opts):
+    def line(self, *args, x=None, y=None, hue=None, palette=None, data=None, **opts):
         if x is not None or y is not None:
-            self._tabular("line", "line", data, x, y, hue, opts)
+            self._tabular("line", "line", data, x, y, hue, palette, opts)
         else:
             self._record("line", *args, **opts)
         return self
 
-    def step(self, *args, x=None, y=None, hue=None, where="post", data=None, **opts):
+    def step(self, *args, x=None, y=None, hue=None, palette=None,
+             where="post", data=None, **opts):
         """Step plot — sugar over `line(curve=...)`. `where="pre"`,
         `"post"` (default), or `"mid"` map to plotlet's curve names
         (`step-before`, `step-after`, `step-mid`). matplotlib convention."""
@@ -437,24 +451,28 @@ class Chart(_Renderable):
             )
         opts = dict(opts)
         opts["curve"] = curve
-        return self.line(*args, x=x, y=y, hue=hue, data=data, **opts)
+        return self.line(*args, x=x, y=y, hue=hue, palette=palette, data=data, **opts)
 
-    def scatter(self, *args, x=None, y=None, hue=None, size=None, style=None,
-                sizes=(20, 200), data=None, **opts):
+    def scatter(self, *args, x=None, y=None, hue=None, palette=None,
+                size=None, style=None, sizes=(20, 200), data=None, **opts):
         """Plot points. `size=<col>` maps a numeric column to per-point area
         in pixels², linearly rescaled into `sizes=(min, max)`. `style=<col>`
         cycles markers (`o`, `s`, `^`, `v`, `x`, `+`) per unique value.
-        Both compose with `hue=<col>`."""
+        Both compose with `hue=<col>`. `palette=` pins hue categories to
+        colors — accepts a dict (`{"A": "#3F97C5", ...}`) or a list indexed
+        by category-appearance order."""
         if x is not None or y is not None:
             if size is not None or style is not None:
-                self._scatter_with_aesthetics(data, x, y, hue, size, style, sizes, opts)
+                self._scatter_with_aesthetics(data, x, y, hue, palette,
+                                              size, style, sizes, opts)
             else:
-                self._tabular("scatter", "scatter", data, x, y, hue, opts)
+                self._tabular("scatter", "scatter", data, x, y, hue, palette, opts)
         else:
             self._record("scatter", *args, **opts)
         return self
 
-    def _scatter_with_aesthetics(self, data, x_col, y_col, hue, size, style, sizes, opts):
+    def _scatter_with_aesthetics(self, data, x_col, y_col, hue, palette,
+                                 size, style, sizes, opts):
         """Compute per-point `s` and `marker` arrays from data columns, then
         emit one scatter call per hue group (or one total when no hue).
         Centralized so the hue/size/style combinatorics stay in one place."""
@@ -483,12 +501,15 @@ class Chart(_Renderable):
             if v not in seen:
                 seen.append(v)
         opts.pop("label", None)
-        for v in seen:
-            idxs = [i for i, h in enumerate(hue_vals) if h == v]
-            xs_g = [xs_all[i] for i in idxs]
-            ys_g = [ys_all[i] for i in idxs]
+        for i, v in enumerate(seen):
+            idxs = [j for j, h in enumerate(hue_vals) if h == v]
+            xs_g = [xs_all[j] for j in idxs]
+            ys_g = [ys_all[j] for j in idxs]
             sub_opts = slice_for(idxs)
             sub_opts.pop("label", None)
+            pc = _palette_color(palette, v, i)
+            if pc is not None:
+                sub_opts["color"] = pc
             self._record("scatter", xs_g, ys_g, label=str(v), **sub_opts)
 
     @staticmethod
@@ -591,7 +612,7 @@ class Chart(_Renderable):
             )
         return df
 
-    def _tabular(self, public_name, kind, data, x_col, y_col, hue, opts):
+    def _tabular(self, public_name, kind, data, x_col, y_col, hue, palette, opts):
         df = self._resolve_data(data, public_name)
         if hue is None:
             self._record(kind, to_list(df[x_col]), to_list(df[y_col]), **opts)
@@ -604,10 +625,14 @@ class Chart(_Renderable):
             if v not in seen:
                 seen.append(v)
         opts.pop("label", None)  # hue overrides any user-provided label
-        for v in seen:
-            xs_g = [xs_all[i] for i, h in enumerate(hue_vals) if h == v]
-            ys_g = [ys_all[i] for i, h in enumerate(hue_vals) if h == v]
-            self._record(kind, xs_g, ys_g, label=str(v), **opts)
+        for i, v in enumerate(seen):
+            xs_g = [xs_all[j] for j, h in enumerate(hue_vals) if h == v]
+            ys_g = [ys_all[j] for j, h in enumerate(hue_vals) if h == v]
+            sub_opts = dict(opts)
+            pc = _palette_color(palette, v, i)
+            if pc is not None:
+                sub_opts["color"] = pc
+            self._record(kind, xs_g, ys_g, label=str(v), **sub_opts)
 
     # Frame-state methods (title/xlabel/ylabel/xlim/ylim/xscale/yscale/
     # grid/legend) forward through __getattr__ above.
