@@ -22,6 +22,26 @@ These belong in **your project**. Reference implementations to copy and adapt
 live in [`src/plotlet/recipes/`](../src/plotlet/recipes/) (single-file artists)
 and [`cookbook/`](../cookbook/) (multi-file projects like annotated heatmaps).
 
+## The replay model
+
+A `Chart` is a journal, not a state machine. `c.xlim(1, 10)` doesn't set a
+limit — it appends `("xlim", (1, 10), {})` to `Chart._calls`. The renderer
+never sees user method calls directly; it sees the list. `_replay` is a
+pure fold of `(calls, artist registry) → state dict`, which `_render` then
+turns into SVG.
+
+Several features fall out of this rather than being designed separately:
+
+- **Byte-identical re-renders.** `to_svg()` re-walks the same list; calling it twice produces the same bytes.
+- **Themes.** `c.theme(...)` appends into the same journal. A user's `c.xlim(...)` after `c.theme(...)` naturally wins by journal order; no precedence rules to maintain.
+- **Facets.** `pt.facet(...)` is a chart-shaped recorder; one set of artist calls is replayed against each group's subset.
+- **Shared scales.** `share_x="col"` does a pre-pass replay to discover per-panel data domains, then unions them by column before the real render.
+- **Extension.** `add_artist(name, record=..., draw=...)` just registers a pair of pure functions; the journal needs no extension points.
+
+The price is that `record()` runs before scales and colors exist, so
+artists can't resolve pixel positions or palettes at record time — see
+[EXTENDING.md](EXTENDING.md).
+
 ## Why this shape
 
 Code is becoming cheap. The cost of writing a 100-line custom plot type
