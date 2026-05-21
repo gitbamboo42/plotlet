@@ -12,7 +12,7 @@ inputs but gets numerically wobbly on degenerate covariance matrices.
 
 API:
     pca_biplot(matrix, var_names, sample_labels=None, hue=None,
-               scale_loadings=2.5)
+               palette=None, scale_loadings=2.5)
 """
 
 SUMMARY = "PCA biplot: PC1 vs PC2 scatter with loading arrows. SVD-based via numpy."
@@ -53,7 +53,7 @@ pt.add_artist(pt.ArtistSpec(
 ))
 
 
-def pca_biplot(matrix, var_names, sample_labels=None, hue=None,
+def pca_biplot(matrix, var_names, sample_labels=None, hue=None, palette=None,
                scale_loadings: float = 2.5) -> "pt.Chart":
     X = np.asarray(to_list_2d(matrix), dtype=float)
     # Center and scale (correlation PCA — the standard biplot convention).
@@ -70,13 +70,9 @@ def pca_biplot(matrix, var_names, sample_labels=None, hue=None,
     if hue is None:
         c.scatter(pc1, pc2, s=20, alpha=0.7)
     else:
-        cats = []
-        for h in hue:
-            if h not in cats: cats.append(h)
-        for cat in cats:
-            xs = [pc1[i] for i, h in enumerate(hue) if h == cat]
-            ys = [pc2[i] for i, h in enumerate(hue) if h == cat]
-            c.scatter(xs, ys, s=20, alpha=0.7, label=str(cat))
+        df = {"pc1": pc1, "pc2": pc2, "hue": list(hue)}
+        c.scatter(x="pc1", y="pc2", hue="hue", palette=palette,
+                  data=df, s=20, alpha=0.7)
         c.legend(True)
     for j, name in enumerate(var_names):
         dx = float(loadings_pc1[j]) * scale_loadings

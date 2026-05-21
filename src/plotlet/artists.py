@@ -11,7 +11,7 @@ from ._spec import _D
 from .draw._png import encode_rgb
 from .draw.colormaps import colormap_lut, _ContinuousNorm
 from .draw.colors import _resolve_color
-from .draw import (text_path, marker, op,
+from .draw import (text_path, marker,
                     segment, rect as draw_rect, path as draw_path,
                     polygon as draw_polygon, errorbar_v, errorbar_h)
 from .draw.font import _measure_text
@@ -96,6 +96,8 @@ def _artist_scatter(a, xs_, ys_, col):
     raw_s = opts.get("s", _D["scatter_s"])
     raw_mk = opts.get("marker", "o")
     alpha = opts.get("alpha", _D["scatter_alpha"])
+    edgecolor = opts.get("edgecolor")
+    linewidth = opts.get("linewidth")
     n = len(a["xs"])
     # `s` and `marker` accept either a scalar (one value for every point)
     # or a per-point sequence (size=/style= mappings produce the list form).
@@ -107,7 +109,8 @@ def _artist_scatter(a, xs_, ys_, col):
         if not (math.isfinite(px) and math.isfinite(py)):
             continue
         sz = math.sqrt(sizes[i]) / 2
-        out.append(marker(markers[i], px, py, sz, col, alpha))
+        out.append(marker(markers[i], px, py, sz, col, alpha,
+                          edgecolor=edgecolor, edgewidth=linewidth))
     return "".join(out)
 
 
@@ -117,23 +120,30 @@ def _artist_bar(a, xs_, ys_, col):
     bw = xs_.bandwidth
     y0 = ys_(0)
     alpha = opts.get("alpha", _D["bar_alpha"])
+    edgecolor = opts.get("edgecolor")
+    lw = opts.get("linewidth", _D["linewidth"]) if edgecolor else 1
     # padding=0 produces contiguous bands (heatmap track look). Adjacent
-    # rects in SVG anti-alias their shared edge into a hairline gap;
+    # rects anti-alias their shared edge into a hairline gap;
     # shape-rendering="crispEdges" pixel-aligns the borders so the cells
     # really butt up. Skip it for normal bars where the visible inner
     # padding makes anti-aliased edges look smoother.
-    crisp = ' shape-rendering="crispEdges"' if getattr(xs_, "padding", 0.2) == 0 else ''
+    sr = "crispEdges" if getattr(xs_, "padding", 0.2) == 0 else None
     for c, v in zip(a["cats"], a["vals"]):
         x = xs_(c) - bw / 2
         y = ys_(v)
-        out.append(f'<rect x="{x:.2f}" y="{min(y0, y):.2f}" width="{bw:.2f}" '
-                   f'height="{abs(y - y0):.2f}" fill="{col}"{op(alpha)}{crisp}/>')
+        out.append(draw_rect(x, min(y0, y), bw, abs(y - y0),
+                             fill=col, stroke=edgecolor, stroke_width=lw,
+                             dash=opts.get("linestyle"),
+                             alpha=alpha, shape_rendering=sr))
     return "".join(out)
 
 
 def _artist_hist(a, xs_, ys_, ih, col):
     out = []
-    alpha = a["opts"].get("alpha", _D["hist_alpha"])
+    opts = a["opts"]
+    alpha = opts.get("alpha", _D["hist_alpha"])
+    edgecolor = opts.get("edgecolor")
+    lw = opts.get("linewidth", _D["linewidth"]) if edgecolor else 1
     half_gap = _D["hist_gap"] / 2
     for b in a["_bins"]:
         x0 = xs_(b["x0"]) + half_gap
@@ -141,7 +151,9 @@ def _artist_hist(a, xs_, ys_, ih, col):
         w = max(0, x1 - x0)
         y = ys_(b["count"])
         h = ih - y
-        out.append(draw_rect(x0, y, w, h, fill=col, alpha=alpha))
+        out.append(draw_rect(x0, y, w, h, fill=col,
+                             stroke=edgecolor, stroke_width=lw,
+                             dash=opts.get("linestyle"), alpha=alpha))
     return "".join(out)
 
 

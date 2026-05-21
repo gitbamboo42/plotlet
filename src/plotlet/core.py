@@ -280,7 +280,9 @@ def _replay(calls):
     for name, args, kw in calls:
         spec = get_artist(name)
         if spec is not None:
-            st["artists"].append(spec.record(args, kw))
+            # Pass fresh copies so a `kw.pop(...)` inside `record()` doesn't
+            # corrupt the stored call dict — re-renders walk the same list.
+            st["artists"].append(spec.record(list(args), dict(kw)))
         elif name == "title":  st["title"] = args[0]
         elif name == "xlabel": st["xlabel"] = args[0]
         elif name == "ylabel": st["ylabel"] = args[0]

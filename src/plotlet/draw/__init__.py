@@ -93,23 +93,29 @@ def _shape_opacity(alpha, fill_alpha, stroke_alpha,
     return fop + sop
 
 
-def marker(kind: str, x: float, y: float, size: float, color: str, alpha) -> str:
+def marker(kind: str, x: float, y: float, size: float, color: str, alpha,
+           edgecolor: str | None = None, edgewidth: float | None = None) -> str:
     """Emit a single marker glyph (one of `"o" "s" "^" "v" "x" "+"`) at
     pixel `(x, y)`. Returns an empty string for unknown marker codes.
-    """
-    msw = _D["marker_stroke_width"]
+
+    `edgecolor=` adds an outline to filled markers (`o`/`s`/`^`/`v`).
+    `edgewidth=` overrides the stroke width for ALL markers (including the
+    `x`/`+` outlines, which use `color` as their stroke); falls back to
+    `_D["marker_stroke_width"]`."""
+    msw = edgewidth if edgewidth is not None else _D["marker_stroke_width"]
     _op = op(alpha)
+    edge = f' stroke="{edgecolor}" stroke-width="{msw}"' if edgecolor else ""
     if kind == "o":
-        return f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{size}" fill="{color}"{_op}/>'
+        return f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{size}" fill="{color}"{edge}{_op}/>'
     if kind == "s":
         return (f'<rect x="{x - size:.2f}" y="{y - size:.2f}" width="{2 * size}" '
-                f'height="{2 * size}" fill="{color}"{_op}/>')
+                f'height="{2 * size}" fill="{color}"{edge}{_op}/>')
     if kind == "^":
         return (f'<path d="M{x:.2f},{y - size:.2f}L{x + size:.2f},{y + size:.2f}'
-                f'L{x - size:.2f},{y + size:.2f}Z" fill="{color}"{_op}/>')
+                f'L{x - size:.2f},{y + size:.2f}Z" fill="{color}"{edge}{_op}/>')
     if kind == "v":
         return (f'<path d="M{x:.2f},{y + size:.2f}L{x + size:.2f},{y - size:.2f}'
-                f'L{x - size:.2f},{y - size:.2f}Z" fill="{color}"{_op}/>')
+                f'L{x - size:.2f},{y - size:.2f}Z" fill="{color}"{edge}{_op}/>')
     if kind == "x":
         return (f'<path d="M{x - size:.2f},{y - size:.2f}L{x + size:.2f},{y + size:.2f}'
                 f'M{x - size:.2f},{y + size:.2f}L{x + size:.2f},{y - size:.2f}" '
@@ -142,20 +148,26 @@ def segment(x1: float, y1: float, x2: float, y2: float, *,
 def rect(x: float, y: float, w: float, h: float, *,
          fill: str = None, stroke: str = None,
          stroke_width: float = 1, alpha=1,
-         fill_alpha=None, stroke_alpha=None) -> str:
+         fill_alpha=None, stroke_alpha=None,
+         dash=None, shape_rendering: str | None = None) -> str:
     """Emit a single SVG `<rect>` at pixel (x, y) with size (w, h).
 
     `fill=None` (default) draws an outline only — pass `stroke=` to add a
     border. `fill_alpha` / `stroke_alpha` override `alpha` per channel when
     you need a translucent body with an opaque outline (or vice versa); when
     both are `None`, `alpha` is applied as a single whole-element `opacity`.
+    `dash` accepts a registered linestyle (`"--"`, `":"`, `"-."`) or a raw
+    SVG dasharray (`"6,3"`). `shape_rendering="crispEdges"` pixel-aligns
+    borders, useful for contiguous-band heatmap-style rects.
     """
     fa = f' fill="{fill}"' if fill else ' fill="none"'
-    sa = f' stroke="{stroke}" stroke-width="{stroke_width}"' if stroke else ""
+    sa = (f' stroke="{stroke}" stroke-width="{stroke_width}"{_dash_attr(dash)}'
+          if stroke else "")
     oa = _shape_opacity(alpha, fill_alpha, stroke_alpha,
                         has_fill=bool(fill), has_stroke=bool(stroke))
+    sr = f' shape-rendering="{shape_rendering}"' if shape_rendering else ""
     return (f'<rect x="{x:.2f}" y="{y:.2f}" width="{w:.2f}" height="{h:.2f}"'
-            f'{fa}{sa}{oa}/>')
+            f'{fa}{sa}{oa}{sr}/>')
 
 
 def circle(cx: float, cy: float, r: float, *,

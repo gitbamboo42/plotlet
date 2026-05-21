@@ -10,9 +10,11 @@ The seaborn / pandas EDA staple. Showcases how plotlet's composition
 algebra makes "many small multiples" recipes trivial.
 
 API:
-    pair_plot({"x": xs, "y": ys, "z": zs}, ...)
+    pair_plot(df, hue="species", palette={"A": "#3F97C5", ...})
 
-`vars` is a dict of {name: 1-D iterable}. All columns must share length.
+`data` is a DataFrame or dict-of-columns ({name: 1-D iterable}); the
+`hue` column (if given) is excluded from the pair grid and used for
+categorical coloring via the chart-level `hue=`/`palette=` API.
 """
 
 SUMMARY = 'EDA pair-plot: n × n grid of scatter + histogram cells, built via plotlet `grid()` composition.'
@@ -20,20 +22,18 @@ SUMMARY = 'EDA pair-plot: n × n grid of scatter + histogram cells, built via pl
 from pathlib import Path
 
 import plotlet as pt
-from plotlet.utils import to_list
 
 
-def pair_plot(vars: dict, hue: list | None = None,
+def pair_plot(data, hue: str | None = None, palette=None,
               scatter_size: int = 8, panel_size: int = 140,
               hist_bins: int = 20) -> "pt.Chart":
-    """Build a pair-plot for `vars` (dict of name -> 1-D values).
+    """Build a pair-plot for the numeric columns of `data`.
 
-    `hue` is an optional per-row category vector; matching rows get the
-    same tab10 color in scatter cells. Returns the assembled chart so
-    the caller can `.save_svg(...)` or `.title(...)` it.
-    """
-    names = list(vars.keys())
-    series = {k: to_list(v) for k, v in vars.items()}
+    `hue` is an optional column name; matching rows get the same color
+    (and a categorical legend entry) in scatter cells. `palette=` pins
+    hue categories to specific colors (forwarded to `c.scatter`)."""
+    cols = list(data.columns) if hasattr(data, "columns") else list(data.keys())
+    names = [c for c in cols if c != hue]
     n = len(names)
     rows = []
     for i, ni in enumerate(names):
@@ -41,22 +41,12 @@ def pair_plot(vars: dict, hue: list | None = None,
         for j, nj in enumerate(names):
             c = pt.chart(data_width=panel_size, data_height=panel_size)
             if i == j:
-                c.hist(series[ni], bins=hist_bins)
+                c.hist(x=ni, data=data, bins=hist_bins)
+            elif hue is None:
+                c.scatter(x=nj, y=ni, data=data, s=scatter_size)
             else:
-                if hue is None:
-                    c.scatter(series[nj], series[ni], s=scatter_size)
-                else:
-                    # Split by category and emit one scatter per group so
-                    # the color cycle picks them up.
-                    cats = []
-                    by_cat = {}
-                    for x, y, h in zip(series[nj], series[ni], hue):
-                        if h not in by_cat:
-                            cats.append(h); by_cat[h] = ([], [])
-                        by_cat[h][0].append(x); by_cat[h][1].append(y)
-                    for cat in cats:
-                        xs, ys = by_cat[cat]
-                        c.scatter(xs, ys, s=scatter_size, label=str(cat))
+                c.scatter(x=nj, y=ni, hue=hue, palette=palette,
+                          data=data, s=scatter_size)
             # Only the outer cells get axis labels — interior is busy enough.
             if i == n - 1:
                 c.xlabel(nj)
@@ -75,7 +65,7 @@ def demo():
     """Build the demonstration chart with synthetic data.
 
     Returns a `pt.Chart` ready for `.save_svg()` or further composition."""
-    import random, math
+    import random
     random.seed(0)
     n = 200
     # Three correlated variables with a categorical hue.
@@ -86,8 +76,9 @@ def demo():
     species = ["A" if p < 1.0 else ("B" if p < 1.5 else "C") for p in petal_w]
     fig = pair_plot(
         {"sepal len": sepal_l, "sepal wid": sepal_w,
-         "petal len": petal_l, "petal wid": petal_w},
-        hue=species,
+         "petal len": petal_l, "petal wid": petal_w,
+         "species": species},
+        hue="species",
         panel_size=110,
     )
     return fig

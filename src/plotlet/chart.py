@@ -43,21 +43,8 @@ from .core import (
     _FRAME_METHODS, _replay, _render,
     _to_px,
 )
-from .utils import to_list, to_list_2d
+from .utils import to_list, to_list_2d, palette_color
 from .registry import get_artist, all_artist_names
-
-
-def _palette_color(palette, value, index):
-    """Resolve a hue-category value to a color via `palette`. Returns
-    `None` when `palette` is `None` or doesn't cover `value`, in which
-    case the caller falls through to the internal cycle. Accepts a dict
-    (category → color) or a sequence indexed by category-appearance order
-    (wraps modulo length, matching the cycle convention)."""
-    if palette is None:
-        return None
-    if isinstance(palette, dict):
-        return palette.get(value)
-    return palette[index % len(palette)]
 
 
 def _extract_theme(calls) -> str | None:
@@ -507,7 +494,7 @@ class Chart(_Renderable):
             ys_g = [ys_all[j] for j in idxs]
             sub_opts = slice_for(idxs)
             sub_opts.pop("label", None)
-            pc = _palette_color(palette, v, i)
+            pc = palette_color(palette, v, i)
             if pc is not None:
                 sub_opts["color"] = pc
             self._record("scatter", xs_g, ys_g, label=str(v), **sub_opts)
@@ -629,7 +616,7 @@ class Chart(_Renderable):
             xs_g = [xs_all[j] for j, h in enumerate(hue_vals) if h == v]
             ys_g = [ys_all[j] for j, h in enumerate(hue_vals) if h == v]
             sub_opts = dict(opts)
-            pc = _palette_color(palette, v, i)
+            pc = palette_color(palette, v, i)
             if pc is not None:
                 sub_opts["color"] = pc
             self._record(kind, xs_g, ys_g, label=str(v), **sub_opts)

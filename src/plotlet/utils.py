@@ -19,6 +19,7 @@ The inverse-direction primitives (emit SVG strings) live in `plotlet.draw`.
 import math
 
 from .registry import get_artist
+from .draw.colors import TAB10
 
 
 def to_list(obj):
@@ -89,6 +90,91 @@ def histogram(data, bins):
             for i in range(n)]
 
 
+def quantile(xs, q):
+    """Linear-interpolation quantile (Tukey / numpy default `linear`).
+    Returns NaN for empty input, the single value for length-1 input."""
+    xs = sorted(xs)
+    n = len(xs)
+    if n == 0:
+        return float("nan")
+    if n == 1:
+        return xs[0]
+    pos = (n - 1) * q
+    lo = int(pos)
+    hi = min(lo + 1, n - 1)
+    return xs[lo] + (xs[hi] - xs[lo]) * (pos - lo)
+
+
+def palette_color(palette, value, index):
+    """Resolve a hue-category value to a color via `palette`. Returns
+    `None` when `palette` is `None`/empty or doesn't cover `value`, in
+    which case the caller falls through to its own cycle. Accepts a
+    dict (category → color) or a sequence indexed by category-appearance
+    order (wraps modulo length)."""
+    if not palette:
+        return None
+    if isinstance(palette, dict):
+        return palette.get(value)
+    return palette[index % len(palette)]
+
+
+def hue_color(hues, palette, j, fallback):
+    """Pick a color for hue index `j` in a dodged categorical artist.
+
+    With no hue (`hues == [None]`) returns `fallback` — the artist's
+    chart-level cycle color. With hue, resolves via `palette_color` and
+    falls through to `TAB10[j % 10]` so categories beyond the palette
+    still get a deterministic color."""
+    if hues == [None]:
+        return fallback
+    return palette_color(palette, hues[j], j) or TAB10[j % 10]
+
+
+def dodge_positions(x_scale, cat, n_hues, j, *, band_frac=0.6, gap=0.1):
+    """Compute the centered-dodge x position and box width for sub-box
+    `j` of `n_hues` within category `cat`.
+
+    `band_frac` is the total dodge-group width as a fraction of the
+    category band; `gap` is the fraction of each slot left as spacing
+    between adjacent boxes (ignored when `n_hues == 1` — nothing to
+    space from). Returns `(cx, box_w)` in pixel coordinates."""
+    band = getattr(x_scale, "bandwidth", 1.0)
+    slot_w = band * band_frac / n_hues
+    box_w = slot_w * (1 - gap) if n_hues > 1 else slot_w
+    cx = x_scale(cat) + (j - (n_hues - 1) / 2) * slot_w
+    return cx, box_w
+
+
+def categorical_groups(data, x_col, y_col, hue_col=None):
+    """Bin a long-form table into per-(x, hue) value lists.
+
+    Returns `(cats, hues, groups)`:
+      `cats`   — unique x values in appearance order.
+      `hues`   — unique hue values in appearance order, or `[None]` when
+                 `hue_col is None`.
+      `groups` — nested list with `groups[i][j]` = y values where
+                 `x == cats[i]` and (`hue == hues[j]` or hue is absent).
+
+    Used by recipe artists that accept seaborn-style
+    `(data=df, x=col, y=col, hue=col)` input."""
+    if data is None:
+        raise ValueError("categorical_groups: data= is required.")
+    xs = to_list(data[x_col])
+    ys = to_list(data[y_col])
+    hs = to_list(data[hue_col]) if hue_col is not None else [None] * len(xs)
+    cats, hues = [], []
+    for v in xs:
+        if v not in cats: cats.append(v)
+    for v in hs:
+        if v not in hues: hues.append(v)
+    groups = [[[] for _ in hues] for _ in cats]
+    cat_idx = {c: i for i, c in enumerate(cats)}
+    hue_idx = {h: j for j, h in enumerate(hues)}
+    for x, y, h in zip(xs, ys, hs):
+        groups[cat_idx[x]][hue_idx[h]].append(y)
+    return cats, hues, groups
+
+
 def collect_categories(artists, axis):
     """Unique values an artist contributes on `axis`, alphabetically sorted."""
     seen = set()
@@ -106,4 +192,6 @@ def collect_categories(artists, axis):
     return sorted(out, key=str)
 
 
-__all__ = ["to_list", "to_list_2d", "broadcast", "histogram", "collect_categories"]
+__all__ = ["to_list", "to_list_2d", "broadcast", "histogram", "quantile",
+           "palette_color", "hue_color", "dodge_positions",
+           "categorical_groups", "collect_categories"]

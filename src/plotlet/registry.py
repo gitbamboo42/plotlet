@@ -6,6 +6,8 @@ A spec bundles the four things `_render` needs to know about a plot type:
   - `record(args, kwargs) -> dict`
         Convert positional/keyword args from the recorder into the artist
         dict that gets stored in `Chart._calls`. Pure data — no scales yet.
+        `args` and `kwargs` are fresh copies on every render, so it's safe
+        for `record` to `kwargs.pop(...)` or otherwise mutate them.
 
   - `xdomain(artist) -> Iterable[float] | None` / `ydomain(...)`
         Yield numeric values that should participate in autoscaling on each
