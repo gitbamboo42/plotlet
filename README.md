@@ -95,7 +95,7 @@ hm = pt.chart(); hm.imshow(matrix, cmap="viridis")
 hm | pt.legend(hm)             # heatmap + colorbar
 
 # Multi-source — groups by chart, each chart's title as section header.
-parent = (a | b); parent.legend()        # sugar for parent | pt.legend()
+(a | b) | pt.legend()                    # auto-harvests entries from a and b
 ```
 
 A composed chart owns its children; render the parent. Calling `.show()` on a child raises. Full reference: [docs/SUBPLOTS.md](docs/SUBPLOTS.md).

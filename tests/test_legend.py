@@ -8,16 +8,16 @@
 The in-frame overlay (`chart.legend(True)` / `legend=True`) is exercised
 incidentally inside `tests/test_chart.py`. This file is dedicated to the
 layout-level renderer in `plotlet/legend.py` — `pt.legend()` panel form,
-`parent.legend()` decorator, grouping by source `title`, continuous
+grouping by source `title`, continuous
 gradient strips for sources with `legend_gradient` (today: `imshow`),
 and content-driven sizing.
 
 Each plot below bundles several features so the suite isn't dominated by
 near-duplicate baselines:
 
-  legend_auto_grouped — parent.legend() decorator, no-source auto-harvest,
-                        default grouping with chart `title` headers,
-                        content-driven auto-sizing.
+  legend_auto_grouped — `parent | pt.legend()` composition, no-source
+                        auto-harvest, default grouping with chart `title`
+                        headers, content-driven auto-sizing.
   legend_continuous   — pt.legend(hm) panel form with a continuous source;
                         per-imshow legend={"label", "ticks"} override.
   legend_mixed        — pt.legend() panel form harvesting both an imshow
@@ -60,7 +60,7 @@ def legend_auto_grouped():
     a.line(xs, [math.sin(x) for x in xs], label="sin")
     b = pt.chart(title="beta", data_width=180, data_height=140)
     b.line(xs, [math.cos(x) for x in xs], label="cos")
-    return (a | b).legend()
+    return (a | b) | pt.legend()
 
 
 def legend_continuous():

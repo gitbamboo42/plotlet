@@ -79,9 +79,9 @@ One constructor for both discrete swatches and continuous gradients — geometry
 # Panel form — explicit grid cell
 pt.grid([[hm, pt.legend(hm)]])
 
-# Decorator form — attached to a parent in its reserved margin
-(A | B).legend()              # collects entries from A and B
-(C | D).legend(D)             # gradient legend for D, attached to (C | D)
+# Composed with | or / — appended as a sibling leaf
+(A | B) | pt.legend()         # collects entries from A and B
+(C | D) | pt.legend(D)        # gradient legend for D, beside (C | D)
 
 # Group-by-chart with each chart's `title` as section header
 pt.legend(a, b, c)
@@ -90,8 +90,6 @@ pt.legend(*srcs, group_by_chart=False)   # flat list
 # Rename or hide per-source section headers
 pt.legend(hm, names={hm: "Treatment", top: None})
 ```
-
-Decorator form is sugar over the panel form internally — same renderer.
 
 ## Single-parent rule
 

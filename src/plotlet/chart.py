@@ -12,7 +12,11 @@ This module owns plotlet's user-facing classes:
 
   * **`chart(...)`** / **`grid([[...]])`** — public factory functions.
 
-Composition operators (defined on both Chart and Layout):
+`Chart` and `Layout` share a private `_Renderable` base that owns the
+composition operators (`|`, `/`), output methods (`to_svg`, `show`,
+`save_*`), and `fit()`. Subclasses just implement `_to_svg_unchecked`.
+
+Composition operators:
 
   * `a | b` → horizontal `Layout`. Flattens when LHS is already a
     same-direction `Layout` (so `a | b | c` is a single 3-cell row, not
@@ -54,7 +58,143 @@ def _extract_theme(calls) -> str | None:
     return name
 
 
-class Chart:
+class _Renderable:
+    """Private base for `Chart` and `Layout` — owns the shared rendering
+    glue (composition operators, output methods, `fit()`,
+    `_require_render_root`). The one variant piece is
+    `_to_svg_unchecked`, which each subclass implements.
+
+    Lives behind an underscore on purpose: users only ever see `Chart`
+    and `Layout`. The base is here to remove copy-paste, not to grow a
+    public hierarchy.
+    """
+
+    # Default for leaves. `Layout` overrides to True. Lets tree-walking
+    # code in the layout engine distinguish parents from leaves without
+    # `isinstance` checks at every site.
+    _is_parent: bool = False
+
+    # ---------- composition ----------
+
+    def __or__(self, other) -> "Layout":
+        return _compose(self, other, "h")
+
+    def __truediv__(self, other) -> "Layout":
+        return _compose(self, other, "v")
+
+    # ---------- render ----------
+
+    def to_svg(self) -> str:
+        self._require_render_root()
+        return self._to_svg_unchecked()
+
+    def _to_svg_unchecked(self) -> str:
+        raise NotImplementedError
+
+    def to_html(self, full_page: bool = False) -> str:
+        svg = self.to_svg()
+        if full_page:
+            return ('<!doctype html><html><head><meta charset="utf-8">'
+                    '<title>plotlet</title></head>'
+                    f'<body style="margin:24px">{svg}</body></html>')
+        return svg
+
+    def _repr_html_(self) -> str:
+        return self.to_svg()
+
+    def show(self):
+        self._require_render_root()
+        svg = self.to_svg()
+        try:
+            from IPython.display import HTML, display
+        except ImportError:
+            print(self.to_html(full_page=True))
+            return
+        display(HTML(svg))
+
+    def save_svg(self, path):
+        Path(path).write_text(self.to_svg())
+        return self
+
+    def save_png(self, path, *, scale: float = 1.0, dpi: int | None = None):
+        """Rasterize to PNG. Requires `cairosvg` (`pip install cairosvg`).
+        `scale` multiplies the canvas pixel dimensions uniformly (e.g.
+        `scale=2` for retina); `dpi` overrides the default 96 dpi
+        rendering — both are passed straight through."""
+        _rasterize(self.to_svg(), path, "png", scale=scale, dpi=dpi)
+        return self
+
+    def save_pdf(self, path):
+        """Rasterize to PDF. Requires `cairosvg`."""
+        _rasterize(self.to_svg(), path, "pdf")
+        return self
+
+    def write_html(self, path):
+        Path(path).write_text(self.to_html(full_page=True))
+        return self
+
+    def fit(self, canvas_width=None, canvas_height=None):
+        """Return a copy of this node with every data leaf's data region
+        scaled so the rendered SVG fits within `canvas_width ×
+        canvas_height` pixels.
+
+        Layout-aware: only data regions scale. Tick labels, titles, axis
+        labels, spine widths, font sizes, and panel gaps stay at their
+        absolute pixel sizes — the result keeps the publication look at
+        every size, just with a smaller or larger data area.
+
+        Aspect ratio is preserved (the binding constraint wins). Pass
+        one dimension to scale uniformly to that axis; pass both to
+        fit-within W × H. Accepts pixels (``400``) or unit-suffixed
+        strings (``"4in"``, ``"10cm"``, ``"72pt"``).
+
+        Returns a fresh copy; the original is unchanged."""
+        from copy import deepcopy
+        from ._layout_engine import _natural_size, _data_total_size
+        cls_name = type(self).__name__
+        W = _to_px(canvas_width)
+        H = _to_px(canvas_height)
+        if W is None and H is None:
+            raise ValueError(
+                f"{cls_name}.fit() requires at least one of canvas_width=, canvas_height=."
+            )
+        if (W is not None and W <= 0) or (H is not None and H <= 0):
+            raise ValueError(f"{cls_name}.fit() canvas dimensions must be positive.")
+        node = deepcopy(self)
+        node._parent = None  # copy may inherit a stale parent ref
+        # Direct solve. Natural figure = data_total + overhead (margins,
+        # gaps, non-data leaves). Solving target = s * data_total +
+        # overhead for s gives the exact factor in one pass — unless the
+        # overhead changes with scale (it can, via measure-driven tick
+        # label growth). Iterating absorbs that residual; in practice
+        # 2–3 passes converge to within a pixel.
+        for _ in range(6):
+            W_nat, H_nat = _natural_size(node)
+            D_w, D_h = _data_total_size(node)
+            ratios = []
+            if W is not None and D_w > 0:
+                overhead_w = W_nat - D_w
+                ratios.append(max(1e-3, (W - overhead_w) / D_w))
+            if H is not None and D_h > 0:
+                overhead_h = H_nat - D_h
+                ratios.append(max(1e-3, (H - overhead_h) / D_h))
+            if not ratios:
+                break
+            s = min(ratios)
+            if abs(s - 1.0) < 5e-4:
+                break
+            _scale_data_dims(node, s)
+        return node
+
+    def _require_render_root(self):
+        if self._parent is not None:
+            kind = "layout" if self._is_parent else "chart"
+            raise RuntimeError(
+                f"this {kind} is part of a composed parent; render the parent instead."
+            )
+
+
+class Chart(_Renderable):
     def __init__(self, data=None, *,
                  data_width: int | float | str | None = None,
                  data_height: int | float | str | None = None,
@@ -203,17 +343,6 @@ class Chart:
         leaf._inset_owner = None
         leaf._last_M_eff = None
         return leaf
-
-    # `Chart` is always a leaf; the field is a compatibility shim so
-    # tree-walking code in `layout.py` can use `if x._is_parent:` against
-    # either `Chart` or `Layout` interchangeably. `Layout` overrides it.
-    _is_parent: bool = False
-
-    def __or__(self, other) -> "Layout":
-        return _compose(self, other, "h")
-
-    def __truediv__(self, other) -> "Layout":
-        return _compose(self, other, "v")
 
     def legend(self, *args, position: str | None = None, **kwargs) -> "Chart":
         """Toggle the in-frame overlay legend.
@@ -508,10 +637,6 @@ class Chart:
 
     # ---------- render ----------
 
-    def to_svg(self) -> str:
-        self._require_render_root()
-        return self._to_svg_unchecked()
-
     def _to_svg_unchecked(self) -> str:
         """Render path that skips the root check — used by parents
         embedding this chart (insets, layout panels)."""
@@ -539,112 +664,15 @@ class Chart:
         with active_theme(_extract_theme(self._calls)):
             return _render(states[id(self)], W, H, M_eff)
 
-    def to_html(self, full_page: bool = False) -> str:
-        svg = self.to_svg()
-        if full_page:
-            return ('<!doctype html><html><head><meta charset="utf-8">'
-                    '<title>plotlet</title></head>'
-                    f'<body style="margin:24px">{svg}</body></html>')
-        return svg
-
-    def _repr_html_(self) -> str:
-        return self.to_svg()
-
-    def show(self):
-        self._require_render_root()
-        svg = self.to_svg()
-        try:
-            from IPython.display import HTML, display
-        except ImportError:
-            print(self.to_html(full_page=True))
-            return
-        display(HTML(svg))
-
-    def save_svg(self, path):
-        Path(path).write_text(self.to_svg())
-        return self
-
-    def save_png(self, path, *, scale: float = 1.0, dpi: int | None = None):
-        """Rasterize the chart to PNG. Requires `cairosvg` (`pip install
-        cairosvg`). `scale` multiplies the canvas pixel dimensions
-        uniformly (e.g. `scale=2` for retina); `dpi` overrides the
-        default 96 dpi rendering — both are passed straight through."""
-        _rasterize(self.to_svg(), path, "png", scale=scale, dpi=dpi)
-        return self
-
-    def save_pdf(self, path):
-        """Rasterize the chart to PDF. Requires `cairosvg`."""
-        _rasterize(self.to_svg(), path, "pdf")
-        return self
-
-    def write_html(self, path):
-        Path(path).write_text(self.to_html(full_page=True))
-        return self
-
-    def fit(self, canvas_width=None, canvas_height=None) -> "Chart":
-        """Return a copy of this chart with data dimensions scaled so the
-        rendered SVG fits within `canvas_width × canvas_height` pixels.
-
-        Layout-aware: only data regions scale. Tick labels, titles, axis
-        labels, spine widths, font sizes, and panel gaps stay at their
-        absolute pixel sizes — the result keeps the publication look at
-        every size, just with a smaller or larger data area.
-
-        Aspect ratio is preserved (the binding constraint wins). Pass
-        one dimension to scale uniformly to that axis; pass both to
-        fit-within W × H. Accepts pixels (``400``) or unit-suffixed
-        strings (``"4in"``, ``"10cm"``, ``"72pt"``).
-
-        Returns a fresh Chart; the original is unchanged."""
-        from copy import deepcopy
-        from ._layout_engine import _natural_size, _data_total_size
-        W = _to_px(canvas_width)
-        H = _to_px(canvas_height)
-        if W is None and H is None:
-            raise ValueError(
-                "Chart.fit() requires at least one of canvas_width=, canvas_height=."
-            )
-        if (W is not None and W <= 0) or (H is not None and H <= 0):
-            raise ValueError("Chart.fit() canvas dimensions must be positive.")
-        chart = deepcopy(self)
-        chart._parent = None  # copy may inherit a stale parent ref
-        # Direct solve. Natural figure = data_total + overhead (margins,
-        # gaps, non-data leaves). Solving target = s * data_total +
-        # overhead for s gives the exact factor in one pass — unless the
-        # overhead changes with scale (it can, via measure-driven tick
-        # label growth). Iterating absorbs that residual; in practice
-        # 2–3 passes converge to within a pixel.
-        for _ in range(6):
-            W_nat, H_nat = _natural_size(chart)
-            D_w, D_h = _data_total_size(chart)
-            ratios = []
-            if W is not None and D_w > 0:
-                overhead_w = W_nat - D_w
-                ratios.append(max(1e-3, (W - overhead_w) / D_w))
-            if H is not None and D_h > 0:
-                overhead_h = H_nat - D_h
-                ratios.append(max(1e-3, (H - overhead_h) / D_h))
-            if not ratios:
-                # Nothing to scale (e.g. a sole legend leaf).
-                break
-            s = min(ratios)
-            if abs(s - 1.0) < 5e-4:
-                break
-            _scale_data_dims(chart, s)
-        return chart
-
     def _require_render_root(self):
-        if self._parent is not None:
-            raise RuntimeError(
-                "this chart is part of a composed parent; render the parent instead."
-            )
+        super()._require_render_root()
         if self._inset_owner is not None:
             raise RuntimeError(
                 "this chart is an inset; render the owning parent leaf instead."
             )
 
 
-class Layout:
+class Layout(_Renderable):
     """A composition of charts — the parent type returned by `|`, `/`,
     and `pt.grid()`. Layouts coordinate panel margins, share scales
     across leaves, and emit one outer SVG containing each leaf rendered
@@ -656,9 +684,8 @@ class Layout:
     per nesting level).
     """
 
-    # Layout-as-parent counterpart to `Chart._is_parent`; the constant is
-    # what lets layout-walking code in `layout.py` distinguish parents
-    # from leaves without `isinstance` checks at every site.
+    # Override the base default. Lets tree-walking code in the layout
+    # engine treat parents and leaves uniformly via `if x._is_parent:`.
     _is_parent: bool = True
 
     def __init__(self, kind: str, children: list):
@@ -674,14 +701,6 @@ class Layout:
         for child in self._children:
             if child is not None:
                 child._parent = self
-
-    # ---------- composition ----------
-
-    def __or__(self, other) -> "Layout":
-        return _compose(self, other, "h")
-
-    def __truediv__(self, other) -> "Layout":
-        return _compose(self, other, "v")
 
     # ---------- parent-only ----------
 
