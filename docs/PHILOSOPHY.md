@@ -19,7 +19,7 @@ with AI assistance making the per-extension cost low.
 - Specialty scales beyond the basics
 
 These belong in **your project**. Reference implementations to copy and adapt
-live in [`src/plotlet/recipes/`](../src/plotlet/recipes/) (single-file artists)
+live in [`src/plotlet/extensions/`](../src/plotlet/extensions/) (single-file artists)
 and [`cookbook/`](../cookbook/) (multi-file projects like annotated heatmaps).
 
 ## The replay model

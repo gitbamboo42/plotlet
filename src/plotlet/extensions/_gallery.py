@@ -2,7 +2,7 @@
 
 For each `examples/<name>.py`:
   - read SUMMARY from the source (no import, no execution)
-  - run the recipe if `<name>.svg` is missing or stale
+  - run the extension if `<name>.svg` is missing or stale
   - embed the SVG inline in a card on the gallery page
 
 Run:  python examples/_gallery.py
@@ -32,7 +32,7 @@ def _summary(py_path: Path) -> str:
 
 
 def _ensure_svg(svg_path: Path, py_path: Path) -> bool:
-    """Run the recipe if needed. Returns True if SVG is present."""
+    """Run the extension if needed. Returns True if SVG is present."""
     if svg_path.exists() and svg_path.stat().st_mtime >= py_path.stat().st_mtime:
         return True
     print(f"  running {py_path.name}")
@@ -161,7 +161,7 @@ def main():
             listed.add(name)
         if cards:
             cards_by_section[section] = cards
-    # Pick up any flat-file recipes that aren't in the section index.
+    # Pick up any flat-file extensions that aren't in the section index.
     extras = []
     for py in sorted(HERE.glob("*.py")):
         if py.name.startswith("_"):
@@ -198,7 +198,7 @@ def main():
         + "".join(body)
     )
     print(f"\nwrote {out_path}")
-    print(f"  {len(listed) + len(extras)} recipes")
+    print(f"  {len(listed) + len(extras)} extensions")
 
 
 if __name__ == "__main__":

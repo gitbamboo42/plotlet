@@ -4,7 +4,7 @@ A Python library for SVG plots — with multi-panel composition, shared-axis lay
 
 ## What it's for
 
-plotlet is built for **multi-panel scientific figures with custom plot types** — genome tracks, spike rasters, climate stacks, Manhattan plots, phylogenetic trees. The core ships ~5 standard plots plus multi-panel composition (`|`, `/`, `share_x()`). Custom plot types are a 3-step recipe and live in your own project (or [`src/plotlet/recipes/`](src/plotlet/recipes/)). See [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) for the framing.
+plotlet is built for **multi-panel scientific figures with custom plot types** — genome tracks, spike rasters, climate stacks, Manhattan plots, phylogenetic trees. The core ships ~5 standard plots plus multi-panel composition (`|`, `/`, `share_x()`). Custom plot types are a 3-step recipe and live in your own project (or [`src/plotlet/extensions/`](src/plotlet/extensions/)). See [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) for the framing.
 
 ```python
 import plotlet as pt
@@ -155,7 +155,7 @@ Multi-panel layouts may mix themes per leaf. Define your own with `pt.register_t
 
 ## Adding a new plot type
 
-A 3-step recipe (~50–100 lines) gets axes, scales, legend, grid, and composability for free. The `draw` callback uses pixel-coordinate helpers from `plotlet.draw` — no hand-rolling SVG. Recommended home: your own project, or [`src/plotlet/recipes/`](src/plotlet/recipes/) as reference. Full guide: [docs/EXTENDING.md](docs/EXTENDING.md).
+A 3-step recipe (~50–100 lines) gets axes, scales, legend, grid, and composability for free. The `draw` callback uses pixel-coordinate helpers from `plotlet.draw` — no hand-rolling SVG. Recommended home: your own project, or [`src/plotlet/extensions/`](src/plotlet/extensions/) as reference. Full guide: [docs/EXTENDING.md](docs/EXTENDING.md).
 
 ## Testing
 
@@ -172,7 +172,7 @@ python tests/test_themes.py           # one chart × each shipped theme
 - No interactivity (hover, zoom, click). Static rendering is the point.
 - Not aiming for full coverage of standard statistical plots — those needs are well-served elsewhere.
 - Not a 3D plotter, not a dashboard tool.
-- Not a feature catalog — new plot types belong in user projects or `src/plotlet/recipes/`, not core.
+- Not a feature catalog — new plot types belong in user projects or `src/plotlet/extensions/`, not core.
 
 ## License
 

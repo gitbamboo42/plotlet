@@ -5,7 +5,7 @@ bundle them into an `ArtistSpec`, hand it to `add_artist(...)`. After that,
 `c.<your_name>(...)` Just Works on any `Chart` — autoscaling, gridlines,
 color cycling, and the legend integrate for free. No edits to `core.py`,
 no monkey-patching. Custom artists live in your project, or in
-[`src/plotlet/recipes/`](../src/plotlet/recipes/) as reference.
+[`src/plotlet/extensions/`](../src/plotlet/extensions/) as reference.
 
 ---
 
@@ -56,9 +56,9 @@ c.lollipop([1, 2, 3, 4, 5], [3, 7, 2, 9, 4], label="A")
 c.title("Lollipop chart").grid(True).legend(True).save_svg("out.svg")
 ```
 
-Worked example: [`src/plotlet/recipes/lollipop.py`](../src/plotlet/recipes/lollipop.py) — basic
+Worked example: [`src/plotlet/extensions/lollipop.py`](../src/plotlet/extensions/lollipop.py) — basic
 artist plus an optional `legend_entries` so the legend entry looks like a
-tiny lollipop. Every recipe under [`src/plotlet/recipes/`](../src/plotlet/recipes/)
+tiny lollipop. Every extension under [`src/plotlet/extensions/`](../src/plotlet/extensions/)
 is a working reference; skim a couple before writing your own.
 
 ---
