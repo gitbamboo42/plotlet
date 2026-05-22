@@ -74,10 +74,11 @@ Any of these can be overridden by a theme. Unspecified keys fall through
 to `classic` — which is just `spec.json` with no overrides. The full
 default spec lives in [`src/plotlet/spec.json`](../src/plotlet/spec.json).
 
-Convention: **palette (`colors.tab10`, `colors.named`) stays orthogonal
-to theme.** Themes change frame chrome; the data palette is for users
-to override at the chart / call level, not via theme. Same split as
-ggplot2's `theme_*` vs `scale_color_*`.
+Convention: **the data palette stays orthogonal to theme.** TAB10 and
+the named-color shortcuts live in [`src/plotlet/draw/colors.py`](../src/plotlet/draw/colors.py)
+as plain constants — not in `spec.json`, not theme-overridable. Themes
+change frame chrome; the data palette is for users to override at the
+chart / call level. Same split as ggplot2's `theme_*` vs `scale_color_*`.
 
 ## Writing your own theme
 
