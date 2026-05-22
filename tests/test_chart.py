@@ -978,6 +978,62 @@ def chart_hexbin():
     return c | pt.legend(c)
 
 
+def chart_freqpoly():
+    rng = random.Random(14)
+    a = [rng.gauss(0, 1) for _ in range(400)]
+    b = [rng.gauss(1, 1.4) for _ in range(400)]
+    c = pt.chart(data_width=300, data_height=200,
+                 title="frequency polygon", xlabel="value", ylabel="count",
+                 legend=True)
+    c.freqpoly(a, bins=25, label="control")
+    c.freqpoly(b, bins=25, label="treatment")
+    c.legend(position="right")
+    return c
+
+
+def chart_contour():
+    import math
+    n = 60
+    grid = []
+    for i in range(n):
+        row = []
+        for j in range(n):
+            x = -3 + 6 * j / (n - 1)
+            y = -3 + 6 * i / (n - 1)
+            v = (math.exp(-(x * x + 1.5 * y * y) / 2)
+                 + 0.5 * math.exp(-((x - 1.5) ** 2 + (y + 1.5) ** 2) / 0.6))
+            row.append(v)
+        grid.append(row)
+    c = pt.chart(data_width=300, data_height=300,
+                 title="contour", xlabel="x", ylabel="y")
+    c.contour(grid, extent=(-3, 3, -3, 3), cmap="viridis",
+              levels=[0.05, 0.1, 0.2, 0.4, 0.6, 0.8])
+    return c
+
+
+def chart_ridge():
+    rng = random.Random(15)
+    labels = ["Jan", "Feb", "Mar", "Apr", "May"]
+    groups = [[rng.gauss(20 + i, 3) for _ in range(200)] for i in range(5)]
+    c = pt.chart(data_width=320, data_height=260,
+                 title="ridge", xlabel="value")
+    c.ridge(labels, groups, overlap=1.6)
+    c.yticks([])
+    return c
+
+
+def chart_qq():
+    rng = random.Random(16)
+    sample = [rng.gauss(0, 1) + 0.2 * (rng.expovariate(1) - 1)
+              for _ in range(150)]
+    c = pt.chart(data_width=280, data_height=240,
+                 title="Q-Q vs N(0, 1)",
+                 xlabel="theoretical quantile",
+                 ylabel="sample quantile")
+    c.qq(sample, dist="normal")
+    return c
+
+
 def _legend_position_chart(position):
     """A two-line chart with an outside-positioned in-frame legend. Used
     by the legend_outside_* baselines to exercise each `position=` value
@@ -1078,6 +1134,10 @@ PLOTS = {
     "regression":            chart_regression,
     "kde_2d":                chart_kde_2d,
     "hexbin":                chart_hexbin,
+    "freqpoly":              chart_freqpoly,
+    "contour":               chart_contour,
+    "ridge":                 chart_ridge,
+    "qq":                    chart_qq,
 }
 
 
