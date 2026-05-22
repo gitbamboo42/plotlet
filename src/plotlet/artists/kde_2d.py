@@ -22,7 +22,7 @@ import math
 from ..registry import ArtistSpec, add_artist
 from ..draw import segment
 from ..draw.colormaps import colormap, _ContinuousNorm
-from ..utils import to_list
+from ..utils import to_list, silverman_bw
 
 
 _MS_CASES = {
@@ -35,16 +35,6 @@ _MS_CASES = {
     6: [(0, 2)], 9: [(0, 2)],
     7: [(2, 3)], 8: [(2, 3)],
 }
-
-
-def _silverman(xs):
-    n = len(xs)
-    if n < 2:
-        return 1.0
-    m = sum(xs) / n
-    var = sum((x - m) ** 2 for x in xs) / n
-    sd = math.sqrt(var) or 1.0
-    return 1.06 * sd * n ** (-1 / 5)
 
 
 def _kde2d_grid(xs, ys, n_grid, bw_x, bw_y, x_lo, x_hi, y_lo, y_hi):
@@ -86,8 +76,8 @@ def _kde_2d_record(args, kw):
     if not xs:
         return {"type": "kde_2d", "_xs": xs, "_ys": ys, "_grid": [], "opts": kw}
     bw = kw.get("bw")
-    bw_x = bw if bw else _silverman(xs)
-    bw_y = bw if bw else _silverman(ys)
+    bw_x = bw if bw else silverman_bw(xs)
+    bw_y = bw if bw else silverman_bw(ys)
     x_lo = min(xs) - 3 * bw_x; x_hi = max(xs) + 3 * bw_x
     y_lo = min(ys) - 3 * bw_y; y_hi = max(ys) + 3 * bw_y
     grid = _kde2d_grid(xs, ys, n_grid, bw_x, bw_y, x_lo, x_hi, y_lo, y_hi)

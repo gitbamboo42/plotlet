@@ -6,6 +6,7 @@ import base64
 from ..registry import ArtistSpec, add_artist
 from ..utils import to_list_2d
 from .._spec import _D
+from ..draw import rect
 from ..draw._png import encode_rgb
 from ..draw.colormaps import colormap_lut, _ContinuousNorm
 
@@ -74,9 +75,7 @@ def _artist_imshow(a, xs_, ys_, col):
                     i = int(norm.to_unit(v) * 255 + 0.5) * 3
                     fill = f"rgb({lut[i]},{lut[i+1]},{lut[i+2]})"
                 x = sx_l + c * cw
-                out.append(
-                    f'<rect x="{x:.3f}" y="{y:.3f}" width="{cw:.3f}" '
-                    f'height="{ch:.3f}" fill="{fill}"/>')
+                out.append(rect(x, y, cw, ch, fill=fill))
         return "".join(out)
 
     buf = bytearray()

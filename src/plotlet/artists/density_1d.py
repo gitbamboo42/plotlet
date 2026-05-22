@@ -14,46 +14,22 @@ Styling kwargs:
   linewidth=1.6  curve stroke width
   label=None     legend label (no legend entry when absent)
 """
-import math
-
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list
+from ..utils import to_list, silverman_bw, kde_1d
 from ..draw import path, polyline, segment
-
-
-def _silverman(xs):
-    n = len(xs)
-    if n < 2:
-        return 1.0
-    m = sum(xs) / n
-    var = sum((x - m) ** 2 for x in xs) / n
-    sd = math.sqrt(var) or 1.0
-    return 1.06 * sd * n ** (-1 / 5)
-
-
-def _kde(samples, grid, bw):
-    inv = 1.0 / (bw * math.sqrt(2 * math.pi) * len(samples))
-    out = []
-    for g in grid:
-        s = 0.0
-        for x in samples:
-            z = (g - x) / bw
-            s += math.exp(-0.5 * z * z)
-        out.append(s * inv)
-    return out
 
 
 def _density_1d_record(args, kw):
     vals = to_list(args[0])
     n_grid = kw.get("n_grid", 200)
-    bw = kw.get("bw") or _silverman(vals)
+    bw = kw.get("bw") or silverman_bw(vals)
     if not vals:
         return {"type": "density_1d", "_grid": [], "_d": [], "opts": kw}
     lo, hi = min(vals), max(vals)
     pad = (hi - lo) * 0.1 or 1.0
     lo -= pad; hi += pad
     grid = [lo + (hi - lo) * i / (n_grid - 1) for i in range(n_grid)]
-    d = _kde(vals, grid, bw)
+    d = kde_1d(vals, grid, bw)
     return {"type": "density_1d", "_grid": grid, "_d": d, "opts": kw}
 
 

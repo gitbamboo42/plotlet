@@ -20,27 +20,15 @@ SUMMARY = "Median line plus filled percentile ribbon (seaborn `estimator='median
 from pathlib import Path
 
 import plotlet as pt
-from plotlet.utils import to_list
+from plotlet.utils import to_list, quantile
 from plotlet.draw import polygon, polyline, rect, segment
-
-
-def _quantile(xs, q):
-    xs = sorted(xs)
-    n = len(xs)
-    if n == 0:
-        return float("nan")
-    if n == 1:
-        return xs[0]
-    pos = (n - 1) * q
-    lo = int(pos); hi = min(lo + 1, n - 1)
-    return xs[lo] + (xs[hi] - xs[lo]) * (pos - lo)
 
 
 def _percentiles_from_grid(samples, qs):
     """For each row, compute (median, q_low, q_high)."""
-    med = [_quantile(row, 0.5) for row in samples]
-    lo = [_quantile(row, qs[0]) for row in samples]
-    hi = [_quantile(row, qs[1]) for row in samples]
+    med = [quantile(row, 0.5) for row in samples]
+    lo = [quantile(row, qs[0]) for row in samples]
+    hi = [quantile(row, qs[1]) for row in samples]
     return med, lo, hi
 
 

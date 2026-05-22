@@ -12,34 +12,11 @@ API: c.ridge(labels, samples_per_label, overlap=1.4, bw=None).
 """
 
 SUMMARY = 'Stacked KDE / joyplot densities, multiple series offset vertically.'
-import math
 from pathlib import Path
 
 import plotlet as pt
 from plotlet.draw import path, text_path
-from plotlet.utils import to_list
-
-
-def _silverman_bw(xs):
-    n = len(xs)
-    if n < 2:
-        return 1.0
-    m = sum(xs) / n
-    var = sum((x - m) ** 2 for x in xs) / n
-    sd = math.sqrt(var) or 1.0
-    return 1.06 * sd * n ** (-1 / 5)
-
-
-def _kde(samples, grid, bw):
-    inv = 1.0 / (bw * math.sqrt(2 * math.pi))
-    out = []
-    for g in grid:
-        s = 0.0
-        for x in samples:
-            z = (g - x) / bw
-            s += math.exp(-0.5 * z * z)
-        out.append(s * inv / len(samples))
-    return out
+from plotlet.utils import to_list, silverman_bw, kde_1d
 
 
 def ridge_record(args, kw):
@@ -77,8 +54,8 @@ def ridge_draw(a, ctx):
     for i, (label, vals) in enumerate(zip(a["labels"], a["groups"])):
         if not vals:
             continue
-        bw = a["opts"].get("bw") or _silverman_bw(vals)
-        d = _kde(vals, grid, bw)
+        bw = a["opts"].get("bw") or silverman_bw(vals)
+        d = kde_1d(vals, grid, bw)
         dmax = max(d) or 1.0
         baseline_y = n - 1 - i
         pts = []

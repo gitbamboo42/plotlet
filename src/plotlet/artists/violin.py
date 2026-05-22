@@ -26,31 +26,10 @@ Styling kwargs:
 import math
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, quantile, hue_color, dodge_positions, categorical_groups
+from ..utils import to_list, quantile, hue_color, dodge_positions, categorical_groups, silverman_bw, kde_1d
 from ..draw import path, rect, segment
 from .._spec import _FRAME, _FIGSPEC
 
-
-def _silverman_bw(xs):
-    n = len(xs)
-    if n < 2:
-        return 1.0
-    m = sum(xs) / n
-    var = sum((x - m) ** 2 for x in xs) / n
-    sd = math.sqrt(var) or 1.0
-    return 1.06 * sd * n ** (-1 / 5)
-
-
-def _kde(samples, grid, bw):
-    inv = 1.0 / (bw * math.sqrt(2 * math.pi))
-    out = []
-    for g in grid:
-        s = 0.0
-        for x in samples:
-            z = (g - x) / bw
-            s += math.exp(-0.5 * z * z)
-        out.append(s * inv / len(samples))
-    return out
 
 
 def _violin_record(args, kw):
@@ -120,12 +99,12 @@ def _violin_draw(a, ctx):
                                           band_frac=w_frac, gap=gap)
             half_w_px = slot_w / 2
 
-            bw = _silverman_bw(vals) * bw_adjust
+            bw = silverman_bw(vals) * bw_adjust
             lo, hi = min(vals), max(vals)
             pad = 0 if trim else ((hi - lo) * 0.1 or 1.0)
             grid = [lo - pad + (hi - lo + 2 * pad) * k / (n_grid - 1)
                     for k in range(n_grid)]
-            d = _kde(vals, grid, bw)
+            d = kde_1d(vals, grid, bw)
             dmax = max(d) or 1.0
 
             left = []; right = []

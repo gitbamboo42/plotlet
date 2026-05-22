@@ -201,6 +201,31 @@ def collect_categories(artists, axis):
     return sorted(out, key=str)
 
 
+def silverman_bw(xs):
+    """Silverman's rule-of-thumb bandwidth for a 1-D Gaussian KDE."""
+    n = len(xs)
+    if n < 2:
+        return 1.0
+    m = sum(xs) / n
+    var = sum((x - m) ** 2 for x in xs) / n
+    sd = math.sqrt(var) or 1.0
+    return 1.06 * sd * n ** (-1 / 5)
+
+
+def kde_1d(samples, grid, bw):
+    """Evaluate a 1-D Gaussian KDE at each point in `grid`.
+
+    Returns density values (same length as grid) normalised to integrate to 1.
+    """
+    inv = 1.0 / (bw * math.sqrt(2 * math.pi) * len(samples))
+    out = []
+    for g in grid:
+        s = sum(math.exp(-0.5 * ((g - x) / bw) ** 2) for x in samples)
+        out.append(s * inv)
+    return out
+
+
 __all__ = ["to_list", "to_list_2d", "broadcast", "histogram", "quantile",
            "palette_color", "hue_color", "dodge_positions",
-           "categorical_groups", "collect_categories"]
+           "categorical_groups", "collect_categories",
+           "silverman_bw", "kde_1d"]

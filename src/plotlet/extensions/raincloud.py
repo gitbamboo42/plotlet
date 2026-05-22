@@ -44,34 +44,14 @@ Styling kwargs (all optional):
 
 SUMMARY = "Half-violin + box + jittered strip per category — Allen-Wilkinson modern bio paper standard; long-form `hue=` dodges sub-rainclouds."
 
-import math
 from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import (to_list, quantile, hue_color,
-                            dodge_positions, categorical_groups)
+                            dodge_positions, categorical_groups,
+                            silverman_bw, kde_1d)
 from plotlet.draw import path, rect, segment, circle
 from plotlet._spec import _FRAME
-
-
-def _silverman(xs):
-    n = len(xs)
-    if n < 2: return 1.0
-    m = sum(xs) / n
-    var = sum((x - m) ** 2 for x in xs) / n
-    return 1.06 * (math.sqrt(var) or 1.0) * n ** (-1 / 5)
-
-
-def _kde(samples, grid, bw):
-    inv = 1.0 / (bw * math.sqrt(2 * math.pi) * len(samples))
-    out = []
-    for g in grid:
-        s = 0.0
-        for x in samples:
-            z = (g - x) / bw
-            s += math.exp(-0.5 * z * z)
-        out.append(s * inv)
-    return out
 
 
 _M64 = 0xFFFFFFFFFFFFFFFF
@@ -171,12 +151,12 @@ def raincloud_draw(a, ctx):
             strip_cp  = cp - open_sign * third
 
             # --- half-violin ---
-            bw = _silverman(vals) * bw_adjust
+            bw = silverman_bw(vals) * bw_adjust
             lo_v, hi_v = min(vals), max(vals)
             pad = 0 if trim else ((hi_v - lo_v) * 0.1 or 1.0)
             grid = [lo_v - pad + (hi_v - lo_v + 2 * pad) * k / (n_grid - 1)
                     for k in range(n_grid)]
-            d = _kde(vals, grid, bw)
+            d = kde_1d(vals, grid, bw)
             dmax = max(d) or 1.0
             curve = []
             for gx, dy in zip(grid, d):
