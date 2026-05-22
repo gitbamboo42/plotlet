@@ -38,7 +38,7 @@ from .draw.font import _measure_text, _cap_height, _descender
 from .draw import text_path, segment, _dash_attr
 from .utils import histogram, collect_categories
 from .registry import RenderContext, get_artist, all_artist_names
-from . import builtin_artists  # noqa: F401  — registers built-ins on import
+from . import artists  # noqa: F401  — registers built-ins on import
 
 # AI-readable SVG attrs — see docs/AI_ATTRS.md. Every plotlet SVG carries
 # `data-plotlet-*` attributes describing plot type, axes, scales, ranges,
