@@ -145,7 +145,7 @@ def _artist_bar(a, xs_, ys_, col):
     horizontal = opts.get("orientation") == "h"
     cat_scale, val_scale = (ys_, xs_) if horizontal else (xs_, ys_)
     band = cat_scale.bandwidth
-    base = val_scale(0)
+    base = val_scale(opts.get("bottom", 0))
     alpha = opts.get("alpha", _D["bar_alpha"])
     edgecolor = opts.get("edgecolor")
     lw = opts.get("linewidth", _D["linewidth"]) if edgecolor else 1

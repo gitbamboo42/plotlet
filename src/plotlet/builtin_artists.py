@@ -304,8 +304,10 @@ add_artist(ArtistSpec(
 # detection picks them up the same way it would for any string-valued x.
 
 def _bar_horizontal(a): return a["opts"].get("orientation") == "h"
-def _bar_xdomain(a): return list(a["vals"]) + [0] if _bar_horizontal(a) else a["cats"]
-def _bar_ydomain(a): return a["cats"] if _bar_horizontal(a) else list(a["vals"]) + [0]
+def _bar_vals_domain(a):
+    return list(a["vals"]) + [0, a["opts"].get("bottom", 0)]
+def _bar_xdomain(a): return _bar_vals_domain(a) if _bar_horizontal(a) else a["cats"]
+def _bar_ydomain(a): return a["cats"] if _bar_horizontal(a) else _bar_vals_domain(a)
 
 
 add_artist(ArtistSpec(
