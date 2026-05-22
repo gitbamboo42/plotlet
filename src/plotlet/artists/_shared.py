@@ -8,6 +8,35 @@ from .._spec import _LEGSPEC
 from ..draw import marker, segment, rect
 
 
+_CURVE_VALUES = ("linear", "step-before", "step-after", "step-mid")
+
+
+def _step_coords(xs, ys, mode):
+    """Interleave (xs, ys) into step-shaped coordinates.
+
+    `mode` is one of 'before' | 'after' | 'mid'. NaN values pass through
+    unchanged — the path-building stage breaks the stroke at them, so
+    gaps don't get bridged by a phantom step."""
+    n = len(xs)
+    if n < 2:
+        return list(xs), list(ys)
+    out_x = [xs[0]]
+    out_y = [ys[0]]
+    for i in range(1, n):
+        x0, x1 = xs[i - 1], xs[i]
+        y0, y1 = ys[i - 1], ys[i]
+        if mode == "before":
+            out_x.append(x0); out_y.append(y1)
+        elif mode == "after":
+            out_x.append(x1); out_y.append(y0)
+        else:  # mid
+            mid = (x0 + x1) / 2
+            out_x.append(mid); out_y.append(y0)
+            out_x.append(mid); out_y.append(y1)
+        out_x.append(x1); out_y.append(y1)
+    return out_x, out_y
+
+
 def _xy_minmax(xs, ys):
     """Min/max for an x/y series, ignoring NaN. Returns dict ready to merge
     into a data_attrs result."""

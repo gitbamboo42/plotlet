@@ -2,12 +2,55 @@
 the matplotlib `ax.errorbar` staple. `yerr`/`xerr` accept a scalar,
 a per-point sequence, or a `(lower, upper)` tuple for asymmetric bars.
 """
+import math
+
 from ..registry import ArtistSpec, add_artist
 from ..utils import to_list
-from ..draw import marker, segment
+from ..draw import marker, segment, errorbar_v, errorbar_h
 from .._spec import _D, _LEGSPEC
-from .._artist_impl import _artist_errorbar, _expand_err
 from ._shared import _xy_minmax
+
+
+def _expand_err(err, n):
+    """Normalize an error-spec into (lower, upper) lists of length n.
+    Accepts scalar, list/array, or a 2-tuple (lower, upper) for asymmetric."""
+    if err is None:
+        return [0.0] * n, [0.0] * n
+    if isinstance(err, tuple) and len(err) == 2:
+        lo = to_list(err[0]); hi = to_list(err[1])
+        if len(lo) == 1: lo = lo * n
+        if len(hi) == 1: hi = hi * n
+        return lo, hi
+    if hasattr(err, "__iter__") and not isinstance(err, str):
+        v = to_list(err)
+        return list(v), list(v)
+    return [float(err)] * n, [float(err)] * n
+
+
+def _artist_errorbar(a, xs_, ys_, col):
+    xs, ys, opts = a["xs"], a["ys"], a["opts"]
+    n = len(xs)
+    xlo, xhi = _expand_err(opts.get("xerr"), n)
+    ylo, yhi = _expand_err(opts.get("yerr"), n)
+    capsize = opts.get("capsize", _D["errorbar_capsize"])
+    lw = opts.get("linewidth", _D["errorbar_linewidth"])
+    mk = opts.get("marker", "o")
+    msize = opts.get("markersize", _D["markersize"])
+    alpha = opts.get("alpha", 1)
+    out = []
+    for x, y, dxl, dxh, dyl, dyh in zip(xs, ys, xlo, xhi, ylo, yhi):
+        px = xs_(x); py = ys_(y)
+        if not (math.isfinite(px) and math.isfinite(py)):
+            continue
+        if dyl or dyh:
+            out.append(errorbar_v(px, ys_(y - dyl), ys_(y + dyh),
+                                  capsize=capsize, color=col, width=lw, alpha=alpha))
+        if dxl or dxh:
+            out.append(errorbar_h(py, xs_(x - dxl), xs_(x + dxh),
+                                  capsize=capsize, color=col, width=lw, alpha=alpha))
+        if mk:
+            out.append(marker(mk, px, py, msize, col, alpha))
+    return "".join(out)
 
 
 def _errorbar_xdomain(a):

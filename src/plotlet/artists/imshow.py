@@ -1,10 +1,99 @@
 """imshow needs a preprocessing step (2-D-ify, autocompute vmin/vmax) before
 domain can be computed. We do that in record() rather than _render.
 """
+import base64
+
 from ..registry import ArtistSpec, add_artist
 from ..utils import to_list_2d
 from .._spec import _D
-from .._artist_impl import _artist_imshow
+from ..draw._png import encode_rgb
+from ..draw.colormaps import colormap_lut, _ContinuousNorm
+
+
+def _artist_imshow(a, xs_, ys_, col):
+    """2-D array → colored grid. Branches between many <rect>s and one PNG.
+
+    The threshold (`imshow_max_rects` in spec.json) trades vector cleanliness
+    for SVG file size. Below the threshold, each cell is its own <rect> — sharp
+    at any zoom. Above, the whole image is encoded as base64 PNG.
+
+    `origin` controls vertical orientation. Default `"lower"` puts row 0 at
+    the BOTTOM of the data rectangle (Cartesian). Opt in to `"upper"` for
+    matrix-style display (row 0 at top, what you see when you print the
+    array); the panel auto-inverts the y-axis in that case so tick "0"
+    lands next to row 0, matching matplotlib.
+
+    Color mapping goes through `_ContinuousNorm`, which supports `norm="log"`
+    and `center=` on top of the default linear range.
+    """
+    nrows = a["_nrows"]; ncols = a["_ncols"]
+    if nrows == 0 or ncols == 0:
+        return ""
+    data = a["_data"]
+    opts = a["opts"]
+    norm = _ContinuousNorm(a["_vmin"], a["_vmax"],
+                           kind=opts.get("norm", "linear"),
+                           center=opts.get("center"))
+    lut = colormap_lut(opts.get("cmap", _D["default_cmap"]))
+    origin = opts.get("origin", "lower")
+
+    extent = opts.get("extent")
+    if extent is None:
+        x_left, x_right, y_bot, y_top = 0.0, float(ncols), 0.0, float(nrows)
+    else:
+        x_left, x_right, y_bot, y_top = extent
+
+    sxa = xs_(x_left); sxb = xs_(x_right)
+    sya = ys_(y_bot);  syb = ys_(y_top)
+    sx_l = min(sxa, sxb); sx_r = max(sxa, sxb)
+    sy_t = min(sya, syb); sy_b = max(sya, syb)
+    pw = sx_r - sx_l; ph = sy_b - sy_t
+    if pw <= 0 or ph <= 0:
+        return ""
+
+    # Render order = order in which we walk pixel rows from top to bottom.
+    # Default origin="lower": row 0 belongs at the bottom, so iterate
+    # data in reverse to put the highest-index row at top first.
+    # origin="upper": row 0 belongs at the top — natural data order.
+    row_index = range(nrows) if origin == "upper" \
+                else ((nrows - 1 - r) for r in range(nrows))
+    rows_in_render_order = [data[i] for i in row_index]
+
+    use_rects = nrows * ncols <= _D["imshow_max_rects"]
+
+    if use_rects:
+        out = []
+        cw = pw / ncols; ch = ph / nrows
+        for r, row in enumerate(rows_in_render_order):
+            y = sy_t + r * ch
+            for c in range(ncols):
+                v = row[c]
+                if v != v:
+                    fill = "rgb(0,0,0)"
+                else:
+                    i = int(norm.to_unit(v) * 255 + 0.5) * 3
+                    fill = f"rgb({lut[i]},{lut[i+1]},{lut[i+2]})"
+                x = sx_l + c * cw
+                out.append(
+                    f'<rect x="{x:.3f}" y="{y:.3f}" width="{cw:.3f}" '
+                    f'height="{ch:.3f}" fill="{fill}"/>')
+        return "".join(out)
+
+    buf = bytearray()
+    for row in rows_in_render_order:
+        for c in range(ncols):
+            v = row[c]
+            if v != v:
+                buf.append(0); buf.append(0); buf.append(0)
+            else:
+                i = int(norm.to_unit(v) * 255 + 0.5) * 3
+                buf.append(lut[i]); buf.append(lut[i+1]); buf.append(lut[i+2])
+    png = encode_rgb(bytes(buf), ncols, nrows)
+    b64 = base64.b64encode(png).decode("ascii")
+    return (f'<image x="{sx_l:.3f}" y="{sy_t:.3f}" '
+            f'width="{pw:.3f}" height="{ph:.3f}" '
+            f'preserveAspectRatio="none" image-rendering="pixelated" '
+            f'href="data:image/png;base64,{b64}"/>')
 
 
 def _imshow_data_attrs(a):

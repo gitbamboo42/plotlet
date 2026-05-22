@@ -5,15 +5,97 @@ the full frame regardless of the data scale. `hlines` / `vlines` are the
 bounded, data-coordinate counterparts that participate in autoscaling and
 use the color cycle so a labeled call acts like a series.
 """
+import math
+
 from ..registry import ArtistSpec, add_artist
 from ..utils import broadcast
 from .._spec import _D
-from .._artist_impl import (
-    _artist_axhline, _artist_axvline,
-    _artist_axhspan, _artist_axvspan,
-    _artist_hlines, _artist_vlines,
-)
+from ..draw import segment, rect as draw_rect
 from ._shared import _refline_legend_entries, _refspan_legend_entries
+
+
+def _artist_axhline(a, xs_, ys_, iw, ih, col):
+    opts = a["opts"]
+    y = ys_(a["y"])
+    if not math.isfinite(y) or y < 0 or y > ih:
+        return ""
+    x0 = iw * opts.get("xmin", 0.0)
+    x1 = iw * opts.get("xmax", 1.0)
+    return segment(x0, y, x1, y,
+                   color=col,
+                   width=opts.get("linewidth", _D["refline_width"]),
+                   dash=opts.get("linestyle"),
+                   alpha=opts.get("alpha", 1))
+
+
+def _artist_axvline(a, xs_, ys_, iw, ih, col):
+    opts = a["opts"]
+    x = xs_(a["x"])
+    if not math.isfinite(x) or x < 0 or x > iw:
+        return ""
+    y0 = ih * (1 - opts.get("ymax", 1.0))
+    y1 = ih * (1 - opts.get("ymin", 0.0))
+    return segment(x, y0, x, y1,
+                   color=col,
+                   width=opts.get("linewidth", _D["refline_width"]),
+                   dash=opts.get("linestyle"),
+                   alpha=opts.get("alpha", 1))
+
+
+def _artist_hlines(a, xs_, ys_, col):
+    opts = a["opts"]
+    lw = opts.get("linewidth", _D["refline_width"])
+    ls = opts.get("linestyle")
+    alpha = opts.get("alpha", 1)
+    out = []
+    for y, x0, x1 in zip(a["ys"], a["xmins"], a["xmaxs"]):
+        py = ys_(y); px0 = xs_(x0); px1 = xs_(x1)
+        if not (math.isfinite(py) and math.isfinite(px0) and math.isfinite(px1)):
+            continue
+        out.append(segment(px0, py, px1, py, color=col, width=lw,
+                           dash=ls, alpha=alpha))
+    return "".join(out)
+
+
+def _artist_vlines(a, xs_, ys_, col):
+    opts = a["opts"]
+    lw = opts.get("linewidth", _D["refline_width"])
+    ls = opts.get("linestyle")
+    alpha = opts.get("alpha", 1)
+    out = []
+    for x, y0, y1 in zip(a["xs"], a["ymins"], a["ymaxs"]):
+        px = xs_(x); py0 = ys_(y0); py1 = ys_(y1)
+        if not (math.isfinite(px) and math.isfinite(py0) and math.isfinite(py1)):
+            continue
+        out.append(segment(px, py0, px, py1, color=col, width=lw,
+                           dash=ls, alpha=alpha))
+    return "".join(out)
+
+
+def _artist_axhspan(a, xs_, ys_, iw, ih, col):
+    opts = a["opts"]
+    y_a = ys_(a["ymin"]); y_b = ys_(a["ymax"])
+    y0 = max(0.0, min(ih, min(y_a, y_b)))
+    y1 = max(0.0, min(ih, max(y_a, y_b)))
+    if y1 - y0 <= 0:
+        return ""
+    x0 = iw * opts.get("xmin", 0.0)
+    x1 = iw * opts.get("xmax", 1.0)
+    return draw_rect(x0, y0, x1 - x0, y1 - y0, fill=col,
+                     alpha=opts.get("alpha", _D["refspan_alpha"]))
+
+
+def _artist_axvspan(a, xs_, ys_, iw, ih, col):
+    opts = a["opts"]
+    x_a = xs_(a["xmin"]); x_b = xs_(a["xmax"])
+    x0 = max(0.0, min(iw, min(x_a, x_b)))
+    x1 = max(0.0, min(iw, max(x_a, x_b)))
+    if x1 - x0 <= 0:
+        return ""
+    y0 = ih * (1 - opts.get("ymax", 1.0))
+    y1 = ih * (1 - opts.get("ymin", 0.0))
+    return draw_rect(x0, y0, x1 - x0, y1 - y0, fill=col,
+                     alpha=opts.get("alpha", _D["refspan_alpha"]))
 
 
 # --- axhline ---
