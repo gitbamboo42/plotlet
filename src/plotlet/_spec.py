@@ -21,7 +21,7 @@ def _install(target, source) -> None:
     """Replace `target`'s contents with `source`'s, preserving identity of
     nested mutable containers (dicts AND lists). Used to swap themes
     without breaking references that other modules captured at import
-    time via `from ._spec import _D, _TAB10, _COLOR_NAMES`. Nested dicts
+    time via `from ._spec import _D, _FRAME`. Nested dicts
     and lists that exist on both sides are recursed into so their
     identity survives; mismatched-type or absent-on-target values are
     deep-copied wholesale.
@@ -49,8 +49,6 @@ def _install(target, source) -> None:
 SPEC: dict = {}
 _install(SPEC, load_theme("classic"))
 
-_TAB10 = SPEC["colors"]["tab10"]
-_COLOR_NAMES = SPEC["colors"]["named"]
 _DASH = SPEC["linestyles"]
 _D = SPEC["defaults"]
 _FRAME = SPEC["frame"]
@@ -75,7 +73,7 @@ def _swap_to(name: str) -> dict:
     """Install theme `name` into the live spec dicts; return the previous
     full SPEC snapshot for later restoration. `_install` recurses into
     nested dicts and lists, so module-level handles at any depth
-    (`_FRAME`, `_TAB10`, `_MARGIN_FLOOR`, …) keep their identity."""
+    (`_FRAME`, `_D`, `_MARGIN_FLOOR`, …) keep their identity."""
     global _CURRENT_THEME
     snapshot = copy.deepcopy(SPEC)
     prev_theme = _CURRENT_THEME
