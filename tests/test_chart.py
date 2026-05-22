@@ -921,8 +921,8 @@ def chart_rug():
     rng = random.Random(9)
     vals = [rng.gauss(0, 1) for _ in range(150)]
     c = pt.chart(data_width=300, data_height=200,
-                 title="histogram + rug", xlabel="value", ylabel="count")
-    c.hist(vals, bins=24)
+                 title="density + rug", xlabel="value", ylabel="density")
+    c.density_1d(vals, fill=True)
     c.rug(vals, color="#444444")
     return c
 
