@@ -6,6 +6,7 @@ per-geom convention, with consolidation only where it earns its keep).
 
 Single-artist files (one plot type each):
   scatter, line, bar, hist, imshow, dendrogram, errorbar
+  boxplot, violin, swarm, strip
 
 Category files (closely-related artists grouped):
   references — axhline, axvline, axhspan, axvspan, hlines, vlines
@@ -25,6 +26,10 @@ from . import hist         # noqa: F401
 from . import imshow       # noqa: F401
 from . import dendrogram   # noqa: F401
 from . import errorbar     # noqa: F401
+from . import boxplot      # noqa: F401
+from . import violin       # noqa: F401
+from . import swarm        # noqa: F401
+from . import strip        # noqa: F401
 
 # Category files
 from . import references   # noqa: F401

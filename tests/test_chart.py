@@ -803,6 +803,92 @@ def chart_time_axis_hours():
     return c
 
 
+def chart_boxplot():
+    rng = random.Random(0)
+    rows = []
+    for group in ("ctrl", "low", "mid", "high"):
+        for trt, shift in (("A", 0.0), ("B", 1.4)):
+            mu = {"ctrl": 5, "low": 6, "mid": 7.5, "high": 9}[group] + shift
+            sd = {"ctrl": 1, "low": 1.2, "mid": 1.5, "high": 1.8}[group]
+            for _ in range(30):
+                rows.append({"group": group, "trt": trt,
+                             "score": rng.gauss(mu, sd)})
+    rows += [{"group": "low", "trt": "A", "score": 12},
+             {"group": "high", "trt": "B", "score": 16}]
+    data = {k: [r[k] for r in rows] for k in rows[0]}
+    c = pt.chart(data_width=380, data_height=220,
+                 title="boxplot hue", xlabel="group", ylabel="score",
+                 legend=True)
+    c.xscale("category", order=["ctrl", "low", "mid", "high"])
+    c.boxplot(data=data, x="group", y="score", hue="trt",
+              palette={"A": "#3F97C5", "B": "#F99917"})
+    c.legend(position="right")
+    return c
+
+
+def chart_violin():
+    rng = random.Random(1)
+    rows = []
+    for genotype in ("wt", "+drug", "ko", "rescue"):
+        for trt, shift in (("A", 0.0), ("B", 1.2)):
+            mu = {"wt": 5, "+drug": 4, "ko": 7, "rescue": 5.5}[genotype] + shift
+            sd = {"wt": 1, "+drug": 0.8, "ko": 1.4, "rescue": 1.0}[genotype]
+            for _ in range(80):
+                rows.append({"geno": genotype, "trt": trt,
+                             "expr": rng.gauss(mu, sd)})
+    data = {k: [r[k] for r in rows] for k in rows[0]}
+    c = pt.chart(data_width=380, data_height=220,
+                 title="violin hue", xlabel="genotype", ylabel="expression",
+                 legend=True)
+    c.xscale("category", order=["wt", "+drug", "ko", "rescue"])
+    c.violin(data=data, x="geno", y="expr", hue="trt",
+             palette={"A": "#3F97C5", "B": "#F99917"}, inner="box")
+    c.legend(position="right")
+    return c
+
+
+def chart_swarm():
+    rng = random.Random(2)
+    rows = []
+    for group in ("A", "B", "C", "D"):
+        for trt, shift in (("ctrl", 0.0), ("dose", 0.8)):
+            mu = {"A": 3.0, "B": 4.5, "C": 5.2, "D": 6.0}[group] + shift
+            sd = {"A": 0.6, "B": 0.7, "C": 0.5, "D": 0.9}[group]
+            for _ in range(20):
+                rows.append({"group": group, "trt": trt,
+                             "value": rng.gauss(mu, sd)})
+    data = {k: [r[k] for r in rows] for k in rows[0]}
+    c = pt.chart(data_width=360, data_height=220,
+                 title="swarm hue", xlabel="group", ylabel="value",
+                 legend=True)
+    c.xscale("category", order=["A", "B", "C", "D"])
+    c.swarm(data=data, x="group", y="value", hue="trt",
+            palette={"ctrl": "#3F97C5", "dose": "#F99917"})
+    c.legend(position="right")
+    return c
+
+
+def chart_strip():
+    rng = random.Random(3)
+    rows = []
+    for cond in ("A", "B", "C", "D"):
+        for trt, shift in (("ctrl", 0.0), ("dose", 0.8)):
+            mu = {"A": 3.0, "B": 4.5, "C": 5.2, "D": 6.1}[cond] + shift
+            sd = {"A": 0.8, "B": 1.0, "C": 0.6, "D": 1.2}[cond]
+            for _ in range(25):
+                rows.append({"cond": cond, "trt": trt,
+                             "value": rng.gauss(mu, sd)})
+    data = {k: [r[k] for r in rows] for k in rows[0]}
+    c = pt.chart(data_width=360, data_height=220,
+                 title="strip hue", xlabel="condition", ylabel="value",
+                 legend=True)
+    c.xscale("category", order=["A", "B", "C", "D"])
+    c.strip(data=data, x="cond", y="value", hue="trt",
+            palette={"ctrl": "#3F97C5", "dose": "#F99917"})
+    c.legend(position="right")
+    return c
+
+
 def _legend_position_chart(position):
     """A two-line chart with an outside-positioned in-frame legend. Used
     by the legend_outside_* baselines to exercise each `position=` value
@@ -892,6 +978,10 @@ PLOTS = {
     "legend_outside_left":   chart_legend_outside_left,
     "legend_outside_top":    chart_legend_outside_top,
     "legend_outside_bottom": chart_legend_outside_bottom,
+    "boxplot":               chart_boxplot,
+    "violin":                chart_violin,
+    "swarm":                 chart_swarm,
+    "strip":                 chart_strip,
 }
 
 

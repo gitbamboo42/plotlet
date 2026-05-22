@@ -1,50 +1,37 @@
-"""Custom artist: boxplot.
+"""Tukey-style box-and-whisker: Q1-Q3 box, median line, 1.5*IQR whiskers, outlier dots.
 
-Tukey-style box-and-whisker: a box from Q1 to Q3, a median line, whiskers
-out to the most extreme value within 1.5*IQR of each edge, and outliers
-as individual dots. The matplotlib/seaborn staple for distribution-by-
-category summaries.
+Wide-form: c.boxplot(cats, values_per_cat)
+Long-form:  c.boxplot(data=df, x="cat", y="value", hue="group", palette={...})
 
-Two input shapes, picked by which kwargs are present:
-  - Wide-form (positional):  c.boxplot(cats, values_per_cat)
-  - Long-form (seaborn):     c.boxplot(data=df, x="cat", y="value",
-                                       hue="group", palette={...})
+Long-form with `hue=` dodges sub-boxes side-by-side within each cat and emits
+one legend entry per hue category.
 
-Long-form with `hue=` dodges sub-boxes side-by-side within each cat and
-emits one legend entry per hue category. `palette=` accepts a dict
-(category → color) or a sequence; missing entries fall through to TAB10.
-
-Styling kwargs (all optional):
-  - `orientation='v'`       — `'h'` for horizontal boxes (cats on y axis).
-  - `width=0.6`             — total dodge-group width as a band fraction.
-  - `gap=0.1`               — fraction of slot width left as a gap between
-                              adjacent dodged boxes.
-  - `fill=True`             — set False for outline-only boxes.
-  - `fill_alpha=0.55`       — box-fill opacity (border stays opaque).
-  - `linecolor=<themed>`    — override border / whisker / cap color.
-  - `linewidth=1`           — border / whisker / cap stroke width.
-  - `median_linewidth=1.6`  — median line stroke width.
-  - `notch=False`           — draw the median's 95 % CI as a notched waist.
-  - `showmeans=False`       — show mean as a small triangle marker.
-  - `mean_marker='^'`       — marker kind for the mean indicator.
-  - `whis=1.5`              — IQR multiplier for the whisker fences.
-  - `showfliers=True`       — set False to hide outliers.
-  - `flier_size=2.2`        — outlier-marker radius.
-  - `flier_color=<linecolor>` — override outlier stroke color.
+Styling kwargs:
+  orientation='v'       'h' for horizontal (cats on y axis)
+  width=0.6             total dodge-group width as a band fraction
+  gap=0.1               slot-gap fraction between dodged boxes
+  fill=True             False for outline-only boxes
+  fill_alpha=0.55       box-fill opacity
+  linecolor=<themed>    border / whisker / cap color
+  linewidth=1           border / whisker / cap stroke width
+  median_linewidth=1.6  median line stroke width
+  notch=False           draw 95 % CI waist on the box
+  showmeans=False       show mean as a small triangle marker
+  mean_marker='^'       marker kind for the mean indicator
+  whis=1.5              IQR multiplier for whisker fences
+  showfliers=True       False hides outliers
+  flier_size=2.2        outlier-marker radius
+  flier_color=<linecolor>  override outlier stroke color
 """
-
-SUMMARY = 'Tukey-style box + whiskers + outlier dots, one box per category; long-form `hue=` dodges sub-boxes.'
-from pathlib import Path
-
-import plotlet as pt
-from plotlet.utils import (to_list, quantile, hue_color,
-                            dodge_positions, categorical_groups)
-from plotlet.draw import segment, rect, circle, errorbar_v, errorbar_h, polygon, marker
-from plotlet._spec import _FRAME
 import math
 
+from ..registry import ArtistSpec, add_artist
+from ..utils import to_list, quantile, hue_color, dodge_positions, categorical_groups
+from ..draw import segment, rect, circle, errorbar_v, errorbar_h, polygon, marker
+from .._spec import _FRAME
 
-def boxplot_record(args, kw):
+
+def _boxplot_record(args, kw):
     if "data" in kw or "x" in kw or "y" in kw:
         data = kw.pop("data", None)
         x = kw.pop("x", None)
@@ -74,15 +61,15 @@ def _boxplot_values(a):
     return [v for row in a["groups"] for g in row for v in g]
 
 
-def boxplot_xdomain(a):
+def _boxplot_xdomain(a):
     return _boxplot_values(a) if _boxplot_horizontal(a) else a["cats"]
 
 
-def boxplot_ydomain(a):
+def _boxplot_ydomain(a):
     return a["cats"] if _boxplot_horizontal(a) else _boxplot_values(a)
 
 
-def boxplot_draw(a, ctx):
+def _boxplot_draw(a, ctx):
     cats, hues, groups = a["cats"], a["hues"], a["groups"]
     n_hues = len(hues)
     opts = a["opts"]
@@ -139,12 +126,9 @@ def boxplot_draw(a, ctx):
                 ci = min(ci, (q2 - q1), (q3 - q2))
                 vp_ci_lo = val_scale(q2 - ci)
                 vp_ci_hi = val_scale(q2 + ci)
-                inset = box_w * 0.2  # how far the notch indents from each side
+                inset = box_w * 0.2
                 cp_lo_in = cp_lo + inset
                 cp_hi_in = cp_hi - inset
-                # Build the 10-vertex notched box going counter-clockwise
-                # around the value axis (q1 → q3). In horizontal mode we
-                # swap so cp ↔ vp before emission.
                 pts = [
                     (cp_lo,    vp_q1),
                     (cp_hi,    vp_q1),
@@ -161,7 +145,6 @@ def boxplot_draw(a, ctx):
                     pts = [(y, x) for x, y in pts]
                 out.append(polygon(pts, fill=fill, stroke=line, stroke_width=lw,
                                    fill_alpha=fill_alpha if do_fill else 1.0))
-                # Median line spans only the indented portion of the notch.
                 if horizontal:
                     median = (vp_q2, cp_lo_in, vp_q2, cp_hi_in)
                 else:
@@ -202,7 +185,7 @@ def boxplot_draw(a, ctx):
     return "".join(out)
 
 
-def boxplot_legend_entries(a):
+def _boxplot_legend_entries(a):
     hues = a["hues"]
     if hues == [None]:
         return []
@@ -225,47 +208,11 @@ def boxplot_legend_entries(a):
     return entries
 
 
-pt.add_artist(pt.ArtistSpec(
+add_artist(ArtistSpec(
     name="boxplot",
-    record=boxplot_record,
-    xdomain=boxplot_xdomain,
-    ydomain=boxplot_ydomain,
-    draw=boxplot_draw,
-    legend_entries=boxplot_legend_entries,
+    record=_boxplot_record,
+    xdomain=_boxplot_xdomain,
+    ydomain=_boxplot_ydomain,
+    draw=_boxplot_draw,
+    legend_entries=_boxplot_legend_entries,
 ))
-
-
-def demo():
-    """Build the demonstration chart with synthetic data.
-
-    Returns a `pt.Chart` ready for `.save_svg()` or further composition."""
-    import random
-    random.seed(0)
-    # Long-form: a row per measurement, with group + treatment cols.
-    rows = []
-    for group in ("control", "low", "mid", "high"):
-        for treatment, shift in (("A", 0.0), ("B", 1.4)):
-            mu = {"control": 5, "low": 6, "mid": 7.5, "high": 9}[group] + shift
-            sd = {"control": 1, "low": 1.2, "mid": 1.5, "high": 1.8}[group]
-            for _ in range(40):
-                rows.append({"group": group, "treatment": treatment,
-                             "score": random.gauss(mu, sd)})
-    # A couple of outliers so the IQR fence has work to do.
-    rows.append({"group": "low",  "treatment": "A", "score": 12})
-    rows.append({"group": "low",  "treatment": "A", "score": -2})
-    rows.append({"group": "high", "treatment": "B", "score": 16})
-    data = {k: [r[k] for r in rows] for k in rows[0]}
-
-    c = pt.chart()
-    c.xscale("category", order=["control", "low", "mid", "high"])
-    c.boxplot(data=data, x="group", y="score", hue="treatment",
-              palette={"A": "#3F97C5", "B": "#F99917"})
-    c.title("Dose response by treatment").xlabel("group").ylabel("score")
-    c.legend(True, position="right")
-    return c
-
-
-if __name__ == "__main__":
-    out = Path(__file__).with_suffix(".svg")
-    demo().save_svg(out)
-    print(f"wrote {out}")

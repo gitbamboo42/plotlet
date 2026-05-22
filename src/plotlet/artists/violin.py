@@ -1,52 +1,34 @@
-"""Custom artist: violin plot.
+"""Mirrored KDE outline per category with a ggplot2-style mini-boxplot inside.
 
-Mirrored KDE outline per category, with a mini-boxplot (Q1-Q3 box +
-median line + 1.5*IQR whiskers) drawn inside — the ggplot2-style violin.
-The KDE shape conveys the distribution, the inner box conveys the
-Tukey summary.
+Wide-form: c.violin(cats, values_per_cat)
+Long-form:  c.violin(data=df, x="cat", y="value", hue="group", palette={...})
 
-Two input shapes, picked by which kwargs are present:
-  - Wide-form (positional):  c.violin(cats, values_per_cat)
-  - Long-form (seaborn):     c.violin(data=df, x="cat", y="value",
-                                       hue="group", palette={...})
+Long-form with `hue=` dodges sub-violins side-by-side within each cat and emits
+one legend entry per hue category.
 
-Long-form with `hue=` dodges sub-violins side-by-side within each cat
-and emits one legend entry per hue category. `palette=` accepts a dict
-(category → color) or a sequence; missing entries fall through to TAB10.
-
-Styling kwargs (all optional):
-  - `orientation='v'`       — `'h'` for horizontal violins (cats on y axis).
-  - `width=0.8`             — total dodge-group width as a band fraction.
-  - `gap=0.1`               — fraction of slot width left as a gap between
-                              adjacent dodged violins.
-  - `inner='box'`           — `'box'` mini-boxplot (Q1-Q3 outlined + median
-                              line + 1.5*IQR whiskers), `'quartile'` three
-                              dashed lines at Q1/Q2/Q3, `None` KDE only.
-  - `trim=True`             — clip the KDE at min/max of the data. `False`
-                              extends 10 % past each end (matplotlib default).
-  - `fill=True`             — set False for outline-only violins.
-  - `fill_alpha=0.4`        — body-fill opacity (outline stays opaque).
-  - `linecolor=<themed>`    — override outline / inner-box color.
-  - `linewidth=1`           — outline / inner-box stroke width.
-  - `whis=1.5`              — IQR multiplier for the whisker fences (when
-                              `inner='box'`).
-  - `inner_box_fill=<bg>`   — mini-boxplot fill (when `inner='box'`).
-                              Defaults to the figure background so the box
-                              reads as negative space against the violin
-                              body on any theme.
-  - `n_grid=80`             — KDE evaluation grid resolution.
-  - `bw_adjust=1.0`         — Silverman bandwidth multiplier (>1 smoother).
+Styling kwargs:
+  orientation='v'       'h' for horizontal (cats on y axis)
+  width=0.8             total dodge-group width as a band fraction
+  gap=0.1               slot-gap fraction between dodged violins
+  inner='box'           'box' mini-boxplot (Q1-Q3 + median + whiskers),
+                        'quartile' three dashed Q1/Q2/Q3 lines, None KDE only
+  trim=True             clip KDE at min/max of data; False extends 10 % past
+  fill=True             False for outline-only violins
+  fill_alpha=0.4        body-fill opacity
+  linecolor=<themed>    outline / inner-box color
+  linewidth=1           outline / inner-box stroke width
+  whis=1.5              IQR multiplier for whisker fences (inner='box')
+  inner_box_fill=<bg>   mini-boxplot fill; defaults to figure background so
+                        the box reads as negative space on any theme
+  n_grid=80             KDE evaluation grid resolution
+  bw_adjust=1.0         Silverman bandwidth multiplier (>1 smoother)
 """
-
-SUMMARY = 'Mirrored KDE outline + mini-boxplot inside, per category; long-form `hue=` dodges sub-violins.'
 import math
-from pathlib import Path
 
-import plotlet as pt
-from plotlet.utils import (to_list, quantile, hue_color,
-                            dodge_positions, categorical_groups)
-from plotlet.draw import path, rect, segment
-from plotlet._spec import _FRAME, _FIGSPEC
+from ..registry import ArtistSpec, add_artist
+from ..utils import to_list, quantile, hue_color, dodge_positions, categorical_groups
+from ..draw import path, rect, segment
+from .._spec import _FRAME, _FIGSPEC
 
 
 def _silverman_bw(xs):
@@ -71,7 +53,7 @@ def _kde(samples, grid, bw):
     return out
 
 
-def violin_record(args, kw):
+def _violin_record(args, kw):
     if "data" in kw or "x" in kw or "y" in kw:
         data = kw.pop("data", None)
         x = kw.pop("x", None)
@@ -101,15 +83,15 @@ def _violin_values(a):
     return [v for row in a["groups"] for g in row for v in g]
 
 
-def violin_xdomain(a):
+def _violin_xdomain(a):
     return _violin_values(a) if _violin_horizontal(a) else a["cats"]
 
 
-def violin_ydomain(a):
+def _violin_ydomain(a):
     return a["cats"] if _violin_horizontal(a) else _violin_values(a)
 
 
-def violin_draw(a, ctx):
+def _violin_draw(a, ctx):
     cats, hues, groups = a["cats"], a["hues"], a["groups"]
     n_hues = len(hues)
     opts = a["opts"]
@@ -208,7 +190,7 @@ def violin_draw(a, ctx):
     return "".join(out)
 
 
-def violin_legend_entries(a):
+def _violin_legend_entries(a):
     hues = a["hues"]
     if hues == [None]:
         return []
@@ -231,43 +213,11 @@ def violin_legend_entries(a):
     return entries
 
 
-pt.add_artist(pt.ArtistSpec(
+add_artist(ArtistSpec(
     name="violin",
-    record=violin_record,
-    xdomain=violin_xdomain,
-    ydomain=violin_ydomain,
-    draw=violin_draw,
-    legend_entries=violin_legend_entries,
+    record=_violin_record,
+    xdomain=_violin_xdomain,
+    ydomain=_violin_ydomain,
+    draw=_violin_draw,
+    legend_entries=_violin_legend_entries,
 ))
-
-
-def demo():
-    """Build the demonstration chart with synthetic data.
-
-    Returns a `pt.Chart` ready for `.save_svg()` or further composition."""
-    import random
-    random.seed(0)
-    rows = []
-    for genotype in ("wild-type", "+drug", "knockout", "rescue"):
-        for treatment, shift in (("A", 0.0), ("B", 1.2)):
-            mu = {"wild-type": 5, "+drug": 4, "knockout": 7, "rescue": 5.5}[genotype] + shift
-            sd = {"wild-type": 1, "+drug": 0.8, "knockout": 1.4, "rescue": 1.0}[genotype]
-            for _ in range(120):
-                rows.append({"genotype": genotype, "treatment": treatment,
-                             "expression": random.gauss(mu, sd)})
-    data = {k: [r[k] for r in rows] for k in rows[0]}
-
-    c = pt.chart()
-    c.xscale("category", order=["wild-type", "+drug", "knockout", "rescue"])
-    c.violin(data=data, x="genotype", y="expression", hue="treatment",
-             palette={"A": "#3F97C5", "B": "#F99917"}, inner="box")
-    c.title("Expression level by genotype and treatment")
-    c.xlabel("genotype").ylabel("log₂ FPKM")
-    c.legend(True, position="right")
-    return c
-
-
-if __name__ == "__main__":
-    out = Path(__file__).with_suffix(".svg")
-    demo().save_svg(out)
-    print(f"wrote {out}")
