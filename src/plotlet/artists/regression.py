@@ -1,35 +1,38 @@
-"""Custom artist: linear regression with confidence ribbon.
+"""OLS fit line plus Student-t confidence ribbon. ggplot2's geom_smooth(method='lm').
 
-Fits y ~ x by closed-form OLS, draws the fit line, and shades a
-confidence band around it using the exact Student-t critical value at
-n - 2 degrees of freedom. Equivalent to `geom_smooth(method="lm")` and
-seaborn `regplot`.
-
-API: c.regression(xs, ys, level=0.95, n_grid=80).
+Fits y ~ x by closed-form OLS, draws the fit line, and shades a confidence
+band using the exact Student-t critical value at n - 2 degrees of freedom.
 The scatter is not drawn here — overlay your own `c.scatter(xs, ys)`.
+
+API: c.regression(xs, ys)
+
+Styling kwargs:
+  level=0.95     confidence level for the band
+  n_grid=80      grid resolution for evaluating the band
+  alpha=0.2      ribbon fill opacity
+  linewidth=1.8  fit line stroke width
+  label=None     legend label (no legend entry when absent)
 
 Math:
     slope b = Σ((x - x̄)(y - ȳ)) / Σ((x - x̄)²)
     intercept a = ȳ - b·x̄
     residual σ² = SSE / (n - 2)
     se(ŷ(x)) = σ · sqrt(1/n + (x - x̄)² / Σ(x - x̄)²)
-    t · se for the band, t = t_{α/2, n-2}.
+    t · se for the band, t = t_{α/2, n-2}
 """
-
-SUMMARY = "OLS fit line plus Student-t confidence ribbon."
-
 import math
-from pathlib import Path
 
-import plotlet as pt
-from plotlet.utils import to_list
-from plotlet.draw import polygon, polyline, rect, segment
 from scipy.stats import t as _t_dist
+
+from ..registry import ArtistSpec, add_artist
+from ..utils import to_list
+from ..draw import polygon, polyline, rect, segment
 
 
 def _fit_ols(xs, ys):
     n = len(xs)
-    xm = sum(xs) / n; ym = sum(ys) / n
+    xm = sum(xs) / n
+    ym = sum(ys) / n
     sxx = sum((x - xm) ** 2 for x in xs) or 1e-12
     sxy = sum((x - xm) * (y - ym) for x, y in zip(xs, ys))
     b = sxy / sxx
@@ -40,7 +43,7 @@ def _fit_ols(xs, ys):
     return a, b, xm, sxx, math.sqrt(sigma2), n
 
 
-def regression_record(args, kw):
+def _regression_record(args, kw):
     xs = to_list(args[0])
     ys = to_list(args[1])
     a, b, xm, sxx, sigma, n = _fit_ols(xs, ys)
@@ -49,10 +52,10 @@ def regression_record(args, kw):
             "_sigma": sigma, "_n": n, "opts": kw}
 
 
-def regression_xdomain(a): return a["xs"]
+def _regression_xdomain(a): return a["xs"]
 
 
-def regression_ydomain(a):
+def _regression_ydomain(a):
     if not a["xs"]:
         return []
     level = a["opts"].get("level", 0.95)
@@ -63,7 +66,7 @@ def regression_ydomain(a):
             a["_a"] + a["_b"] * hi + crit * a["_sigma"]]
 
 
-def regression_draw(a, ctx):
+def _regression_draw(a, ctx):
     col = ctx.color
     fill_alpha = a["opts"].get("alpha", 0.2)
     lw = a["opts"].get("linewidth", 1.8)
@@ -75,7 +78,8 @@ def regression_draw(a, ctx):
     crit = _t_dist.ppf((1 + level) / 2, df)
     lo, hi = min(a["xs"]), max(a["xs"])
     grid = [lo + (hi - lo) * i / (n_grid - 1) for i in range(n_grid)]
-    a0, b0, xm, sxx, sigma, n = a["_a"], a["_b"], a["_xm"], a["_sxx"], a["_sigma"], a["_n"]
+    a0, b0, xm, sxx, sigma, n = (a["_a"], a["_b"], a["_xm"],
+                                  a["_sxx"], a["_sigma"], a["_n"])
     upper, lower, mid = [], [], []
     for x in grid:
         yhat = a0 + b0 * x
@@ -92,45 +96,22 @@ def regression_draw(a, ctx):
     return "".join(out)
 
 
-def regression_legend_entries(a):
+def _regression_legend_entries(a):
     label = a["opts"].get("label")
     if not label:
         return []
-    def paint(a, ctx, x0, y_mid):
-        col = a["_color"]
-        return (
-            rect(x0, y_mid - 5, 22, 10, fill=col, alpha=0.2)
-            + segment(x0, y_mid, x0 + 22, y_mid, color=col, width=1.8)
-        )
-    return [{"label": label, "color": a.get("_color"), "paint": paint}]
+    def paint(_a, _ctx, _x0, _y_mid):
+        col = _a.get("_color", _ctx.color)
+        return (rect(_x0, _y_mid - 5, 22, 10, fill=col, alpha=0.2)
+                + segment(_x0, _y_mid, _x0 + 22, _y_mid, color=col, width=1.8))
+    return [{"label": label, "color": None, "paint": paint}]
 
 
-pt.add_artist(pt.ArtistSpec(
+add_artist(ArtistSpec(
     name="regression",
-    record=regression_record,
-    xdomain=regression_xdomain,
-    ydomain=regression_ydomain,
-    draw=regression_draw,
-    legend_entries=regression_legend_entries,
+    record=_regression_record,
+    xdomain=_regression_xdomain,
+    ydomain=_regression_ydomain,
+    draw=_regression_draw,
+    legend_entries=_regression_legend_entries,
 ))
-
-
-def demo():
-    """Build the demonstration chart with synthetic data.
-
-    Returns a `pt.Chart` ready for `.save_svg()` or further composition."""
-    import random
-    random.seed(6)
-    xs = [i * 0.5 for i in range(40)]
-    ys = [1.2 + 0.7 * x + random.gauss(0, 1.0) for x in xs]
-    c = pt.chart()
-    c.scatter(xs, ys, label="data")
-    c.regression(xs, ys, level=0.95, label="fit ± 95 % CI")
-    c.title("Linear regression").xlabel("x").ylabel("y").legend(True)
-    return c
-
-
-if __name__ == "__main__":
-    out = Path(__file__).with_suffix(".svg")
-    demo().save_svg(out)
-    print(f"wrote {out}")

@@ -889,6 +889,95 @@ def chart_strip():
     return c
 
 
+def chart_pointplot():
+    rng = random.Random(7)
+    cats = ["1 wk", "2 wk", "4 wk", "8 wk"]
+    ctrl = [[rng.gauss(5.0 + 0.04 * i, 1.0) for _ in range(20)] for i in range(4)]
+    drug = [[rng.gauss(5.0 + 0.45 * i, 1.0) for _ in range(20)] for i in range(4)]
+    c = pt.chart(data_width=320, data_height=200,
+                 title="pointplot", xlabel="timepoint", ylabel="score",
+                 legend=True)
+    c.xscale("category", order=cats)
+    c.pointplot(cats, ctrl, label="control")
+    c.pointplot(cats, drug, label="drug")
+    c.legend(position="right")
+    return c
+
+
+def chart_ecdf():
+    rng = random.Random(8)
+    a = [rng.gauss(0, 1) for _ in range(200)]
+    b = [rng.gauss(0.6, 1.3) for _ in range(200)]
+    c = pt.chart(data_width=300, data_height=200,
+                 title="ECDF", xlabel="value", ylabel="F̂(x)",
+                 legend=True)
+    c.ecdf(a, label="control")
+    c.ecdf(b, label="treatment")
+    c.legend(position="right")
+    return c
+
+
+def chart_rug():
+    rng = random.Random(9)
+    vals = [rng.gauss(0, 1) for _ in range(150)]
+    c = pt.chart(data_width=300, data_height=200,
+                 title="histogram + rug", xlabel="value", ylabel="count")
+    c.hist(vals, bins=24)
+    c.rug(vals, color="#444444")
+    return c
+
+
+def chart_density_1d():
+    rng = random.Random(10)
+    a = [rng.gauss(0, 1) for _ in range(300)]
+    b = [rng.gauss(1.2, 1.3) for _ in range(300)]
+    c = pt.chart(data_width=300, data_height=200,
+                 title="density", xlabel="value", ylabel="density",
+                 legend=True)
+    c.density_1d(a, label="control", fill=True)
+    c.density_1d(b, label="treatment", fill=True)
+    c.legend(position="right")
+    return c
+
+
+def chart_regression():
+    rng = random.Random(11)
+    xs = [i * 0.5 for i in range(40)]
+    ys = [1.2 + 0.7 * x + rng.gauss(0, 1.0) for x in xs]
+    c = pt.chart(data_width=300, data_height=220,
+                 title="linear regression", xlabel="x", ylabel="y",
+                 legend=True)
+    c.scatter(xs, ys, label="data")
+    c.regression(xs, ys, label="fit ± 95 % CI")
+    c.legend(position="right")
+    return c
+
+
+def chart_kde_2d():
+    rng = random.Random(12)
+    n = 200
+    xs = ([rng.gauss(-1, 0.7) for _ in range(n)]
+          + [rng.gauss(1.2, 1.0) for _ in range(n)])
+    ys = ([rng.gauss(0, 1.0) for _ in range(n)]
+          + [rng.gauss(2, 0.8) for _ in range(n)])
+    c = pt.chart(data_width=300, data_height=260,
+                 title="2-D KDE", xlabel="x", ylabel="y")
+    c.scatter(xs, ys, s=5, alpha=0.25, color="#444444")
+    c.kde_2d(xs, ys, n_grid=40, cmap="viridis")
+    return c
+
+
+def chart_hexbin():
+    rng = random.Random(13)
+    n = 3000
+    xs = [rng.gauss(0, 1) + rng.gauss(0, 0.4) for _ in range(n)]
+    ys = [x + rng.gauss(0, 1) for x in xs]
+    c = pt.chart(data_width=300, data_height=260,
+                 title="hexbin", xlabel="x", ylabel="y")
+    c.hexbin(xs, ys, gridsize=22)
+    return c | pt.legend(c)
+
+
 def _legend_position_chart(position):
     """A two-line chart with an outside-positioned in-frame legend. Used
     by the legend_outside_* baselines to exercise each `position=` value
@@ -982,6 +1071,13 @@ PLOTS = {
     "violin":                chart_violin,
     "swarm":                 chart_swarm,
     "strip":                 chart_strip,
+    "pointplot":             chart_pointplot,
+    "ecdf":                  chart_ecdf,
+    "rug":                   chart_rug,
+    "density_1d":            chart_density_1d,
+    "regression":            chart_regression,
+    "kde_2d":                chart_kde_2d,
+    "hexbin":                chart_hexbin,
 }
 
 

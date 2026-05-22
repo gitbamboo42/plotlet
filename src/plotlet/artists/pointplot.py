@@ -1,32 +1,32 @@
-"""Custom artist: pointplot.
-
-Categorical x with a point at the group estimate and a vertical CI bar;
-consecutive groups are connected so trends across an ordered category
-set jump out. Seaborn's `pointplot`.
+"""Categorical point estimate + CI bar + connecting line. Seaborn's pointplot.
 
 CI options:
-  - `ci="t"`     -> t-distribution CI on the mean (analytic; the
-                    classic textbook bar).
-  - `ci="boot"`  -> percentile bootstrap CI (default 1 000 resamples).
-                    Works for any estimator.
-  - `ci=None`    -> no CI, just points and connectors.
+  ci="t"     -> t-distribution CI on the mean (analytic; classic textbook bar).
+  ci="boot"  -> percentile bootstrap CI (default 1 000 resamples). Works for
+                any estimator.
+  ci=None    -> no CI, just points and connectors.
 
-API:
-    c.pointplot(cats, values_per_cat,
-                estimator="mean", ci="t", level=0.95, n_boot=1000,
-                size=4, capsize=4)
+Wide-form: c.pointplot(cats, values_per_cat)
+
+Styling kwargs:
+  estimator='mean'   'median' for the central tendency
+  ci='t'             see above
+  level=0.95         confidence level
+  n_boot=1000        bootstrap resamples (ci='boot' only)
+  seed=0             RNG seed for bootstrap
+  size=4             point radius in pixels
+  capsize=4          half-width of CI cap tick in pixels
+  linewidth=1.4      line and bar stroke width
+  label=None         legend label (no legend entry when absent)
 """
-
-SUMMARY = "Categorical point estimate + analytic-t (or bootstrap) CI bar + connecting line."
-
 import math
 import random
-from pathlib import Path
 
-import plotlet as pt
-from plotlet.utils import to_list
-from plotlet.draw import segment, circle, polyline, errorbar_v
 from scipy.stats import t as _t_dist
+
+from ..registry import ArtistSpec, add_artist
+from ..utils import to_list
+from ..draw import segment, circle, polyline, errorbar_v
 
 
 def _t_ci_mean(vals, level):
@@ -54,12 +54,14 @@ def _bootstrap_ci(vals, estimator_fn, level, n_boot, rng):
 
 
 def _median(xs):
-    s = sorted(xs); n = len(s)
-    if n == 0: return float("nan")
+    s = sorted(xs)
+    n = len(s)
+    if n == 0:
+        return float("nan")
     return s[n // 2] if n % 2 else 0.5 * (s[n // 2 - 1] + s[n // 2])
 
 
-def pointplot_record(args, kw):
+def _pointplot_record(args, kw):
     cats = to_list(args[0])
     groups = [list(to_list(g)) for g in args[1]]
     estimator = kw.get("estimator", "mean")
@@ -75,7 +77,8 @@ def pointplot_record(args, kw):
         if ci is None or not g:
             los.append(float("nan")); his.append(float("nan"))
         elif ci == "t" and estimator == "mean":
-            lo, hi = _t_ci_mean(g, level); los.append(lo); his.append(hi)
+            lo, hi = _t_ci_mean(g, level)
+            los.append(lo); his.append(hi)
         else:
             lo, hi = _bootstrap_ci(g, est_fn, level, n_boot, rng)
             los.append(lo); his.append(hi)
@@ -83,17 +86,17 @@ def pointplot_record(args, kw):
             "_los": los, "_his": his, "opts": kw}
 
 
-def pointplot_xdomain(a): return a["cats"]
+def _pointplot_xdomain(a): return a["cats"]
 
 
-def pointplot_ydomain(a):
+def _pointplot_ydomain(a):
     out = list(a["_ests"])
     out += [v for v in a["_los"] if v == v]
     out += [v for v in a["_his"] if v == v]
     return out
 
 
-def pointplot_draw(a, ctx):
+def _pointplot_draw(a, ctx):
     col = ctx.color
     r = a["opts"].get("size", 4)
     capsize = a["opts"].get("capsize", 4)
@@ -103,7 +106,8 @@ def pointplot_draw(a, ctx):
     for cat, est, lo, hi in zip(a["cats"], a["_ests"], a["_los"], a["_his"]):
         if est != est:
             continue
-        cx = ctx.x_scale(cat); py = ctx.y_scale(est)
+        cx = ctx.x_scale(cat)
+        py = ctx.y_scale(est)
         if lo == lo and hi == hi:
             out.append(errorbar_v(cx, ctx.y_scale(lo), ctx.y_scale(hi),
                                   capsize=capsize, color=col, width=lw))
@@ -114,46 +118,22 @@ def pointplot_draw(a, ctx):
     return "".join(out)
 
 
-def pointplot_legend_entries(a):
+def _pointplot_legend_entries(a):
     label = a["opts"].get("label")
     if not label:
         return []
-    def paint(a, ctx, x0, y_mid):
-        col = a["_color"]
-        return (
-            segment(x0, y_mid, x0 + 22, y_mid, color=col, width=1.4)
-            + circle(x0 + 11, y_mid, 3, fill=col)
-        )
-    return [{"label": label, "color": a.get("_color"), "paint": paint}]
+    def paint(_a, _ctx, _x0, _y_mid):
+        col = _a.get("_color", _ctx.color)
+        return (segment(_x0, _y_mid, _x0 + 22, _y_mid, color=col, width=1.4)
+                + circle(_x0 + 11, _y_mid, 3, fill=col))
+    return [{"label": label, "color": None, "paint": paint}]
 
 
-pt.add_artist(pt.ArtistSpec(
+add_artist(ArtistSpec(
     name="pointplot",
-    record=pointplot_record,
-    xdomain=pointplot_xdomain,
-    ydomain=pointplot_ydomain,
-    draw=pointplot_draw,
-    legend_entries=pointplot_legend_entries,
+    record=_pointplot_record,
+    xdomain=_pointplot_xdomain,
+    ydomain=_pointplot_ydomain,
+    draw=_pointplot_draw,
+    legend_entries=_pointplot_legend_entries,
 ))
-
-
-def demo():
-    """Build the demonstration chart with synthetic data.
-
-    Returns a `pt.Chart` ready for `.save_svg()` or further composition."""
-    rng = random.Random(0)
-    cats = ["1 wk", "2 wk", "4 wk", "8 wk", "12 wk"]
-    control = [[rng.gauss(5 + 0.05 * i, 1.0) for _ in range(20)] for i in range(5)]
-    drug    = [[rng.gauss(5 + 0.4 * i, 1.0) for _ in range(20)] for i in range(5)]
-    c = pt.chart()
-    c.xscale("category", order=cats)
-    c.pointplot(cats, control, label="control")
-    c.pointplot(cats, drug, label="drug")
-    c.title("Response over time").xlabel("timepoint").ylabel("score").legend(True)
-    return c
-
-
-if __name__ == "__main__":
-    out = Path(__file__).with_suffix(".svg")
-    demo().save_svg(out)
-    print(f"wrote {out}")

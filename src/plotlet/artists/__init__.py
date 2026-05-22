@@ -7,6 +7,7 @@ per-geom convention, with consolidation only where it earns its keep).
 Single-artist files (one plot type each):
   scatter, line, bar, hist, imshow, dendrogram, errorbar
   boxplot, violin, swarm, strip
+  pointplot, ecdf, rug, density_1d, regression, kde_2d, hexbin
 
 Category files (closely-related artists grouped):
   references — axhline, axvline, axhspan, axvspan, hlines, vlines
@@ -30,6 +31,13 @@ from . import boxplot      # noqa: F401
 from . import violin       # noqa: F401
 from . import swarm        # noqa: F401
 from . import strip        # noqa: F401
+from . import pointplot    # noqa: F401
+from . import ecdf         # noqa: F401
+from . import rug          # noqa: F401
+from . import density_1d   # noqa: F401
+from . import regression   # noqa: F401
+from . import kde_2d       # noqa: F401
+from . import hexbin       # noqa: F401
 
 # Category files
 from . import references   # noqa: F401

@@ -1,29 +1,30 @@
-"""Custom artist: 2-D KDE contours from a scatter sample.
+"""2-D Gaussian KDE iso-density contours from a scatter sample.
 
-Estimates a smooth 2-D density from `(xs, ys)` using a separable Gaussian
-kernel on a regular grid, then draws iso-density contours via marching
-squares. The visual cousin of `hexbin` for smaller, smoother samples.
+Estimates a smooth 2-D density from (xs, ys) using a separable Gaussian kernel
+on a regular grid, then draws iso-density contours via marching squares. The
+visual cousin of hexbin for smaller, smoother samples.
 
-Differs from the cookbook `contour` recipe, which expects a pre-computed
-2-D scalar grid. Here the recipe estimates the grid from data.
+Differs from the cookbook contour recipe, which expects a pre-computed 2-D
+scalar grid. Here the grid is estimated from data.
 
-API:
-    c.kde_2d(xs, ys, n_grid=60, bw=None, levels=None,
-             cmap=None, color="#1f77b4", linewidth=1.2)
+API: c.kde_2d(xs, ys)
+
+Styling kwargs:
+  n_grid=60          KDE evaluation grid resolution (n × n)
+  bw=None            bandwidth override; defaults to Silverman's rule per axis
+  levels=None        list of iso-density levels; defaults to 5 quantile levels
+  cmap=None          colormap name for coloring contours by level
+  color='#1f77b4'    fallback contour color when cmap is not set
+  linewidth=1.2      contour stroke width
 """
-
-SUMMARY = '2-D Gaussian KDE on a scatter sample, drawn as iso-density contours.'
-
 import math
-from pathlib import Path
 
-import plotlet as pt
-from plotlet.draw import segment
-from plotlet.utils import to_list
-from plotlet.draw.colormaps import colormap, _ContinuousNorm
+from ..registry import ArtistSpec, add_artist
+from ..draw import segment
+from ..draw.colormaps import colormap, _ContinuousNorm
+from ..utils import to_list
 
 
-# Marching-squares lookup (same as cookbook/contour/).
 _MS_CASES = {
     0: [], 15: [],
     1: [(3, 2)], 14: [(3, 2)],
@@ -38,7 +39,8 @@ _MS_CASES = {
 
 def _silverman(xs):
     n = len(xs)
-    if n < 2: return 1.0
+    if n < 2:
+        return 1.0
     m = sum(xs) / n
     var = sum((x - m) ** 2 for x in xs) / n
     sd = math.sqrt(var) or 1.0
@@ -46,7 +48,6 @@ def _silverman(xs):
 
 
 def _kde2d_grid(xs, ys, n_grid, bw_x, bw_y, x_lo, x_hi, y_lo, y_hi):
-    """Evaluate a separable Gaussian KDE on a regular `n_grid` × `n_grid`."""
     grid = [[0.0] * n_grid for _ in range(n_grid)]
     inv = 1.0 / (2 * math.pi * bw_x * bw_y * max(len(xs), 1))
     dx = (x_hi - x_lo) / (n_grid - 1) if n_grid > 1 else 1.0
@@ -63,9 +64,6 @@ def _kde2d_grid(xs, ys, n_grid, bw_x, bw_y, x_lo, x_hi, y_lo, y_hi):
     return [[v * inv for v in row] for row in grid]
 
 
-def _interp(t, p1, p2): return p1 + t * (p2 - p1)
-
-
 def _edge_pt(edge, r, c, vtl, vtr, vbr, vbl, lvl):
     if edge == 0:
         t = (lvl - vtl) / (vtr - vtl) if vtr != vtl else 0.5
@@ -80,17 +78,15 @@ def _edge_pt(edge, r, c, vtl, vtr, vbr, vbl, lvl):
     return (c, r + t)
 
 
-def kde2d_record(args, kw):
+def _kde_2d_record(args, kw):
     xs = to_list(args[0])
     ys = to_list(args[1])
     n_grid = kw.get("n_grid", 60)
     if not xs:
-        return {"type": "kde_2d", "_xs": xs, "_ys": ys, "_grid": [],
-                "opts": kw}
+        return {"type": "kde_2d", "_xs": xs, "_ys": ys, "_grid": [], "opts": kw}
     bw = kw.get("bw")
     bw_x = bw if bw else _silverman(xs)
     bw_y = bw if bw else _silverman(ys)
-    # Grid extent: data range padded by 3 bandwidths to avoid clipping tails.
     x_lo = min(xs) - 3 * bw_x; x_hi = max(xs) + 3 * bw_x
     y_lo = min(ys) - 3 * bw_y; y_hi = max(ys) + 3 * bw_y
     grid = _kde2d_grid(xs, ys, n_grid, bw_x, bw_y, x_lo, x_hi, y_lo, y_hi)
@@ -98,13 +94,14 @@ def kde2d_record(args, kw):
             "_extent": (x_lo, x_hi, y_lo, y_hi), "opts": kw}
 
 
-def kde2d_xdomain(a): return a["_xs"]
-def kde2d_ydomain(a): return a["_ys"]
+def _kde_2d_xdomain(a): return a["_xs"]
+def _kde_2d_ydomain(a): return a["_ys"]
 
 
-def kde2d_draw(a, ctx):
+def _kde_2d_draw(a, ctx):
     g = a["_grid"]
-    if not g: return ""
+    if not g:
+        return ""
     n = len(g)
     levels = a["opts"].get("levels")
     flat = [v for row in g for v in row]
@@ -118,7 +115,8 @@ def kde2d_draw(a, ctx):
         cm = colormap(cmap_name)
         norm = _ContinuousNorm(min(levels), max(levels), "linear")
     x0, x1, y0, y1 = a["_extent"]
-    dxd = (x1 - x0) / (n - 1); dyd = (y1 - y0) / (n - 1)
+    dxd = (x1 - x0) / (n - 1)
+    dyd = (y1 - y0) / (n - 1)
     out = []
     for lvl in levels:
         if cmap_name:
@@ -141,42 +139,16 @@ def kde2d_draw(a, ctx):
                     py1 = ctx.y_scale(y0 + p1[1] * dyd)
                     px2 = ctx.x_scale(x0 + p2[0] * dxd)
                     py2 = ctx.y_scale(y0 + p2[1] * dyd)
-                    out.append(segment(px1, py1, px2, py2,
-                                       color=col, width=lw))
+                    out.append(segment(px1, py1, px2, py2, color=col, width=lw))
     return "".join(out)
 
 
-pt.add_artist(pt.ArtistSpec(
+add_artist(ArtistSpec(
     name="kde_2d",
-    record=kde2d_record,
-    xdomain=kde2d_xdomain,
-    ydomain=kde2d_ydomain,
-    draw=kde2d_draw,
+    record=_kde_2d_record,
+    xdomain=_kde_2d_xdomain,
+    ydomain=_kde_2d_ydomain,
+    draw=_kde_2d_draw,
     uses_color_cycle=False,
     default_color="#1f77b4",
 ))
-
-
-def demo():
-    """Build the demonstration chart with synthetic data.
-
-    Returns a `pt.Chart` ready for `.save_svg()` or further composition."""
-    import random
-    random.seed(0)
-    # Two overlapping Gaussian blobs.
-    n = 300
-    xs = ([random.gauss(-1, 0.7) for _ in range(n)]
-          + [random.gauss(+1.2, 1.0) for _ in range(n)])
-    ys = ([random.gauss(0, 1.0) for _ in range(n)]
-          + [random.gauss(2, 0.8) for _ in range(n)])
-    c = pt.chart()
-    c.scatter(xs, ys, s=6, alpha=0.25, color="#444444", label="data")
-    c.kde_2d(xs, ys, n_grid=60, cmap="viridis")
-    c.title("2-D KDE contours").xlabel("x").ylabel("y")
-    return c
-
-
-if __name__ == "__main__":
-    out = Path(__file__).with_suffix(".svg")
-    demo().save_svg(out)
-    print(f"wrote {out}")
