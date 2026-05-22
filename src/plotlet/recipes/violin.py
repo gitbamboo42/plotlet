@@ -1,22 +1,52 @@
 """Custom artist: violin plot.
 
-Mirrored KDE outline with a small box-and-median inside, per category.
-The matplotlib / seaborn violin staple: shape conveys the distribution,
-the inner stats are the conventional Tukey summary.
+Mirrored KDE outline per category, with a mini-boxplot (Q1-Q3 box +
+median line + 1.5*IQR whiskers) drawn inside — the ggplot2-style violin.
+The KDE shape conveys the distribution, the inner box conveys the
+Tukey summary.
 
-API: c.violin(cats, values_per_cat, width=0.8, inner="box").
-- `inner="box"`  — Q1-Q3 box + median tick (default)
-- `inner="quartile"` — three dashed lines at Q1/Q2/Q3
-- `inner=None`   — KDE only
+Two input shapes, picked by which kwargs are present:
+  - Wide-form (positional):  c.violin(cats, values_per_cat)
+  - Long-form (seaborn):     c.violin(data=df, x="cat", y="value",
+                                       hue="group", palette={...})
+
+Long-form with `hue=` dodges sub-violins side-by-side within each cat
+and emits one legend entry per hue category. `palette=` accepts a dict
+(category → color) or a sequence; missing entries fall through to TAB10.
+
+Styling kwargs (all optional):
+  - `orientation='v'`       — `'h'` for horizontal violins (cats on y axis).
+  - `width=0.8`             — total dodge-group width as a band fraction.
+  - `gap=0.1`               — fraction of slot width left as a gap between
+                              adjacent dodged violins.
+  - `inner='box'`           — `'box'` mini-boxplot (Q1-Q3 outlined + median
+                              line + 1.5*IQR whiskers), `'quartile'` three
+                              dashed lines at Q1/Q2/Q3, `None` KDE only.
+  - `trim=True`             — clip the KDE at min/max of the data. `False`
+                              extends 10 % past each end (matplotlib default).
+  - `fill=True`             — set False for outline-only violins.
+  - `fill_alpha=0.4`        — body-fill opacity (outline stays opaque).
+  - `linecolor=<themed>`    — override outline / inner-box color.
+  - `linewidth=1`           — outline / inner-box stroke width.
+  - `whis=1.5`              — IQR multiplier for the whisker fences (when
+                              `inner='box'`).
+  - `inner_box_fill=<bg>`   — mini-boxplot fill (when `inner='box'`).
+                              Defaults to the figure background so the box
+                              reads as negative space against the violin
+                              body on any theme.
+  - `n_grid=80`             — KDE evaluation grid resolution.
+  - `bw_adjust=1.0`         — Silverman bandwidth multiplier (>1 smoother).
 """
 
-SUMMARY = 'Mirrored KDE outline plus Q1-Q3 box and median tick, per category.'
+SUMMARY = 'Mirrored KDE outline + mini-boxplot inside, per category; long-form `hue=` dodges sub-violins.'
 import math
 from pathlib import Path
 
 import plotlet as pt
-from plotlet.utils import to_list
-from plotlet.draw import path, rect, circle, segment
+from plotlet.utils import (to_list, quantile, hue_color,
+                            dodge_positions, categorical_groups)
+from plotlet.draw import path, rect, segment
+from plotlet._spec import _FRAME, _FIGSPEC
 
 
 def _silverman_bw(xs):
@@ -41,73 +71,164 @@ def _kde(samples, grid, bw):
     return out
 
 
-def _quantile(xs, q):
-    xs = sorted(xs)
-    n = len(xs)
-    if n == 0: return float("nan")
-    if n == 1: return xs[0]
-    pos = (n - 1) * q
-    lo = int(pos); hi = min(lo + 1, n - 1)
-    return xs[lo] + (xs[hi] - xs[lo]) * (pos - lo)
-
-
 def violin_record(args, kw):
-    cats = to_list(args[0])
-    groups = [list(to_list(g)) for g in args[1]]
-    return {"type": "violin", "cats": cats, "groups": groups, "opts": kw}
+    if "data" in kw or "x" in kw or "y" in kw:
+        data = kw.pop("data", None)
+        x = kw.pop("x", None)
+        y = kw.pop("y", None)
+        hue = kw.pop("hue", None)
+        if data is None or x is None or y is None:
+            raise TypeError(
+                "violin long-form requires data=, x=, y= (hue= optional)."
+            )
+        cats, hues, groups = categorical_groups(data, x, y, hue)
+    elif len(args) >= 2:
+        cats = to_list(args[0])
+        groups_1d = [list(to_list(g)) for g in args[1]]
+        hues = [None]
+        groups = [[g] for g in groups_1d]
+    else:
+        raise TypeError(
+            "violin requires either positional (cats, values_per_cat) "
+            "or keyword (data=, x=, y=)."
+        )
+    return {"type": "violin", "cats": cats, "hues": hues,
+            "groups": groups, "opts": kw}
 
 
-def violin_xdomain(a): return a["cats"]
-def violin_ydomain(a): return [v for g in a["groups"] for v in g]
+def _violin_horizontal(a): return a["opts"].get("orientation") == "h"
+def _violin_values(a):
+    return [v for row in a["groups"] for g in row for v in g]
+
+
+def violin_xdomain(a):
+    return _violin_values(a) if _violin_horizontal(a) else a["cats"]
+
+
+def violin_ydomain(a):
+    return a["cats"] if _violin_horizontal(a) else _violin_values(a)
 
 
 def violin_draw(a, ctx):
-    col = ctx.color
-    w_frac = a["opts"].get("width", 0.8)
-    inner = a["opts"].get("inner", "box")
-    n_grid = a["opts"].get("n_grid", 80)
-    fill_alpha = a["opts"].get("alpha", 0.5)
-    band = getattr(ctx.x_scale, "bandwidth", 1.0)
-    half_w_px = band * w_frac / 2
+    cats, hues, groups = a["cats"], a["hues"], a["groups"]
+    n_hues = len(hues)
+    opts = a["opts"]
+    palette    = opts.get("palette")
+    w_frac     = opts.get("width", 0.8)
+    gap        = opts.get("gap", 0.1)
+    inner      = opts.get("inner", "box")
+    trim       = opts.get("trim", True)
+    n_grid     = opts.get("n_grid", 80)
+    bw_adjust  = opts.get("bw_adjust", 1.0)
+    fill_alpha = opts.get("fill_alpha", 0.4)
+    lw         = opts.get("linewidth", 1)
+    whis       = opts.get("whis", 1.5)
+    do_fill    = opts.get("fill", True)
+    line       = opts.get("linecolor", _FRAME["color"])
+    horizontal = _violin_horizontal(a)
+    cat_scale, val_scale = (ctx.y_scale, ctx.x_scale) if horizontal else (ctx.x_scale, ctx.y_scale)
     out = []
-    for cat, vals in zip(a["cats"], a["groups"]):
-        if not vals:
-            continue
-        bw = _silverman_bw(vals)
-        lo, hi = min(vals), max(vals)
-        pad = (hi - lo) * 0.1 or 1.0
-        grid = [lo - pad + (hi - lo + 2 * pad) * i / (n_grid - 1)
-                for i in range(n_grid)]
-        d = _kde(vals, grid, bw)
-        dmax = max(d) or 1.0
-        cx = ctx.x_scale(cat)
-        # Symmetric mirror: left side then right side reversed.
-        left = []; right = []
-        for gx, dy in zip(grid, d):
-            dx_px = (dy / dmax) * half_w_px
-            py = ctx.y_scale(gx)
-            left.append((cx - dx_px, py))
-            right.append((cx + dx_px, py))
-        pts = left + right[::-1]
-        path_d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts) + " Z"
-        out.append(path(path_d, fill=col, stroke=col, stroke_width=1,
-                        fill_alpha=fill_alpha, stroke_alpha=1))
-        # Inner stats.
-        q1 = _quantile(vals, 0.25); q2 = _quantile(vals, 0.5); q3 = _quantile(vals, 0.75)
-        y_q1, y_q2, y_q3 = ctx.y_scale(q1), ctx.y_scale(q2), ctx.y_scale(q3)
-        if inner == "box":
-            iqr_w = half_w_px * 0.35
-            out.append(
-                rect(cx - iqr_w, min(y_q1, y_q3), 2 * iqr_w, abs(y_q3 - y_q1), fill="#222")
-                + circle(cx, y_q2, 2, fill="#ffffff")
-            )
-        elif inner == "quartile":
-            for q in (q1, q2, q3):
-                py = ctx.y_scale(q)
-                out.append(segment(cx - half_w_px * 0.7, py,
-                                   cx + half_w_px * 0.7, py,
-                                   color=col, width=1, dash="3,2"))
+    for i, cat in enumerate(cats):
+        for j in range(n_hues):
+            vals = groups[i][j]
+            if not vals:
+                continue
+            fill = hue_color(hues, palette, j, ctx.color) if do_fill else None
+            cp, slot_w = dodge_positions(cat_scale, cat, n_hues, j,
+                                          band_frac=w_frac, gap=gap)
+            half_w_px = slot_w / 2
+
+            bw = _silverman_bw(vals) * bw_adjust
+            lo, hi = min(vals), max(vals)
+            pad = 0 if trim else ((hi - lo) * 0.1 or 1.0)
+            grid = [lo - pad + (hi - lo + 2 * pad) * k / (n_grid - 1)
+                    for k in range(n_grid)]
+            d = _kde(vals, grid, bw)
+            dmax = max(d) or 1.0
+
+            left = []; right = []
+            for gx, dy in zip(grid, d):
+                d_px = (dy / dmax) * half_w_px
+                vp = val_scale(gx)
+                if horizontal:
+                    left.append((vp, cp - d_px))
+                    right.append((vp, cp + d_px))
+                else:
+                    left.append((cp - d_px, vp))
+                    right.append((cp + d_px, vp))
+            pts = left + right[::-1]
+            path_d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts) + " Z"
+            out.append(path(path_d, fill=fill, stroke=line, stroke_width=lw,
+                            fill_alpha=fill_alpha if do_fill else 1.0))
+
+            q1 = quantile(vals, 0.25)
+            q2 = quantile(vals, 0.50)
+            q3 = quantile(vals, 0.75)
+            vp_q1 = val_scale(q1)
+            vp_q2 = val_scale(q2)
+            vp_q3 = val_scale(q3)
+            if inner == "box":
+                box_half = half_w_px * 0.18
+                box_fill = opts.get("inner_box_fill", _FIGSPEC["background"])
+                iqr = q3 - q1
+                lo_fence = q1 - whis * iqr
+                hi_fence = q3 + whis * iqr
+                inliers = [v for v in vals if lo_fence <= v <= hi_fence]
+                whisker_lo = min(inliers) if inliers else q1
+                whisker_hi = max(inliers) if inliers else q3
+                vp_wlo = val_scale(whisker_lo)
+                vp_whi = val_scale(whisker_hi)
+                if horizontal:
+                    out.append(segment(vp_wlo, cp, vp_q1, cp, color=line, width=lw))
+                    out.append(segment(vp_q3, cp, vp_whi, cp, color=line, width=lw))
+                    out.append(rect(min(vp_q1, vp_q3), cp - box_half,
+                                    abs(vp_q3 - vp_q1), 2 * box_half,
+                                    fill=box_fill, stroke=line, stroke_width=lw))
+                    out.append(segment(vp_q2, cp - box_half, vp_q2, cp + box_half,
+                                       color=line, width=lw))
+                else:
+                    out.append(segment(cp, vp_wlo, cp, vp_q1, color=line, width=lw))
+                    out.append(segment(cp, vp_q3, cp, vp_whi, color=line, width=lw))
+                    out.append(rect(cp - box_half, min(vp_q1, vp_q3),
+                                    2 * box_half, abs(vp_q3 - vp_q1),
+                                    fill=box_fill, stroke=line, stroke_width=lw))
+                    out.append(segment(cp - box_half, vp_q2, cp + box_half, vp_q2,
+                                       color=line, width=lw))
+            elif inner == "quartile":
+                for q in (q1, q2, q3):
+                    vp = val_scale(q)
+                    if horizontal:
+                        out.append(segment(vp, cp - half_w_px * 0.7,
+                                           vp, cp + half_w_px * 0.7,
+                                           color=line, width=lw, dash="3,2"))
+                    else:
+                        out.append(segment(cp - half_w_px * 0.7, vp,
+                                           cp + half_w_px * 0.7, vp,
+                                           color=line, width=lw, dash="3,2"))
     return "".join(out)
+
+
+def violin_legend_entries(a):
+    hues = a["hues"]
+    if hues == [None]:
+        return []
+    opts = a["opts"]
+    palette = opts.get("palette")
+    fill_alpha = opts.get("fill_alpha", 0.4)
+    lw = opts.get("linewidth", 1)
+    do_fill = opts.get("fill", True)
+    line = opts.get("linecolor", _FRAME["color"])
+    entries = []
+    for j, h in enumerate(hues):
+        col = hue_color(hues, palette, j, line)
+        fill = col if do_fill else None
+        def paint(_a, _ctx, _x0, _y_mid,
+                  _fill=fill, _line=line, _lw=lw, _fa=fill_alpha):
+            return rect(_x0, _y_mid - 5, 22, 10,
+                        fill=_fill, stroke=_line, stroke_width=_lw,
+                        fill_alpha=_fa if _fill else 1.0)
+        entries.append({"label": str(h), "color": col, "paint": paint})
+    return entries
 
 
 pt.add_artist(pt.ArtistSpec(
@@ -116,6 +237,7 @@ pt.add_artist(pt.ArtistSpec(
     xdomain=violin_xdomain,
     ydomain=violin_ydomain,
     draw=violin_draw,
+    legend_entries=violin_legend_entries,
 ))
 
 
@@ -125,17 +247,23 @@ def demo():
     Returns a `pt.Chart` ready for `.save_svg()` or further composition."""
     import random
     random.seed(0)
-    cats = ["wild-type", "+drug", "knockout", "rescue"]
-    groups = [
-        [random.gauss(5, 1) for _ in range(150)],
-        [random.gauss(4, 0.8) for _ in range(150)],
-        [random.gauss(7, 1.4) for _ in range(150)] + [random.gauss(3.5, 0.5) for _ in range(60)],
-        [random.gauss(5.5, 1) for _ in range(150)],
-    ]
+    rows = []
+    for genotype in ("wild-type", "+drug", "knockout", "rescue"):
+        for treatment, shift in (("A", 0.0), ("B", 1.2)):
+            mu = {"wild-type": 5, "+drug": 4, "knockout": 7, "rescue": 5.5}[genotype] + shift
+            sd = {"wild-type": 1, "+drug": 0.8, "knockout": 1.4, "rescue": 1.0}[genotype]
+            for _ in range(120):
+                rows.append({"genotype": genotype, "treatment": treatment,
+                             "expression": random.gauss(mu, sd)})
+    data = {k: [r[k] for r in rows] for k in rows[0]}
+
     c = pt.chart()
-    c.xscale("category", order=cats)
-    c.violin(cats, groups, inner="box")
-    c.title("Expression level by genotype").xlabel("genotype").ylabel("log₂ FPKM")
+    c.xscale("category", order=["wild-type", "+drug", "knockout", "rescue"])
+    c.violin(data=data, x="genotype", y="expression", hue="treatment",
+             palette={"A": "#3F97C5", "B": "#F99917"}, inner="box")
+    c.title("Expression level by genotype and treatment")
+    c.xlabel("genotype").ylabel("log₂ FPKM")
+    c.legend(True, position="right")
     return c
 
 
