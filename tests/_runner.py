@@ -67,6 +67,12 @@ def run(set_name: str, plots: dict) -> int:
         actual = fn().to_svg()
 
         if update:
+            # Skip rewrites that would only flip the volatile attrs —
+            # avoids a "diff every baseline" cascade on a bare version
+            # bump. New files still get written.
+            if target.exists() and _normalize(target.read_text()) == _normalize(actual):
+                print(f"SKIP   {label} (unchanged under normalize)")
+                continue
             target.write_text(actual)
             print(f"WROTE  {label} ({len(actual)} chars)")
             continue
