@@ -7,7 +7,7 @@
 import math
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, long_form_xy, hue_color
+from ..utils import to_list, hue_color
 from .._spec import _D, _LEGSPEC
 from ..draw import marker, path as draw_path, segment
 from ._shared import _xy_minmax, _line_legend_entries, _CURVE_VALUES, _step_coords
@@ -52,21 +52,10 @@ def _artist_line(a, xs_, ys_, col, xs, ys):
 
 
 def _line_record(args, kw):
-    kw = dict(kw)
-    if "data" in kw or "x" in kw or "y" in kw:
-        data = kw.pop("data", None)
-        x_col = kw.pop("x", None)
-        y_col = kw.pop("y", None)
-        hue_col = kw.pop("hue", None)
-        if data is None or x_col is None or y_col is None:
-            raise TypeError(
-                "line long-form requires data=, x=, y= (hue= optional)."
-            )
-        hues, groups = long_form_xy(data, x_col, y_col, hue_col)
-    else:
-        hues = [None]
-        groups = [(to_list(args[0]), to_list(args[1]))]
-    return {"type": "line", "hues": hues, "groups": groups, "opts": kw}
+    # Long-form is handled at the Chart layer (`Chart.line` resolves
+    # data/x/y/hue → per-hue records); the artist only sees wide-form.
+    return {"type": "line", "hues": [None],
+            "groups": [(to_list(args[0]), to_list(args[1]))], "opts": dict(kw)}
 
 
 def _line_xdomain(a):

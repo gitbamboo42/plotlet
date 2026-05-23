@@ -1111,6 +1111,30 @@ def chart_density_1d_long_hue():
     return c
 
 
+def chart_regression_hue():
+    """OLS regression fits one line + band per hue group, ggplot's
+    `geom_smooth(method=\"lm\") + aes(color=)` shape."""
+    import pandas as pd
+    rng = random.Random(22)
+    rows = []
+    for g, (slope, intercept) in zip(["A", "B", "C"],
+                                       [(1.5, 0.0), (-0.5, 3.0), (0.8, -1.5)]):
+        for _ in range(60):
+            x = rng.uniform(0, 4)
+            rows.append({"x": x,
+                         "y": slope * x + intercept + rng.gauss(0, 0.4),
+                         "g": g})
+    df = pd.DataFrame(rows)
+    c = pt.chart(df, x="x", y="y", hue="g",
+                 data_width=320, data_height=240,
+                 title="per-hue regression",
+                 xlabel="x", ylabel="y", legend=True)
+    c.scatter(s=14, alpha=0.5)
+    c.regression()
+    c.legend(position="right")
+    return c
+
+
 def chart_aes_inheritance():
     """Chart-level aes (x=, y=, hue=) inherited by multiple artist calls,
     ggplot-style. The boxplot+strip overlay is the canonical use case."""
@@ -1257,6 +1281,7 @@ PLOTS = {
     "scatter_long_hue":      chart_scatter_long_hue,
     "density_1d_long_hue":   chart_density_1d_long_hue,
     "aes_inheritance":       chart_aes_inheritance,
+    "regression_hue":        chart_regression_hue,
 }
 
 

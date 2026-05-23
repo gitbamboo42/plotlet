@@ -10,7 +10,7 @@ conflict with hue-based colouring.
 import math
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, long_form_xy, hue_color
+from ..utils import to_list, hue_color
 from ..draw import marker
 from ..draw.colormaps import colormap_lut, _ContinuousNorm
 from .._spec import _D, _LEGSPEC
@@ -60,21 +60,10 @@ def _artist_scatter(a, xs_, ys_, col, xs, ys):
 
 
 def _scatter_record(args, kw):
-    kw = dict(kw)
-    if "data" in kw or "x" in kw or "y" in kw:
-        data = kw.pop("data", None)
-        x_col = kw.pop("x", None)
-        y_col = kw.pop("y", None)
-        hue_col = kw.pop("hue", None)
-        if data is None or x_col is None or y_col is None:
-            raise TypeError(
-                "scatter long-form requires data=, x=, y= (hue= optional)."
-            )
-        hues, groups = long_form_xy(data, x_col, y_col, hue_col)
-    else:
-        hues = [None]
-        groups = [(to_list(args[0]), to_list(args[1]))]
-    return {"type": "scatter", "hues": hues, "groups": groups, "opts": kw}
+    # Long-form is handled at the Chart layer (`Chart.scatter` resolves
+    # data/x/y/hue → per-hue records); the artist only sees wide-form.
+    return {"type": "scatter", "hues": [None],
+            "groups": [(to_list(args[0]), to_list(args[1]))], "opts": dict(kw)}
 
 
 def _scatter_xdomain(a):
