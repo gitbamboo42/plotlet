@@ -17,7 +17,7 @@ and why-not-X live in [README.md](README.md) and [docs/PHILOSOPHY.md](docs/PHILO
 
 ## Load-bearing policies (not derivable from code)
 
-- **Core vs extensions split.** New plot types default to [`src/plotlet/extensions/`](src/plotlet/extensions/) (single-file) or [`cookbook/`](cookbook/) (multi-file projects). Core only for shared infrastructure (colormap registry, PNG encoder) — refuse "add Sankey to core" by default.
+- **Core vs extensions split.** Core covers the **standard plotting vocabulary** (the set listed in [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md)). **Domain-specific plot types** default to [`src/plotlet/extensions/`](src/plotlet/extensions/) (single-file) or [`cookbook/`](cookbook/) (multi-file projects). Decision rule for borderline cases: a plot type qualifies as "standard vocabulary" if **two or more** of matplotlib / seaborn / ggplot2 ship it as a primitive. Domain idioms (Sankey, Manhattan, ROC, KM, mosaic, calendar heatmap, etc.) don't qualify even if one popular lib has them. (Internal-only framing; not for public docs.)
 - **Lean flexible on existing core artists.** Add kwargs (alpha, per-side styling) over hand-rolled workarounds. ~1 line of user code vs 20+ lines of workaround → add the kwarg.
 - **No interactivity. Forever, not deferred.** Hover, zoom, pan, click, animation kill byte-identical reproducibility — the foundation for baseline-image testing.
 - **No global state.** Themes, defaults, anything: per-chart, deterministic. Same script → byte-identical SVG everywhere.
