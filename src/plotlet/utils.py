@@ -115,6 +115,36 @@ def quantile(xs, q, *, _skipna=True):
     return xs[lo] + (xs[hi] - xs[lo]) * (pos - lo)
 
 
+def _data_has_column(data, name):
+    """True iff `data` has a column named `name`. Works for DataFrames,
+    dict-of-lists, and anything else supporting `in` containment."""
+    if data is None:
+        return False
+    if hasattr(data, "columns"):
+        return name in data.columns
+    try:
+        return name in data
+    except TypeError:
+        return False
+
+
+def resolve_aes(data, value):
+    """Classify an aes value (e.g. `fill=`, `color=`, `group=`) as either
+    a literal or a column reference.
+
+    Returns `("literal", value)` when `value` is None, a non-string, or a
+    string that does not match a column of `data`. Returns
+    `("column", values_list)` when `value` is a string and `data` has a
+    column with that name — in which case the per-row column values are
+    materialized via `to_list(...)`. Matches seaborn's "string-meaning-
+    depends-on-data" rule; with no `data=` bound, every value is literal."""
+    if value is None or not isinstance(value, str):
+        return ("literal", value)
+    if _data_has_column(data, value):
+        return ("column", to_list(data[value]))
+    return ("literal", value)
+
+
 def palette_color(palette, value, index):
     """Resolve a hue-category value to a color via `palette`. Returns
     `None` when `palette` is `None`/empty or doesn't cover `value`, in
@@ -128,63 +158,52 @@ def palette_color(palette, value, index):
     return palette[index % len(palette)]
 
 
-def hue_color(hues, palette, j, fallback):
-    """Pick a color for hue index `j` in a dodged categorical artist.
-
-    With no hue (`hues == [None]`) returns `fallback` — the artist's
-    chart-level cycle color. With hue, resolves via `palette_color` and
-    falls through to `TAB10[j % 10]` so categories beyond the palette
-    still get a deterministic color."""
-    if hues == [None]:
-        return fallback
-    return palette_color(palette, hues[j], j) or TAB10[j % 10]
-
-
-def dodge_positions(cat_scale, cat, n_hues, j, *, band_frac=0.6, gap=0.1):
+def dodge_positions(cat_scale, cat, n_groups, j, *, band_frac=0.6, gap=0.1):
     """Compute the centered-dodge position and box size for sub-box `j`
-    of `n_hues` within category `cat`.
+    of `n_groups` within category `cat`.
 
     `cat_scale` is the scale of whichever axis holds the categories
     (x_scale in vertical mode, y_scale in horizontal). `band_frac` is
     the total dodge-group size as a fraction of the category band; `gap`
     is the fraction of each slot left as spacing between adjacent boxes
-    (ignored when `n_hues == 1`). Returns `(center, box_size)` in pixel
+    (ignored when `n_groups == 1`). Returns `(center, box_size)` in pixel
     coordinates along the categorical axis."""
     band = getattr(cat_scale, "bandwidth", 1.0)
-    slot_w = band * band_frac / n_hues
-    box_w = slot_w * (1 - gap) if n_hues > 1 else slot_w
-    center = cat_scale(cat) + (j - (n_hues - 1) / 2) * slot_w
+    slot_w = band * band_frac / n_groups
+    box_w = slot_w * (1 - gap) if n_groups > 1 else slot_w
+    center = cat_scale(cat) + (j - (n_groups - 1) / 2) * slot_w
     return center, box_w
 
 
-def categorical_groups(data, x_col, y_col, hue_col=None):
-    """Bin a long-form table into per-(x, hue) value lists.
+def categorical_groups(data, x_col, y_col, group_col=None):
+    """Bin a long-form table into per-(x, group) value lists.
 
-    Returns `(cats, hues, groups)`:
+    Returns `(cats, groups, vals)`:
       `cats`   — unique x values in appearance order.
-      `hues`   — unique hue values in appearance order, or `[None]` when
-                 `hue_col is None`.
-      `groups` — nested list with `groups[i][j]` = y values where
-                 `x == cats[i]` and (`hue == hues[j]` or hue is absent).
+      `groups` — unique group-column values in appearance order, or
+                 `[None]` when `group_col is None`.
+      `vals`   — nested list with `vals[i][j]` = y values where
+                 `x == cats[i]` and (`group_col_value == groups[j]` or
+                 grouping is absent).
 
-    Used by recipe artists that accept seaborn-style
-    `(data=df, x=col, y=col, hue=col)` input."""
+    Used by categorical artists that accept long-form
+    `(data=df, x=col, y=col, fill=col)` input."""
     if data is None:
         raise ValueError("categorical_groups: data= is required.")
     xs = to_list(data[x_col])
     ys = to_list(data[y_col])
-    hs = to_list(data[hue_col]) if hue_col is not None else [None] * len(xs)
-    cats, hues = [], []
+    hs = to_list(data[group_col]) if group_col is not None else [None] * len(xs)
+    cats, groups = [], []
     for v in xs:
         if v not in cats: cats.append(v)
     for v in hs:
-        if v not in hues: hues.append(v)
-    groups = [[[] for _ in hues] for _ in cats]
+        if v not in groups: groups.append(v)
+    vals = [[[] for _ in groups] for _ in cats]
     cat_idx = {c: i for i, c in enumerate(cats)}
-    hue_idx = {h: j for j, h in enumerate(hues)}
+    group_idx = {g: j for j, g in enumerate(groups)}
     for x, y, h in zip(xs, ys, hs):
-        groups[cat_idx[x]][hue_idx[h]].append(y)
-    return cats, hues, groups
+        vals[cat_idx[x]][group_idx[h]].append(y)
+    return cats, groups, vals
 
 
 def collect_categories(artists, axis):
@@ -204,53 +223,54 @@ def collect_categories(artists, axis):
     return sorted(out, key=str)
 
 
-def long_form_xy(data, x_col, y_col, hue_col=None):
-    """Long-form xy table -> (hues, groups). `groups[j]` is the `(xs, ys)`
-    pair where `hue == hues[j]`. With `hue_col=None`, returns
-    `([None], [(xs, ys)])` so callers can handle both cases uniformly.
+def long_form_xy(data, x_col, y_col, group_col=None):
+    """Long-form xy table -> (groups, xy). `xy[j]` is the `(xs, ys)`
+    pair where the group-column value equals `groups[j]`. With
+    `group_col=None`, returns `([None], [(xs, ys)])` so callers can
+    handle both cases uniformly.
 
     Used by xy artists (scatter, line, regression, ...) that accept
-    seaborn-style `(data=df, x=col, y=col, hue=col)` input."""
+    long-form `(data=df, x=col, y=col, color=col)` input."""
     if data is None:
         raise ValueError("long_form_xy: data= is required.")
     xs_all = to_list(data[x_col])
     ys_all = to_list(data[y_col])
-    if hue_col is None:
+    if group_col is None:
         return [None], [(xs_all, ys_all)]
-    hs = to_list(data[hue_col])
-    hues = []
+    hs = to_list(data[group_col])
+    groups = []
     for h in hs:
-        if h not in hues: hues.append(h)
-    groups = [([], []) for _ in hues]
-    hue_idx = {h: j for j, h in enumerate(hues)}
+        if h not in groups: groups.append(h)
+    xy = [([], []) for _ in groups]
+    group_idx = {h: j for j, h in enumerate(groups)}
     for x, y, h in zip(xs_all, ys_all, hs):
-        j = hue_idx[h]
-        groups[j][0].append(x)
-        groups[j][1].append(y)
-    return hues, groups
+        j = group_idx[h]
+        xy[j][0].append(x)
+        xy[j][1].append(y)
+    return groups, xy
 
 
-def long_form_1d(data, x_col, hue_col=None):
-    """Long-form 1-D table -> (hues, groups). `groups[j]` is the list of
-    values where `hue == hues[j]`. With `hue_col=None`, returns
-    `([None], [values])`.
+def long_form_1d(data, x_col, group_col=None):
+    """Long-form 1-D table -> (groups, vals). `vals[j]` is the list of
+    values where the group-column value equals `groups[j]`. With
+    `group_col=None`, returns `([None], [values])`.
 
     Used by 1-D distribution artists (hist, density_1d, ecdf, ...) that
-    accept seaborn-style `(data=df, x=col, hue=col)` input."""
+    accept long-form `(data=df, x=col, color=col)` input."""
     if data is None:
         raise ValueError("long_form_1d: data= is required.")
     xs_all = to_list(data[x_col])
-    if hue_col is None:
+    if group_col is None:
         return [None], [xs_all]
-    hs = to_list(data[hue_col])
-    hues = []
+    hs = to_list(data[group_col])
+    groups = []
     for h in hs:
-        if h not in hues: hues.append(h)
-    groups = [[] for _ in hues]
-    hue_idx = {h: j for j, h in enumerate(hues)}
+        if h not in groups: groups.append(h)
+    vals = [[] for _ in groups]
+    group_idx = {h: j for j, h in enumerate(groups)}
     for x, h in zip(xs_all, hs):
-        groups[hue_idx[h]].append(x)
-    return hues, groups
+        vals[group_idx[h]].append(x)
+    return groups, vals
 
 
 def _drop_nan(xs):
@@ -288,7 +308,7 @@ def kde_1d(samples, grid, bw):
 
 
 __all__ = ["to_list", "to_list_2d", "broadcast", "histogram", "quantile",
-           "palette_color", "hue_color", "dodge_positions",
+           "resolve_aes", "palette_color", "dodge_positions",
            "categorical_groups", "collect_categories",
            "long_form_xy", "long_form_1d",
            "silverman_bw", "kde_1d"]

@@ -1,15 +1,24 @@
-"""Line — connected xy points, single-series or long-form with hue split.
+"""Line — connected xy points, single-series per record.
 
   c.line(xs, ys)                                       # wide-form
   c.line(data=df, x="col_x", y="col_y")                # long-form
-  c.line(data=df, x="col_x", y="col_y", hue="group")   # one line per hue
+  c.line(data=df, x="col_x", y="col_y", color="g")     # one line per color level
+  c.line(data=df, x="col_x", y="col_y",                # invisible split — one
+          color="cohort", group="subject")              #   line per subject,
+                                                        #   colors only by cohort
+  c.line(data=df, ..., linetype="cohort")              # dash pattern per level
+  c.line(data=df, ..., alpha="cohort", alphas=(.3, 1)) # opacity per level
+
+Column-driven splitting (any of `color`/`group`/`linetype`/`alpha`) is
+handled at the Chart layer — the artist itself always sees one series
+per record.
 """
 import math
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, hue_color
-from .._spec import _D, _LEGSPEC
-from ..draw import marker, path as draw_path, segment
+from ..utils import to_list
+from .._spec import _D
+from ..draw import marker, path as draw_path
 from ._shared import _xy_minmax, _line_legend_entries, _CURVE_VALUES, _step_coords
 
 
@@ -52,23 +61,17 @@ def _artist_line(a, xs_, ys_, col, xs, ys):
 
 
 def _line_record(args, kw):
-    # Long-form is handled at the Chart layer (`Chart.line` resolves
-    # data/x/y/hue → per-hue records); the artist only sees wide-form.
-    return {"type": "line", "hues": [None],
-            "groups": [(to_list(args[0]), to_list(args[1]))], "opts": dict(kw)}
+    return {"type": "line",
+            "xs": to_list(args[0]), "ys": to_list(args[1]),
+            "opts": dict(kw)}
 
 
-def _line_xdomain(a):
-    return [x for xs, _ in a["groups"] for x in xs]
-
-
-def _line_ydomain(a):
-    return [y for _, ys in a["groups"] for y in ys]
+def _line_xdomain(a): return a["xs"]
+def _line_ydomain(a): return a["ys"]
 
 
 def _line_data_attrs(a):
-    xs = [x for xs, _ in a["groups"] for x in xs]
-    ys = [y for _, ys in a["groups"] for y in ys]
+    xs, ys = a["xs"], a["ys"]
     out = {"n": len(xs)}
     out.update(_xy_minmax(xs, ys))
     opts = a["opts"]
@@ -80,30 +83,8 @@ def _line_data_attrs(a):
 
 
 def _line_draw(a, ctx):
-    palette = a["opts"].get("palette")
-    out = []
-    for j, (xs, ys) in enumerate(a["groups"]):
-        col = hue_color(a["hues"], palette, j, ctx.color)
-        out.append(_artist_line(a, ctx.x_scale, ctx.y_scale, col, xs, ys))
-    return "".join(out)
-
-
-def _line_legend_entries_multi(a):
-    hues = a["hues"]
-    if hues == [None]:
-        return _line_legend_entries(a)
-    opts = a["opts"]
-    palette = opts.get("palette")
-    lw = opts.get("linewidth", _D["linewidth"])
-    sw = _LEGSPEC["swatch_width"]
-    entries = []
-    for j, h in enumerate(hues):
-        col = hue_color(hues, palette, j, a.get("_color"))
-        def paint(_a, _ctx, x0, y_mid, _col=col):
-            return segment(x0, y_mid, x0 + sw, y_mid, color=_col, width=lw,
-                           dash=opts.get("linestyle"))
-        entries.append({"label": str(h), "color": col, "paint": paint})
-    return entries
+    return _artist_line(a, ctx.x_scale, ctx.y_scale, ctx.color,
+                        a["xs"], a["ys"])
 
 
 add_artist(ArtistSpec(
@@ -112,6 +93,6 @@ add_artist(ArtistSpec(
     xdomain=_line_xdomain,
     ydomain=_line_ydomain,
     draw=_line_draw,
-    legend_entries=_line_legend_entries_multi,
+    legend_entries=_line_legend_entries,
     data_attrs=_line_data_attrs,
 ))

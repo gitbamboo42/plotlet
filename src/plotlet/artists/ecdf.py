@@ -7,16 +7,21 @@ differences obvious.
 
   c.ecdf(values)                                # wide-form
   c.ecdf(data=df, x="col")                      # long-form
-  c.ecdf(data=df, x="col", hue="group")         # one curve per hue
+  c.ecdf(data=df, x="col", color="group")       # one curve per group
 
-Styling kwargs:
+Aesthetics:
+  color=         line color (literal) or column name → grouped curves
+  palette=       maps group levels → colors when `color=` is a column
+
+Other styling kwargs:
   complement=False   True draws 1 - F̂(x) (survival function)
   linewidth=1.5      stroke width
   label=None         legend label (single-series only)
 """
 from ..registry import ArtistSpec, add_artist
 from ..draw import polyline, segment
-from ..utils import to_list, long_form_1d, hue_color
+from ..utils import to_list, long_form_1d, resolve_aes, palette_color
+from ..draw.colors import TAB10, _resolve_color
 from .._spec import _LEGSPEC
 
 
@@ -25,35 +30,47 @@ def _ecdf_record(args, kw):
     if "data" in kw or "x" in kw or "y" in kw:
         data_df = kw.pop("data", None)
         x_col = kw.pop("x", None)
-        hue_col = kw.pop("hue", None)
         if data_df is None or x_col is None:
             raise TypeError(
-                "ecdf long-form requires data=, x= (hue= optional)."
+                "ecdf long-form requires data=, x= (color= optional)."
             )
-        hues, groups = long_form_1d(data_df, x_col, hue_col)
+        color = kw.pop("color", None)
+        color_kind, color_value = resolve_aes(data_df, color)
+        group_col = color if color_kind == "column" else None
+        groups, vals = long_form_1d(data_df, x_col, group_col)
+        if color_kind == "literal" and color_value is not None:
+            kw["_color_literal"] = color_value
     else:
-        hues = [None]
-        groups = [to_list(args[0])]
-    groups = [sorted(g) for g in groups]
-    return {"type": "ecdf", "hues": hues, "groups": groups, "opts": kw}
+        groups = [None]
+        vals = [to_list(args[0])]
+    vals = [sorted(g) for g in vals]
+    return {"type": "ecdf", "groups": groups, "vals": vals, "opts": kw}
 
 
 def _ecdf_xdomain(a):
-    return [v for g in a["groups"] for v in g]
+    return [v for g in a["vals"] for v in g]
 
 
 def _ecdf_ydomain(a): return [0, 1]
+
+
+def _group_color(groups, palette, j, fallback):
+    if groups == [None]:
+        return fallback
+    return palette_color(palette, groups[j], j) or TAB10[j % 10]
 
 
 def _ecdf_draw(a, ctx):
     palette = a["opts"].get("palette")
     lw = a["opts"].get("linewidth", 1.5)
     complement = a["opts"].get("complement", False)
+    color_literal = _resolve_color(a["opts"].get("_color_literal"))
+    fallback = color_literal if color_literal is not None else ctx.color
     out = []
-    for j, data in enumerate(a["groups"]):
+    for j, data in enumerate(a["vals"]):
         n = len(data)
         if n == 0: continue
-        col = hue_color(a["hues"], palette, j, ctx.color)
+        col = _group_color(a["groups"], palette, j, fallback)
         pts = []
         prev_y = 1 if complement else 0
         pts.append((ctx.x_scale(data[0]), ctx.y_scale(prev_y)))
@@ -69,11 +86,11 @@ def _ecdf_draw(a, ctx):
 
 
 def _ecdf_legend_entries(a):
-    hues = a["hues"]
+    groups = a["groups"]
     opts = a["opts"]
     lw = opts.get("linewidth", 1.5)
     sw = _LEGSPEC["swatch_width"]
-    if hues == [None]:
+    if groups == [None]:
         label = opts.get("label")
         if not label:
             return []
@@ -83,11 +100,11 @@ def _ecdf_legend_entries(a):
         return [{"label": label, "color": None, "paint": paint}]
     palette = opts.get("palette")
     entries = []
-    for j, h in enumerate(hues):
-        col = hue_color(hues, palette, j, a.get("_color"))
+    for j, g in enumerate(groups):
+        col = _group_color(groups, palette, j, a.get("_color"))
         def paint(_a, _ctx, x0, y_mid, _col=col):
             return segment(x0, y_mid, x0 + sw, y_mid, color=_col, width=lw)
-        entries.append({"label": str(h), "color": col, "paint": paint})
+        entries.append({"label": str(g), "color": col, "paint": paint})
     return entries
 
 

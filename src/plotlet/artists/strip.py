@@ -4,12 +4,18 @@ No per-render RNG — jitter offsets are derived from a splitmix64 hash of each
 point's indices so the SVG is byte-identical across runs.
 
 Wide-form: c.strip(cats, values_per_cat)
-Long-form:  c.strip(data=df, x="cat", y="value", hue="group", palette={...})
+Long-form: c.strip(data=df, x="cat", y="value", fill="group", palette={...})
 
-Long-form with `hue=` dodges sub-strips side-by-side within each cat and emits
-one legend entry per hue category.
+Long-form with `fill="col"` dodges sub-strips side-by-side within each cat and
+emits one legend entry per group level.
 
-Styling kwargs:
+Aesthetics:
+  fill=<col>/<literal>  point color (col = column-driven grouping, literal
+                        color string, or None for the cycle default)
+  color=<literal>       point outline (defaults to frame color when used)
+  palette=              maps group levels → fills when `fill=` is a column
+
+Other styling kwargs:
   orientation='v'   'h' for horizontal (cats on y axis)
   width=0.8         total dodge-group width as a band fraction
   gap=0.1           slot-gap fraction between dodged sub-strips
@@ -18,10 +24,11 @@ Styling kwargs:
   size=3            point radius in pixels
   alpha=0.7         point opacity
   linewidth=0       outline stroke width (0 = no outline)
-  edgecolor=<line>  outline color when linewidth > 0
 """
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, hue_color, dodge_positions, categorical_groups
+from ..utils import (to_list, resolve_aes, palette_color,
+                     dodge_positions, categorical_groups)
+from ..draw.colors import TAB10, _resolve_color
 from ..draw import circle
 from .._spec import _FRAME
 
@@ -40,34 +47,49 @@ def _jitter_hash(*ints):
     return ((z & 0xFFFFFFFF) / 0xFFFFFFFF) - 0.5
 
 
+def _resolve_fill_kwarg(data, kw):
+    """For strip/swarm: `fill=` accepts None, literal color, or column name.
+    Returns `(fill_literal, group_col)`."""
+    fill = kw.pop("fill", None)
+    if fill is None:
+        return None, None
+    kind, value = resolve_aes(data, fill)
+    if kind == "column":
+        return None, fill
+    return value, None
+
+
 def _strip_record(args, kw):
     if "data" in kw or "x" in kw or "y" in kw:
         data = kw.pop("data", None)
         x = kw.pop("x", None)
         y = kw.pop("y", None)
-        hue = kw.pop("hue", None)
         if data is None or x is None or y is None:
             raise TypeError(
-                "strip long-form requires data=, x=, y= (hue= optional)."
+                "strip long-form requires data=, x=, y= (fill= optional)."
             )
-        cats, hues, groups = categorical_groups(data, x, y, hue)
+        fill_literal, group_col = _resolve_fill_kwarg(data, kw)
+        cats, groups, vals = categorical_groups(data, x, y, group_col)
     elif len(args) >= 2:
         cats = to_list(args[0])
-        groups_1d = [list(to_list(g)) for g in args[1]]
-        hues = [None]
-        groups = [[g] for g in groups_1d]
+        vals_1d = [list(to_list(g)) for g in args[1]]
+        groups = [None]
+        vals = [[g] for g in vals_1d]
+        fill_literal, _ = _resolve_fill_kwarg(None, kw)
     else:
         raise TypeError(
             "strip requires either positional (cats, values_per_cat) "
             "or keyword (data=, x=, y=)."
         )
-    return {"type": "strip", "cats": cats, "hues": hues,
-            "groups": groups, "opts": kw}
+    if fill_literal is not None:
+        kw["_fill_literal"] = fill_literal
+    return {"type": "strip", "cats": cats, "groups": groups,
+            "vals": vals, "opts": kw}
 
 
 def _strip_horizontal(a): return a["opts"].get("orientation") == "h"
 def _strip_values(a):
-    return [v for row in a["groups"] for g in row for v in g]
+    return [v for row in a["vals"] for g in row for v in g]
 
 
 def _strip_xdomain(a):
@@ -78,9 +100,15 @@ def _strip_ydomain(a):
     return a["cats"] if _strip_horizontal(a) else _strip_values(a)
 
 
+def _group_fill(groups, palette, j, fallback):
+    if groups == [None]:
+        return fallback
+    return palette_color(palette, groups[j], j) or TAB10[j % 10]
+
+
 def _strip_draw(a, ctx):
-    cats, hues, groups = a["cats"], a["hues"], a["groups"]
-    n_hues = len(hues)
+    cats, groups, vals = a["cats"], a["groups"], a["vals"]
+    n_groups = len(groups)
     opts = a["opts"]
     palette   = opts.get("palette")
     w_frac    = opts.get("width", 0.8)
@@ -89,48 +117,50 @@ def _strip_draw(a, ctx):
     r         = opts.get("size", 3)
     alpha     = opts.get("alpha", 0.7)
     lw        = opts.get("linewidth", 0)
-    edgecolor = opts.get("edgecolor", _FRAME["color"])
+    stroke    = _resolve_color(opts.get("color")) or _FRAME["color"]
+    fill_literal = _resolve_color(opts.get("_fill_literal"))
+    fill_fallback = fill_literal if fill_literal is not None else ctx.color
     horizontal = _strip_horizontal(a)
     cat_scale, val_scale = (ctx.y_scale, ctx.x_scale) if horizontal else (ctx.x_scale, ctx.y_scale)
     out = []
     for i, cat in enumerate(cats):
-        for j in range(n_hues):
-            vals = groups[i][j]
-            if not vals:
+        for j in range(n_groups):
+            vs = vals[i][j]
+            if not vs:
                 continue
-            col = hue_color(hues, palette, j, ctx.color)
-            cp, slot_w = dodge_positions(cat_scale, cat, n_hues, j,
+            col = _group_fill(groups, palette, j, fill_fallback)
+            cp, slot_w = dodge_positions(cat_scale, cat, n_groups, j,
                                           band_frac=w_frac, gap=gap)
-            for k, v in enumerate(vals):
+            for k, v in enumerate(vs):
                 if v != v:  # NaN
                     continue
                 off = _jitter_hash(i, j, k) * slot_w * jitter
                 vp = val_scale(v)
                 cx, cy = (vp, cp + off) if horizontal else (cp + off, vp)
                 out.append(circle(cx, cy, r, fill=col, alpha=alpha,
-                                  stroke=edgecolor if lw > 0 else None,
+                                  stroke=stroke if lw > 0 else None,
                                   stroke_width=lw))
     return "".join(out)
 
 
 def _strip_legend_entries(a):
-    hues = a["hues"]
-    if hues == [None]:
+    groups = a["groups"]
+    if groups == [None]:
         return []
     opts = a["opts"]
     palette = opts.get("palette")
     r = opts.get("size", 3)
     alpha = opts.get("alpha", 0.7)
     lw = opts.get("linewidth", 0)
-    edgecolor = opts.get("edgecolor", _FRAME["color"])
+    stroke = _resolve_color(opts.get("color")) or _FRAME["color"]
     entries = []
-    for j, h in enumerate(hues):
-        col = hue_color(hues, palette, j, _FRAME["color"])
+    for j, g in enumerate(groups):
+        col = _group_fill(groups, palette, j, _FRAME["color"])
         def paint(_a, _ctx, _x0, _y_mid,
-                  _col=col, _r=r, _al=alpha, _lw=lw, _ec=edgecolor):
+                  _col=col, _r=r, _al=alpha, _lw=lw, _ec=stroke):
             return circle(_x0 + 11, _y_mid, _r, fill=_col, alpha=_al,
                           stroke=_ec if _lw > 0 else None, stroke_width=_lw)
-        entries.append({"label": str(h), "color": col, "paint": paint})
+        entries.append({"label": str(g), "color": col, "paint": paint})
     return entries
 
 

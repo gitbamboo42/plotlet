@@ -47,7 +47,7 @@ def chart_hue():
     }
     c = pt.chart(df, title="hue split",
                  xlabel="t", ylabel="v", legend=True, grid=True)
-    c.line(x="t", y="v", hue="series")
+    c.line(x="t", y="v", color="series")
     return c
 
 
@@ -61,14 +61,14 @@ def chart_scatter_hue():
     }
     c = pt.chart(df, title="scatter hue",
                  xlabel="x", ylabel="y", legend=True, grid=True)
-    c.scatter(x="x", y="y", hue="group", s=30, alpha=0.6)
+    c.scatter(x="x", y="y", color="group", s=30, alpha=0.6)
     return c
 
 
 def chart_bar():
     df = {"category": ["A", "B", "C", "D", "E"], "count": [4, 7, 2, 9, 5]}
     c = pt.chart(df, title="bar from table", ylabel="count")
-    c.bar(x="category", y="count", color="C0")
+    c.bar(x="category", y="count", fill="C0")
     return c
 
 
@@ -77,7 +77,7 @@ def chart_hist():
     df = {"value": [rng.gauss(0, 1) for _ in range(2000)]}
     c = pt.chart(df, title="histogram from table",
                  xlabel="value", ylabel="count")
-    c.hist(x="value", bins=30, color="C2")
+    c.hist(x="value", bins=30, fill="C2")
     return c
 
 
@@ -176,7 +176,7 @@ def chart_category_x_order():
     c = pt.chart(df, title="bar with explicit category order",
                  xlabel="sample", ylabel="count")
     c.xscale("category", order=["S3", "S1", "S2"])
-    c.bar(x="sample", y="count", color="C2")
+    c.bar(x="sample", y="count", fill="C2")
     return c
 
 
@@ -215,7 +215,7 @@ def chart_hide_yticks():
     df = {"sample": ["S1", "S2", "S3", "S4"], "stage": [0.5] * 4}
     c = pt.chart(df, data_width=320, data_height=24, title="metadata strip",
                  ylabel="stage")
-    c.bar(x="sample", y="stage", color="C1")
+    c.bar(x="sample", y="stage", fill="C1")
     c.ylim(0, 1)
     c.yticks([])
     return c
@@ -227,7 +227,7 @@ def chart_xticks_rotation():
           "count": [12, 7, 19, 14, 9]}
     c = pt.chart(df, data_width=320, data_height=180,
                  title="rotated x labels", ylabel="count")
-    c.bar(x="month", y="count", color="C0")
+    c.bar(x="month", y="count", fill="C0")
     c.xticks(rotation=45)
     return c
 
@@ -271,7 +271,7 @@ def chart_category_padding_zero():
     df = {"x": ["a", "b", "c", "d", "e"], "v": [1, 2, 3, 2, 1]}
     c = pt.chart(df, data_width=320, data_height=60, title="padding=0 (contiguous)")
     c.xscale("category", padding=0)
-    c.bar(x="x", y="v", color="C0")
+    c.bar(x="x", y="v", fill="C0")
     return c
 
 
@@ -537,7 +537,7 @@ def chart_long_rotated_xticks():
           "count":  [12, 7, 19, 14, 9]}
     c = pt.chart(df, data_width=300, data_height=180,
                  title="long rotated x-tick labels", ylabel="count")
-    c.bar(x="sample", y="count", color="C0")
+    c.bar(x="sample", y="count", fill="C0")
     c.xticks(rotation=45)
     return c
 
@@ -755,7 +755,7 @@ def chart_scatter_size_style_hue():
     c = pt.chart(df, data_width=400, data_height=240,
                  title="hue + size + style", xlabel="x", ylabel="y",
                  legend=True)
-    c.scatter(x="x", y="y", hue="group", size="mass", style="group")
+    c.scatter(x="x", y="y", color="group", size="mass", style="group")
     return c
 
 
@@ -820,7 +820,7 @@ def chart_boxplot():
                  title="boxplot hue", xlabel="group", ylabel="score",
                  legend=True)
     c.xscale("category", order=["ctrl", "low", "mid", "high"])
-    c.boxplot(data=data, x="group", y="score", hue="trt",
+    c.boxplot(data=data, x="group", y="score", fill="trt",
               palette={"A": "#3F97C5", "B": "#F99917"})
     c.legend(position="right")
     return c
@@ -841,7 +841,7 @@ def chart_violin():
                  title="violin hue", xlabel="genotype", ylabel="expression",
                  legend=True)
     c.xscale("category", order=["wt", "+drug", "ko", "rescue"])
-    c.violin(data=data, x="geno", y="expr", hue="trt",
+    c.violin(data=data, x="geno", y="expr", fill="trt",
              palette={"A": "#3F97C5", "B": "#F99917"}, inner="box")
     c.legend(position="right")
     return c
@@ -862,7 +862,7 @@ def chart_swarm():
                  title="swarm hue", xlabel="group", ylabel="value",
                  legend=True)
     c.xscale("category", order=["A", "B", "C", "D"])
-    c.swarm(data=data, x="group", y="value", hue="trt",
+    c.swarm(data=data, x="group", y="value", fill="trt",
             palette={"ctrl": "#3F97C5", "dose": "#F99917"})
     c.legend(position="right")
     return c
@@ -883,7 +883,7 @@ def chart_strip():
                  title="strip hue", xlabel="condition", ylabel="value",
                  legend=True)
     c.xscale("category", order=["A", "B", "C", "D"])
-    c.strip(data=data, x="cond", y="value", hue="trt",
+    c.strip(data=data, x="cond", y="value", fill="trt",
             palette={"ctrl": "#3F97C5", "dose": "#F99917"})
     c.legend(position="right")
     return c
@@ -1076,6 +1076,25 @@ def chart_bar_fill():
     return c
 
 
+def chart_bar_long_fill():
+    # Long-form: `fill="col"` drives grouping; `color="black"` paints
+    # the stroke (new flexibility — previously inexpressible).
+    import pandas as pd
+    rows = []
+    for q, vals in zip(["Q1", "Q2", "Q3", "Q4"],
+                        [(12, 8, 5), (18, 14, 7), (15, 16, 9), (22, 18, 11)]):
+        for s, v in zip(["A", "B", "C"], vals):
+            rows.append({"quarter": q, "series": s, "value": v})
+    df = pd.DataFrame(rows)
+    c = pt.chart(df, data_width=320, data_height=200,
+                 title="bar long-form (fill=col, outlined)",
+                 ylabel="$M", legend=True)
+    c.bar(x="quarter", y="value", fill="series", color="black",
+          position="dodge")
+    c.legend(position="right")
+    return c
+
+
 def chart_scatter_long_hue():
     import pandas as pd
     rng = random.Random(17)
@@ -1090,7 +1109,7 @@ def chart_scatter_long_hue():
     c = pt.chart(data_width=300, data_height=240,
                  title="scatter (long-form, hue)",
                  xlabel="x", ylabel="y", legend=True)
-    c.scatter(data=df, x="x", y="y", hue="group")
+    c.scatter(data=df, x="x", y="y", color="group")
     c.legend(position="right")
     return c
 
@@ -1106,7 +1125,7 @@ def chart_density_1d_long_hue():
     c = pt.chart(data_width=320, data_height=200,
                  title="density (long-form, hue)",
                  xlabel="value", ylabel="density", legend=True)
-    c.density_1d(data=df, x="val", hue="group", fill=True)
+    c.density_1d(data=df, x="val", color="group", fill=True)
     c.legend(position="right")
     return c
 
@@ -1125,12 +1144,80 @@ def chart_regression_hue():
                          "y": slope * x + intercept + rng.gauss(0, 0.4),
                          "g": g})
     df = pd.DataFrame(rows)
-    c = pt.chart(df, x="x", y="y", hue="g",
+    c = pt.chart(df, x="x", y="y", color="g",
                  data_width=320, data_height=240,
                  title="per-hue regression",
                  xlabel="x", ylabel="y", legend=True)
     c.scatter(s=14, alpha=0.5)
     c.regression()
+    c.legend(position="right")
+    return c
+
+
+def chart_line_group():
+    # `group=col` splits into multiple polylines without burning a color
+    # channel — every subject gets its own trace but the legend only
+    # shows the cohort (color) levels.
+    import pandas as pd
+    rng = random.Random(31)
+    rows = []
+    for cohort, mu_slope in zip(["ctrl", "trt"], [0.4, 1.1]):
+        for subj in range(5):
+            base = rng.gauss(0, 0.3)
+            slope = mu_slope + rng.gauss(0, 0.15)
+            for t in range(8):
+                rows.append({"t": t, "value": base + slope * t + rng.gauss(0, 0.2),
+                             "subject": f"{cohort}_{subj}", "cohort": cohort})
+    df = pd.DataFrame(rows)
+    c = pt.chart(df, x="t", y="value",
+                 data_width=320, data_height=200,
+                 title="trajectories: color by cohort, group by subject",
+                 xlabel="t", ylabel="value", legend=True)
+    c.line(color="cohort", group="subject", alpha=0.7)
+    c.legend(position="right")
+    return c
+
+
+def chart_line_linetype():
+    # `linetype=col` cycles dash patterns per level. When `linetype`
+    # maps the same column as `color`, the legend swatches inherit the
+    # dash pattern — the canonical B&W-safe / colorblind-redundant
+    # encoding pattern.
+    import pandas as pd
+    rng = random.Random(8)
+    rows = []
+    for cohort, mu in zip(["ctrl", "low_dose", "high_dose"], [0.3, 0.8, 1.4]):
+        for t in range(10):
+            rows.append({"t": t, "v": mu * t + rng.gauss(0, 0.2),
+                         "cohort": cohort})
+    df = pd.DataFrame(rows)
+    c = pt.chart(df, x="t", y="v",
+                 data_width=320, data_height=200,
+                 title="redundant color + linetype",
+                 xlabel="t", ylabel="v", legend=True)
+    c.line(color="cohort", linetype="cohort", linewidth=1.6)
+    c.legend(position="right")
+    return c
+
+
+def chart_line_alpha():
+    # `alpha=col` linearly interpolates per group through `alphas=(lo, hi)`.
+    # Default range is (0.3, 1.0) so the first level fades, the last stays
+    # fully opaque.
+    import pandas as pd
+    rng = random.Random(9)
+    rows = []
+    for cohort, mu in zip(["baseline", "wk4", "wk8", "wk12"],
+                          [0.3, 0.7, 1.1, 1.5]):
+        for t in range(10):
+            rows.append({"t": t, "v": mu * t + rng.gauss(0, 0.2),
+                         "cohort": cohort})
+    df = pd.DataFrame(rows)
+    c = pt.chart(df, x="t", y="v",
+                 data_width=320, data_height=200,
+                 title="color + alpha by cohort",
+                 xlabel="t", ylabel="v", legend=True)
+    c.line(color="cohort", alpha="cohort", linewidth=1.8)
     c.legend(position="right")
     return c
 
@@ -1277,11 +1364,15 @@ PLOTS = {
     "bar_stack":             chart_bar_stack,
     "bar_dodge":             chart_bar_dodge,
     "bar_fill":              chart_bar_fill,
+    "bar_long_fill":         chart_bar_long_fill,
     "area_stack":            chart_area_stack,
     "scatter_long_hue":      chart_scatter_long_hue,
     "density_1d_long_hue":   chart_density_1d_long_hue,
     "aes_inheritance":       chart_aes_inheritance,
     "regression_hue":        chart_regression_hue,
+    "line_group":            chart_line_group,
+    "line_linetype":         chart_line_linetype,
+    "line_alpha":            chart_line_alpha,
 }
 
 

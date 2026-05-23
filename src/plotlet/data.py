@@ -15,7 +15,7 @@ Example:
 
     import plotlet as pt
     penguins = pt.load("penguins")
-    c = pt.chart(penguins, x="bill_length_mm", y="bill_depth_mm", hue="species")
+    c = pt.chart(penguins, x="bill_length_mm", y="bill_depth_mm", color="species")
     c.scatter()
 """
 import csv
@@ -55,7 +55,7 @@ def load(name):
     Pass directly to `pt.chart(...)`:
 
         df = pt.load("penguins")
-        pt.chart(df, x="bill_length_mm", y="bill_depth_mm", hue="species")
+        pt.chart(df, x="bill_length_mm", y="bill_depth_mm", color="species")
 
     See `pt.list_datasets()` for what's available.
     """

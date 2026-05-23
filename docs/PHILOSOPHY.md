@@ -10,9 +10,9 @@ per-extension cost low.
 
 - The deferred-render pipeline (Chart, replay, render)
 - Scales: linear, log, category, time, symlog, power, sqrt
-- Long-form (`data=df, x=, y=, hue=`) and wide-form input across the
-  standard vocabulary, so a data frame plus column names is the primary
-  entry point
+- Long-form (`data=df, x=, y=, color=`/`fill=`) and wide-form input
+  across the standard vocabulary, so a data frame plus column names is
+  the primary entry point
 - The standard plotting vocabulary:
   - **xy:** scatter, line, regression
   - **categorical distributions:** boxplot, violin, swarm, strip, pointplot

@@ -1,14 +1,27 @@
 """Histogram — binned counts of a 1-D distribution.
 
-  c.hist(values)                                    # wide-form
-  c.hist(data=df, x="col")                          # long-form
-  c.hist(data=df, x="col", hue="group")             # overlaid by group
+  c.hist(values)                                # wide-form
+  c.hist(data=df, x="col")                      # long-form
+  c.hist(data=df, x="col", fill="group")        # overlaid by group
 
-Multi-hue overlays share bin edges (seaborn's default) so the bars are
-comparable across groups.
+Multi-group overlays share bin edges so the bars are comparable.
+
+Aesthetics:
+  fill=         constant color OR column name → grouped multi-series
+  color=        stroke color (constant, default None = no stroke)
+  palette=      maps group levels → colors when `fill=` is a column
+
+Other styling kwargs:
+  bins=10             number of bins
+  density=False       True normalises so area under each set of bars is 1
+  histtype='bar'      'bar', 'step' (outline-only), or 'stepfilled'
+  orientation='v'     'h' for horizontal bars
+  alpha=<themed>      bar fill opacity
+  linewidth=<themed>  stroke width (used only when color is set)
 """
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, long_form_1d, hue_color
+from ..utils import to_list, long_form_1d, resolve_aes, palette_color
+from ..draw.colors import TAB10, _resolve_color
 from .._spec import _D, _LEGSPEC
 from ..draw import rect as draw_rect, path as draw_path
 
@@ -20,8 +33,8 @@ def _artist_hist(a, xs_, ys_, col, bins):
     bin_scale, count_scale = (ys_, xs_) if horizontal else (xs_, ys_)
     base = count_scale(0)
     alpha = opts.get("alpha", _D["hist_alpha"])
-    edgecolor = opts.get("edgecolor")
-    lw = opts.get("linewidth", _D["linewidth"]) if edgecolor else 1
+    stroke = _resolve_color(opts.get("color"))
+    lw = opts.get("linewidth", _D["linewidth"]) if stroke else 1
     histtype = opts.get("histtype", "bar")
     if histtype not in ("bar", "step", "stepfilled"):
         raise ValueError(
@@ -43,7 +56,7 @@ def _artist_hist(a, xs_, ys_, col, bins):
             else:
                 x, y, w, h = bp_lo, count_lo, bin_size, count_size
             out.append(draw_rect(x, y, w, h, fill=col,
-                                 stroke=edgecolor, stroke_width=lw,
+                                 stroke=stroke, stroke_width=lw,
                                  dash=opts.get("linestyle"), alpha=alpha))
         return "".join(out)
 
@@ -58,11 +71,11 @@ def _artist_hist(a, xs_, ys_, col, bins):
     if horizontal:
         pts = [(p, q) for q, p in pts]
     d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts)
-    stroke = edgecolor or col
-    stroke_w = lw if edgecolor else _D["linewidth"]
+    edge = stroke or col
+    edge_w = lw if stroke else _D["linewidth"]
     fill = col if histtype == "stepfilled" else None
     out.append(draw_path(d + " Z", fill=fill,
-                         stroke=stroke, stroke_width=stroke_w,
+                         stroke=edge, stroke_width=edge_w,
                          dash=opts.get("linestyle"), alpha=alpha))
     return "".join(out)
 
@@ -72,16 +85,23 @@ def _hist_record(args, kw):
     if "data" in kw or "x" in kw or "y" in kw:
         data_df = kw.pop("data", None)
         x_col = kw.pop("x", None)
-        hue_col = kw.pop("hue", None)
         if data_df is None or x_col is None:
             raise TypeError(
-                "hist long-form requires data=, x= (hue= optional)."
+                "hist long-form requires data=, x= (fill= optional)."
             )
-        hues, groups = long_form_1d(data_df, x_col, hue_col)
+        fill = kw.pop("fill", None)
+        fill_kind, fill_value = resolve_aes(data_df, fill)
+        group_col = fill if fill_kind == "column" else None
+        groups, vals = long_form_1d(data_df, x_col, group_col)
+        if fill_kind == "literal" and fill_value is not None:
+            kw["_fill_literal"] = fill_value
     else:
-        hues = [None]
-        groups = [to_list(args[0])]
-    return {"type": "hist", "hues": hues, "groups": groups, "opts": kw}
+        groups = [None]
+        vals = [to_list(args[0])]
+        fill = kw.pop("fill", None)
+        if fill is not None:
+            kw["_fill_literal"] = fill
+    return {"type": "hist", "groups": groups, "vals": vals, "opts": kw}
 
 
 def _bin_xs(bin_groups):
@@ -93,9 +113,9 @@ def _bin_ys(bin_groups):
 
 
 def _hist_data_attrs(a):
-    groups = a["groups"]
+    vals = a["vals"]
     bin_groups = a.get("_bin_groups", [])
-    n = sum(len(g) for g in groups)
+    n = sum(len(g) for g in vals)
     out = {"n": n, "bins": (len(bin_groups[0]) if bin_groups else
                             a["opts"].get("bins", 10))}
     flat_bins = [b for bins in bin_groups for b in bins]
@@ -119,22 +139,30 @@ def _hist_ydomain(a):
     return _bin_xs(bin_groups) if _hist_horizontal(a) else _bin_ys(bin_groups)
 
 
+def _group_fill(groups, palette, j, fallback):
+    if groups == [None]:
+        return fallback
+    return palette_color(palette, groups[j], j) or TAB10[j % 10]
+
+
 def _hist_draw(a, ctx):
     palette = a["opts"].get("palette")
     bin_groups = a.get("_bin_groups", [])
+    fill_literal = _resolve_color(a["opts"].get("_fill_literal"))
+    fill_fallback = fill_literal if fill_literal is not None else ctx.color
     out = []
     for j, bins in enumerate(bin_groups):
-        col = hue_color(a["hues"], palette, j, ctx.color)
+        col = _group_fill(a["groups"], palette, j, fill_fallback)
         out.append(_artist_hist(a, ctx.x_scale, ctx.y_scale, col, bins))
     return "".join(out)
 
 
 def _hist_legend_entries(a):
-    hues = a["hues"]
+    groups = a["groups"]
     opts = a["opts"]
     alpha = opts.get("alpha", _D["hist_alpha"])
     sw = _LEGSPEC["swatch_width"]
-    if hues == [None]:
+    if groups == [None]:
         label = opts.get("label")
         if not label:
             return []
@@ -144,11 +172,11 @@ def _hist_legend_entries(a):
         return [{"label": label, "color": a.get("_color"), "paint": paint}]
     palette = opts.get("palette")
     entries = []
-    for j, h in enumerate(hues):
-        col = hue_color(hues, palette, j, a.get("_color"))
+    for j, g in enumerate(groups):
+        col = _group_fill(groups, palette, j, a.get("_color"))
         def paint(_a, _ctx, x0, y_mid, _col=col):
             return draw_rect(x0, y_mid - 5, sw, 10, fill=_col, alpha=alpha)
-        entries.append({"label": str(h), "color": col, "paint": paint})
+        entries.append({"label": str(g), "color": col, "paint": paint})
     return entries
 
 

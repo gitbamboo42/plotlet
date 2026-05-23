@@ -1,16 +1,25 @@
-"""Scatter — single-series xy or long-form with optional hue split.
+"""Scatter — single-series xy.
 
   c.scatter(xs, ys)                                       # wide-form
   c.scatter(data=df, x="col_x", y="col_y")                # long-form
-  c.scatter(data=df, x="col_x", y="col_y", hue="group")   # one colour per hue
+  c.scatter(data=df, x="col_x", y="col_y", color="g")     # one color per level
+  c.scatter(data=df, ..., color="g", group="subject")     # invisible finer split
+  c.scatter(data=df, ..., alpha="cohort",                 # opacity per level
+            alphas=(0.3, 1.0))
+  c.scatter(data=df, ..., size="mass", sizes=(10, 200))   # per-point area
+  c.scatter(data=df, ..., style="group")                  # per-level marker glyph
 
-The per-point `c=`, `s=`, `marker=` mappings are wide-form-only — they
-conflict with hue-based colouring.
+Column-driven splitting (any of `color`/`group`/`alpha`) is handled at
+the Chart layer — the artist itself always sees one series per record.
+`size`/`style` are computed per-point and stay inside a single record.
+
+The per-point `c=` (numeric → colormap) is wide-form-only — it conflicts
+with column-driven `color=`.
 """
 import math
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, hue_color
+from ..utils import to_list
 from ..draw import marker
 from ..draw.colormaps import colormap_lut, _ContinuousNorm
 from .._spec import _D, _LEGSPEC
@@ -60,23 +69,17 @@ def _artist_scatter(a, xs_, ys_, col, xs, ys):
 
 
 def _scatter_record(args, kw):
-    # Long-form is handled at the Chart layer (`Chart.scatter` resolves
-    # data/x/y/hue → per-hue records); the artist only sees wide-form.
-    return {"type": "scatter", "hues": [None],
-            "groups": [(to_list(args[0]), to_list(args[1]))], "opts": dict(kw)}
+    return {"type": "scatter",
+            "xs": to_list(args[0]), "ys": to_list(args[1]),
+            "opts": dict(kw)}
 
 
-def _scatter_xdomain(a):
-    return [x for xs, _ in a["groups"] for x in xs]
-
-
-def _scatter_ydomain(a):
-    return [y for _, ys in a["groups"] for y in ys]
+def _scatter_xdomain(a): return a["xs"]
+def _scatter_ydomain(a): return a["ys"]
 
 
 def _scatter_data_attrs(a):
-    xs = [x for xs, _ in a["groups"] for x in xs]
-    ys = [y for _, ys in a["groups"] for y in ys]
+    xs, ys = a["xs"], a["ys"]
     out = {"n": len(xs)}
     out.update(_xy_minmax(xs, ys))
     out["marker"] = a["opts"].get("marker", "o")
@@ -84,48 +87,30 @@ def _scatter_data_attrs(a):
 
 
 def _scatter_draw(a, ctx):
-    palette = a["opts"].get("palette")
-    out = []
-    for j, (xs, ys) in enumerate(a["groups"]):
-        col = hue_color(a["hues"], palette, j, ctx.color)
-        out.append(_artist_scatter(a, ctx.x_scale, ctx.y_scale, col, xs, ys))
-    return "".join(out)
+    return _artist_scatter(a, ctx.x_scale, ctx.y_scale, ctx.color,
+                           a["xs"], a["ys"])
 
 
 def _scatter_legend_entries(a):
-    hues = a["hues"]
     opts = a["opts"]
+    label = opts.get("label")
+    if not label:
+        return []
     sw = _LEGSPEC["swatch_width"]
-    if hues == [None]:
-        label = opts.get("label")
-        if not label:
-            return []
-        def paint(a, ctx, x0, y_mid):
-            raw_s = opts.get("s", ctx.defaults["scatter_s"])
-            raw_mk = opts.get("marker", "o")
-            s_val = (sorted(raw_s)[len(raw_s) // 2]
-                     if isinstance(raw_s, (list, tuple)) and raw_s
-                     else (raw_s if not isinstance(raw_s, (list, tuple))
-                           else ctx.defaults["scatter_s"]))
-            mk_val = (raw_mk[0]
-                      if isinstance(raw_mk, (list, tuple)) and raw_mk
-                      else (raw_mk if not isinstance(raw_mk, (list, tuple)) else "o"))
-            s_size = math.sqrt(s_val) / 2
-            return marker(mk_val, x0 + sw / 2, y_mid, s_size, a["_color"],
-                          opts.get("alpha", ctx.defaults["scatter_alpha"]))
-        return [{"label": label, "color": a.get("_color"), "paint": paint}]
-    palette = opts.get("palette")
-    alpha = opts.get("alpha", _D["scatter_alpha"])
-    s_val = opts.get("s", _D["scatter_s"])
-    mk_val = opts.get("marker", "o")
-    entries = []
-    for j, h in enumerate(hues):
-        col = hue_color(hues, palette, j, a.get("_color"))
-        def paint(_a, _ctx, x0, y_mid, _col=col):
-            return marker(mk_val, x0 + sw / 2, y_mid,
-                          math.sqrt(s_val) / 2, _col, alpha)
-        entries.append({"label": str(h), "color": col, "paint": paint})
-    return entries
+    def paint(_a, _ctx, x0, y_mid):
+        raw_s = opts.get("s", _ctx.defaults["scatter_s"])
+        raw_mk = opts.get("marker", "o")
+        s_val = (sorted(raw_s)[len(raw_s) // 2]
+                 if isinstance(raw_s, (list, tuple)) and raw_s
+                 else (raw_s if not isinstance(raw_s, (list, tuple))
+                       else _ctx.defaults["scatter_s"]))
+        mk_val = (raw_mk[0]
+                  if isinstance(raw_mk, (list, tuple)) and raw_mk
+                  else (raw_mk if not isinstance(raw_mk, (list, tuple)) else "o"))
+        s_size = math.sqrt(s_val) / 2
+        return marker(mk_val, x0 + sw / 2, y_mid, s_size, _a["_color"],
+                      opts.get("alpha", _ctx.defaults["scatter_alpha"]))
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
 add_artist(ArtistSpec(

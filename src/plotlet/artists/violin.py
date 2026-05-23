@@ -1,21 +1,26 @@
-"""Mirrored KDE outline per category with a ggplot2-style mini-boxplot inside.
+"""Mirrored KDE outline per category with a mini-boxplot inside.
 
 Wide-form: c.violin(cats, values_per_cat)
-Long-form:  c.violin(data=df, x="cat", y="value", hue="group", palette={...})
+Long-form: c.violin(data=df, x="cat", y="value", fill="group", palette={...})
 
-Long-form with `hue=` dodges sub-violins side-by-side within each cat and emits
-one legend entry per hue category.
+Long-form with `fill="col"` dodges sub-violins side-by-side within each cat
+and emits one legend entry per group level.
 
-Styling kwargs:
+Aesthetics:
+  fill=True/<col>/<literal>/False  body fill (True = palette/cycle default,
+                                   col = column-driven grouping, literal
+                                   color string, or False for outline-only)
+  color=<literal>      outline / inner-box stroke (defaults to frame color)
+  palette=             maps group levels → fills when `fill=` is a column
+
+Other styling kwargs:
   orientation='v'       'h' for horizontal (cats on y axis)
   width=0.8             total dodge-group width as a band fraction
   gap=0.1               slot-gap fraction between dodged violins
   inner='box'           'box' mini-boxplot (Q1-Q3 + median + whiskers),
                         'quartile' three dashed Q1/Q2/Q3 lines, None KDE only
   trim=True             clip KDE at min/max of data; False extends 10 % past
-  fill=True             False for outline-only violins
   fill_alpha=0.4        body-fill opacity
-  linecolor=<themed>    outline / inner-box color
   linewidth=1           outline / inner-box stroke width
   whis=1.5              IQR multiplier for whisker fences (inner='box')
   inner_box_fill=<bg>   mini-boxplot fill; defaults to figure background so
@@ -23,15 +28,26 @@ Styling kwargs:
   n_grid=80             KDE evaluation grid resolution
   bw_adjust=1.0         Silverman bandwidth multiplier (>1 smoother)
 """
-import math
-
 from ..registry import ArtistSpec, add_artist
-from ..utils import (to_list, quantile, hue_color, dodge_positions,
-                     categorical_groups, silverman_bw, kde_1d)
+from ..utils import (to_list, quantile, resolve_aes, palette_color,
+                     dodge_positions, categorical_groups,
+                     silverman_bw, kde_1d)
 from ..utils import _drop_nan
+from ..draw.colors import TAB10, _resolve_color
 from ..draw import path, rect, segment
 from .._spec import _FRAME, _FIGSPEC
 
+
+def _resolve_fill_kwarg(data, kw):
+    fill = kw.pop("fill", True)
+    if fill is False or fill is None:
+        return False, None, None
+    if fill is True:
+        return True, None, None
+    kind, value = resolve_aes(data, fill)
+    if kind == "column":
+        return True, None, fill
+    return True, value, None
 
 
 def _violin_record(args, kw):
@@ -39,29 +55,33 @@ def _violin_record(args, kw):
         data = kw.pop("data", None)
         x = kw.pop("x", None)
         y = kw.pop("y", None)
-        hue = kw.pop("hue", None)
         if data is None or x is None or y is None:
             raise TypeError(
-                "violin long-form requires data=, x=, y= (hue= optional)."
+                "violin long-form requires data=, x=, y= (fill= optional)."
             )
-        cats, hues, groups = categorical_groups(data, x, y, hue)
+        do_fill, fill_literal, group_col = _resolve_fill_kwarg(data, kw)
+        cats, groups, vals = categorical_groups(data, x, y, group_col)
     elif len(args) >= 2:
         cats = to_list(args[0])
-        groups_1d = [list(to_list(g)) for g in args[1]]
-        hues = [None]
-        groups = [[g] for g in groups_1d]
+        vals_1d = [list(to_list(g)) for g in args[1]]
+        groups = [None]
+        vals = [[g] for g in vals_1d]
+        do_fill, fill_literal, _ = _resolve_fill_kwarg(None, kw)
     else:
         raise TypeError(
             "violin requires either positional (cats, values_per_cat) "
             "or keyword (data=, x=, y=)."
         )
-    return {"type": "violin", "cats": cats, "hues": hues,
-            "groups": groups, "opts": kw}
+    kw["_do_fill"] = do_fill
+    if fill_literal is not None:
+        kw["_fill_literal"] = fill_literal
+    return {"type": "violin", "cats": cats, "groups": groups,
+            "vals": vals, "opts": kw}
 
 
 def _violin_horizontal(a): return a["opts"].get("orientation") == "h"
 def _violin_values(a):
-    return [v for row in a["groups"] for g in row for v in g]
+    return [v for row in a["vals"] for g in row for v in g]
 
 
 def _violin_xdomain(a):
@@ -72,9 +92,15 @@ def _violin_ydomain(a):
     return a["cats"] if _violin_horizontal(a) else _violin_values(a)
 
 
+def _group_fill(groups, palette, j, fallback):
+    if groups == [None]:
+        return fallback
+    return palette_color(palette, groups[j], j) or TAB10[j % 10]
+
+
 def _violin_draw(a, ctx):
-    cats, hues, groups = a["cats"], a["hues"], a["groups"]
-    n_hues = len(hues)
+    cats, groups, vals = a["cats"], a["groups"], a["vals"]
+    n_groups = len(groups)
     opts = a["opts"]
     palette    = opts.get("palette")
     w_frac     = opts.get("width", 0.8)
@@ -86,27 +112,29 @@ def _violin_draw(a, ctx):
     fill_alpha = opts.get("fill_alpha", 0.4)
     lw         = opts.get("linewidth", 1)
     whis       = opts.get("whis", 1.5)
-    do_fill    = opts.get("fill", True)
-    line       = opts.get("linecolor", _FRAME["color"])
+    do_fill    = opts.get("_do_fill", True)
+    line       = _resolve_color(opts.get("color")) or _FRAME["color"]
+    fill_literal = _resolve_color(opts.get("_fill_literal"))
+    fill_fallback = fill_literal if fill_literal is not None else ctx.color
     horizontal = _violin_horizontal(a)
     cat_scale, val_scale = (ctx.y_scale, ctx.x_scale) if horizontal else (ctx.x_scale, ctx.y_scale)
     out = []
     for i, cat in enumerate(cats):
-        for j in range(n_hues):
-            vals = _drop_nan(groups[i][j])
-            if not vals:
+        for j in range(n_groups):
+            vs = _drop_nan(vals[i][j])
+            if not vs:
                 continue
-            fill = hue_color(hues, palette, j, ctx.color) if do_fill else None
-            cp, slot_w = dodge_positions(cat_scale, cat, n_hues, j,
+            fill = _group_fill(groups, palette, j, fill_fallback) if do_fill else None
+            cp, slot_w = dodge_positions(cat_scale, cat, n_groups, j,
                                           band_frac=w_frac, gap=gap)
             half_w_px = slot_w / 2
 
-            bw = silverman_bw(vals) * bw_adjust
-            lo, hi = min(vals), max(vals)
+            bw = silverman_bw(vs) * bw_adjust
+            lo, hi = min(vs), max(vs)
             pad = 0 if trim else ((hi - lo) * 0.1 or 1.0)
             grid = [lo - pad + (hi - lo + 2 * pad) * k / (n_grid - 1)
                     for k in range(n_grid)]
-            d = kde_1d(vals, grid, bw)
+            d = kde_1d(vs, grid, bw)
             dmax = max(d) or 1.0
 
             left = []; right = []
@@ -124,9 +152,9 @@ def _violin_draw(a, ctx):
             out.append(path(path_d, fill=fill, stroke=line, stroke_width=lw,
                             fill_alpha=fill_alpha if do_fill else 1.0))
 
-            q1 = quantile(vals, 0.25)
-            q2 = quantile(vals, 0.50)
-            q3 = quantile(vals, 0.75)
+            q1 = quantile(vs, 0.25)
+            q2 = quantile(vs, 0.50)
+            q3 = quantile(vs, 0.75)
             vp_q1 = val_scale(q1)
             vp_q2 = val_scale(q2)
             vp_q3 = val_scale(q3)
@@ -136,7 +164,7 @@ def _violin_draw(a, ctx):
                 iqr = q3 - q1
                 lo_fence = q1 - whis * iqr
                 hi_fence = q3 + whis * iqr
-                inliers = [v for v in vals if lo_fence <= v <= hi_fence]
+                inliers = [v for v in vs if lo_fence <= v <= hi_fence]
                 whisker_lo = min(inliers) if inliers else q1
                 whisker_hi = max(inliers) if inliers else q3
                 vp_wlo = val_scale(whisker_lo)
@@ -172,25 +200,25 @@ def _violin_draw(a, ctx):
 
 
 def _violin_legend_entries(a):
-    hues = a["hues"]
-    if hues == [None]:
+    groups = a["groups"]
+    if groups == [None]:
         return []
     opts = a["opts"]
     palette = opts.get("palette")
     fill_alpha = opts.get("fill_alpha", 0.4)
     lw = opts.get("linewidth", 1)
-    do_fill = opts.get("fill", True)
-    line = opts.get("linecolor", _FRAME["color"])
+    do_fill = opts.get("_do_fill", True)
+    line = _resolve_color(opts.get("color")) or _FRAME["color"]
     entries = []
-    for j, h in enumerate(hues):
-        col = hue_color(hues, palette, j, line)
+    for j, g in enumerate(groups):
+        col = _group_fill(groups, palette, j, line)
         fill = col if do_fill else None
         def paint(_a, _ctx, _x0, _y_mid,
                   _fill=fill, _line=line, _lw=lw, _fa=fill_alpha):
             return rect(_x0, _y_mid - 5, 22, 10,
                         fill=_fill, stroke=_line, stroke_width=_lw,
                         fill_alpha=_fa if _fill else 1.0)
-        entries.append({"label": str(h), "color": col, "paint": paint})
+        entries.append({"label": str(g), "color": col, "paint": paint})
     return entries
 
 

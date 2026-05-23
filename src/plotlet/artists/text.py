@@ -1,6 +1,10 @@
 """Text-rendering artists — `text` for data-anchored labels, `annotate` for
 matplotlib-style label-with-arrow.
 
+  c.text(x, y, "label")                          # single label (scalars)
+  c.text(xs, ys, ["A", "B", "C"])                # multiple labels (lists)
+  c.text(data=df, x="x", y="y", label="name")    # long-form (column names)
+
 Both render glyph paths from the bundled DejaVu Sans so output stays
 font-independent.
 """
@@ -155,6 +159,22 @@ def _artist_text(a, xs_, ys_, col):
 # with list `xs`/`ys` to mark every point with the same glyph.
 
 def _text_record(args, kw):
+    # Long-form path: c.text(data=df, x="col", y="col", label="col")
+    if "data" in kw or "x" in kw or "y" in kw or "label" in kw:
+        kw = dict(kw)
+        data = kw.pop("data", None)
+        x_col = kw.pop("x", None)
+        y_col = kw.pop("y", None)
+        label_col = kw.pop("label", None)
+        if data is None or x_col is None or y_col is None or label_col is None:
+            raise TypeError(
+                "text long-form requires data=, x=, y=, label=."
+            )
+        xs = to_list(data[x_col])
+        ys = to_list(data[y_col])
+        labels = [str(v) for v in to_list(data[label_col])]
+        return {"type": "text", "xs": xs, "ys": ys, "labels": labels, "opts": kw}
+
     x, y, s = args[0], args[1], args[2]
     x_is_scalar = not (hasattr(x, "__iter__") and not isinstance(x, str))
     if x_is_scalar:

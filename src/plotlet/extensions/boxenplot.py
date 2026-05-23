@@ -1,22 +1,30 @@
 """Custom artist: letter-value plot (a.k.a. boxenplot).
 
-Heskes / Hofmann / Wickham's modern alternative to the boxplot for big
-samples (n ≥ ~100). Where boxplot has one box covering Q1–Q3, boxenplot
-draws a *nested* stack of boxes at successively further-out quantile
-pairs ([Q1, Q3], [Q1/2, Q3·2], [Q1/4, Q3·4] — i.e. octiles, hexadeciles, …)
-giving a richer tail picture. Each outer box is shaded lighter than the
-inner one so you can read the levels at a glance.
+Modern alternative to the boxplot for big samples (n ≥ ~100). Where
+boxplot has one box covering Q1–Q3, boxenplot draws a *nested* stack of
+boxes at successively further-out quantile pairs ([Q1, Q3], [Q1/2, Q3·2],
+[Q1/4, Q3·4] — i.e. octiles, hexadeciles, …) giving a richer tail
+picture. Each outer box is shaded lighter than the inner one so you can
+read the levels at a glance.
 
 Two input shapes, picked by which kwargs are present:
   - Wide-form (positional):  c.boxen(cats, values_per_cat)
-  - Long-form (seaborn):     c.boxen(data=df, x="cat", y="value",
-                                      hue="group", palette={...})
+  - Long-form (table):       c.boxen(data=df, x="cat", y="value",
+                                      fill="group", palette={...})
 
-Long-form with `hue=` dodges sub-boxen side-by-side within each cat and
-emits one legend entry per hue category. `palette=` accepts a dict
-(category → color) or a sequence; missing entries fall through to TAB10.
+Long-form with `fill="col"` dodges sub-boxen side-by-side within each cat
+and emits one legend entry per group level. `palette=` accepts a dict
+(level → color) or a sequence; missing entries fall through to TAB10.
 
-Styling kwargs (all optional):
+Aesthetics:
+  - `fill=True/<col>/<literal>/False` — body fill (True = palette/cycle
+                              default, col = column-driven grouping,
+                              literal color string, or False for
+                              outline-only).
+  - `color=<literal>`        — border / median stroke (defaults to frame).
+  - `palette=`               — maps levels → fills when `fill=` is a column.
+
+Other styling kwargs (all optional):
   - `orientation='v'`        — `'h'` for horizontal boxen (cats on y axis).
   - `width=0.7`              — total dodge-group width as a band fraction.
   - `gap=0.1`                — fraction of slot width left as a gap between
@@ -24,19 +32,18 @@ Styling kwargs (all optional):
   - `max_levels=5`           — maximum nesting depth (also capped by
                                sample size: stop when the next level
                                would put <1 sample in the tail).
-  - `fill=True`              — set False for outline-only boxes.
-  - `linecolor=<themed>`     — override border / median color.
   - `linewidth=0.6`          — border stroke width.
   - `median_linewidth=1.6`   — median tick stroke width.
 """
 
-SUMMARY = 'Letter-value plot (boxenplot): nested quantile boxes for big-sample distribution detail; long-form `hue=` dodges sub-boxen.'
+SUMMARY = 'Letter-value plot (boxenplot): nested quantile boxes for big-sample distribution detail.'
 
 from pathlib import Path
 
 import plotlet as pt
 from plotlet.draw import rect, segment
-from plotlet.utils import (to_list, quantile, hue_color,
+from plotlet.draw.colors import TAB10, _resolve_color
+from plotlet.utils import (to_list, quantile, resolve_aes, palette_color,
                             dodge_positions, categorical_groups)
 from plotlet._spec import _FRAME
 
@@ -55,34 +62,50 @@ def _mix_to_white(hex_col, t):
     return f"rgb({r},{g},{b})"
 
 
+def _resolve_fill_kwarg(data, kw):
+    fill = kw.pop("fill", True)
+    if fill is False or fill is None:
+        return False, None, None
+    if fill is True:
+        return True, None, None
+    kind, value = resolve_aes(data, fill)
+    if kind == "column":
+        return True, None, fill
+    return True, value, None
+
+
 def boxen_record(args, kw):
     if "data" in kw or "x" in kw or "y" in kw:
         data = kw.pop("data", None)
         x = kw.pop("x", None)
         y = kw.pop("y", None)
-        hue = kw.pop("hue", None)
         if data is None or x is None or y is None:
             raise TypeError(
-                "boxen long-form requires data=, x=, y= (hue= optional)."
+                "boxen long-form requires data=, x=, y= (fill= optional)."
             )
-        cats, hues, groups = categorical_groups(data, x, y, hue)
+        do_fill, fill_literal, group_col = _resolve_fill_kwarg(data, kw)
+        cats, groups, vals = categorical_groups(data, x, y, group_col)
     elif len(args) >= 2:
         cats = to_list(args[0])
-        groups_1d = [list(to_list(g)) for g in args[1]]
-        hues = [None]
-        groups = [[g] for g in groups_1d]
+        vals_1d = [list(to_list(g)) for g in args[1]]
+        groups = [None]
+        vals = [[g] for g in vals_1d]
+        do_fill, fill_literal, _ = _resolve_fill_kwarg(None, kw)
     else:
         raise TypeError(
             "boxen requires either positional (cats, values_per_cat) "
             "or keyword (data=, x=, y=)."
         )
-    return {"type": "boxen", "cats": cats, "hues": hues,
-            "groups": groups, "opts": kw}
+    kw["_do_fill"] = do_fill
+    if fill_literal is not None:
+        kw["_fill_literal"] = fill_literal
+    return {"type": "boxen", "cats": cats, "groups": groups,
+            "vals": vals, "opts": kw}
 
 
 def _boxen_horizontal(a): return a["opts"].get("orientation") == "h"
 def _boxen_values(a):
-    return [v for row in a["groups"] for g in row for v in g]
+    return [v for row in a["vals"] for g in row for v in g]
 
 
 def boxen_xdomain(a):
@@ -93,9 +116,15 @@ def boxen_ydomain(a):
     return a["cats"] if _boxen_horizontal(a) else _boxen_values(a)
 
 
+def _group_fill(groups, palette, j, fallback):
+    if groups == [None]:
+        return fallback
+    return palette_color(palette, groups[j], j) or TAB10[j % 10]
+
+
 def boxen_draw(a, ctx):
-    cats, hues, groups = a["cats"], a["hues"], a["groups"]
-    n_hues = len(hues)
+    cats, groups, vals = a["cats"], a["groups"], a["vals"]
+    n_groups = len(groups)
     opts = a["opts"]
     palette    = opts.get("palette")
     bw_frac    = opts.get("width", 0.7)
@@ -103,21 +132,23 @@ def boxen_draw(a, ctx):
     max_levels = opts.get("max_levels", 5)
     lw         = opts.get("linewidth", 0.6)
     median_lw  = opts.get("median_linewidth", 1.6)
-    do_fill    = opts.get("fill", True)
-    line       = opts.get("linecolor", _FRAME["color"])
+    do_fill    = opts.get("_do_fill", True)
+    line       = _resolve_color(opts.get("color")) or _FRAME["color"]
+    fill_literal = _resolve_color(opts.get("_fill_literal"))
+    fill_fallback = fill_literal if fill_literal is not None else ctx.color
     horizontal = _boxen_horizontal(a)
     cat_scale, val_scale = (ctx.y_scale, ctx.x_scale) if horizontal else (ctx.x_scale, ctx.y_scale)
     out = []
     for i, cat in enumerate(cats):
-        for j in range(n_hues):
-            vals = groups[i][j]
-            if len(vals) < 4:
+        for j in range(n_groups):
+            vs = vals[i][j]
+            if len(vs) < 4:
                 continue
-            base_col = hue_color(hues, palette, j, ctx.color) if do_fill else None
-            cp, slot_w = dodge_positions(cat_scale, cat, n_hues, j,
+            base_col = _group_fill(groups, palette, j, fill_fallback) if do_fill else None
+            cp, slot_w = dodge_positions(cat_scale, cat, n_groups, j,
                                           band_frac=bw_frac, gap=gap)
-            median = quantile(vals, 0.5)
-            n = len(vals)
+            median = quantile(vs, 0.5)
+            n = len(vs)
             levels = []
             for k in range(max_levels):
                 q_lo = 0.25 / (2 ** k)
@@ -127,8 +158,8 @@ def boxen_draw(a, ctx):
             # Outermost first (widest, palest); innermost last so the
             # median tick lands on top of the inner box.
             for q_lo, q_hi, k in reversed(levels):
-                v_lo = quantile(vals, q_lo)
-                v_hi = quantile(vals, q_hi)
+                v_lo = quantile(vs, q_lo)
+                v_hi = quantile(vs, q_hi)
                 w_px = slot_w * max(1.0 - k * 0.18, 0.2)
                 shade = _mix_to_white(base_col, min(0.75, 0.18 * k)) if base_col else None
                 vp_lo = val_scale(v_lo); vp_hi = val_scale(v_hi)
@@ -153,23 +184,23 @@ def boxen_draw(a, ctx):
 
 
 def boxen_legend_entries(a):
-    hues = a["hues"]
-    if hues == [None]:
+    groups = a["groups"]
+    if groups == [None]:
         return []
     opts = a["opts"]
     palette = opts.get("palette")
     lw = opts.get("linewidth", 0.6)
-    do_fill = opts.get("fill", True)
-    line = opts.get("linecolor", _FRAME["color"])
+    do_fill = opts.get("_do_fill", True)
+    line = _resolve_color(opts.get("color")) or _FRAME["color"]
     entries = []
-    for j, h in enumerate(hues):
-        col = hue_color(hues, palette, j, line)
+    for j, g in enumerate(groups):
+        col = _group_fill(groups, palette, j, line)
         fill = col if do_fill else None
         def paint(_a, _ctx, _x0, _y_mid,
                   _fill=fill, _line=line, _lw=lw):
             return rect(_x0, _y_mid - 5, 22, 10,
                         fill=_fill, stroke=_line, stroke_width=_lw)
-        entries.append({"label": str(h), "color": col, "paint": paint})
+        entries.append({"label": str(g), "color": col, "paint": paint})
     return entries
 
 
@@ -206,7 +237,7 @@ def demo():
 
     c = pt.chart()
     c.xscale("category", order=["A", "B", "C", "D"])
-    c.boxen(data=data, x="group", y="value", hue="treatment",
+    c.boxen(data=data, x="group", y="value", fill="treatment",
             palette={"control": "#3F97C5", "dose": "#F99917"})
     c.title("Letter-value plot by group and treatment")
     c.xlabel("group").ylabel("value")

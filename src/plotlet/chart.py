@@ -43,7 +43,8 @@ from .core import (
     _FRAME_METHODS, _replay, _render,
     _to_px,
 )
-from .utils import to_list, to_list_2d, palette_color
+from .draw.colors import TAB10
+from .utils import to_list, to_list_2d, palette_color, resolve_aes
 from .registry import get_artist, all_artist_names
 
 
@@ -210,7 +211,10 @@ class Chart(_Renderable):
                  facecolor: str | None = None,
                  theme: str | None = None,
                  x: str | None = None, y: str | None = None,
-                 hue: str | None = None,
+                 fill: str | None = None,
+                 color: str | None = None,
+                 group: str | None = None,
+                 linetype: str | None = None,
                  palette=None,
                  **kwargs):
         # Migration errors — surface the rename loudly rather than silently
@@ -269,7 +273,10 @@ class Chart(_Renderable):
         self._data = data
         # Chart-level aesthetic defaults (ggplot-style inheritance). Artist
         # calls with matching kwargs override; missing kwargs fall back here.
-        self._aes = {"x": x, "y": y, "hue": hue, "palette": palette}
+        self._aes = {"x": x, "y": y,
+                     "fill": fill, "color": color, "group": group,
+                     "linetype": linetype,
+                     "palette": palette}
         self._parent: "Layout | None" = None
         # Share-class membership. Set by parent-level .share_x() / .share_y()
         # (or pt.grid(share_x=...)); not user-settable on the leaf directly.
@@ -403,13 +410,14 @@ class Chart(_Renderable):
             def recorder(*args, **kwargs):
                 if spec is not None:
                     # Chart-level aesthetic inheritance — fill in missing aes
-                    # from `pt.chart(df, x=, y=, hue=, palette=)`.
+                    # from `pt.chart(df, x=, y=, color=, palette=)`.
                     for k, v in self._aes.items():
                         if v is not None and k not in kwargs:
                             kwargs[k] = v
                     # Data injection — column-referencing kwargs need a table.
                     if (self._data is not None and "data" not in kwargs
-                            and any(k in kwargs for k in ("x", "y", "hue"))):
+                            and any(k in kwargs for k in
+                                    ("x", "y", "fill", "color", "group", "linetype"))):
                         kwargs["data"] = self._data
                 if spec is not None and spec.frame_defaults is not None:
                     for call in spec.frame_defaults(list(args), dict(kwargs)) or ():
@@ -434,26 +442,33 @@ class Chart(_Renderable):
         so they need to record explicitly."""
         self._calls.append((name, list(args), dict(kwargs)))
 
-    def _resolve_aes(self, *, x=None, y=None, hue=None, palette=None):
-        """Fill in missing aes from chart-level defaults set on the
-        constructor (`pt.chart(df, x=, y=, hue=, palette=)`). Per-call
+    def _resolve_aes(self, *, x=None, y=None, palette=None):
+        """Fill in missing x/y/palette from chart-level defaults set on
+        the constructor (`pt.chart(df, x=, y=, palette=)`). Per-call
         kwargs always win — only `None` slots get the chart-level value."""
         if x is None: x = self._aes.get("x")
         if y is None: y = self._aes.get("y")
-        if hue is None: hue = self._aes.get("hue")
         if palette is None: palette = self._aes.get("palette")
-        return x, y, hue, palette
-        return self
+        return x, y, palette
 
-    def line(self, *args, x=None, y=None, hue=None, palette=None, data=None, **opts):
-        x, y, hue, palette = self._resolve_aes(x=x, y=y, hue=hue, palette=palette)
+    def line(self, *args, x=None, y=None, color=None, group=None,
+             linetype=None, alpha=None, palette=None, data=None, **opts):
+        x, y, palette = self._resolve_aes(x=x, y=y, palette=palette)
+        if color is None: color = self._aes.get("color")
+        if group is None: group = self._aes.get("group")
+        if linetype is None: linetype = self._aes.get("linetype")
         if x is not None or y is not None:
-            self._tabular("line", "line", data, x, y, hue, palette, opts)
+            self._tabular("line", "line", data, x, y,
+                          color, group, linetype, alpha, palette, opts)
         else:
+            if color is not None: opts["color"] = color
+            if linetype is not None: opts["linestyle"] = linetype
+            if alpha is not None: opts["alpha"] = alpha
             self._record("line", *args, **opts)
         return self
 
-    def step(self, *args, x=None, y=None, hue=None, palette=None,
+    def step(self, *args, x=None, y=None, color=None, group=None,
+             linetype=None, alpha=None, palette=None,
              where="post", data=None, **opts):
         """Step plot — sugar over `line(curve=...)`. `where="pre"`,
         `"post"` (default), or `"mid"` map to plotlet's curve names
@@ -465,26 +480,34 @@ class Chart(_Renderable):
             )
         opts = dict(opts)
         opts["curve"] = curve
-        return self.line(*args, x=x, y=y, hue=hue, palette=palette, data=data, **opts)
+        return self.line(*args, x=x, y=y, color=color, group=group,
+                         linetype=linetype, palette=palette, data=data, **opts)
 
-    def scatter(self, *args, x=None, y=None, hue=None, palette=None,
+    def scatter(self, *args, x=None, y=None, color=None, group=None,
+                alpha=None, palette=None,
                 c=None, cmap=None, vmin=None, vmax=None, norm=None,
                 size=None, style=None, sizes=(20, 200), data=None, **opts):
         """Plot points. `size=<col>` maps a numeric column to per-point area
         in pixels², linearly rescaled into `sizes=(min, max)`. `style=<col>`
         cycles markers (`o`, `s`, `^`, `v`, `x`, `+`) per unique value.
-        Both compose with `hue=<col>`. `palette=` pins hue categories to
-        colors — accepts a dict (`{"A": "#3F97C5", ...}`) or a list indexed
-        by category-appearance order.
+        Both compose with `color=<col>` (one color per unique value).
+        `palette=` pins categories to colors — accepts a dict
+        (`{"A": "#3F97C5", ...}`) or a list indexed by category-appearance
+        order.
 
         For numeric color mapping use `c=<col_or_list>` + `cmap=`, with
         optional `vmin`/`vmax`/`norm='linear'|'log'`. `c=` is mutually
-        exclusive with `hue=` — they're alternative color sources."""
-        x, y, hue, palette = self._resolve_aes(x=x, y=y, hue=hue, palette=palette)
-        if c is not None and hue is not None:
+        exclusive with a column-driven `color=` — they're alternative
+        color sources."""
+        x, y, palette = self._resolve_aes(x=x, y=y, palette=palette)
+        if color is None: color = self._aes.get("color")
+        if group is None: group = self._aes.get("group")
+        df_for_aes = data if data is not None else self._data
+        color_kind, _ = resolve_aes(df_for_aes, color)
+        if c is not None and color_kind == "column":
             raise ValueError(
-                "scatter accepts either hue= (categorical) or c= (numeric), "
-                "not both — they're alternative color sources."
+                "scatter accepts either color=<col> (categorical) or "
+                "c= (numeric), not both — they're alternative color sources."
             )
         if c is not None:
             df = data if data is not None else self._data
@@ -504,28 +527,34 @@ class Chart(_Renderable):
             if norm is not None: opts["norm"] = norm
         if x is not None or y is not None:
             if size is not None or style is not None:
-                self._scatter_with_aesthetics(data, x, y, hue, palette,
-                                              size, style, sizes, opts)
+                self._scatter_with_aesthetics(data, x, y, color, group, alpha,
+                                              palette, size, style, sizes, opts)
             elif c is not None:
                 df = self._resolve_data(data, "scatter")
                 self._record("scatter", to_list(df[x]), to_list(df[y]), **opts)
             else:
-                self._tabular("scatter", "scatter", data, x, y, hue, palette, opts)
+                # scatter ignores `linetype` (no line to dash) — pass None
+                # so it never appears in opts.
+                self._tabular("scatter", "scatter", data, x, y,
+                              color, group, None, alpha, palette, opts)
         else:
+            if color is not None: opts["color"] = color
+            if alpha is not None: opts["alpha"] = alpha
             self._record("scatter", *args, **opts)
         return self
 
-    def _scatter_with_aesthetics(self, data, x_col, y_col, hue, palette,
-                                 size, style, sizes, opts):
+    def _scatter_with_aesthetics(self, data, x_col, y_col, color, group, alpha,
+                                 palette, size, style, sizes, opts):
         """Compute per-point `s` and `marker` arrays from data columns, then
-        emit one scatter call per hue group (or one total when no hue).
-        Centralized so the hue/size/style combinatorics stay in one place."""
+        emit one scatter call per (color, group, alpha) tuple. Centralized
+        so the color/group/alpha/size/style combinatorics stay in one place."""
         df = self._resolve_data(data, "scatter")
         xs_all = to_list(df[x_col])
         ys_all = to_list(df[y_col])
         n = len(xs_all)
         s_arr   = self._compute_size_array(df[size], sizes) if size is not None else None
         mk_arr  = self._compute_style_array(df[style])      if style is not None else None
+        alphas = opts.pop("alphas", self._DEFAULT_ALPHA_RANGE)
 
         def slice_for(idx_list):
             sub_opts = dict(opts)
@@ -535,26 +564,60 @@ class Chart(_Renderable):
                 sub_opts["marker"] = [mk_arr[i] for i in idx_list]
             return sub_opts
 
-        if hue is None:
-            self._record("scatter", xs_all, ys_all, **slice_for(range(n)))
+        color_kind, color_value = resolve_aes(df, color)
+        group_kind, group_value = resolve_aes(df, group)
+        alpha_kind, alpha_value = resolve_aes(df, alpha)
+
+        if (color_kind == "literal" and group_kind == "literal"
+                and alpha_kind == "literal"):
+            sub_opts = slice_for(range(n))
+            if color_value is not None:
+                sub_opts["color"] = color_value
+            if alpha_value is not None:
+                sub_opts["alpha"] = alpha_value
+            self._record("scatter", xs_all, ys_all, **sub_opts)
             return
 
-        hue_vals = to_list(df[hue])
-        seen = []
-        for v in hue_vals:
-            if v not in seen:
-                seen.append(v)
+        color_vec = color_value if color_kind == "column" else [None] * n
+        group_vec = group_value if group_kind == "column" else [None] * n
+        alpha_vec = alpha_value if alpha_kind == "column" else [None] * n
+        color_levels: list = []
+        for v in color_vec:
+            if v not in color_levels:
+                color_levels.append(v)
+        alpha_levels: list = []
+        for v in alpha_vec:
+            if v not in alpha_levels:
+                alpha_levels.append(v)
+        triples: list = []
+        for k in zip(color_vec, group_vec, alpha_vec):
+            if k not in triples:
+                triples.append(k)
+
         opts.pop("label", None)
-        for i, v in enumerate(seen):
-            idxs = [j for j, h in enumerate(hue_vals) if h == v]
+        labeled: set = set()
+        for ck, gk, ak in triples:
+            idxs = [j for j in range(n)
+                    if color_vec[j] == ck and group_vec[j] == gk
+                    and alpha_vec[j] == ak]
             xs_g = [xs_all[j] for j in idxs]
             ys_g = [ys_all[j] for j in idxs]
             sub_opts = slice_for(idxs)
             sub_opts.pop("label", None)
-            pc = palette_color(palette, v, i)
-            if pc is not None:
-                sub_opts["color"] = pc
-            self._record("scatter", xs_g, ys_g, label=str(v), **sub_opts)
+            if color_kind == "column":
+                idx = color_levels.index(ck)
+                sub_opts["color"] = palette_color(palette, ck, idx) or TAB10[idx % 10]
+                if ck not in labeled:
+                    sub_opts["label"] = str(ck)
+                    labeled.add(ck)
+            elif color_value is not None:
+                sub_opts["color"] = color_value
+            if alpha_kind == "column":
+                sub_opts["alpha"] = self._alpha_for_level(
+                    alpha_levels.index(ak), len(alpha_levels), alphas)
+            elif alpha_value is not None:
+                sub_opts["alpha"] = alpha_value
+            self._record("scatter", xs_g, ys_g, **sub_opts)
 
     @staticmethod
     def _compute_size_array(values, sizes):
@@ -582,30 +645,51 @@ class Chart(_Renderable):
         mapping = {v: cycle[i % len(cycle)] for i, v in enumerate(seen)}
         return [mapping[v] for v in vals]
 
-    def bar(self, *args, x=None, y=None, hue=None, palette=None, data=None, **opts):
-        x, y, hue, palette = self._resolve_aes(x=x, y=y, hue=hue, palette=palette)
-        if hue is not None:
-            # Long-form with hue: hand off to the artist's multi-series path.
+    def bar(self, *args, x=None, y=None, fill=None, color=None,
+            palette=None, data=None, **opts):
+        x, y, palette = self._resolve_aes(x=x, y=y, palette=palette)
+        if fill is None: fill = self._aes.get("fill")
+        if color is None: color = self._aes.get("color")
+        long_form = (x is not None or y is not None
+                     or fill is not None or data is not None)
+        if long_form:
+            # Artist's long-form path resolves `fill=` as literal-vs-column
+            # and aggregates duplicate (x, group) rows.
             df = self._resolve_data(data, "bar")
-            self._record("bar", data=df, x=x, y=y, hue=hue, palette=palette, **opts)
-        elif x is not None or y is not None:
-            df = self._resolve_data(data, "bar")
-            self._record("bar", to_list(df[x]), to_list(df[y]), **opts)
+            kw = {"data": df}
+            if x is not None: kw["x"] = x
+            if y is not None: kw["y"] = y
+            if fill is not None: kw["fill"] = fill
+            if color is not None: kw["color"] = color
+            if palette is not None: kw["palette"] = palette
+            self._record("bar", **kw, **opts)
         else:
+            if color is not None: opts["color"] = color
+            if fill is not None: opts["fill"] = fill
+            if palette is not None: opts["palette"] = palette
             self._record("bar", *args, **opts)
         return self
 
-    def hist(self, *args, x=None, hue=None, palette=None, data=None, **opts):
-        x, _, hue, palette = self._resolve_aes(x=x, hue=hue, palette=palette)
-        if hue is not None:
-            # Long-form with hue: hand off to the artist's multi-hue path
-            # so bin edges are shared across groups.
+    def hist(self, *args, x=None, fill=None, color=None,
+             palette=None, data=None, **opts):
+        x, _, palette = self._resolve_aes(x=x, palette=palette)
+        if fill is None: fill = self._aes.get("fill")
+        if color is None: color = self._aes.get("color")
+        long_form = (x is not None or fill is not None or data is not None)
+        if long_form:
+            # Artist's long-form path resolves `fill=` as literal-vs-column
+            # and shares bin edges across groups.
             df = self._resolve_data(data, "hist")
-            self._record("hist", data=df, x=x, hue=hue, palette=palette, **opts)
-        elif x is not None:
-            df = self._resolve_data(data, "hist")
-            self._record("hist", to_list(df[x]), **opts)
+            kw = {"data": df}
+            if x is not None: kw["x"] = x
+            if fill is not None: kw["fill"] = fill
+            if color is not None: kw["color"] = color
+            if palette is not None: kw["palette"] = palette
+            self._record("hist", **kw, **opts)
         else:
+            if color is not None: opts["color"] = color
+            if fill is not None: opts["fill"] = fill
+            if palette is not None: opts["palette"] = palette
             self._record("hist", *args, **opts)
         return self
 
@@ -669,27 +753,104 @@ class Chart(_Renderable):
             )
         return df
 
-    def _tabular(self, public_name, kind, data, x_col, y_col, hue, palette, opts):
+    _LINETYPE_CYCLE = (None, "--", ":", "-.")
+    _DEFAULT_ALPHA_RANGE = (0.3, 1.0)
+
+    @staticmethod
+    def _alpha_for_level(idx, n_levels, alphas):
+        """Map a discrete level index to an alpha value within `alphas`
+        (a `(lo, hi)` tuple). One level → the high end; otherwise
+        linearly spaced."""
+        lo, hi = alphas
+        if n_levels <= 1:
+            return hi
+        return lo + (hi - lo) * idx / (n_levels - 1)
+
+    def _tabular(self, public_name, kind, data, x_col, y_col,
+                 color, group, linetype, alpha, palette, opts):
+        """Long-form table → one or more artist records. Splits into one
+        record per unique `(color, group, linetype)` tuple, where each
+        aes may be None, a literal, or a column name.
+
+        Color: column → palette-resolved per level, one legend entry per
+        level (first sub-record of each level carries the label).
+        Group: invisible split — never burns a color or a legend entry.
+        Linetype: column → dash cycle per level. When `linetype` maps the
+        same column as `color`, the existing color legend swatches inherit
+        the dash pattern (via `linestyle` on the labeled sub-record).
+        """
         df = self._resolve_data(data, public_name)
-        if hue is None:
-            self._record(kind, to_list(df[x_col]), to_list(df[y_col]), **opts)
-            return
-        hue_vals = to_list(df[hue])
+        color_kind, color_value = resolve_aes(df, color)
+        group_kind, group_value = resolve_aes(df, group)
+        ltype_kind, ltype_value = resolve_aes(df, linetype)
+        alpha_kind, alpha_value = resolve_aes(df, alpha)
+        alphas = opts.pop("alphas", self._DEFAULT_ALPHA_RANGE)
         xs_all = to_list(df[x_col])
         ys_all = to_list(df[y_col])
-        seen: list = []
-        for v in hue_vals:
-            if v not in seen:
-                seen.append(v)
-        opts.pop("label", None)  # hue overrides any user-provided label
-        for i, v in enumerate(seen):
-            xs_g = [xs_all[j] for j, h in enumerate(hue_vals) if h == v]
-            ys_g = [ys_all[j] for j, h in enumerate(hue_vals) if h == v]
+        n = len(xs_all)
+
+        # Fast path: no column-driven splits — single record.
+        if (color_kind == "literal" and group_kind == "literal"
+                and ltype_kind == "literal" and alpha_kind == "literal"):
+            if color_value is not None:
+                opts["color"] = color_value
+            if ltype_value is not None:
+                opts["linestyle"] = ltype_value
+            if alpha_value is not None:
+                opts["alpha"] = alpha_value
+            self._record(kind, xs_all, ys_all, **opts)
+            return
+
+        color_vec = color_value if color_kind == "column" else [None] * n
+        group_vec = group_value if group_kind == "column" else [None] * n
+        ltype_vec = ltype_value if ltype_kind == "column" else [None] * n
+        alpha_vec = alpha_value if alpha_kind == "column" else [None] * n
+        color_levels: list = []
+        for v in color_vec:
+            if v not in color_levels:
+                color_levels.append(v)
+        ltype_levels: list = []
+        for v in ltype_vec:
+            if v not in ltype_levels:
+                ltype_levels.append(v)
+        alpha_levels: list = []
+        for v in alpha_vec:
+            if v not in alpha_levels:
+                alpha_levels.append(v)
+        quads: list = []
+        for k in zip(color_vec, group_vec, ltype_vec, alpha_vec):
+            if k not in quads:
+                quads.append(k)
+
+        opts.pop("label", None)  # column-driven grouping overrides any user label
+        labeled: set = set()
+        for ck, gk, lk, ak in quads:
+            idxs = [j for j in range(n)
+                    if color_vec[j] == ck and group_vec[j] == gk
+                    and ltype_vec[j] == lk and alpha_vec[j] == ak]
+            xs_g = [xs_all[j] for j in idxs]
+            ys_g = [ys_all[j] for j in idxs]
             sub_opts = dict(opts)
-            pc = palette_color(palette, v, i)
-            if pc is not None:
-                sub_opts["color"] = pc
-            self._record(kind, xs_g, ys_g, label=str(v), **sub_opts)
+            if color_kind == "column":
+                idx = color_levels.index(ck)
+                sub_opts["color"] = palette_color(palette, ck, idx) or TAB10[idx % 10]
+                if ck not in labeled:
+                    sub_opts["label"] = str(ck)
+                    labeled.add(ck)
+            elif color_value is not None:
+                sub_opts["color"] = color_value
+            if ltype_kind == "column":
+                ls = self._LINETYPE_CYCLE[ltype_levels.index(lk) % len(self._LINETYPE_CYCLE)]
+                if ls is not None:
+                    sub_opts["linestyle"] = ls
+            elif ltype_value is not None:
+                sub_opts["linestyle"] = ltype_value
+            if alpha_kind == "column":
+                sub_opts["alpha"] = self._alpha_for_level(
+                    alpha_levels.index(ak), len(alpha_levels), alphas)
+            elif alpha_value is not None:
+                sub_opts["alpha"] = alpha_value
+            self._record(kind, xs_g, ys_g, **sub_opts)
 
     # Frame-state methods (title/xlabel/ylabel/xlim/ylim/xscale/yscale/
     # grid/legend) forward through __getattr__ above.

@@ -1,18 +1,24 @@
 """Tukey-style box-and-whisker: Q1-Q3 box, median line, 1.5*IQR whiskers, outlier dots.
 
 Wide-form: c.boxplot(cats, values_per_cat)
-Long-form:  c.boxplot(data=df, x="cat", y="value", hue="group", palette={...})
+Long-form: c.boxplot(data=df, x="cat", y="value", fill="group", palette={...})
 
-Long-form with `hue=` dodges sub-boxes side-by-side within each cat and emits
-one legend entry per hue category.
+Long-form with `fill="col"` dodges sub-boxes side-by-side within each cat and
+emits one legend entry per group level. A literal `fill="#hex"` paints every
+box the same color; `fill=False` leaves them outline-only.
 
-Styling kwargs:
+Aesthetics:
+  fill=True/<col>/<literal>/False  body fill (True = palette/cycle default,
+                                   col = column-driven grouping, literal
+                                   color string, or False for outline-only)
+  color=<literal>      box / whisker / cap stroke (defaults to frame color)
+  palette=             maps group levels → fills when `fill=` is a column
+
+Other styling kwargs:
   orientation='v'       'h' for horizontal (cats on y axis)
   width=0.6             total dodge-group width as a band fraction
   gap=0.1               slot-gap fraction between dodged boxes
-  fill=True             False for outline-only boxes
   fill_alpha=0.55       box-fill opacity
-  linecolor=<themed>    border / whisker / cap color
   linewidth=1           border / whisker / cap stroke width
   median_linewidth=1.6  median line stroke width
   notch=False           draw 95 % CI waist on the box
@@ -21,15 +27,36 @@ Styling kwargs:
   whis=1.5              IQR multiplier for whisker fences
   showfliers=True       False hides outliers
   flier_size=2.2        outlier-marker radius
-  flier_color=<linecolor>  override outlier stroke color
+  flier_color=<color>   override outlier stroke color
 """
 import math
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, quantile, hue_color, dodge_positions, categorical_groups
+from ..utils import (to_list, quantile, resolve_aes, palette_color,
+                     dodge_positions, categorical_groups)
 from ..utils import _drop_nan
+from ..draw.colors import TAB10, _resolve_color
 from ..draw import segment, rect, circle, errorbar_v, errorbar_h, polygon, marker
 from .._spec import _FRAME
+
+
+def _resolve_fill_kwarg(data, kw):
+    """Pop `fill=` and classify it. Returns `(do_fill, fill_literal,
+    group_col)` where `fill_literal` is a hex / CSS color string (None
+    when the user did not pass a literal) and `group_col` is a column
+    name (None when fill is not column-driven).
+
+    `fill=True` → defaults; `fill=False` → outline-only; literal string →
+    same color for every box; column name → drives grouping."""
+    fill = kw.pop("fill", True)
+    if fill is False or fill is None:
+        return False, None, None
+    if fill is True:
+        return True, None, None
+    kind, value = resolve_aes(data, fill)
+    if kind == "column":
+        return True, None, fill
+    return True, value, None
 
 
 def _boxplot_record(args, kw):
@@ -37,29 +64,33 @@ def _boxplot_record(args, kw):
         data = kw.pop("data", None)
         x = kw.pop("x", None)
         y = kw.pop("y", None)
-        hue = kw.pop("hue", None)
         if data is None or x is None or y is None:
             raise TypeError(
-                "boxplot long-form requires data=, x=, y= (hue= optional)."
+                "boxplot long-form requires data=, x=, y= (fill= optional)."
             )
-        cats, hues, groups = categorical_groups(data, x, y, hue)
+        do_fill, fill_literal, group_col = _resolve_fill_kwarg(data, kw)
+        cats, groups, vals = categorical_groups(data, x, y, group_col)
     elif len(args) >= 2:
         cats = to_list(args[0])
-        groups_1d = [list(to_list(g)) for g in args[1]]
-        hues = [None]
-        groups = [[g] for g in groups_1d]
+        vals_1d = [list(to_list(g)) for g in args[1]]
+        groups = [None]
+        vals = [[g] for g in vals_1d]
+        do_fill, fill_literal, _ = _resolve_fill_kwarg(None, kw)
     else:
         raise TypeError(
             "boxplot requires either positional (cats, values_per_cat) "
             "or keyword (data=, x=, y=)."
         )
-    return {"type": "boxplot", "cats": cats, "hues": hues,
-            "groups": groups, "opts": kw}
+    kw["_do_fill"] = do_fill
+    if fill_literal is not None:
+        kw["_fill_literal"] = fill_literal
+    return {"type": "boxplot", "cats": cats, "groups": groups,
+            "vals": vals, "opts": kw}
 
 
 def _boxplot_horizontal(a): return a["opts"].get("orientation") == "h"
 def _boxplot_values(a):
-    return [v for row in a["groups"] for g in row for v in g]
+    return [v for row in a["vals"] for g in row for v in g]
 
 
 def _boxplot_xdomain(a):
@@ -70,9 +101,17 @@ def _boxplot_ydomain(a):
     return a["cats"] if _boxplot_horizontal(a) else _boxplot_values(a)
 
 
+def _group_fill(groups, palette, j, fallback):
+    """Per-group fill: ungrouped → fallback; grouped → palette lookup
+    with TAB10 wraparound."""
+    if groups == [None]:
+        return fallback
+    return palette_color(palette, groups[j], j) or TAB10[j % 10]
+
+
 def _boxplot_draw(a, ctx):
-    cats, hues, groups = a["cats"], a["hues"], a["groups"]
-    n_hues = len(hues)
+    cats, groups, vals = a["cats"], a["groups"], a["vals"]
+    n_groups = len(groups)
     opts = a["opts"]
     palette = opts.get("palette")
     bw_frac    = opts.get("width", 0.6)
@@ -86,31 +125,33 @@ def _boxplot_draw(a, ctx):
     show_means = opts.get("showmeans", False)
     mean_marker_k = opts.get("mean_marker", "^")
     notch      = opts.get("notch", False)
-    do_fill    = opts.get("fill", True)
-    line       = opts.get("linecolor", _FRAME["color"])
-    flier_line = opts.get("flier_color", line)
+    do_fill    = opts.get("_do_fill", True)
+    line       = _resolve_color(opts.get("color")) or _FRAME["color"]
+    flier_line = _resolve_color(opts.get("flier_color")) or line
+    fill_literal = _resolve_color(opts.get("_fill_literal"))
+    fill_fallback = fill_literal if fill_literal is not None else ctx.color
     horizontal = _boxplot_horizontal(a)
     cat_scale, val_scale = (ctx.y_scale, ctx.x_scale) if horizontal else (ctx.x_scale, ctx.y_scale)
     eb_along_val = errorbar_h if horizontal else errorbar_v
     out = []
     for i, cat in enumerate(cats):
-        for j in range(n_hues):
-            vals = _drop_nan(groups[i][j])
-            if not vals:
+        for j in range(n_groups):
+            vs = _drop_nan(vals[i][j])
+            if not vs:
                 continue
-            fill = hue_color(hues, palette, j, ctx.color) if do_fill else None
-            cp, box_w = dodge_positions(cat_scale, cat, n_hues, j,
+            fill = _group_fill(groups, palette, j, fill_fallback) if do_fill else None
+            cp, box_w = dodge_positions(cat_scale, cat, n_groups, j,
                                         band_frac=bw_frac, gap=gap)
             cp_lo = cp - box_w / 2
             cp_hi = cp + box_w / 2
-            q1 = quantile(vals, 0.25)
-            q2 = quantile(vals, 0.50)
-            q3 = quantile(vals, 0.75)
+            q1 = quantile(vs, 0.25)
+            q2 = quantile(vs, 0.50)
+            q3 = quantile(vs, 0.75)
             iqr = q3 - q1
             lo_fence = q1 - whis * iqr
             hi_fence = q3 + whis * iqr
-            inliers = [v for v in vals if lo_fence <= v <= hi_fence]
-            outliers = [v for v in vals if v < lo_fence or v > hi_fence] if show_fliers else []
+            inliers = [v for v in vs if lo_fence <= v <= hi_fence]
+            outliers = [v for v in vs if v < lo_fence or v > hi_fence] if show_fliers else []
             whisker_lo = min(inliers) if inliers else q1
             whisker_hi = max(inliers) if inliers else q3
             vp_q1 = val_scale(q1)
@@ -122,7 +163,7 @@ def _boxplot_draw(a, ctx):
             if notch:
                 # 95 % CI of the median ≈ 1.57 * IQR / sqrt(n). Cap at the
                 # IQR halves so the indent never crosses Q1 or Q3.
-                n_samples = len(vals)
+                n_samples = len(vs)
                 ci = 1.57 * iqr / math.sqrt(n_samples) if n_samples > 0 else 0
                 ci = min(ci, (q2 - q1), (q3 - q2))
                 vp_ci_lo = val_scale(q2 - ci)
@@ -171,7 +212,7 @@ def _boxplot_draw(a, ctx):
             out.append(eb_along_val(cp, vp_q1, vp_lo, capsize=cap_w,
                                     color=line, width=lw))
             if show_means:
-                mean_v = sum(vals) / len(vals)
+                mean_v = sum(vs) / len(vs)
                 vp_m = val_scale(mean_v)
                 cx_m, cy_m = (vp_m, cp) if horizontal else (cp, vp_m)
                 out.append(marker(mean_marker_k, cx_m, cy_m,
@@ -187,25 +228,25 @@ def _boxplot_draw(a, ctx):
 
 
 def _boxplot_legend_entries(a):
-    hues = a["hues"]
-    if hues == [None]:
+    groups = a["groups"]
+    if groups == [None]:
         return []
     opts = a["opts"]
     palette = opts.get("palette")
     fill_alpha = opts.get("fill_alpha", 0.55)
     lw = opts.get("linewidth", 1)
-    do_fill = opts.get("fill", True)
-    line = opts.get("linecolor", _FRAME["color"])
+    do_fill = opts.get("_do_fill", True)
+    line = _resolve_color(opts.get("color")) or _FRAME["color"]
     entries = []
-    for j, h in enumerate(hues):
-        col = hue_color(hues, palette, j, line)
+    for j, g in enumerate(groups):
+        col = _group_fill(groups, palette, j, line)
         fill = col if do_fill else None
         def paint(_a, _ctx, _x0, _y_mid,
                   _fill=fill, _line=line, _lw=lw, _fa=fill_alpha):
             return rect(_x0, _y_mid - 5, 22, 10,
                         fill=_fill, stroke=_line, stroke_width=_lw,
                         fill_alpha=_fa if _fill else 1.0)
-        entries.append({"label": str(h), "color": col, "paint": paint})
+        entries.append({"label": str(g), "color": col, "paint": paint})
     return entries
 
 

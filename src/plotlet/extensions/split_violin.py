@@ -2,14 +2,14 @@
 
 A violin sliced down the middle, with the *left* half showing the
 distribution of group A and the *right* half showing the distribution
-of group B, per category. seaborn's `violinplot(hue=..., split=True)`.
+of group B, per category.
 
 Saves a lot of vertical space vs. side-by-side full violins, and the
 direct mirror invites the eye to read the symmetry (or lack of it).
 
-KDE is `scipy.stats.gaussian_kde` so the bandwidth selection matches
-seaborn's; a small Silverman fallback path is left commented at the
-top of the file for users who'd rather not depend on scipy.
+KDE is `scipy.stats.gaussian_kde`; a small Silverman fallback path is
+left commented at the top of the file for users who'd rather not depend
+on scipy.
 
 API:
     c.split_violin(cats, group_a, group_b,
@@ -22,7 +22,7 @@ median + Q1-Q3 box inside each half; `inner=None` leaves the violin
 silhouette alone.
 """
 
-SUMMARY = "Split violin: left half group A, right half group B per category (seaborn split=True)."
+SUMMARY = "Split violin: left half group A, right half group B per category."
 
 import numpy as np
 from pathlib import Path

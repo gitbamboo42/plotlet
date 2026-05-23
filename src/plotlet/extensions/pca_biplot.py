@@ -11,8 +11,11 @@ used pure-Python power iteration with deflation; works fine for clean
 inputs but gets numerically wobbly on degenerate covariance matrices.
 
 API:
-    pca_biplot(matrix, var_names, sample_labels=None, hue=None,
+    pca_biplot(matrix, var_names, sample_labels=None, color=None,
                palette=None, scale_loadings=2.5)
+
+`color` is an optional per-sample category vector (same length as the
+rows of `matrix`); each unique value gets its own point color.
 """
 
 SUMMARY = "PCA biplot: PC1 vs PC2 scatter with loading arrows. SVD-based via numpy."
@@ -53,7 +56,7 @@ pt.add_artist(pt.ArtistSpec(
 ))
 
 
-def pca_biplot(matrix, var_names, sample_labels=None, hue=None, palette=None,
+def pca_biplot(matrix, var_names, sample_labels=None, color=None, palette=None,
                scale_loadings: float = 2.5) -> "pt.Chart":
     X = np.asarray(to_list_2d(matrix), dtype=float)
     # Center and scale (correlation PCA — the standard biplot convention).
@@ -67,11 +70,11 @@ def pca_biplot(matrix, var_names, sample_labels=None, hue=None, palette=None,
     loadings_pc1 = Vt[0]
     loadings_pc2 = Vt[1]
     c = pt.chart(data_width=400, data_height=400)
-    if hue is None:
+    if color is None:
         c.scatter(pc1, pc2, s=20, alpha=0.7)
     else:
-        df = {"pc1": pc1, "pc2": pc2, "hue": list(hue)}
-        c.scatter(x="pc1", y="pc2", hue="hue", palette=palette,
+        df = {"pc1": pc1, "pc2": pc2, "group": list(color)}
+        c.scatter(x="pc1", y="pc2", color="group", palette=palette,
                   data=df, s=20, alpha=0.7)
         c.legend(True)
     for j, name in enumerate(var_names):
@@ -94,13 +97,13 @@ def demo():
     import random
     random.seed(0)
     var_names = ["x1", "x2", "x3", "x4", "x5"]
-    rows = []; hue = []
+    rows = []; groups = []
     for cls, c1, c2 in [("A", -2, 0), ("B", 1.5, 1), ("C", 0, -2)]:
         for _ in range(40):
             base = [c1, c2, c1 * 0.5, -c2 * 0.3, c1 - c2]
             rows.append([b + random.gauss(0, 0.5) for b in base])
-            hue.append(cls)
-    fig = pca_biplot(rows, var_names, hue=hue)
+            groups.append(cls)
+    fig = pca_biplot(rows, var_names, color=groups)
     return fig
 
 

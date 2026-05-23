@@ -1,4 +1,4 @@
-"""OLS fit line plus Student-t confidence ribbon. ggplot2's `geom_smooth(method="lm")`.
+"""OLS fit line plus Student-t confidence ribbon.
 
 Fits y ~ x by closed-form OLS, draws the fit line, and shades a confidence
 band using the exact Student-t critical value at n - 2 degrees of freedom.
@@ -6,14 +6,16 @@ The scatter is not drawn here — overlay your own `c.scatter(xs, ys)`.
 
   c.regression(xs, ys)                                  # single fit
   c.regression(data=df, x="col_x", y="col_y")           # long-form
-  c.regression(data=df, x=..., y=..., hue="group")      # one fit per hue
+  c.regression(data=df, x=..., y=..., color="group")    # one fit per group
 
 Styling kwargs:
+  color=         line color (literal) or column name → one fit per level
+  palette=       maps levels → colors when `color=` is a column
   level=0.95     confidence level for the band
   n_grid=80      grid resolution for evaluating the band
   alpha=0.2      ribbon fill opacity
   linewidth=1.8  fit line stroke width
-  label=None     legend label (single-fit only — multi-hue auto-labels)
+  label=None     legend label (single-fit only — multi-group auto-labels)
 
 Math:
     slope b = Σ((x - x̄)(y - ȳ)) / Σ((x - x̄)²)
@@ -27,7 +29,8 @@ import math
 from scipy.stats import t as _t_dist
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, long_form_xy, hue_color
+from ..utils import to_list, long_form_xy, resolve_aes, palette_color
+from ..draw.colors import TAB10, _resolve_color
 from .._spec import _LEGSPEC
 from ..draw import polygon, polyline, rect, segment
 
@@ -63,29 +66,33 @@ def _regression_record(args, kw):
         data = kw.pop("data", None)
         x_col = kw.pop("x", None)
         y_col = kw.pop("y", None)
-        hue_col = kw.pop("hue", None)
         if data is None or x_col is None or y_col is None:
             raise TypeError(
-                "regression long-form requires data=, x=, y= (hue= optional)."
+                "regression long-form requires data=, x=, y= (color= optional)."
             )
-        hues, groups = long_form_xy(data, x_col, y_col, hue_col)
+        color = kw.pop("color", None)
+        color_kind, color_value = resolve_aes(data, color)
+        group_col = color if color_kind == "column" else None
+        groups, xy = long_form_xy(data, x_col, y_col, group_col)
+        if color_kind == "literal" and color_value is not None:
+            kw["_color_literal"] = color_value
     else:
-        hues = [None]
-        groups = [(to_list(args[0]), to_list(args[1]))]
-    cleaned = [_drop_nan_xy(xs, ys) for xs, ys in groups]
+        groups = [None]
+        xy = [(to_list(args[0]), to_list(args[1]))]
+    cleaned = [_drop_nan_xy(xs, ys) for xs, ys in xy]
     fits = [_fit_ols(xs, ys) for xs, ys in cleaned]
-    return {"type": "regression", "hues": hues, "groups": cleaned,
+    return {"type": "regression", "groups": groups, "xy": cleaned,
             "fits": fits, "opts": kw}
 
 
 def _regression_xdomain(a):
-    return [x for xs, _ in a["groups"] for x in xs]
+    return [x for xs, _ in a["xy"] for x in xs]
 
 
 def _regression_ydomain(a):
     level = a["opts"].get("level", 0.95)
     out = []
-    for fit, (xs, _) in zip(a["fits"], a["groups"]):
+    for fit, (xs, _) in zip(a["fits"], a["xy"]):
         if fit is None or not xs:
             continue
         a0, b0, _xm, _sxx, sigma, n = fit
@@ -97,17 +104,25 @@ def _regression_ydomain(a):
     return out
 
 
+def _group_color(groups, palette, j, fallback):
+    if groups == [None]:
+        return fallback
+    return palette_color(palette, groups[j], j) or TAB10[j % 10]
+
+
 def _regression_draw(a, ctx):
     palette = a["opts"].get("palette")
     fill_alpha = a["opts"].get("alpha", 0.2)
     lw = a["opts"].get("linewidth", 1.8)
     level = a["opts"].get("level", 0.95)
     n_grid = a["opts"].get("n_grid", 80)
+    color_literal = _resolve_color(a["opts"].get("_color_literal"))
+    fallback = color_literal if color_literal is not None else ctx.color
     out = []
-    for j, ((xs, _ys), fit) in enumerate(zip(a["groups"], a["fits"])):
+    for j, ((xs, _ys), fit) in enumerate(zip(a["xy"], a["fits"])):
         if fit is None or len(xs) < 3:
             continue
-        col = hue_color(a["hues"], palette, j, ctx.color)
+        col = _group_color(a["groups"], palette, j, fallback)
         a0, b0, xm, sxx, sigma, n = fit
         crit = _t_dist.ppf((1 + level) / 2, n - 2)
         lo, hi = min(xs), max(xs)
@@ -129,12 +144,12 @@ def _regression_draw(a, ctx):
 
 
 def _regression_legend_entries(a):
-    hues = a["hues"]
+    groups = a["groups"]
     opts = a["opts"]
     fill_alpha = opts.get("alpha", 0.2)
     lw = opts.get("linewidth", 1.8)
     sw = _LEGSPEC["swatch_width"]
-    if hues == [None]:
+    if groups == [None]:
         label = opts.get("label")
         if not label:
             return []
@@ -145,12 +160,12 @@ def _regression_legend_entries(a):
         return [{"label": label, "color": None, "paint": paint}]
     palette = opts.get("palette")
     entries = []
-    for j, h in enumerate(hues):
-        col = hue_color(hues, palette, j, a.get("_color"))
+    for j, g in enumerate(groups):
+        col = _group_color(groups, palette, j, a.get("_color"))
         def paint(_a, _ctx, x0, y_mid, _col=col):
             return (rect(x0, y_mid - 5, sw, 10, fill=_col, alpha=fill_alpha)
                     + segment(x0, y_mid, x0 + sw, y_mid, color=_col, width=lw))
-        entries.append({"label": str(h), "color": col, "paint": paint})
+        entries.append({"label": str(g), "color": col, "paint": paint})
     return entries
 
 

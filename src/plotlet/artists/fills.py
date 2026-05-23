@@ -2,18 +2,18 @@
 
 `fill_between(xs, y1, y2)` fills between two curves. `area(xs, ys)`
 is the single-series shorthand. Passing a list-of-series turns it into a
-stacked area chart (ggplot's `geom_area(position="stack")`), and `data=`
-+ `hue=` accepts a long-form table.
+stacked area chart, and `data=` + `fill=` accepts a long-form table.
 
   c.area(xs, ys)                                              # single
   c.area(xs, [s_a, s_b, s_c], labels=["A", "B", "C"])         # stacked
-  c.area(data=df, x="x", y="y", hue="series")                 # long-form
+  c.area(data=df, x="x", y="y", fill="series")                # long-form
 """
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, hue_color
+from ..utils import to_list, resolve_aes, palette_color
+from ..draw.colors import TAB10, _resolve_color
 from .._spec import _D, _LEGSPEC
 from ..draw import polygon as draw_polygon, rect as draw_rect
-from ._shared import (_xy_minmax, _line_legend_entries, _bar_legend_entries,
+from ._shared import (_xy_minmax, _line_legend_entries,
                        _CURVE_VALUES, _step_coords)
 
 
@@ -70,24 +70,24 @@ add_artist(ArtistSpec(
 
 # --- area ---
 
-def _aggregate_long_xy(data, x_col, y_col, hue_col):
-    """Long-form table -> (xs, hues, series). series[j][i] sums y over
-    rows where x == xs[i] and hue == hues[j]."""
+def _aggregate_long_xy(data, x_col, y_col, group_col):
+    """Long-form table -> (xs, groups, series). series[j][i] sums y over
+    rows where x == xs[i] and the grouping value == groups[j]."""
     xs_all = to_list(data[x_col])
     ys_all = to_list(data[y_col])
-    hs = to_list(data[hue_col]) if hue_col is not None else [None] * len(xs_all)
-    xs, hues = [], []
+    gs = to_list(data[group_col]) if group_col is not None else [None] * len(xs_all)
+    xs, groups = [], []
     for x in xs_all:
         if x not in xs: xs.append(x)
-    for h in hs:
-        if h not in hues: hues.append(h)
-    if not hues: hues = [None]
-    series = [[0.0] * len(xs) for _ in hues]
+    for g in gs:
+        if g not in groups: groups.append(g)
+    if not groups: groups = [None]
+    series = [[0] * len(xs) for _ in groups]
     x_idx = {x: i for i, x in enumerate(xs)}
-    hue_idx = {h: j for j, h in enumerate(hues)}
-    for x, y, h in zip(xs_all, ys_all, hs):
-        series[hue_idx[h]][x_idx[x]] += y
-    return xs, hues, series
+    group_idx = {g: j for j, g in enumerate(groups)}
+    for x, y, g in zip(xs_all, ys_all, gs):
+        series[group_idx[g]][x_idx[x]] += y
+    return xs, groups, series
 
 
 def _area_record(args, kw):
@@ -97,23 +97,30 @@ def _area_record(args, kw):
         data = kw.pop("data", None)
         x_col = kw.pop("x", None)
         y_col = kw.pop("y", None)
-        hue_col = kw.pop("hue", None)
         if data is None or x_col is None or y_col is None:
             raise TypeError(
-                "area long-form requires data=, x=, y= (hue= optional)."
+                "area long-form requires data=, x=, y= (fill= optional)."
             )
-        xs, hues, series = _aggregate_long_xy(data, x_col, y_col, hue_col)
+        fill = kw.pop("fill", None)
+        fill_kind, fill_value = resolve_aes(data, fill)
+        group_col = fill if fill_kind == "column" else None
+        xs, groups, series = _aggregate_long_xy(data, x_col, y_col, group_col)
+        if fill_kind == "literal" and fill_value is not None:
+            kw["_fill_literal"] = fill_value
     else:
         xs = to_list(args[0])
         v = to_list(args[1])
         if v and hasattr(v[0], "__iter__") and not isinstance(v[0], str):
             series = [to_list(s) for s in v]
             labels = kw.pop("labels", None)
-            hues = list(labels) if labels else [None] * len(series)
+            groups = list(labels) if labels else [None] * len(series)
         else:
             series = [v]
-            hues = [None]
-    return {"type": "area", "xs": xs, "hues": hues, "series": series,
+            groups = [None]
+            fill = kw.pop("fill", None)
+            if fill is not None:
+                kw["_fill_literal"] = fill
+    return {"type": "area", "xs": xs, "groups": groups, "series": series,
             "base": base, "opts": kw}
 
 
@@ -137,9 +144,15 @@ def _area_data_attrs(a):
     return out
 
 
+def _group_fill(groups, palette, j, fallback):
+    if groups == [None]:
+        return fallback
+    return palette_color(palette, groups[j], j) or TAB10[j % 10]
+
+
 def _area_draw(a, ctx):
     xs = a["xs"]
-    hues = a["hues"]
+    groups = a["groups"]
     series = a["series"]
     opts = a["opts"]
     palette = opts.get("palette")
@@ -150,6 +163,8 @@ def _area_draw(a, ctx):
         raise ValueError(
             f"unknown curve={curve!r}; expected one of {_CURVE_VALUES}"
         )
+    fill_literal = _resolve_color(opts.get("_fill_literal"))
+    fill_fallback = fill_literal if fill_literal is not None else ctx.color
     multi = len(series) > 1
     out = []
     running = [base] * len(xs)
@@ -167,18 +182,18 @@ def _area_draw(a, ctx):
         pts = [(ctx.x_scale(x), ctx.y_scale(y)) for x, y in zip(up_x, up_y)]
         pts += [(ctx.x_scale(x), ctx.y_scale(y))
                 for x, y in zip(reversed(lo_x), reversed(lo_y))]
-        col = hue_color(hues, palette, j, ctx.color) if multi else ctx.color
+        col = _group_fill(groups, palette, j, fill_fallback) if multi else fill_fallback
         out.append(draw_polygon(pts, fill=col, alpha=alpha))
         running = upper
     return "".join(out)
 
 
 def _area_legend_entries(a):
-    hues = a["hues"]
+    groups = a["groups"]
     opts = a["opts"]
     alpha = opts.get("alpha", _D["fill_alpha"])
     sw = _LEGSPEC["swatch_width"]
-    if hues == [None]:
+    if groups == [None]:
         label = opts.get("label")
         if not label:
             return []
@@ -188,11 +203,11 @@ def _area_legend_entries(a):
         return [{"label": label, "color": a.get("_color"), "paint": paint}]
     palette = opts.get("palette")
     entries = []
-    for j, h in enumerate(hues):
-        col = hue_color(hues, palette, j, a.get("_color"))
+    for j, g in enumerate(groups):
+        col = _group_fill(groups, palette, j, a.get("_color"))
         def paint(_a, _ctx, x0, y_mid, _col=col, _alpha=alpha):
             return draw_rect(x0, y_mid - 5, sw, 10, fill=_col, alpha=_alpha)
-        entries.append({"label": str(h), "color": col, "paint": paint})
+        entries.append({"label": str(g), "color": col, "paint": paint})
     return entries
 
 

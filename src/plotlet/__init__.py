@@ -2,7 +2,7 @@
 
     import plotlet as pt
     c = pt.chart(df, title="...", xlabel="x", ylabel="y", legend=True, grid=True)
-    c.line(x="time", y="value", hue="series")
+    c.line(x="time", y="value", color="series")
     c                         # auto-renders in Jupyter
 
 For non-tabular use, the chained form works directly on the same Chart:

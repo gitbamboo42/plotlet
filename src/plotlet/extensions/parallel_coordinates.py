@@ -5,18 +5,17 @@ row of data becomes a polyline that connects its values across all
 axes. Each axis is independently scaled to [0, 1] so variables on
 different scales coexist.
 
-Used everywhere EDA touches more than three numeric columns. ggplot2
-doesn't ship it natively; pandas does (`pandas.plotting.parallel_coordinates`).
+Used everywhere EDA touches more than three numeric columns.
 
 API:
-    c.parallel_coords(rows, var_names, hue=None, alpha=0.6)
+    c.parallel_coords(rows, var_names, group=None, alpha=0.6)
 
 `rows`     -> list of rows, each a list of values aligned with `var_names`.
 `var_names` -> ordered list of column names.
-`hue`      -> optional per-row category vector; same length as `rows`.
+`group`    -> optional per-row category vector; same length as `rows`.
               Each unique value gets its own color via the cycle.
 
-Pass `hue` to highlight class membership (the most common use case).
+Pass `group` to highlight class membership (the most common use case).
 """
 
 SUMMARY = "Multivariate EDA: vertical axes per variable, one polyline per row, normalized scales."
@@ -53,18 +52,18 @@ def parallel_coords_draw(a, ctx):
     col_lo = [min(row[i] for row in rows) for i in range(n_vars)]
     col_hi = [max(row[i] for row in rows) for i in range(n_vars)]
     span = [h - l if h > l else 1 for l, h in zip(col_lo, col_hi)]
-    hue = a["opts"].get("hue")
+    group = a["opts"].get("group")
     alpha = a["opts"].get("alpha", 0.6)
     lw = a["opts"].get("linewidth", 1.0)
     # Color per row.
     palette = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
                "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"]
-    if hue is not None:
+    if group is not None:
         cats = []
-        for h in hue:
+        for h in group:
             if h not in cats:
                 cats.append(h)
-        row_colors = [palette[cats.index(h) % len(palette)] for h in hue]
+        row_colors = [palette[cats.index(h) % len(palette)] for h in group]
     else:
         row_colors = [ctx.color or palette[0]] * len(rows)
     out = []
@@ -104,7 +103,7 @@ def demo():
     import random
     random.seed(0)
     var_names = ["sepal_len", "sepal_wid", "petal_len", "petal_wid"]
-    rows = []; hue = []
+    rows = []; groups = []
     for cls, base, base_w in [("A", 5.0, 1.4), ("B", 6.0, 4.0), ("C", 6.8, 5.5)]:
         for _ in range(35):
             rows.append([
@@ -113,9 +112,9 @@ def demo():
                 base_w + random.gauss(0, 0.5),
                 base_w * 0.4 + random.gauss(0, 0.2),
             ])
-            hue.append(cls)
+            groups.append(cls)
     c = pt.chart(data_width=520, data_height=260)
-    c.parallel_coords(rows, var_names, hue=hue)
+    c.parallel_coords(rows, var_names, group=groups)
     c.xticks([]); c.yticks([])  # labels are drawn inside the artist
     c.title("Parallel coordinates")
     return c

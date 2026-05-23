@@ -544,23 +544,23 @@ def _enforce_floors(M):
 
 def _prebin_hist(st):
     """Compute hist bins on `st["artists"]` so they participate in domain
-    scanning. Multi-hue groups share bin edges (seaborn default).
-    Idempotent (guarded by `_bin_groups` presence)."""
+    scanning. Multi-group overlays share bin edges. Idempotent (guarded by
+    `_bin_groups` presence)."""
     for a in st["artists"]:
         if a["type"] != "hist" or "_bin_groups" in a:
             continue
         opts = a["opts"]
         bins_n = opts.get("bins", 10)
         density = opts.get("density", False)
-        groups = a["groups"]
-        if len(groups) <= 1:
-            a["_bin_groups"] = [histogram(groups[0], bins_n, density=density)] \
-                               if groups else [[]]
+        vals = a["vals"]
+        if len(vals) <= 1:
+            a["_bin_groups"] = [histogram(vals[0], bins_n, density=density)] \
+                               if vals else [[]]
             continue
-        all_vals = [v for g in groups for v in g
+        all_vals = [v for g in vals for v in g
                     if v is not None and not (isinstance(v, float) and v != v)]
         if not all_vals:
-            a["_bin_groups"] = [[] for _ in groups]
+            a["_bin_groups"] = [[] for _ in vals]
             continue
         lo, hi = min(all_vals), max(all_vals)
         if lo == hi: hi = lo + 1
@@ -568,7 +568,7 @@ def _prebin_hist(st):
         width = (hi - lo) / n
         edges = [lo + i * width for i in range(n + 1)]
         bin_groups = []
-        for g in groups:
+        for g in vals:
             counts = [0] * n
             cleaned = [v for v in g if v is not None
                        and not (isinstance(v, float) and v != v)]
@@ -1295,7 +1295,12 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     color_idx = 0
     for a in st["artists"]:
         spec = get_artist(a["type"])
-        user_color = _resolve_color(a["opts"].get("color"))
+        # Honor either `color=` (stroke-defaulted artists) or `fill=`
+        # literal (fill-defaulted artists, e.g. bar) as the artist's
+        # user-set primary color — both should skip the cycle and supply
+        # `_color` for the legend.
+        user_color = _resolve_color(a["opts"].get("color")
+                                    or a["opts"].get("_fill_literal"))
         if user_color is not None:
             a["_color"] = user_color
         elif spec is not None and spec.uses_color_cycle:

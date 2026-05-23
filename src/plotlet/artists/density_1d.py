@@ -6,18 +6,24 @@ area integrates to 1 so you can overlay multiple groups fairly.
 
   c.density_1d(values)                                # wide-form
   c.density_1d(data=df, x="col")                      # long-form
-  c.density_1d(data=df, x="col", hue="group")         # one curve per hue
+  c.density_1d(data=df, x="col", color="group")       # one curve per group
 
-Styling kwargs:
+Aesthetics:
+  color=         line color (literal) or column name → grouped curves
+  fill=False     True shades the area under each curve in the line color
+  palette=       maps group levels → colors when `color=` is a column
+
+Other styling kwargs:
   bw=None        bandwidth override; defaults to Silverman's rule
   n_grid=200     KDE evaluation grid resolution
-  fill=False     True shades the area under each curve
   alpha=0.25     fill opacity (used only when fill=True)
   linewidth=1.6  curve stroke width
   label=None     legend label (single-series only)
 """
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, long_form_1d, silverman_bw, kde_1d, hue_color
+from ..utils import (to_list, long_form_1d, resolve_aes, palette_color,
+                     silverman_bw, kde_1d)
+from ..draw.colors import TAB10, _resolve_color
 from .._spec import _LEGSPEC
 from ..draw import path, polyline, segment
 
@@ -27,21 +33,25 @@ def _density_1d_record(args, kw):
     if "data" in kw or "x" in kw or "y" in kw:
         data_df = kw.pop("data", None)
         x_col = kw.pop("x", None)
-        hue_col = kw.pop("hue", None)
         if data_df is None or x_col is None:
             raise TypeError(
-                "density_1d long-form requires data=, x= (hue= optional)."
+                "density_1d long-form requires data=, x= (color= optional)."
             )
-        hues, groups = long_form_1d(data_df, x_col, hue_col)
+        color = kw.pop("color", None)
+        color_kind, color_value = resolve_aes(data_df, color)
+        group_col = color if color_kind == "column" else None
+        groups, vals = long_form_1d(data_df, x_col, group_col)
+        if color_kind == "literal" and color_value is not None:
+            kw["_color_literal"] = color_value
     else:
-        hues = [None]
-        groups = [to_list(args[0])]
+        groups = [None]
+        vals = [to_list(args[0])]
     n_grid = kw.get("n_grid", 200)
     bw_kw = kw.get("bw")
-    all_vals = [v for g in groups for v in g]
+    all_vals = [v for g in vals for v in g]
     if not all_vals:
-        return {"type": "density_1d", "hues": hues,
-                "_grids": [[] for _ in groups], "_ds": [[] for _ in groups],
+        return {"type": "density_1d", "groups": groups,
+                "_grids": [[] for _ in vals], "_ds": [[] for _ in vals],
                 "opts": kw}
     lo, hi = min(all_vals), max(all_vals)
     pad = (hi - lo) * 0.1 or 1.0
@@ -49,14 +59,14 @@ def _density_1d_record(args, kw):
     grid = [lo + (hi - lo) * i / (n_grid - 1) for i in range(n_grid)]
     grids = []
     ds = []
-    for g in groups:
+    for g in vals:
         if not g:
             grids.append([]); ds.append([])
             continue
         bw = bw_kw or silverman_bw(g)
         grids.append(grid)
         ds.append(kde_1d(g, grid, bw))
-    return {"type": "density_1d", "hues": hues,
+    return {"type": "density_1d", "groups": groups,
             "_grids": grids, "_ds": ds, "opts": kw}
 
 
@@ -68,17 +78,25 @@ def _density_1d_ydomain(a):
     return [v for d in a["_ds"] for v in d] + [0]
 
 
+def _group_color(groups, palette, j, fallback):
+    if groups == [None]:
+        return fallback
+    return palette_color(palette, groups[j], j) or TAB10[j % 10]
+
+
 def _density_1d_draw(a, ctx):
     palette = a["opts"].get("palette")
     lw = a["opts"].get("linewidth", 1.6)
-    fill = a["opts"].get("fill", False)
+    fill_flag = a["opts"].get("fill", False)
     alpha = a["opts"].get("alpha", 0.25)
+    color_literal = _resolve_color(a["opts"].get("_color_literal"))
+    fallback = color_literal if color_literal is not None else ctx.color
     out = []
     for j, (grid, d) in enumerate(zip(a["_grids"], a["_ds"])):
         if not grid: continue
-        col = hue_color(a["hues"], palette, j, ctx.color)
+        col = _group_color(a["groups"], palette, j, fallback)
         pts = [(ctx.x_scale(x), ctx.y_scale(y)) for x, y in zip(grid, d)]
-        if fill and pts:
+        if fill_flag and pts:
             y0 = ctx.y_scale(0)
             d_path = ("M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts)
                       + f" L{pts[-1][0]:.2f},{y0:.2f} L{pts[0][0]:.2f},{y0:.2f} Z")
@@ -88,11 +106,11 @@ def _density_1d_draw(a, ctx):
 
 
 def _density_1d_legend_entries(a):
-    hues = a["hues"]
+    groups = a["groups"]
     opts = a["opts"]
     lw = opts.get("linewidth", 1.6)
     sw = _LEGSPEC["swatch_width"]
-    if hues == [None]:
+    if groups == [None]:
         label = opts.get("label")
         if not label:
             return []
@@ -102,11 +120,11 @@ def _density_1d_legend_entries(a):
         return [{"label": label, "color": None, "paint": paint}]
     palette = opts.get("palette")
     entries = []
-    for j, h in enumerate(hues):
-        col = hue_color(hues, palette, j, a.get("_color"))
+    for j, g in enumerate(groups):
+        col = _group_color(groups, palette, j, a.get("_color"))
         def paint(_a, _ctx, x0, y_mid, _col=col):
             return segment(x0, y_mid, x0 + sw, y_mid, color=_col, width=lw)
-        entries.append({"label": str(h), "color": col, "paint": paint})
+        entries.append({"label": str(g), "color": col, "paint": paint})
     return entries
 
 

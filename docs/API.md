@@ -3,8 +3,9 @@
 `pt.chart(data=None, **opts)` returns a `Chart`. When `data` is given —
 any object supporting `data[col_name]` returning an iterable (pandas /
 polars / dict-of-lists / dict-of-arrays) — every mark method accepts
-long-form `(x="col", y="col", hue="col")`. Otherwise marks take wide-form
-positional arrays. All methods return `self`, so they chain.
+long-form `(x="col", y="col", color="col")` (or `fill="col"` on
+fill-defaulted artists). Otherwise marks take wide-form positional
+arrays. All methods return `self`, so they chain.
 
 ## Frame options
 
@@ -59,42 +60,61 @@ the actual values).
 
 ## Mark methods
 
-Every method accepts long-form `(data=df, x="col", y="col", hue="col")`
-when the chart was constructed with `pt.chart(data, …)`, and wide-form
-positional `(xs, ys)` arrays otherwise. The tables list styling kwargs;
-the long-form keyword pattern is universal and not repeated.
+Every method accepts long-form `(data=df, x="col", y="col", …)` when
+the chart was constructed with `pt.chart(data, …)`, and wide-form
+positional `(xs, ys)` arrays otherwise. The primary grouping aes is
+`color=` for stroke-defaulted artists (line, scatter, regression,
+density_1d, ecdf, freqpoly, rug) and `fill=` for fill-defaulted ones
+(bar, hist, area, boxplot, violin, strip, swarm). Each accepts a literal
+color string or a column name; column → one series per unique level.
+
+`line` and `scatter` accept additional column-driven aes:
+`group=` (invisible split — no color/legend burn; e.g. one polyline per
+subject within a cohort) and `alpha=` (opacity per level, linearly
+interpolated through `alphas=(min, max)`, default `(0.3, 1.0)`).
+`line` additionally accepts `linetype=` (dash cycle per level), which
+doesn't apply to `scatter` since there's no line to dash.
+
+These chart-level aes can be set once on the constructor —
+`pt.chart(df, color=, group=, linetype=, alpha=, fill=)` — and are
+inherited by `line`/`scatter` calls that don't override them. Other
+artists (boxplot, bar, hist, etc.) accept only the relevant subset for
+their geometry; chart-level aes they don't support pass through silently.
+
+The tables list styling kwargs; the grouping/long-form pattern is
+universal and not repeated.
 
 ### xy and 1-D distributions
 
 | call | options |
 | --- | --- |
-| `.line(x=, y=, hue=, **opts)` | `color`, `label`, `linewidth`, `linestyle` (`"-"`, `"--"`, `":"`, `"-."`), `marker`, `markersize`, `curve` (`"linear"`, `"step-before"`, `"step-after"`, `"step-mid"`) |
+| `.line(x=, y=, color=, group=, linetype=, alpha=, **opts)` | `palette`, `alphas=(min, max)`, `label`, `linewidth`, `linestyle` (`"-"`, `"--"`, `":"`, `"-."`), `marker`, `markersize`, `curve` (`"linear"`, `"step-before"`, `"step-after"`, `"step-mid"`) |
 | `.step(x=, y=, where=, **opts)` | sugar over `line(curve=…)`; `where=` is `"pre"` / `"post"` (default) / `"mid"` |
-| `.scatter(x=, y=, hue=, size=, style=, **opts)` | `color`, `label`, `s`, `alpha`, `marker`, `sizes=(min, max)` |
-| `.regression(x=, y=, **opts)` | `level=0.95`, `alpha=0.2`, `linewidth=1.8` — OLS fit + Student-t band |
-| `.hist(x=, hue=, **opts)` | `bins`, `density`, `histtype` (`"bar"` / `"step"` / `"stepfilled"`), `orientation` |
-| `.density_1d(x=, hue=, **opts)` | `bw`, `n_grid=200`, `fill`, `alpha` — Gaussian KDE |
-| `.ecdf(x=, hue=, **opts)` | `complement=False` (survival), `linewidth` |
-| `.rug(x=, hue=, axis="x", **opts)` | `length=0.04`, `alpha` — tick marks at observations |
-| `.freqpoly(x=, hue=, **opts)` | `bins`, `density` — line version of hist |
+| `.scatter(x=, y=, color=, group=, alpha=, size=, style=, **opts)` | `palette`, `alphas=(min, max)`, `label`, `s`, `marker`, `sizes=(min, max)` |
+| `.regression(x=, y=, color=, **opts)` | `palette`, `level=0.95`, `alpha=0.2`, `linewidth=1.8` — OLS fit + Student-t band |
+| `.hist(x=, fill=, **opts)` | `color` (stroke), `palette`, `bins`, `density`, `histtype` (`"bar"` / `"step"` / `"stepfilled"`), `orientation` |
+| `.density_1d(x=, color=, **opts)` | `palette`, `bw`, `n_grid=200`, `fill=True/False`, `alpha` — Gaussian KDE |
+| `.ecdf(x=, color=, **opts)` | `palette`, `complement=False` (survival), `linewidth` |
+| `.rug(x=, color=, axis="x", **opts)` | `palette`, `length=0.04`, `alpha` — tick marks at observations |
+| `.freqpoly(x=, color=, **opts)` | `palette`, `bins`, `density` — line version of hist |
 | `.qq(values, dist="normal")` | `dist=` accepts any `scipy.stats` RV or another sample |
 
 ### Categorical distributions
 
 | call | options |
 | --- | --- |
-| `.boxplot(x=, y=, hue=, **opts)` | `orientation`, `notch`, `width`, `whis=1.5`, `flier_size` |
-| `.violin(x=, y=, hue=, **opts)` | `inner="box"\|"quartile"\|None`, `trim`, `bw_adjust`, `fill_alpha` |
-| `.swarm(x=, y=, hue=, **opts)` | `size`, `dodge`, `palette` — collision-resolved jitter |
-| `.strip(x=, y=, hue=, **opts)` | `size`, `dodge`, `jitter` — raw jittered points |
+| `.boxplot(x=, y=, fill=, **opts)` | `color` (stroke), `palette`, `orientation`, `notch`, `width`, `whis=1.5`, `flier_size` |
+| `.violin(x=, y=, fill=, **opts)` | `color` (stroke), `palette`, `inner="box"\|"quartile"\|None`, `trim`, `bw_adjust`, `fill_alpha` |
+| `.swarm(x=, y=, fill=, **opts)` | `color` (outline), `palette`, `size`, `linewidth` — collision-resolved jitter |
+| `.strip(x=, y=, fill=, **opts)` | `color` (outline), `palette`, `size`, `jitter` — raw jittered points |
 | `.pointplot(cats, values_per_cat, **opts)` | `estimator="mean"`, `ci="t"\|"boot"\|None`, `level=0.95` |
 
 ### Bars, areas, errorbars
 
 | call | options |
 | --- | --- |
-| `.bar(x=, y=, hue=, position=, **opts)` | `position="stack"\|"dodge"\|"fill"` for multi-series, `orientation`, `bottom`, `width`, `gap` |
-| `.area(x=, y=, hue=, **opts)` | multi-series stacks when given a list-of-series or `hue=`; `base`, `curve`, `alpha` |
+| `.bar(x=, y=, fill=, position=, **opts)` | `color` (stroke), `palette`, `position="stack"\|"dodge"\|"fill"` for multi-series, `orientation`, `bottom`, `width`, `gap` |
+| `.area(x=, y=, fill=, **opts)` | multi-series stacks when given a list-of-series or `fill=<col>`; `palette`, `base`, `curve`, `alpha` |
 | `.fill_between(x=, y1=, y2=, **opts)` | `color`, `alpha`, `curve`, `label` |
 | `.errorbar(x=, y=, yerr=, xerr=, **opts)` | scalar, sequence, or `(lower, upper)` tuple for asymmetric bars |
 
@@ -117,13 +137,15 @@ the long-form keyword pattern is universal and not repeated.
 | `.axhline(y, **opts)` / `.axvline(x, **opts)` | `color`, `linewidth`, `linestyle`, `alpha`, axes-fraction `xmin`/`xmax` |
 | `.axhspan(ymin, ymax, **opts)` / `.axvspan(xmin, xmax, **opts)` | `color`, `alpha`, `label` |
 | `.rect(x, y, w, h, **opts)` / `.polygon(pts, **opts)` | data-coord shapes, `fill`, `stroke` |
-| `.text(x, y, s, **opts)` / `.annotate(text, xy=, xytext=, **opts)` | `ha`, `va`, `fontsize`, `arrow=True/False` |
+| `.text(x, y, s, **opts)` / `.text(data=df, x=, y=, label=, **opts)` / `.annotate(text, xy=, xytext=, **opts)` | `ha`, `va`, `fontsize`, `arrow=True/False` |
 
 ### Notes
 
-- `hue=<col>` splits into one call per unique value with auto-labels and tab10 colors.
+- A column-driven grouping aes (`color=<col>` or `fill=<col>`) splits into one call per unique value with auto-labels and tab10 colors; the palette is overridable per-artist via `palette=`.
+- `color=` is the stroke and `fill=` is the fill — independent kwargs. So an outlined bar is `fill=<col>, color="black"`; previously inexpressible.
+- On `line` / `scatter`, `group=<col>` is the **invisible** split — finer-grained sub-records (one polyline per subject, say) without burning a color channel or a legend row. `alpha=<col>` interpolates opacity per level via `alphas=(min, max)`. `line` additionally has `linetype=<col>` (dash cycle per level); not on `scatter`. When `color=` and `linetype=` (or `alpha=`) map the *same* column, the existing color legend swatches inherit the dash / opacity — the canonical pattern for colorblind-safe or B&W-print redundancy.
 - Reference lines / spans default to black, are drawn outside the data color cycle, and don't participate in autoscaling.
-- On `scatter`, `size=<col>` maps a numeric column to per-point area (pixels², rescaled into `sizes=(min, max)` — default `(20, 200)`); `style=<col>` cycles markers per unique value (`o`, `s`, `^`, `v`, `x`, `+`). `hue`, `size`, `style` compose.
+- On `scatter`, `size=<col>` maps a numeric column to per-point area (pixels², rescaled into `sizes=(min, max)` — default `(20, 200)`); `style=<col>` cycles markers per unique value (`o`, `s`, `^`, `v`, `x`, `+`). `color`, `group`, `size`, `style`, `alpha` all compose.
 - `.imshow` emits one `<rect>` per cell for small grids (≤10000 cells, vector-clean at any zoom) and a base64 PNG above that. `.heatmap` is the DataFrame-aware companion — `df.index` becomes row labels, `df.columns` becomes column labels; cells render at integer + 0.5 centers so a top/left dendrogram pairs cleanly via `share_x` / `share_y`.
 
 ## Color shortcuts
