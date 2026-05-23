@@ -4,7 +4,8 @@ Fits y ~ x by closed-form OLS, draws the fit line, and shades a confidence
 band using the exact Student-t critical value at n - 2 degrees of freedom.
 The scatter is not drawn here — overlay your own `c.scatter(xs, ys)`.
 
-API: c.regression(xs, ys)
+  c.regression(xs, ys)                          # wide-form
+  c.regression(data=df, x="col_x", y="col_y")   # long-form
 
 Styling kwargs:
   level=0.95     confidence level for the band
@@ -29,6 +30,20 @@ from ..utils import to_list
 from ..draw import polygon, polyline, rect, segment
 
 
+def _xy_from_kw(args, kw):
+    """Pull (xs, ys) from either positional args or `data=, x=, y=`."""
+    if "data" in kw or "x" in kw or "y" in kw:
+        data = kw.pop("data", None)
+        x_col = kw.pop("x", None)
+        y_col = kw.pop("y", None)
+        if data is None or x_col is None or y_col is None:
+            raise TypeError(
+                "regression long-form requires data=, x=, y= ."
+            )
+        return to_list(data[x_col]), to_list(data[y_col])
+    return to_list(args[0]), to_list(args[1])
+
+
 def _fit_ols(xs, ys):
     n = len(xs)
     xm = sum(xs) / n
@@ -44,8 +59,8 @@ def _fit_ols(xs, ys):
 
 
 def _regression_record(args, kw):
-    xs = to_list(args[0])
-    ys = to_list(args[1])
+    kw = dict(kw)
+    xs, ys = _xy_from_kw(args, kw)
     a, b, xm, sxx, sigma, n = _fit_ols(xs, ys)
     return {"type": "regression", "xs": xs, "ys": ys,
             "_a": a, "_b": b, "_xm": xm, "_sxx": sxx,

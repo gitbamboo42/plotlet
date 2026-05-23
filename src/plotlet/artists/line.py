@@ -1,13 +1,19 @@
+"""Line — connected xy points, single-series or long-form with hue split.
+
+  c.line(xs, ys)                                       # wide-form
+  c.line(data=df, x="col_x", y="col_y")                # long-form
+  c.line(data=df, x="col_x", y="col_y", hue="group")   # one line per hue
+"""
 import math
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list
-from .._spec import _D
-from ..draw import marker, path as draw_path
+from ..utils import to_list, long_form_xy, hue_color
+from .._spec import _D, _LEGSPEC
+from ..draw import marker, path as draw_path, segment
 from ._shared import _xy_minmax, _line_legend_entries, _CURVE_VALUES, _step_coords
 
 
-def _artist_line(a, xs_, ys_, col):
+def _artist_line(a, xs_, ys_, col, xs, ys):
     out = []
     opts = a["opts"]
     alpha = opts.get("alpha", 1)
@@ -16,12 +22,10 @@ def _artist_line(a, xs_, ys_, col):
         raise ValueError(
             f"unknown curve={curve!r}; expected one of {_CURVE_VALUES}"
         )
-    # Path coordinates depend on the curve mode; markers always sit at
-    # the original data points, so we keep two coordinate lists.
     if curve == "linear":
-        path_xs, path_ys = a["xs"], a["ys"]
+        path_xs, path_ys = xs, ys
     else:
-        path_xs, path_ys = _step_coords(a["xs"], a["ys"], curve[5:])
+        path_xs, path_ys = _step_coords(xs, ys, curve[5:])
     path_pts = [(xs_(x), ys_(y)) for x, y in zip(path_xs, path_ys)]
     path_pts = [(px, py) if (math.isfinite(px) and math.isfinite(py)) else None
                 for px, py in path_pts]
@@ -39,7 +43,7 @@ def _artist_line(a, xs_, ys_, col):
                              dash=ls, alpha=alpha))
     if opts.get("marker"):
         sz = opts.get("markersize", _D["markersize"])
-        for x, y in zip(a["xs"], a["ys"]):
+        for x, y in zip(xs, ys):
             px, py = xs_(x), ys_(y)
             if not (math.isfinite(px) and math.isfinite(py)):
                 continue
@@ -47,26 +51,78 @@ def _artist_line(a, xs_, ys_, col):
     return "".join(out)
 
 
+def _line_record(args, kw):
+    kw = dict(kw)
+    if "data" in kw or "x" in kw or "y" in kw:
+        data = kw.pop("data", None)
+        x_col = kw.pop("x", None)
+        y_col = kw.pop("y", None)
+        hue_col = kw.pop("hue", None)
+        if data is None or x_col is None or y_col is None:
+            raise TypeError(
+                "line long-form requires data=, x=, y= (hue= optional)."
+            )
+        hues, groups = long_form_xy(data, x_col, y_col, hue_col)
+    else:
+        hues = [None]
+        groups = [(to_list(args[0]), to_list(args[1]))]
+    return {"type": "line", "hues": hues, "groups": groups, "opts": kw}
+
+
+def _line_xdomain(a):
+    return [x for xs, _ in a["groups"] for x in xs]
+
+
+def _line_ydomain(a):
+    return [y for _, ys in a["groups"] for y in ys]
+
+
 def _line_data_attrs(a):
-    out = {"n": len(a["xs"])}
-    out.update(_xy_minmax(a["xs"], a["ys"]))
-    if a["opts"].get("linestyle"):
-        out["linestyle"] = a["opts"]["linestyle"]
-    if a["opts"].get("marker"):
-        out["marker"] = a["opts"]["marker"]
-    curve = a["opts"].get("curve")
-    if curve and curve != "linear":
-        out["curve"] = curve
+    xs = [x for xs, _ in a["groups"] for x in xs]
+    ys = [y for _, ys in a["groups"] for y in ys]
+    out = {"n": len(xs)}
+    out.update(_xy_minmax(xs, ys))
+    opts = a["opts"]
+    if opts.get("linestyle"): out["linestyle"] = opts["linestyle"]
+    if opts.get("marker"): out["marker"] = opts["marker"]
+    curve = opts.get("curve")
+    if curve and curve != "linear": out["curve"] = curve
     return out
+
+
+def _line_draw(a, ctx):
+    palette = a["opts"].get("palette")
+    out = []
+    for j, (xs, ys) in enumerate(a["groups"]):
+        col = hue_color(a["hues"], palette, j, ctx.color)
+        out.append(_artist_line(a, ctx.x_scale, ctx.y_scale, col, xs, ys))
+    return "".join(out)
+
+
+def _line_legend_entries_multi(a):
+    hues = a["hues"]
+    if hues == [None]:
+        return _line_legend_entries(a)
+    opts = a["opts"]
+    palette = opts.get("palette")
+    lw = opts.get("linewidth", _D["linewidth"])
+    sw = _LEGSPEC["swatch_width"]
+    entries = []
+    for j, h in enumerate(hues):
+        col = hue_color(hues, palette, j, a.get("_color"))
+        def paint(_a, _ctx, x0, y_mid, _col=col):
+            return segment(x0, y_mid, x0 + sw, y_mid, color=_col, width=lw,
+                           dash=opts.get("linestyle"))
+        entries.append({"label": str(h), "color": col, "paint": paint})
+    return entries
 
 
 add_artist(ArtistSpec(
     name="line",
-    record=lambda args, kw: {"type": "line", "xs": to_list(args[0]),
-                              "ys": to_list(args[1]), "opts": kw},
-    xdomain=lambda a: a["xs"],
-    ydomain=lambda a: a["ys"],
-    draw=lambda a, ctx: _artist_line(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_entries=_line_legend_entries,
+    record=_line_record,
+    xdomain=_line_xdomain,
+    ydomain=_line_ydomain,
+    draw=_line_draw,
+    legend_entries=_line_legend_entries_multi,
     data_attrs=_line_data_attrs,
 ))

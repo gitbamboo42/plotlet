@@ -201,6 +201,55 @@ def collect_categories(artists, axis):
     return sorted(out, key=str)
 
 
+def long_form_xy(data, x_col, y_col, hue_col=None):
+    """Long-form xy table -> (hues, groups). `groups[j]` is the `(xs, ys)`
+    pair where `hue == hues[j]`. With `hue_col=None`, returns
+    `([None], [(xs, ys)])` so callers can handle both cases uniformly.
+
+    Used by xy artists (scatter, line, regression, ...) that accept
+    seaborn-style `(data=df, x=col, y=col, hue=col)` input."""
+    if data is None:
+        raise ValueError("long_form_xy: data= is required.")
+    xs_all = to_list(data[x_col])
+    ys_all = to_list(data[y_col])
+    if hue_col is None:
+        return [None], [(xs_all, ys_all)]
+    hs = to_list(data[hue_col])
+    hues = []
+    for h in hs:
+        if h not in hues: hues.append(h)
+    groups = [([], []) for _ in hues]
+    hue_idx = {h: j for j, h in enumerate(hues)}
+    for x, y, h in zip(xs_all, ys_all, hs):
+        j = hue_idx[h]
+        groups[j][0].append(x)
+        groups[j][1].append(y)
+    return hues, groups
+
+
+def long_form_1d(data, x_col, hue_col=None):
+    """Long-form 1-D table -> (hues, groups). `groups[j]` is the list of
+    values where `hue == hues[j]`. With `hue_col=None`, returns
+    `([None], [values])`.
+
+    Used by 1-D distribution artists (hist, density_1d, ecdf, ...) that
+    accept seaborn-style `(data=df, x=col, hue=col)` input."""
+    if data is None:
+        raise ValueError("long_form_1d: data= is required.")
+    xs_all = to_list(data[x_col])
+    if hue_col is None:
+        return [None], [xs_all]
+    hs = to_list(data[hue_col])
+    hues = []
+    for h in hs:
+        if h not in hues: hues.append(h)
+    groups = [[] for _ in hues]
+    hue_idx = {h: j for j, h in enumerate(hues)}
+    for x, h in zip(xs_all, hs):
+        groups[hue_idx[h]].append(x)
+    return hues, groups
+
+
 def silverman_bw(xs):
     """Silverman's rule-of-thumb bandwidth for a 1-D Gaussian KDE."""
     n = len(xs)
@@ -228,4 +277,5 @@ def kde_1d(samples, grid, bw):
 __all__ = ["to_list", "to_list_2d", "broadcast", "histogram", "quantile",
            "palette_color", "hue_color", "dodge_positions",
            "categorical_groups", "collect_categories",
+           "long_form_xy", "long_form_1d",
            "silverman_bw", "kde_1d"]

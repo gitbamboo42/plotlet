@@ -1076,6 +1076,41 @@ def chart_bar_fill():
     return c
 
 
+def chart_scatter_long_hue():
+    import pandas as pd
+    rng = random.Random(17)
+    n = 60
+    rows = []
+    for g, (mx, my) in zip(["a", "b", "c"], [(0, 0), (2, 1), (1, 2.5)]):
+        for _ in range(n):
+            rows.append({"x": rng.gauss(mx, 0.6),
+                         "y": rng.gauss(my, 0.6),
+                         "group": g})
+    df = pd.DataFrame(rows)
+    c = pt.chart(data_width=300, data_height=240,
+                 title="scatter (long-form, hue)",
+                 xlabel="x", ylabel="y", legend=True)
+    c.scatter(data=df, x="x", y="y", hue="group")
+    c.legend(position="right")
+    return c
+
+
+def chart_density_1d_long_hue():
+    import pandas as pd
+    rng = random.Random(18)
+    rows = []
+    for g, mu in zip(["control", "treatment"], [0, 1.2]):
+        for _ in range(300):
+            rows.append({"val": rng.gauss(mu, 1.0), "group": g})
+    df = pd.DataFrame(rows)
+    c = pt.chart(data_width=320, data_height=200,
+                 title="density (long-form, hue)",
+                 xlabel="value", ylabel="density", legend=True)
+    c.density_1d(data=df, x="val", hue="group", fill=True)
+    c.legend(position="right")
+    return c
+
+
 def chart_area_stack():
     import math
     xs = list(range(0, 30))
@@ -1200,6 +1235,8 @@ PLOTS = {
     "bar_dodge":             chart_bar_dodge,
     "bar_fill":              chart_bar_fill,
     "area_stack":            chart_area_stack,
+    "scatter_long_hue":      chart_scatter_long_hue,
+    "density_1d_long_hue":   chart_density_1d_long_hue,
 }
 
 

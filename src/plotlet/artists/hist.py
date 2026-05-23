@@ -1,11 +1,19 @@
+"""Histogram — binned counts of a 1-D distribution.
+
+  c.hist(values)                                    # wide-form
+  c.hist(data=df, x="col")                          # long-form
+  c.hist(data=df, x="col", hue="group")             # overlaid by group
+
+Multi-hue overlays share bin edges (seaborn's default) so the bars are
+comparable across groups.
+"""
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list
-from .._spec import _D
+from ..utils import to_list, long_form_1d, hue_color
+from .._spec import _D, _LEGSPEC
 from ..draw import rect as draw_rect, path as draw_path
-from ._shared import _bar_legend_entries
 
 
-def _artist_hist(a, xs_, ys_, col):
+def _artist_hist(a, xs_, ys_, col, bins):
     out = []
     opts = a["opts"]
     horizontal = opts.get("orientation") == "h"
@@ -19,7 +27,6 @@ def _artist_hist(a, xs_, ys_, col):
         raise ValueError(
             f"hist histtype={histtype!r} — must be 'bar', 'step', or 'stepfilled'."
         )
-    bins = a["_bins"]
 
     if histtype == "bar":
         half_gap = _D["hist_gap"] / 2
@@ -40,7 +47,6 @@ def _artist_hist(a, xs_, ys_, col):
                                  dash=opts.get("linestyle"), alpha=alpha))
         return "".join(out)
 
-    # step / stepfilled — walk bin tops as one connected path.
     if not bins:
         return ""
     pts = [(bin_scale(bins[0]["x0"]), base)]
@@ -61,33 +67,98 @@ def _artist_hist(a, xs_, ys_, col):
     return "".join(out)
 
 
-def _bin_xs(a): return [b["x0"] for b in a["_bins"]] + [b["x1"] for b in a["_bins"]]
-def _bin_ys(a): return [b["count"] for b in a["_bins"]] + [0]
+def _hist_record(args, kw):
+    kw = dict(kw)
+    if "data" in kw or "x" in kw or "y" in kw:
+        data_df = kw.pop("data", None)
+        x_col = kw.pop("x", None)
+        hue_col = kw.pop("hue", None)
+        if data_df is None or x_col is None:
+            raise TypeError(
+                "hist long-form requires data=, x= (hue= optional)."
+            )
+        hues, groups = long_form_1d(data_df, x_col, hue_col)
+    else:
+        hues = [None]
+        groups = [to_list(args[0])]
+    return {"type": "hist", "hues": hues, "groups": groups, "opts": kw}
+
+
+def _bin_xs(bin_groups):
+    return [v for bins in bin_groups for b in bins for v in (b["x0"], b["x1"])]
+
+
+def _bin_ys(bin_groups):
+    return [b["count"] for bins in bin_groups for b in bins] + [0]
 
 
 def _hist_data_attrs(a):
-    raw = a["data"]
-    out = {"n": len(raw), "bins": len(a.get("_bins", [])) or a["opts"].get("bins", 10)}
-    bins = a.get("_bins") or []
-    if bins:
-        out["x-min"] = bins[0]["x0"]
-        out["x-max"] = bins[-1]["x1"]
-        out["count-max"] = max(b["count"] for b in bins)
+    groups = a["groups"]
+    bin_groups = a.get("_bin_groups", [])
+    n = sum(len(g) for g in groups)
+    out = {"n": n, "bins": (len(bin_groups[0]) if bin_groups else
+                            a["opts"].get("bins", 10))}
+    flat_bins = [b for bins in bin_groups for b in bins]
+    if flat_bins:
+        out["x-min"] = min(b["x0"] for b in flat_bins)
+        out["x-max"] = max(b["x1"] for b in flat_bins)
+        out["count-max"] = max(b["count"] for b in flat_bins)
     return out
 
 
 def _hist_horizontal(a): return a["opts"].get("orientation") == "h"
-def _hist_xdomain(a): return _bin_ys(a) if _hist_horizontal(a) else _bin_xs(a)
-def _hist_ydomain(a): return _bin_xs(a) if _hist_horizontal(a) else _bin_ys(a)
+
+
+def _hist_xdomain(a):
+    bin_groups = a.get("_bin_groups", [])
+    return _bin_ys(bin_groups) if _hist_horizontal(a) else _bin_xs(bin_groups)
+
+
+def _hist_ydomain(a):
+    bin_groups = a.get("_bin_groups", [])
+    return _bin_xs(bin_groups) if _hist_horizontal(a) else _bin_ys(bin_groups)
+
+
+def _hist_draw(a, ctx):
+    palette = a["opts"].get("palette")
+    bin_groups = a.get("_bin_groups", [])
+    out = []
+    for j, bins in enumerate(bin_groups):
+        col = hue_color(a["hues"], palette, j, ctx.color)
+        out.append(_artist_hist(a, ctx.x_scale, ctx.y_scale, col, bins))
+    return "".join(out)
+
+
+def _hist_legend_entries(a):
+    hues = a["hues"]
+    opts = a["opts"]
+    alpha = opts.get("alpha", _D["hist_alpha"])
+    sw = _LEGSPEC["swatch_width"]
+    if hues == [None]:
+        label = opts.get("label")
+        if not label:
+            return []
+        def paint(_a, _ctx, x0, y_mid):
+            return draw_rect(x0, y_mid - 5, sw, 10,
+                             fill=_a["_color"], alpha=alpha)
+        return [{"label": label, "color": a.get("_color"), "paint": paint}]
+    palette = opts.get("palette")
+    entries = []
+    for j, h in enumerate(hues):
+        col = hue_color(hues, palette, j, a.get("_color"))
+        def paint(_a, _ctx, x0, y_mid, _col=col):
+            return draw_rect(x0, y_mid - 5, sw, 10, fill=_col, alpha=alpha)
+        entries.append({"label": str(h), "color": col, "paint": paint})
+    return entries
 
 
 add_artist(ArtistSpec(
     name="hist",
-    record=lambda args, kw: {"type": "hist", "data": to_list(args[0]), "opts": kw},
+    record=_hist_record,
     xdomain=_hist_xdomain,
     ydomain=_hist_ydomain,
-    draw=lambda a, ctx: _artist_hist(a, ctx.x_scale, ctx.y_scale, ctx.color),
-    legend_entries=_bar_legend_entries,
+    draw=_hist_draw,
+    legend_entries=_hist_legend_entries,
     data_attrs=_hist_data_attrs,
     force_zero_y=lambda a: not _hist_horizontal(a),
     force_zero_x=_hist_horizontal,

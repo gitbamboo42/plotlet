@@ -544,11 +544,47 @@ def _enforce_floors(M):
 
 def _prebin_hist(st):
     """Compute hist bins on `st["artists"]` so they participate in domain
-    scanning. Idempotent (guarded by `_bins` presence)."""
+    scanning. Multi-hue groups share bin edges (seaborn default).
+    Idempotent (guarded by `_bin_groups` presence)."""
     for a in st["artists"]:
-        if a["type"] == "hist" and "_bins" not in a:
-            a["_bins"] = histogram(a["data"], a["opts"].get("bins", 10),
-                                   density=a["opts"].get("density", False))
+        if a["type"] != "hist" or "_bin_groups" in a:
+            continue
+        opts = a["opts"]
+        bins_n = opts.get("bins", 10)
+        density = opts.get("density", False)
+        groups = a["groups"]
+        if len(groups) <= 1:
+            a["_bin_groups"] = [histogram(groups[0], bins_n, density=density)] \
+                               if groups else [[]]
+            continue
+        all_vals = [v for g in groups for v in g
+                    if v is not None and not (isinstance(v, float) and v != v)]
+        if not all_vals:
+            a["_bin_groups"] = [[] for _ in groups]
+            continue
+        lo, hi = min(all_vals), max(all_vals)
+        if lo == hi: hi = lo + 1
+        n = bins_n if isinstance(bins_n, int) else 10
+        width = (hi - lo) / n
+        edges = [lo + i * width for i in range(n + 1)]
+        bin_groups = []
+        for g in groups:
+            counts = [0] * n
+            cleaned = [v for v in g if v is not None
+                       and not (isinstance(v, float) and v != v)]
+            for v in cleaned:
+                if v == hi:
+                    counts[-1] += 1
+                else:
+                    i = int((v - lo) / width)
+                    if 0 <= i < n:
+                        counts[i] += 1
+            if density:
+                total = sum(counts) * width or 1
+                counts = [c / total for c in counts]
+            bin_groups.append([{"x0": edges[i], "x1": edges[i + 1],
+                                "count": counts[i]} for i in range(n)])
+        a["_bin_groups"] = bin_groups
 
 
 def _artist_axis_order(artists, axis):

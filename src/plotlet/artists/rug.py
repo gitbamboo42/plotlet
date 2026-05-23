@@ -1,9 +1,12 @@
-"""Rug plot: short tick marks along an axis showing where each observation sits.
+"""Rug plot — short tick marks along an axis showing where each observation sits.
 
-No-bin alternative (or companion) to a histogram. Pairs especially well with
-`density_1d` to show both the smoothed estimate and the raw observations.
+No-bin alternative (or companion) to a histogram. Pairs especially well
+with `density_1d` to show both the smoothed estimate and the raw
+observations.
 
-API: c.rug(values, axis="x")
+  c.rug(values, axis="x")                       # wide-form
+  c.rug(data=df, x="col")                       # long-form
+  c.rug(data=df, x="col", hue="group")          # ticks coloured per hue
 
 Styling kwargs:
   axis='x'       'y' draws ticks along the left axis instead
@@ -13,42 +16,62 @@ Styling kwargs:
 """
 from ..registry import ArtistSpec, add_artist
 from ..draw import segment
-from ..utils import to_list
+from ..utils import to_list, long_form_1d, hue_color
 
 
 def _rug_record(args, kw):
-    return {"type": "rug", "vals": to_list(args[0]), "opts": kw}
+    kw = dict(kw)
+    if "data" in kw or "x" in kw or "y" in kw:
+        data_df = kw.pop("data", None)
+        x_col = kw.pop("x", None)
+        hue_col = kw.pop("hue", None)
+        if data_df is None or x_col is None:
+            raise TypeError(
+                "rug long-form requires data=, x= (hue= optional)."
+            )
+        hues, groups = long_form_1d(data_df, x_col, hue_col)
+    else:
+        hues = [None]
+        groups = [to_list(args[0])]
+    return {"type": "rug", "hues": hues, "groups": groups, "opts": kw}
+
+
+def _rug_axis(a): return a["opts"].get("axis", "x")
 
 
 def _rug_xdomain(a):
-    return a["vals"] if a["opts"].get("axis", "x") == "x" else None
+    if _rug_axis(a) != "x": return None
+    return [v for g in a["groups"] for v in g]
 
 
 def _rug_ydomain(a):
-    return a["vals"] if a["opts"].get("axis", "x") == "y" else None
+    if _rug_axis(a) != "y": return None
+    return [v for g in a["groups"] for v in g]
 
 
 def _rug_draw(a, ctx):
-    col = ctx.color
+    palette = a["opts"].get("palette")
     lw = a["opts"].get("linewidth", 0.8)
     alpha = a["opts"].get("alpha", 0.6)
     length = a["opts"].get("length", 0.04)
-    axis = a["opts"].get("axis", "x")
+    axis = _rug_axis(a)
     out = []
-    if axis == "x":
-        y_base = ctx.ih
-        y_top = y_base - length * ctx.ih
-        for v in a["vals"]:
-            px = ctx.x_scale(v)
-            out.append(segment(px, y_base, px, y_top,
-                               color=col, width=lw, alpha=alpha))
-    else:
-        x_base = 0
-        x_right = length * ctx.iw
-        for v in a["vals"]:
-            py = ctx.y_scale(v)
-            out.append(segment(x_base, py, x_right, py,
-                               color=col, width=lw, alpha=alpha))
+    for j, vals in enumerate(a["groups"]):
+        col = hue_color(a["hues"], palette, j, ctx.color)
+        if axis == "x":
+            y_base = ctx.ih
+            y_top = y_base - length * ctx.ih
+            for v in vals:
+                px = ctx.x_scale(v)
+                out.append(segment(px, y_base, px, y_top,
+                                   color=col, width=lw, alpha=alpha))
+        else:
+            x_base = 0
+            x_right = length * ctx.iw
+            for v in vals:
+                py = ctx.y_scale(v)
+                out.append(segment(x_base, py, x_right, py,
+                                   color=col, width=lw, alpha=alpha))
     return "".join(out)
 
 
