@@ -6,8 +6,7 @@ plotlet is a Python library for SVG plots. It provides reproducible, byte-identi
 
 Hands-on tour with executable examples:
 
-- [notebooks/01_basics.ipynb](notebooks/01_basics.ipynb) — line, scatter, bar, hist, fill_between, reference lines, heatmap
-- [notebooks/02_subplots.ipynb](notebooks/02_subplots.ipynb) — multi-panel composition and shared scales
+- [notebooks/00_introduction.ipynb](notebooks/00_introduction.ipynb) — long-form data, aesthetic inheritance, layering, composition
 
 Reference docs in [`docs/`](docs/):
 
