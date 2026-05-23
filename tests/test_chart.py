@@ -1034,6 +1034,64 @@ def chart_qq():
     return c
 
 
+def chart_bar_stack():
+    cats = ["Q1", "Q2", "Q3", "Q4"]
+    series = [
+        [12, 18, 15, 22],
+        [ 8, 14, 16, 18],
+        [ 5,  7,  9, 11],
+    ]
+    c = pt.chart(data_width=300, data_height=200,
+                 title="bar stack", ylabel="$M", legend=True)
+    c.bar(cats, series, position="stack", labels=["A", "B", "C"])
+    c.legend(position="right")
+    return c
+
+
+def chart_bar_dodge():
+    cats = ["Q1", "Q2", "Q3", "Q4"]
+    series = [
+        [12, 18, 15, 22],
+        [ 8, 14, 16, 18],
+        [ 5,  7,  9, 11],
+    ]
+    c = pt.chart(data_width=320, data_height=200,
+                 title="bar dodge", ylabel="$M", legend=True)
+    c.bar(cats, series, position="dodge", labels=["A", "B", "C"])
+    c.legend(position="right")
+    return c
+
+
+def chart_bar_fill():
+    cats = ["Q1", "Q2", "Q3", "Q4"]
+    series = [
+        [12, 18, 15, 22],
+        [ 8, 14, 16, 18],
+        [ 5,  7,  9, 11],
+    ]
+    c = pt.chart(data_width=300, data_height=200,
+                 title="bar fill (100%)", ylabel="share", legend=True)
+    c.bar(cats, series, position="fill", labels=["A", "B", "C"])
+    c.legend(position="right")
+    return c
+
+
+def chart_area_stack():
+    import math
+    xs = list(range(0, 30))
+    coal      = [max(0, 100 - 2 * x + 5 * math.sin(x / 3)) for x in xs]
+    gas       = [50 + 10 * math.sin(x / 4 + 1) for x in xs]
+    nuclear   = [40 for _ in xs]
+    renewable = [5 + 2.5 * x + 8 * math.sin(x / 5) for x in xs]
+    c = pt.chart(data_width=320, data_height=220,
+                 title="generation mix", xlabel="year", ylabel="TWh",
+                 legend=True)
+    c.area(xs, [coal, gas, nuclear, renewable],
+           labels=["coal", "gas", "nuclear", "renewables"])
+    c.legend(position="right")
+    return c
+
+
 def _legend_position_chart(position):
     """A two-line chart with an outside-positioned in-frame legend. Used
     by the legend_outside_* baselines to exercise each `position=` value
@@ -1138,6 +1196,10 @@ PLOTS = {
     "contour":               chart_contour,
     "ridge":                 chart_ridge,
     "qq":                    chart_qq,
+    "bar_stack":             chart_bar_stack,
+    "bar_dodge":             chart_bar_dodge,
+    "bar_fill":              chart_bar_fill,
+    "area_stack":            chart_area_stack,
 }
 
 
