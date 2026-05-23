@@ -37,7 +37,7 @@ def chart_table():
     return c
 
 
-def chart_hue():
+def chart_color():
     xs = _xs()
     n = len(xs)
     df = {
@@ -45,13 +45,13 @@ def chart_hue():
         "v":      [math.sin(x) for x in xs] + [math.cos(x) for x in xs],
         "series": ["sin"] * n + ["cos"] * n,
     }
-    c = pt.chart(df, title="hue split",
+    c = pt.chart(df, title="color split",
                  xlabel="t", ylabel="v", legend=True, grid=True)
     c.line(x="t", y="v", color="series")
     return c
 
 
-def chart_scatter_hue():
+def chart_scatter_color():
     rng = random.Random(0)
     n = 60
     df = {
@@ -59,7 +59,7 @@ def chart_scatter_hue():
         "y":     [rng.random() * 10 for _ in range(2 * n)],
         "group": ["A"] * n + ["B"] * n,
     }
-    c = pt.chart(df, title="scatter hue",
+    c = pt.chart(df, title="scatter color",
                  xlabel="x", ylabel="y", legend=True, grid=True)
     c.scatter(x="x", y="y", color="group", s=30, alpha=0.6)
     return c
@@ -741,8 +741,8 @@ def chart_scatter_size():
     return c
 
 
-def chart_scatter_size_style_hue():
-    # size + style + hue compose. Each column drives a separate aesthetic.
+def chart_scatter_size_style_color():
+    # size + style + color compose. Each column drives a separate aesthetic.
     random.seed(2)
     n = 36
     groups = ["alpha", "beta", "gamma"]
@@ -753,7 +753,7 @@ def chart_scatter_size_style_hue():
         "group": [groups[i % 3] for i in range(n)],
     }
     c = pt.chart(df, data_width=400, data_height=240,
-                 title="hue + size + style", xlabel="x", ylabel="y",
+                 title="color + size + style", xlabel="x", ylabel="y",
                  legend=True)
     c.scatter(x="x", y="y", color="group", size="mass", style="group")
     return c
@@ -817,7 +817,7 @@ def chart_boxplot():
              {"group": "high", "trt": "B", "score": 16}]
     data = {k: [r[k] for r in rows] for k in rows[0]}
     c = pt.chart(data_width=380, data_height=220,
-                 title="boxplot hue", xlabel="group", ylabel="score",
+                 title="boxplot fill", xlabel="group", ylabel="score",
                  legend=True)
     c.xscale("category", order=["ctrl", "low", "mid", "high"])
     c.boxplot(data=data, x="group", y="score", fill="trt",
@@ -838,7 +838,7 @@ def chart_violin():
                              "expr": rng.gauss(mu, sd)})
     data = {k: [r[k] for r in rows] for k in rows[0]}
     c = pt.chart(data_width=380, data_height=220,
-                 title="violin hue", xlabel="genotype", ylabel="expression",
+                 title="violin fill", xlabel="genotype", ylabel="expression",
                  legend=True)
     c.xscale("category", order=["wt", "+drug", "ko", "rescue"])
     c.violin(data=data, x="geno", y="expr", fill="trt",
@@ -859,7 +859,7 @@ def chart_swarm():
                              "value": rng.gauss(mu, sd)})
     data = {k: [r[k] for r in rows] for k in rows[0]}
     c = pt.chart(data_width=360, data_height=220,
-                 title="swarm hue", xlabel="group", ylabel="value",
+                 title="swarm fill", xlabel="group", ylabel="value",
                  legend=True)
     c.xscale("category", order=["A", "B", "C", "D"])
     c.swarm(data=data, x="group", y="value", fill="trt",
@@ -880,7 +880,7 @@ def chart_strip():
                              "value": rng.gauss(mu, sd)})
     data = {k: [r[k] for r in rows] for k in rows[0]}
     c = pt.chart(data_width=360, data_height=220,
-                 title="strip hue", xlabel="condition", ylabel="value",
+                 title="strip fill", xlabel="condition", ylabel="value",
                  legend=True)
     c.xscale("category", order=["A", "B", "C", "D"])
     c.strip(data=data, x="cond", y="value", fill="trt",
@@ -1095,7 +1095,7 @@ def chart_bar_long_fill():
     return c
 
 
-def chart_scatter_long_hue():
+def chart_scatter_long_color():
     import pandas as pd
     rng = random.Random(17)
     n = 60
@@ -1107,14 +1107,14 @@ def chart_scatter_long_hue():
                          "group": g})
     df = pd.DataFrame(rows)
     c = pt.chart(data_width=300, data_height=240,
-                 title="scatter (long-form, hue)",
+                 title="scatter (long-form, color)",
                  xlabel="x", ylabel="y", legend=True)
     c.scatter(data=df, x="x", y="y", color="group")
     c.legend(position="right")
     return c
 
 
-def chart_density_1d_long_hue():
+def chart_density_1d_long_color():
     import pandas as pd
     rng = random.Random(18)
     rows = []
@@ -1123,16 +1123,15 @@ def chart_density_1d_long_hue():
             rows.append({"val": rng.gauss(mu, 1.0), "group": g})
     df = pd.DataFrame(rows)
     c = pt.chart(data_width=320, data_height=200,
-                 title="density (long-form, hue)",
+                 title="density (long-form, color)",
                  xlabel="value", ylabel="density", legend=True)
     c.density_1d(data=df, x="val", color="group", fill=True)
     c.legend(position="right")
     return c
 
 
-def chart_regression_hue():
-    """OLS regression fits one line + band per hue group, ggplot's
-    `geom_smooth(method=\"lm\") + aes(color=)` shape."""
+def chart_regression_color():
+    """OLS regression: one line + band per color level."""
     import pandas as pd
     rng = random.Random(22)
     rows = []
@@ -1146,7 +1145,7 @@ def chart_regression_hue():
     df = pd.DataFrame(rows)
     c = pt.chart(df, x="x", y="y", color="g",
                  data_width=320, data_height=240,
-                 title="per-hue regression",
+                 title="per-color regression",
                  xlabel="x", ylabel="y", legend=True)
     c.scatter(s=14, alpha=0.5)
     c.regression()
@@ -1223,7 +1222,7 @@ def chart_line_alpha():
 
 
 def chart_aes_inheritance():
-    """Chart-level aes (x=, y=, hue=) inherited by multiple artist calls,
+    """Chart-level aes (x=, y=, color=, fill=) inherited by multiple artist calls,
     ggplot-style. The boxplot+strip overlay is the canonical use case."""
     import pandas as pd
     rng = random.Random(20)
@@ -1280,8 +1279,8 @@ def chart_legend_outside_bottom(): return _legend_position_chart("bottom")
 
 PLOTS = {
     "table":               chart_table,
-    "hue":                 chart_hue,
-    "scatter_hue":         chart_scatter_hue,
+    "color":               chart_color,
+    "scatter_color":       chart_scatter_color,
     "bar":                 chart_bar,
     "hist":                chart_hist,
     "fill_between":        chart_fill_between,
@@ -1327,7 +1326,7 @@ PLOTS = {
     "time_axis_dates":     chart_time_axis_dates,
     "time_axis_hours":     chart_time_axis_hours,
     "scatter_size":        chart_scatter_size,
-    "scatter_size_style_hue": chart_scatter_size_style_hue,
+    "scatter_size_style_color": chart_scatter_size_style_color,
     "facet_scatter":       chart_facet_scatter,
     "facet_wrap_two_rows": chart_facet_wrap_two_rows,
     "symlog_x":            chart_symlog_x,
@@ -1366,10 +1365,10 @@ PLOTS = {
     "bar_fill":              chart_bar_fill,
     "bar_long_fill":         chart_bar_long_fill,
     "area_stack":            chart_area_stack,
-    "scatter_long_hue":      chart_scatter_long_hue,
-    "density_1d_long_hue":   chart_density_1d_long_hue,
+    "scatter_long_color":    chart_scatter_long_color,
+    "density_1d_long_color": chart_density_1d_long_color,
     "aes_inheritance":       chart_aes_inheritance,
-    "regression_hue":        chart_regression_hue,
+    "regression_color":      chart_regression_color,
     "line_group":            chart_line_group,
     "line_linetype":         chart_line_linetype,
     "line_alpha":            chart_line_alpha,
