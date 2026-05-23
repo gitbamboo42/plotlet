@@ -17,6 +17,7 @@ Styling kwargs:
 """
 from ..registry import ArtistSpec, add_artist
 from ..utils import to_list, long_form_1d, hue_color
+from ..utils import _drop_nan
 from .._spec import _LEGSPEC
 from ..draw import polyline, segment
 
@@ -52,6 +53,7 @@ def _freqpoly_record(args, kw):
         groups = [to_list(args[0])]
     bins = kw.get("bins", 20)
     density = kw.get("density", False)
+    groups = [_drop_nan(g) for g in groups]
     all_vals = [v for g in groups for v in g]
     if not all_vals:
         return {"type": "freqpoly", "hues": hues,

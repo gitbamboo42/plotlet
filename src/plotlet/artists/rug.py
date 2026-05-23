@@ -14,6 +14,8 @@ Styling kwargs:
   alpha=0.6      tick opacity
   linewidth=0.8  tick stroke width
 """
+import math
+
 from ..registry import ArtistSpec, add_artist
 from ..draw import segment
 from ..utils import to_list, long_form_1d, hue_color
@@ -62,6 +64,8 @@ def _rug_draw(a, ctx):
             y_base = ctx.ih
             y_top = y_base - length * ctx.ih
             for v in vals:
+                if isinstance(v, float) and math.isnan(v):
+                    continue
                 px = ctx.x_scale(v)
                 out.append(segment(px, y_base, px, y_top,
                                    color=col, width=lw, alpha=alpha))
@@ -69,6 +73,8 @@ def _rug_draw(a, ctx):
             x_base = 0
             x_right = length * ctx.iw
             for v in vals:
+                if isinstance(v, float) and math.isnan(v):
+                    continue
                 py = ctx.y_scale(v)
                 out.append(segment(x_base, py, x_right, py,
                                    color=col, width=lw, alpha=alpha))

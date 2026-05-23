@@ -97,9 +97,12 @@ def histogram(data, bins, density=False):
             for i in range(n)]
 
 
-def quantile(xs, q):
+def quantile(xs, q, *, _skipna=True):
     """Linear-interpolation quantile (Tukey / numpy default `linear`).
-    Returns NaN for empty input, the single value for length-1 input."""
+    NaN values are skipped by default. Returns NaN for empty input, the
+    single value for length-1 input."""
+    if _skipna:
+        xs = _drop_nan(xs)
     xs = sorted(xs)
     n = len(xs)
     if n == 0:
@@ -250,8 +253,14 @@ def long_form_1d(data, x_col, hue_col=None):
     return hues, groups
 
 
+def _drop_nan(xs):
+    return [x for x in xs if not (isinstance(x, float) and math.isnan(x))]
+
+
 def silverman_bw(xs):
-    """Silverman's rule-of-thumb bandwidth for a 1-D Gaussian KDE."""
+    """Silverman's rule-of-thumb bandwidth for a 1-D Gaussian KDE.
+    NaN values are skipped (matches numpy's nan-aware convention)."""
+    xs = _drop_nan(xs)
     n = len(xs)
     if n < 2:
         return 1.0
@@ -262,10 +271,14 @@ def silverman_bw(xs):
 
 
 def kde_1d(samples, grid, bw):
-    """Evaluate a 1-D Gaussian KDE at each point in `grid`.
+    """Evaluate a 1-D Gaussian KDE at each point in `grid`. NaN samples
+    are skipped.
 
     Returns density values (same length as grid) normalised to integrate to 1.
     """
+    samples = _drop_nan(samples)
+    if not samples:
+        return [0.0] * len(grid)
     inv = 1.0 / (bw * math.sqrt(2 * math.pi) * len(samples))
     out = []
     for g in grid:

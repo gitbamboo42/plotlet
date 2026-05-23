@@ -26,7 +26,9 @@ Styling kwargs:
 import math
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, quantile, hue_color, dodge_positions, categorical_groups, silverman_bw, kde_1d
+from ..utils import (to_list, quantile, hue_color, dodge_positions,
+                     categorical_groups, silverman_bw, kde_1d)
+from ..utils import _drop_nan
 from ..draw import path, rect, segment
 from .._spec import _FRAME, _FIGSPEC
 
@@ -91,7 +93,7 @@ def _violin_draw(a, ctx):
     out = []
     for i, cat in enumerate(cats):
         for j in range(n_hues):
-            vals = groups[i][j]
+            vals = _drop_nan(groups[i][j])
             if not vals:
                 continue
             fill = hue_color(hues, palette, j, ctx.color) if do_fill else None
