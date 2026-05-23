@@ -209,6 +209,9 @@ class Chart(_Renderable):
                  clip: bool | None = None,
                  facecolor: str | None = None,
                  theme: str | None = None,
+                 x: str | None = None, y: str | None = None,
+                 hue: str | None = None,
+                 palette=None,
                  **kwargs):
         # Migration errors — surface the rename loudly rather than silently
         # accepting and producing a different-sized figure.
@@ -264,6 +267,9 @@ class Chart(_Renderable):
 
         # ---- Composition state ---------------------------------------------
         self._data = data
+        # Chart-level aesthetic defaults (ggplot-style inheritance). Artist
+        # calls with matching kwargs override; missing kwargs fall back here.
+        self._aes = {"x": x, "y": y, "hue": hue, "palette": palette}
         self._parent: "Layout | None" = None
         # Share-class membership. Set by parent-level .share_x() / .share_y()
         # (or pt.grid(share_x=...)); not user-settable on the leaf directly.
@@ -395,6 +401,16 @@ class Chart(_Renderable):
         spec = get_artist(name)
         if name in _FRAME_METHODS or spec is not None:
             def recorder(*args, **kwargs):
+                if spec is not None:
+                    # Chart-level aesthetic inheritance — fill in missing aes
+                    # from `pt.chart(df, x=, y=, hue=, palette=)`.
+                    for k, v in self._aes.items():
+                        if v is not None and k not in kwargs:
+                            kwargs[k] = v
+                    # Data injection — column-referencing kwargs need a table.
+                    if (self._data is not None and "data" not in kwargs
+                            and any(k in kwargs for k in ("x", "y", "hue"))):
+                        kwargs["data"] = self._data
                 if spec is not None and spec.frame_defaults is not None:
                     for call in spec.frame_defaults(list(args), dict(kwargs)) or ():
                         self._calls.append(call)
@@ -417,9 +433,20 @@ class Chart(_Renderable):
         cases shadow `__getattr__`'s recorder closure with a real method,
         so they need to record explicitly."""
         self._calls.append((name, list(args), dict(kwargs)))
+
+    def _resolve_aes(self, *, x=None, y=None, hue=None, palette=None):
+        """Fill in missing aes from chart-level defaults set on the
+        constructor (`pt.chart(df, x=, y=, hue=, palette=)`). Per-call
+        kwargs always win — only `None` slots get the chart-level value."""
+        if x is None: x = self._aes.get("x")
+        if y is None: y = self._aes.get("y")
+        if hue is None: hue = self._aes.get("hue")
+        if palette is None: palette = self._aes.get("palette")
+        return x, y, hue, palette
         return self
 
     def line(self, *args, x=None, y=None, hue=None, palette=None, data=None, **opts):
+        x, y, hue, palette = self._resolve_aes(x=x, y=y, hue=hue, palette=palette)
         if x is not None or y is not None:
             self._tabular("line", "line", data, x, y, hue, palette, opts)
         else:
@@ -453,6 +480,7 @@ class Chart(_Renderable):
         For numeric color mapping use `c=<col_or_list>` + `cmap=`, with
         optional `vmin`/`vmax`/`norm='linear'|'log'`. `c=` is mutually
         exclusive with `hue=` — they're alternative color sources."""
+        x, y, hue, palette = self._resolve_aes(x=x, y=y, hue=hue, palette=palette)
         if c is not None and hue is not None:
             raise ValueError(
                 "scatter accepts either hue= (categorical) or c= (numeric), "
@@ -554,16 +582,27 @@ class Chart(_Renderable):
         mapping = {v: cycle[i % len(cycle)] for i, v in enumerate(seen)}
         return [mapping[v] for v in vals]
 
-    def bar(self, *args, x=None, y=None, data=None, **opts):
-        if x is not None or y is not None:
+    def bar(self, *args, x=None, y=None, hue=None, palette=None, data=None, **opts):
+        x, y, hue, palette = self._resolve_aes(x=x, y=y, hue=hue, palette=palette)
+        if hue is not None:
+            # Long-form with hue: hand off to the artist's multi-series path.
+            df = self._resolve_data(data, "bar")
+            self._record("bar", data=df, x=x, y=y, hue=hue, palette=palette, **opts)
+        elif x is not None or y is not None:
             df = self._resolve_data(data, "bar")
             self._record("bar", to_list(df[x]), to_list(df[y]), **opts)
         else:
             self._record("bar", *args, **opts)
         return self
 
-    def hist(self, *args, x=None, data=None, **opts):
-        if x is not None:
+    def hist(self, *args, x=None, hue=None, palette=None, data=None, **opts):
+        x, _, hue, palette = self._resolve_aes(x=x, hue=hue, palette=palette)
+        if hue is not None:
+            # Long-form with hue: hand off to the artist's multi-hue path
+            # so bin edges are shared across groups.
+            df = self._resolve_data(data, "hist")
+            self._record("hist", data=df, x=x, hue=hue, palette=palette, **opts)
+        elif x is not None:
             df = self._resolve_data(data, "hist")
             self._record("hist", to_list(df[x]), **opts)
         else:
@@ -571,6 +610,8 @@ class Chart(_Renderable):
         return self
 
     def fill_between(self, *args, x=None, y1=None, y2=None, data=None, **opts):
+        # Aes inheritance: x can come from chart-level x= default.
+        x = x if x is not None else self._aes.get("x")
         if x is not None or y1 is not None or y2 is not None:
             df = self._resolve_data(data, "fill_between")
             self._record("fill_between",

@@ -1111,6 +1111,25 @@ def chart_density_1d_long_hue():
     return c
 
 
+def chart_aes_inheritance():
+    """Chart-level aes (x=, y=, hue=) inherited by multiple artist calls,
+    ggplot-style. The boxplot+strip overlay is the canonical use case."""
+    import pandas as pd
+    rng = random.Random(20)
+    rows = []
+    for g in ["A", "B", "C"]:
+        mu = {"A": 0, "B": 1.5, "C": 0.7}[g]
+        for _ in range(40):
+            rows.append({"group": g, "value": rng.gauss(mu, 0.6)})
+    df = pd.DataFrame(rows)
+    c = pt.chart(df, x="group", y="value",
+                 data_width=320, data_height=240,
+                 title="aes inheritance (boxplot + strip)")
+    c.boxplot()
+    c.strip(s=3, alpha=0.5)
+    return c
+
+
 def chart_area_stack():
     import math
     xs = list(range(0, 30))
@@ -1237,6 +1256,7 @@ PLOTS = {
     "area_stack":            chart_area_stack,
     "scatter_long_hue":      chart_scatter_long_hue,
     "density_1d_long_hue":   chart_density_1d_long_hue,
+    "aes_inheritance":       chart_aes_inheritance,
 }
 
 
