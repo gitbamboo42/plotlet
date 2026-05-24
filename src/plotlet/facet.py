@@ -136,7 +136,7 @@ class FacetGrid:
         return self._materialize().to_html(full_page=full_page)
 
     def _repr_html_(self) -> str:
-        return self.to_svg()
+        return self._materialize()._repr_html_()
 
     def show(self):
         return self._materialize().show()

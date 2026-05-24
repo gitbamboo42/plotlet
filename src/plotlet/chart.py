@@ -101,7 +101,17 @@ class _Renderable:
         return svg
 
     def _repr_html_(self) -> str:
-        return self.to_svg()
+        # Overlay responsive CSS for notebook display only — `to_svg()` stays
+        # byte-identical for file output. `max-width:100%` lets the figure
+        # shrink with a narrow cell; the existing `width` attribute caps it
+        # at natural size; `height:auto` preserves aspect via the viewBox.
+        # Merged into the existing `style="background:..."` to avoid a
+        # duplicate attribute (browsers would drop one).
+        return self.to_svg().replace(
+            'style="background:',
+            'style="max-width:100%;height:auto;background:',
+            1,
+        )
 
     def show(self):
         self._require_render_root()
