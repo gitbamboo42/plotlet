@@ -136,24 +136,28 @@ def chart_imshow_origin_upper():
 def chart_imshow_diverging_center():
     # Asymmetric range (-2 to 8) with center=0 — colorbar shows zero
     # pinned to the middle of the strip even though zero is far from
-    # the geometric midpoint of [-2, 8]. Composed with pt.legend() so
-    # the gradient strip (where the new norm shows up) is rendered.
+    # the geometric midpoint of [-2, 8]. Explicit position="left" also
+    # exercises the inline-colorbar left-side tick rendering.
     data = [[(r - 4) * 0.5 + (c - 4) * 0.7 for c in range(12)] for r in range(10)]
     c = pt.chart(title="imshow center=0", xlabel="x", ylabel="y")
     c.imshow(data, cmap="RdBu_r", center=0, vmin=-2, vmax=8,
              legend={"label": "value"})
-    return c | pt.legend(c)
+    c.legend(True, position="left")
+    return c
 
 
 def chart_imshow_log_norm():
     # Multi-decade dynamic range — without log, all but the brightest
     # cells render near-black; with log, structure across decades shows.
-    # Legend ticks are powers of 10.
+    # Legend ticks are powers of 10. Default position="inside" auto-flips
+    # to "right" for gradient-bearing charts (an inside colorbar is
+    # incoherent), so this exercises the auto-flip path.
     data = [[10 ** (0.05 * r + 0.05 * c) for c in range(20)] for r in range(15)]
     c = pt.chart(title="imshow norm='log'", xlabel="x", ylabel="y")
     c.imshow(data, cmap="magma", norm="log",
              legend={"label": "intensity"})
-    return c | pt.legend(c)
+    c.legend(True)
+    return c
 
 
 def chart_category_x_scatter():
@@ -422,9 +426,10 @@ def chart_heatmap_dataframe():
 
 def chart_heatmap_annot():
     # annot=True overlays each cell's value; annot_color="auto" picks
-    # white text on dark cells, black on light, via luminance. Composed
-    # with pt.legend(c) so the gradient colorbar accompanies the matrix
-    # (the canonical correlation-matrix look).
+    # white text on dark cells, black on light, via luminance. Inline
+    # colorbar via chart.legend(True) — auto-flips inside → right for
+    # the gradient — the canonical correlation-matrix look without the
+    # composition workaround.
     n = 6
     data = [[math.cos((i - j) * 0.4) for j in range(n)] for i in range(n)]
     labels = [f"v{i}" for i in range(n)]
@@ -432,7 +437,8 @@ def chart_heatmap_annot():
     c.heatmap(data, xticklabels=labels, yticklabels=labels,
               cmap="RdBu_r", vmin=-1, vmax=1, annot=True, fmt="+.2f",
               legend={"label": "corr"})
-    return c | pt.legend(c)
+    c.legend(True)
+    return c
 
 
 def chart_imshow_annot_custom():

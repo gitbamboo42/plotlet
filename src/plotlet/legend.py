@@ -152,10 +152,16 @@ def _build_groups(sources: list[Chart], states: dict[int, dict],
     return raw
 
 
-def _render_continuous_entry(entry: dict, x: float, y: float) -> str:
+def _render_continuous_entry(entry: dict, x: float, y: float,
+                              tick_side: str = "right") -> str:
     """One continuous entry: optional label above, then a gradient strip
-    of fixed height (`legend.gradient_height`) with right-side ticks.
-    Tick count adapts to strip height so labels don't crowd.
+    of fixed height (`legend.gradient_height`) with ticks on the chosen
+    side. Tick count adapts to strip height so labels don't crowd.
+
+    `tick_side="right"` (default) puts the tick marks and labels to the
+    right of the strip — the layout-leaf legend's geometry. `tick_side=
+    "left"` mirrors for an inline left-position colorbar so the strip
+    sits flush with the data area's left edge and ticks face outward.
 
     The strip is drawn as `_LEGSPEC["gradient_n_stops"] + 1` solid-fill rect bands rather than
     a `<linearGradient>` — no `<defs>`, no `id`, no `url(#…)`, so the SVG
@@ -198,9 +204,16 @@ def _render_continuous_entry(entry: dict, x: float, y: float) -> str:
     ticks = (list(entry["ticks"]) if entry.get("ticks") is not None
              else norm.ticks(_adaptive_n_ticks(strip_h)))
 
-    tx0 = x + _LEGSPEC["gradient_width"]
-    tx1 = tx0 + _FRAME["tick_length"]
-    label_x = tx1 + _FRAME["tick_pad"]
+    if tick_side == "right":
+        tx0 = x + _LEGSPEC["gradient_width"]
+        tx1 = tx0 + _FRAME["tick_length"]
+        label_x = tx1 + _FRAME["tick_pad"]
+        label_anchor = "start"
+    else:  # "left"
+        tx0 = x
+        tx1 = x - _FRAME["tick_length"]
+        label_x = tx1 - _FRAME["tick_pad"]
+        label_anchor = "end"
     # Bias each tick-label baseline toward the strip's vertical center —
     # top tick shifts down so it doesn't crowd whatever sits above the
     # strip (entry label / chart title), bottom tick shifts up by the
@@ -214,8 +227,42 @@ def _render_continuous_entry(entry: dict, x: float, y: float) -> str:
                      f'stroke="{_FRAME["color"]}" stroke-width="{_FRAME["width"]}"/>')
         bias = 4 * (strip_mid - ty) / (strip_h / 2) if strip_h > 0 else 0
         parts.append(text_path(_fmt_tick(t), label_x, ty + 4 + bias,
-                                tick_size, anchor="start", color=text_color))
+                                tick_size, anchor=label_anchor, color=text_color))
     return "".join(parts)
+
+
+def _inline_gradient_block_size(cont_entries: list[dict]) -> tuple[float, float]:
+    """Block (width, height) for a vertical stack of gradient strips —
+    used by the in-frame inline-colorbar path. Mirrors the per-entry
+    geometry inside `_legend_content_size` but with no header, no
+    discrete rows, and no outer padding (the in-frame block does its
+    own positioning relative to the data edge).
+
+    Returns plain `0, 0` (int) for an empty input so callers that add
+    to an integer `lh` don't get float promotion — keeps byte-identical
+    discrete-only legend output."""
+    if not cont_entries:
+        return 0, 0
+    tick_size = _FONTSPEC["tick_size"]
+    n_ticks = _adaptive_n_ticks(_LEGSPEC["gradient_height"])
+    max_w = 0.0
+    total_h = 0.0
+    for i, entry in enumerate(cont_entries):
+        label = entry.get("label")
+        if label:
+            max_w = max(max_w, _measure_text(label, tick_size))
+            total_h += tick_size + 4
+        ticks = (list(entry["ticks"]) if entry.get("ticks") is not None
+                 else _ContinuousNorm(entry["vmin"], entry["vmax"],
+                                      kind=entry.get("norm", "linear"),
+                                      center=entry.get("center")).ticks(n_ticks))
+        max_tw = max((_measure_text(_fmt_tick(t), tick_size) for t in ticks), default=0.0)
+        strip_col_w = _LEGSPEC["gradient_width"] + _FRAME["tick_length"] + _FRAME["tick_pad"] + max_tw
+        max_w = max(max_w, strip_col_w)
+        total_h += _LEGSPEC["gradient_height"]
+        if i < len(cont_entries) - 1:
+            total_h += _LEGSPEC["section_gap"]
+    return max_w, total_h
 
 
 def _legend_content_size(leaf: Chart, sources: list[Chart],

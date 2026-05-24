@@ -823,42 +823,90 @@ def _rotated_label_bbox(label_w: float, label_h: float, rot_deg: float) -> tuple
 def _inline_legend_layout(st):
     """Geometry for the in-frame legend a leaf paints.
 
-    Returns `(gathered, lw, lh, horizontal)` — list of `(artist, entry)`
-    pairs, block width/height, and a flag indicating whether entries lay
-    out left-to-right (top/bottom positions) or top-to-bottom (inside,
-    left, right). Returns `None` if there's nothing to draw. Called by
-    `_required_margin` (to reserve outside-legend margin space) and by
-    `_render_inner`'s legend block (to paint), so the two stay in sync —
-    change geometry here, both paths follow."""
+    Returns a dict with `disc` (list of `(artist, entry)` pairs from
+    `spec.legend_entries`), `cont` (list of `(artist, descriptor)` pairs
+    from `spec.legend_gradient`), block width/height (`lw`, `lh`), a
+    `horizontal` flag (entries arranged left-to-right vs. stacked), and
+    the resolved `position` (auto-flipped from "inside" → "right" when
+    a continuous mapping is in play, since an inside colorbar inside the
+    data area is incoherent). Returns `None` if there's nothing to draw.
+
+    Continuous + horizontal-position combos raise — a horizontal gradient
+    strip is its own render variant we haven't built; users on those
+    positions should compose with `pt.legend(c)` instead.
+
+    Called by `_required_margin` (to reserve outside-legend margin space)
+    and by `_render_inner`'s legend block (to paint), so the two stay in
+    sync — change geometry here, both paths follow."""
     if not st["legend"]:
         return None
-    gathered = []
+    disc = []
+    cont = []
     for a in st["artists"]:
         spec = get_artist(a["type"])
-        if spec is None or spec.legend_entries is None:
+        if spec is None:
             continue
-        for entry in spec.legend_entries(a):
-            gathered.append((a, entry))
-    if not gathered:
+        if spec.legend_gradient is not None:
+            desc = spec.legend_gradient(a)
+            if desc is not None:
+                cont.append((a, desc))
+        if spec.legend_entries is not None:
+            for entry in spec.legend_entries(a):
+                disc.append((a, entry))
+    if not disc and not cont:
         return None
+
+    requested = st.get("legend_position", "inside")
+    if cont and requested in ("top", "bottom"):
+        raise ValueError(
+            f"chart.legend(position={requested!r}) with a continuous color "
+            f"mapping (imshow / heatmap / hexbin) is not supported — only "
+            f"'right' or 'left' work for the inline colorbar. For a "
+            f"horizontal gradient strip, compose with `pt.legend(c)` "
+            f"instead and place it on top or bottom of your layout."
+        )
+    # Auto-flip "inside" to "right" for gradient charts — an inside
+    # colorbar would float over the data area, which never reads right.
+    if cont and requested == "inside":
+        pos = "right"
+    else:
+        pos = requested
+    horizontal = pos in ("top", "bottom")
+
     row_h = _LEGSPEC["row_height"]
     pad_x = _LEGSPEC["pad_x"]
     pad_y = _LEGSPEC["pad_y"]
     sw    = _LEGSPEC["swatch_width"]
     tick_size = _FONTSPEC["tick_size"]
-    pos = st.get("legend_position", "inside")
-    horizontal = pos in ("top", "bottom")
+
     if horizontal:
-        # Entries arranged left-to-right in one row.
-        entry_ws = [sw + 6 + _measure_text(e["label"], tick_size) for _, e in gathered]
+        # Discrete-only horizontal row (gradients on top/bottom would
+        # have raised above). Entries arranged left-to-right.
+        entry_ws = [sw + 6 + _measure_text(e["label"], tick_size) for _, e in disc]
         spacer = 2 * pad_x
-        lw = 2 * pad_x + sum(entry_ws) + (len(gathered) - 1) * spacer
+        lw = 2 * pad_x + sum(entry_ws) + (len(disc) - 1) * spacer
         lh = row_h + 2 * pad_y
+    elif cont and not disc:
+        # Gradient-only block: no background rect, no padding around the
+        # block — the strip carries its own border. Sits flush against
+        # the data area's outer edge (modulo legend_gap).
+        from .legend import _inline_gradient_block_size
+        lw, lh = _inline_gradient_block_size([d for _, d in cont])
     else:
-        max_text = max(_measure_text(e["label"], tick_size) for _, e in gathered)
-        lw = sw + 6 + max_text + 2 * pad_x
-        lh = len(gathered) * row_h + 2 * pad_y
-    return gathered, lw, lh, horizontal
+        # Vertical mixed (cont + disc) or discrete-only. Stack continuous
+        # strips on top, discrete rows below, with section_gap between.
+        # Background rect wraps everything → outer padding.
+        from .legend import _inline_gradient_block_size
+        disc_max_text = (max(_measure_text(e["label"], tick_size) for _, e in disc)
+                          if disc else 0.0)
+        disc_w = sw + 6 + disc_max_text if disc else 0.0
+        cont_w, cont_h = _inline_gradient_block_size([d for _, d in cont])
+        lw = max(disc_w, cont_w) + 2 * pad_x
+        lh = cont_h + len(disc) * row_h + 2 * pad_y
+        if cont and disc:
+            lh += _LEGSPEC["section_gap"]
+    return {"disc": disc, "cont": cont, "lw": lw, "lh": lh,
+            "horizontal": horizontal, "position": pos}
 
 
 def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
@@ -1029,21 +1077,22 @@ def _required_margin(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     # Outside-legend reservation is *additive* with the label band so the
     # legend block sits beyond the title/labels rather than overlapping
     # them. "inside" paints over the data area and reserves nothing
-    # extra.
-    pos = st.get("legend_position", "inside")
-    if pos != "inside":
-        leg = _inline_legend_layout(st)
-        if leg is not None:
-            _, lw, lh, _ = leg
-            gap = _LAYOUTSPEC["legend_gap"]
-            if pos == "right":
-                right = right + gap + lw
-            elif pos == "left":
-                left = left + gap + lw
-            elif pos == "top":
-                top = top + gap + lh
-            elif pos == "bottom":
-                bottom = bottom + gap + lh
+    # extra. The effective position comes from `_inline_legend_layout`,
+    # which auto-flips "inside" → "right" for charts with a continuous
+    # mapping (an inside colorbar makes no sense).
+    leg = _inline_legend_layout(st)
+    if leg is not None and leg["position"] != "inside":
+        lw, lh = leg["lw"], leg["lh"]
+        pos = leg["position"]
+        gap = _LAYOUTSPEC["legend_gap"]
+        if pos == "right":
+            right = right + gap + lw
+        elif pos == "left":
+            left = left + gap + lw
+        elif pos == "top":
+            top = top + gap + lh
+        elif pos == "bottom":
+            bottom = bottom + gap + lh
 
     return {"top":    int(round(top)),
             "right":  int(round(right)),
@@ -1258,7 +1307,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     # offset depends on it. For other positions / inside / no legend, the
     # title stays at `_PADSPEC["title"]`.
     leg = _inline_legend_layout(st)
-    legend_pos = st.get("legend_position", "inside") if leg is not None else "inside"
+    legend_pos = leg["position"] if leg is not None else "inside"
     legend_gap = _LAYOUTSPEC["legend_gap"]
     # `inner_gap_top` is the data-side gap below the top-position legend
     # — at least `legend_gap`, but expands to clear outward top tick marks
@@ -1514,19 +1563,24 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         # Top-position legend sits between title and data, pushing the
         # title's baseline up by (legend block + outer gap to legend).
         if inner_gap_top is not None:
-            _, _, lh_for_title, _ = leg
-            title_y = -(inner_gap_top + lh_for_title + legend_gap)
+            title_y = -(inner_gap_top + leg["lh"] + legend_gap)
         else:
             title_y = -_PADSPEC["title"]
         parts.append(text_path(st["title"], iw / 2, title_y, title_size,
                                 anchor="middle", color=text_color))
 
-    # legend — gather entries from every artist's legend_entries(a).
-    # Multi-entry artists (sankey, mosaic, ...) contribute one row per
-    # category; single-entry artists (line, bar, scatter, ...) contribute
-    # zero or one row depending on whether they were passed a label.
+    # legend — gather entries from every artist's legend_entries(a) and
+    # gradient descriptors from legend_gradient(a). Multi-entry artists
+    # (sankey, mosaic, ...) contribute one row per category; continuous
+    # artists (imshow, hexbin, ...) contribute a vertical gradient strip
+    # with ticks (this replaces the previous `c | pt.legend(c)` two-line
+    # workaround for an inline colorbar).
     if leg is not None:
-        gathered, lw, lh, horizontal = leg
+        lw = leg["lw"]
+        lh = leg["lh"]
+        horizontal = leg["horizontal"]
+        disc = leg["disc"]
+        cont = leg["cont"]
         row_h = _LEGSPEC["row_height"]
         pad_x = _LEGSPEC["pad_x"]
         pad_y = _LEGSPEC["pad_y"]
@@ -1555,16 +1609,22 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             lx, ly = iw - lw - _LEGSPEC["border_offset"], _LEGSPEC["border_offset"]
             transform = f'translate({lx:.2f},{ly})'
         parts.append(f'<g transform="{transform}">')
-        parts.append(f'<rect x="0" y="0" width="{lw:.2f}" height="{lh}" '
-                     f'fill="{_LEGSPEC["background"]}" stroke="{_FRAME["color"]}" '
-                     f'stroke-width="{_FRAME["width"]}" opacity="{_LEGSPEC["opacity"]}"/>')
+        is_gradient_only = bool(cont) and not disc
+        if not is_gradient_only:
+            # Background rect wraps discrete-only / mixed blocks. Pure
+            # gradient blocks skip it — the strip's own border is enough,
+            # matching the layout-leaf `pt.legend(c)` aesthetic.
+            parts.append(f'<rect x="0" y="0" width="{lw:.2f}" height="{lh}" '
+                         f'fill="{_LEGSPEC["background"]}" stroke="{_FRAME["color"]}" '
+                         f'stroke-width="{_FRAME["width"]}" opacity="{_LEGSPEC["opacity"]}"/>')
         if horizontal:
-            # Entries left-to-right, vertically centered in the single
-            # row. Spacer matches `_inline_legend_layout`.
+            # Discrete-only horizontal row (continuous + horizontal would
+            # have raised in `_inline_legend_layout`). Entries left-to-right,
+            # vertically centered. Spacer matches `_inline_legend_layout`.
             spacer = 2 * pad_x
             cx = pad_x
             ry = pad_y + row_h / 2
-            for a, entry in gathered:
+            for a, entry in disc:
                 paint = entry.get("paint")
                 if paint is not None:
                     parts.append(paint(a, _ctx_for(a), cx, ry))
@@ -1576,8 +1636,36 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
                                         tick_size, anchor="start", color=text_color))
                 cx = tx + _measure_text(entry["label"], tick_size) + spacer
         else:
-            for i, (a, entry) in enumerate(gathered):
-                ry = pad_y + i * row_h + row_h / 2
+            # Vertical layout: gradient strips on top, discrete rows below.
+            # Ticks face away from the data area — right-position gets
+            # tick_side="right", left-position "left". Mixed (gradient +
+            # discrete) defaults to "right"; the rare left-position mixed
+            # case ends up with ticks pointing toward the discrete entries,
+            # which is acceptable for that uncommon combination.
+            from .legend import _render_continuous_entry
+            if is_gradient_only and pos == "left":
+                tick_side = "left"
+                strip_x = lw - _LEGSPEC["gradient_width"]
+                cur_y = 0.0
+            elif is_gradient_only:
+                tick_side = "right"
+                strip_x = 0.0
+                cur_y = 0.0
+            else:
+                tick_side = "right"
+                strip_x = pad_x
+                cur_y = float(pad_y)
+            for i, (_, desc) in enumerate(cont):
+                entry_h = (tick_size + 4 if desc.get("label") else 0) \
+                          + _LEGSPEC["gradient_height"]
+                parts.append(_render_continuous_entry(desc, strip_x, cur_y, tick_side))
+                cur_y += entry_h
+                if i < len(cont) - 1:
+                    cur_y += _LEGSPEC["section_gap"]
+            if cont and disc:
+                cur_y += _LEGSPEC["section_gap"]
+            for i, (a, entry) in enumerate(disc):
+                ry = cur_y + row_h / 2
                 paint = entry.get("paint")
                 if paint is not None:
                     parts.append(paint(a, _ctx_for(a), pad_x, ry))
@@ -1586,6 +1674,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
                                  f'height="10" fill="{entry["color"]}"/>')
                 parts.append(text_path(entry["label"], pad_x + sw + 6, ry + 4,
                                         tick_size, anchor="start", color=text_color))
+                cur_y += row_h
         parts.append('</g>')
 
     # Inset axes — render each as its own SVG fragment positioned by
