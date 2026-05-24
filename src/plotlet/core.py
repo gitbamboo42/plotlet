@@ -910,14 +910,17 @@ def _inline_legend_layout(st):
 
 
 def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
-    """Per-side space (float px) needed for title, xlabel, ylabel, and
-    tick marks/labels on each canvas edge — `_required_margin` *without*
-    the outside-legend reservation.
+    """Per-side space (float px) for the axis-attached elements only —
+    tick marks, tick labels, and the side-anchored label (xlabel /
+    ylabel / title). Used directly by `_render_inner` to position those
+    labels and the inline legend just outside the axis band.
 
-    Used by `_required_margin` (so the legend reservation is additive
-    with the label band, not max-with) and by `_render_inner` (so the
-    outside-legend block can be positioned beyond the label band rather
-    than overlapping the title/labels)."""
+    Cross-side text overhang (a centered title wider than `dw` spilling
+    onto left and right, a rotated ylabel taller than `dh` spilling onto
+    top and bottom) is *not* included here — it grows the canvas via
+    `_required_margin` but should not displace axis-attached labels
+    from their natural slots. See `_required_margin` for the overhang
+    application."""
     tick_size  = _FONTSPEC["tick_size"]
     label_size = _FONTSPEC["label_size"]
     title_size = _FONTSPEC["title_size"]
@@ -1032,27 +1035,43 @@ def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     right_overhang = 0.0 if hide_r else last_bbox_w / 2.0
     right = max(right_marks, right_overhang)
 
-    # Long-text overflow: a title / xlabel longer than `dw` is centered on
-    # `iw/2`, so it sticks out past the data area on both left and right
-    # by `(text_w - dw) / 2`. A ylabel (rotated -90, centered on `ih/2`)
-    # is the same story but vertical: text longer than `dh` spills past
-    # top and bottom equally. Margins grow by the overhang amount so the
-    # rendered text fits inside the canvas. Skip when the label/title is
-    # hidden (joined side) since the renderer won't draw it.
-    if st["title"] and not hide_t:
-        title_overhang = max(0.0, (_measure_text(st["title"], title_size) - dw) / 2.0)
-        left  = max(left,  title_overhang)
-        right = max(right, title_overhang)
-    if st["xlabel"] and not hide_b:
-        xlabel_overhang = max(0.0, (_measure_text(st["xlabel"], label_size) - dw) / 2.0)
-        left  = max(left,  xlabel_overhang)
-        right = max(right, xlabel_overhang)
-    if st["ylabel"] and not hide_l:
-        ylabel_overhang = max(0.0, (_measure_text(st["ylabel"], label_size) - dh) / 2.0)
-        top    = max(top,    ylabel_overhang)
-        bottom = max(bottom, ylabel_overhang)
-
     return {"top": top, "right": right, "bottom": bottom, "left": left}
+
+
+# ---------------------------------------------------------------------------
+# Margin pipeline — how a side's final margin gets built.
+# ---------------------------------------------------------------------------
+# The number `_render` receives as `M[side]` (and the panel transform uses)
+# is composed in four pieces, each from a different function:
+#
+#   M[side] = floor + axis_band + text_overhang + outside_legend_reservation
+#                                  └─ "inflation": everything beyond the band ─┘
+#
+# Pieces:
+#   1. `_enforce_floors(leaf._margin)`         — per-side floor (whitespace),
+#                                                in `_layout_engine.py`.
+#   2. `_label_band_sizes(...)`                 — pure axis band: tick marks,
+#                                                tick labels, ylabel / xlabel
+#                                                / title attached to that side
+#                                                (float).
+#   3. + text overhang (centered title/xlabel  — applied inside `_required_margin`.
+#       wider than `dw`, rotated ylabel taller
+#       than `dh`)
+#   4. + outside legend reservation             — also in `_required_margin`.
+#
+# `_required_margin` returns int (rounded) of (band + overhang + legend).
+# `_compute_measured_margins` adds the floor: `M_eff = floor + M_req`.
+#
+# For *positioning* axis-attached labels (xlabel, ylabel) and the inline
+# legend block, you usually want the axis-band edge, NOT the inflated M
+# edge — a wide title or outside legend should not displace the ylabel
+# from its slot just outside the y-ticks. The recipe is:
+#
+#     inflation[side] = max(0, M_req[side] - round(label_bands[side]))
+#     # position at  M[side] - inflation[side]  ↔  floor + axis_band
+#
+# `_render_inner` does exactly this for xlabel / ylabel positioning.
+# ---------------------------------------------------------------------------
 
 
 def _required_margin(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
@@ -1073,6 +1092,34 @@ def _required_margin(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     in sync if either changes."""
     bands = _label_band_sizes(st, dw, dh, po)
     top, right, bottom, left = bands["top"], bands["right"], bands["bottom"], bands["left"]
+
+    # Cross-side text overhang: a title / xlabel longer than `dw` is
+    # centered on `iw/2`, so it sticks out past the data area on left
+    # and right by `(text_w - dw) / 2`. A ylabel (rotated -90, centered
+    # on `ih/2`) is the same story but vertical: text longer than `dh`
+    # spills past top and bottom equally. Margins grow by the overhang
+    # so the rendered text fits inside the canvas. Skip when the label
+    # / title is hidden (joined side) since the renderer won't draw it.
+    # Applied here (not in `_label_band_sizes`) because positioning code
+    # in `_render_inner` needs the *axis band* without overhang — a wide
+    # title shouldn't displace the ylabel from its natural slot.
+    label_size = _FONTSPEC["label_size"]
+    title_size = _FONTSPEC["title_size"]
+    hide_t = po is not None and po.hide_top
+    hide_b = po is not None and po.hide_bottom
+    hide_l = po is not None and po.hide_left
+    if st["title"] and not hide_t:
+        title_overhang = max(0.0, (_measure_text(st["title"], title_size) - dw) / 2.0)
+        left  = max(left,  title_overhang)
+        right = max(right, title_overhang)
+    if st["xlabel"] and not hide_b:
+        xlabel_overhang = max(0.0, (_measure_text(st["xlabel"], label_size) - dw) / 2.0)
+        left  = max(left,  xlabel_overhang)
+        right = max(right, xlabel_overhang)
+    if st["ylabel"] and not hide_l:
+        ylabel_overhang = max(0.0, (_measure_text(st["ylabel"], label_size) - dh) / 2.0)
+        top    = max(top,    ylabel_overhang)
+        bottom = max(bottom, ylabel_overhang)
 
     # Outside-legend reservation is *additive* with the label band so the
     # legend block sits beyond the title/labels rather than overlapping
@@ -1541,22 +1588,37 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
                 parts.append(segment(x1, y, x2, y, color=col, width=sw))
 
     # xlabel / ylabel / title live in margin space; drop when that margin
-    # is collapsed against a joined neighbor.
+    # is collapsed against a joined neighbor. Positioned against the
+    # axis band (`label_bands`), not the inflated margin (`M`) — so a
+    # wide title, tall ylabel, or outside-positioned legend doesn't
+    # shove the label away from its natural slot just outside the tick
+    # labels. The inline-legend block (below) also reads `label_bands`,
+    # so compute once.
+    label_bands = _label_band_sizes(st, iw, ih, panel_opts)
+    # See "Margin pipeline" comment block above `_required_margin`.
+    # `inflation` = text overhang + outside-legend reservation; subtracting
+    # it from `M[side]` snaps ylabel / xlabel to the axis-band outer edge
+    # rather than floating in the inflated margin. Collapses to the old
+    # canvas-edge anchored formula when inflation is 0 (no overhang, no
+    # outside legend), keeping baselines byte-identical for that case.
+    m_req = _required_margin(st, iw, ih, panel_opts)
+    left_inflation   = max(0, m_req["left"]   - int(round(label_bands["left"])))
+    bottom_inflation = max(0, m_req["bottom"] - int(round(label_bands["bottom"])))
     text_color = _FONTSPEC["color"]
     if st["xlabel"] and not hide_b:
-        # pad.xlabel is the gap from canvas bottom to xlabel's descender bottom;
-        # shift baseline up by descender(label_size) to land the visible glyph
-        # bottom exactly `pad.xlabel` above the canvas edge.
+        # Baseline sits at canvas-bottom edge (minus inflation) minus
+        # pad.xlabel minus the glyph descender — visible glyph bottom
+        # is exactly `pad.xlabel` above the axis band's outer edge.
         parts.append(text_path(st["xlabel"], iw / 2,
-                                ih + M["bottom"] - _PADSPEC["xlabel"] - _descender(label_size),
+                                ih + M["bottom"] - bottom_inflation - _PADSPEC["xlabel"] - _descender(label_size),
                                 label_size, anchor="middle", color=text_color))
     if st["ylabel"] and not hide_l:
-        # pad.ylabel is the gap from canvas left to ylabel's left visible edge;
-        # shift center right by label_size/2 (the rotated-text half-width) to
-        # land the left edge exactly `pad.ylabel` inside the canvas.
+        # Center sits at -(M["left"] - inflation - pad.ylabel - label_size/2)
+        # so the rotated text's left visible edge lands exactly `pad.ylabel`
+        # inside the axis band's outer edge.
         ylabel_path = text_path(st["ylabel"], 0, 0, label_size,
                                 anchor="middle", color=text_color)
-        ylabel_cx = -(M["left"] - _PADSPEC["ylabel"] - label_size / 2)
+        ylabel_cx = -(M["left"] - left_inflation - _PADSPEC["ylabel"] - label_size / 2)
         parts.append(f'<g transform="translate({ylabel_cx},{ih/2}) rotate(-90)">'
                      f'{ylabel_path}</g>')
     if st["title"] and not hide_t:
@@ -1589,19 +1651,18 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         gap = legend_gap
         if pos in ("right", "left", "top", "bottom"):
             # `top` puts the legend *between* the title (outer edge) and
-            # data (inner edge); other sides put it beyond the label
+            # data (inner edge); other sides put it beyond the axis
             # band. Hidden sides naturally collapse via `_label_band_sizes`
             # — when a side's title/labels are dropped (joined share-pair
             # or unset), the band shrinks and the legend moves inward.
-            bands = _label_band_sizes(st, iw, ih, panel_opts)
             if pos == "right":
-                lx, ly = iw + bands["right"] + gap, (ih - lh) / 2
+                lx, ly = iw + label_bands["right"] + gap, (ih - lh) / 2
             elif pos == "left":
-                lx, ly = -(bands["left"] + gap + lw), (ih - lh) / 2
+                lx, ly = -(label_bands["left"] + gap + lw), (ih - lh) / 2
             elif pos == "top":
                 lx, ly = (iw - lw) / 2, -(inner_gap_top + lh)
             else:  # "bottom"
-                lx, ly = (iw - lw) / 2, ih + bands["bottom"] + gap
+                lx, ly = (iw - lw) / 2, ih + label_bands["bottom"] + gap
             transform = f'translate({lx:.2f},{ly:.2f})'
         else:  # "inside" — `ly` is the integer border_offset; preserve
             # the historical `{ly}` formatting (no `.2f`) for byte-identical

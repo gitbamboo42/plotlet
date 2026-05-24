@@ -307,8 +307,11 @@ def chart_long_title():
 def chart_long_ylabel():
     # ylabel rendered rotated -90 around the data area's vertical center;
     # text longer than data_height spills past top and bottom. Margin
-    # should grow on top *and* bottom by half the overhang.
+    # should grow on top *and* bottom by half the overhang. Title is
+    # included so we can verify the vertical overhang doesn't displace
+    # the title from its natural slot above the data area.
     c = pt.chart(data_width=200, data_height=120,
+                 title="long ylabel + title",
                  ylabel="Gene expression (log10 normalized counts per million)",
                  xlabel="time")
     c.line([0, 1, 2, 3], [3.2, 4.1, 4.9, 5.5])
