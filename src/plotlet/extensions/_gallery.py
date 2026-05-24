@@ -116,7 +116,7 @@ SECTIONS = [
     ("Big-data scatter", ["hexbin", "contour", "kde_2d"]),
     ("Bio / omics", ["volcano", "ma_plot", "manhattan", "gene_arrow"]),
     ("Heatmaps", [
-        "annotated_heatmap", "clustermap", "bubble_grid",
+        "clustermap", "bubble_grid",
         "calendar_heatmap", "mosaic",
     ]),
     ("Clinical", ["km_curve", "forest_plot", "funnel_plot"]),

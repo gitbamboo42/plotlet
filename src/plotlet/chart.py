@@ -716,7 +716,8 @@ class Chart(_Renderable):
         return self
 
     def heatmap(self, df, *, cmap=None, vmin=None, vmax=None, norm="linear",
-                center=None, xticklabels=None, yticklabels=None, legend=None):
+                center=None, xticklabels=None, yticklabels=None, legend=None,
+                annot=False, fmt=".2g", annot_color="auto", annot_fontsize=10):
         # DataFrame-aware companion to imshow: index/columns become tick
         # labels, row 0 sits at the top (origin="upper"), and cell centers
         # land at integer + 0.5 so a future top/left dendrogram pairs cleanly
@@ -746,6 +747,11 @@ class Chart(_Renderable):
         if norm != "linear":    opts["norm"]   = norm
         if center is not None:  opts["center"] = center
         if legend is not None:  opts["legend"] = legend
+        if annot is not False and annot is not None:
+            opts["annot"] = annot
+            opts["fmt"] = fmt
+            opts["annot_color"] = annot_color
+            opts["annot_fontsize"] = annot_fontsize
         self._record("imshow", matrix, **opts)
         return self
 

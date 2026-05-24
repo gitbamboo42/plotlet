@@ -420,6 +420,34 @@ def chart_heatmap_dataframe():
     return c
 
 
+def chart_heatmap_annot():
+    # annot=True overlays each cell's value; annot_color="auto" picks
+    # white text on dark cells, black on light, via luminance. Composed
+    # with pt.legend(c) so the gradient colorbar accompanies the matrix
+    # (the canonical correlation-matrix look).
+    n = 6
+    data = [[math.cos((i - j) * 0.4) for j in range(n)] for i in range(n)]
+    labels = [f"v{i}" for i in range(n)]
+    c = pt.chart(title="correlation matrix (annot=True)")
+    c.heatmap(data, xticklabels=labels, yticklabels=labels,
+              cmap="RdBu_r", vmin=-1, vmax=1, annot=True, fmt="+.2f",
+              legend={"label": "corr"})
+    return c | pt.legend(c)
+
+
+def chart_imshow_annot_custom():
+    # annot=<2D array> for independent labels; annot_color fixed.
+    # Mixes numbers (formatted via fmt) and strings (verbatim).
+    data = [[i + j for j in range(4)] for i in range(3)]
+    annot = [["a", "b", "c", "d"],
+             [1.0, 2.5, 3.75, 4.125],
+             ["x", "y", "z", "w"]]
+    c = pt.chart(title="imshow (custom annot, fixed color)")
+    c.imshow(data, cmap="viridis", origin="upper",
+             annot=annot, fmt=".1f", annot_color="#222222", annot_fontsize=12)
+    return c
+
+
 def chart_curve_steps():
     # All three step modes on the same axes, plus the default linear.
     # Markers stay at the original data points regardless of mode — they
@@ -1308,6 +1336,8 @@ PLOTS = {
     "imshow_log":          chart_imshow_log_norm,
     "heatmap_labeled":     chart_heatmap_labeled,
     "heatmap_dataframe":   chart_heatmap_dataframe,
+    "heatmap_annot":       chart_heatmap_annot,
+    "imshow_annot_custom": chart_imshow_annot_custom,
     "long_title":          chart_long_title,
     "long_ylabel":         chart_long_ylabel,
     "long_rotated_xticks": chart_long_rotated_xticks,

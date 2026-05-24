@@ -6,9 +6,13 @@ import base64
 from ..registry import ArtistSpec, add_artist
 from ..utils import to_list_2d
 from .._spec import _D
-from ..draw import rect
+from ..draw import rect, text_path
 from ..draw._png import encode_rgb
 from ..draw.colormaps import colormap_lut, _ContinuousNorm
+
+
+def _rel_luminance(r, g, b):
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255
 
 
 def _artist_imshow(a, xs_, ys_, col):
@@ -56,15 +60,15 @@ def _artist_imshow(a, xs_, ys_, col):
     # Default origin="lower": row 0 belongs at the bottom, so iterate
     # data in reverse to put the highest-index row at top first.
     # origin="upper": row 0 belongs at the top — natural data order.
-    row_index = range(nrows) if origin == "upper" \
-                else ((nrows - 1 - r) for r in range(nrows))
-    rows_in_render_order = [data[i] for i in row_index]
+    row_indices = list(range(nrows)) if origin == "upper" \
+                  else [nrows - 1 - r for r in range(nrows)]
+    rows_in_render_order = [data[i] for i in row_indices]
 
     use_rects = nrows * ncols <= _D["imshow_max_rects"]
+    cw = pw / ncols; ch = ph / nrows
+    out = []
 
     if use_rects:
-        out = []
-        cw = pw / ncols; ch = ph / nrows
         for r, row in enumerate(rows_in_render_order):
             y = sy_t + r * ch
             for c in range(ncols):
@@ -76,23 +80,66 @@ def _artist_imshow(a, xs_, ys_, col):
                     fill = f"rgb({lut[i]},{lut[i+1]},{lut[i+2]})"
                 x = sx_l + c * cw
                 out.append(rect(x, y, cw, ch, fill=fill))
-        return "".join(out)
+    else:
+        buf = bytearray()
+        for row in rows_in_render_order:
+            for c in range(ncols):
+                v = row[c]
+                if v != v:
+                    buf.append(0); buf.append(0); buf.append(0)
+                else:
+                    i = int(norm.to_unit(v) * 255 + 0.5) * 3
+                    buf.append(lut[i]); buf.append(lut[i+1]); buf.append(lut[i+2])
+        png = encode_rgb(bytes(buf), ncols, nrows)
+        b64 = base64.b64encode(png).decode("ascii")
+        out.append(f'<image x="{sx_l:.3f}" y="{sy_t:.3f}" '
+                   f'width="{pw:.3f}" height="{ph:.3f}" '
+                   f'preserveAspectRatio="none" image-rendering="pixelated" '
+                   f'href="data:image/png;base64,{b64}"/>')
 
-    buf = bytearray()
-    for row in rows_in_render_order:
-        for c in range(ncols):
-            v = row[c]
-            if v != v:
-                buf.append(0); buf.append(0); buf.append(0)
-            else:
-                i = int(norm.to_unit(v) * 255 + 0.5) * 3
-                buf.append(lut[i]); buf.append(lut[i+1]); buf.append(lut[i+2])
-    png = encode_rgb(bytes(buf), ncols, nrows)
-    b64 = base64.b64encode(png).decode("ascii")
-    return (f'<image x="{sx_l:.3f}" y="{sy_t:.3f}" '
-            f'width="{pw:.3f}" height="{ph:.3f}" '
-            f'preserveAspectRatio="none" image-rendering="pixelated" '
-            f'href="data:image/png;base64,{b64}"/>')
+    annot = opts.get("annot", False)
+    if annot is not False and annot is not None:
+        # annot=True → label cells with their numeric value; annot=2D-array →
+        # use the supplied labels (numbers formatted via `fmt`, strings used
+        # verbatim). Text color: `"auto"` picks black/white via the cell's
+        # rendered-color luminance so labels stay readable across the cmap.
+        label_source = data if annot is True else to_list_2d(annot)
+        if len(label_source) != nrows or (label_source and len(label_source[0]) != ncols):
+            raise ValueError(
+                f"imshow: annot array shape ({len(label_source)}x"
+                f"{len(label_source[0]) if label_source else 0}) "
+                f"doesn't match data ({nrows}x{ncols})"
+            )
+        labels_in_render_order = [label_source[i] for i in row_indices]
+        fmt = opts.get("fmt", ".2g")
+        color_opt = opts.get("annot_color", "auto")
+        fontsize = opts.get("annot_fontsize", 10)
+        for r, label_row in enumerate(labels_in_render_order):
+            cy = sy_t + (r + 0.5) * ch
+            data_row = rows_in_render_order[r]
+            for c in range(ncols):
+                label = label_row[c]
+                if label is None or (isinstance(label, float) and label != label):
+                    continue
+                txt = format(label, fmt) if isinstance(label, (int, float)) \
+                      else str(label)
+                if color_opt == "auto":
+                    v = data_row[c]
+                    if v != v:
+                        txt_col = "#ffffff"
+                    else:
+                        i = int(norm.to_unit(v) * 255 + 0.5) * 3
+                        if _rel_luminance(lut[i], lut[i+1], lut[i+2]) < 0.55:
+                            txt_col = "#ffffff"
+                        else:
+                            txt_col = "#000000"
+                else:
+                    txt_col = color_opt
+                cx = sx_l + (c + 0.5) * cw
+                out.append(text_path(txt, cx, cy + fontsize / 3,
+                                     fontsize, anchor="middle", color=txt_col))
+
+    return "".join(out)
 
 
 def _imshow_data_attrs(a):
@@ -120,6 +167,9 @@ def _imshow_data_attrs(a):
     center = a["opts"].get("center")
     if center is not None:
         out["center"] = float(center)
+    annot = a["opts"].get("annot", False)
+    if annot is not False and annot is not None:
+        out["annot"] = "values" if annot is True else "custom"
     return out
 
 

@@ -131,8 +131,8 @@ universal and not repeated.
 
 | call | options |
 | --- | --- |
-| `.imshow(data, **opts)` | `cmap` (~180 vendored, default `"viridis"`), `vmin`, `vmax`, `extent` |
-| `.heatmap(df, **opts)` | `cmap`, `vmin`, `vmax`, `norm`, `center`, `xticklabels`, `yticklabels`, `legend` |
+| `.imshow(data, **opts)` | `cmap` (~180 vendored, default `"viridis"`), `vmin`, `vmax`, `extent`, `annot`, `fmt`, `annot_color`, `annot_fontsize` |
+| `.heatmap(df, **opts)` | `cmap`, `vmin`, `vmax`, `norm`, `center`, `xticklabels`, `yticklabels`, `legend`, `annot`, `fmt`, `annot_color`, `annot_fontsize` |
 | `.dendrogram(matrix, **opts)` | `orient="top"\|"left"\|"right"\|"bottom"`, `linkage="single"\|"average"\|"complete"`, `metric` |
 | `.axhline(y, **opts)` / `.axvline(x, **opts)` | `color`, `linewidth`, `linestyle`, `alpha`, axes-fraction `xmin`/`xmax` |
 | `.axhspan(ymin, ymax, **opts)` / `.axvspan(xmin, xmax, **opts)` | `color`, `alpha`, `label` |
@@ -147,6 +147,7 @@ universal and not repeated.
 - Reference lines / spans default to black, are drawn outside the data color cycle, and don't participate in autoscaling.
 - On `scatter`, `size=<col>` maps a numeric column to per-point area (pixels², rescaled into `sizes=(min, max)` — default `(20, 200)`); `style=<col>` cycles markers per unique value (`o`, `s`, `^`, `v`, `x`, `+`). `color`, `group`, `size`, `style`, `alpha` all compose.
 - `.imshow` emits one `<rect>` per cell for small grids (≤10000 cells, vector-clean at any zoom) and a base64 PNG above that. `.heatmap` is the DataFrame-aware companion — `df.index` becomes row labels, `df.columns` becomes column labels; cells render at integer + 0.5 centers so a top/left dendrogram pairs cleanly via `share_x` / `share_y`.
+- On both, `annot=True` overlays each cell's value as a text label (correlation / confusion matrices). `annot=<2D array>` uses custom labels — numbers formatted via `fmt`, strings verbatim — so labels independent of cell values (e.g. significance asterisks over a correlation cmap) are a string-array away. `fmt=".2g"` is the format spec (passed to `format(value, fmt)`, matching seaborn). `annot_color="auto"` picks black or white per cell via luminance; pass any CSS color for uniform text.
 
 ## Color shortcuts
 
