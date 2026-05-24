@@ -37,6 +37,7 @@ that need finer-grained control.
 """
 from .._spec import _D, _DASH
 from .font import _glyph, _measure_text, _UPEM, _GS
+from .linestyles import _resolve_linestyle
 
 from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.pens.transformPen import TransformPen
@@ -130,7 +131,7 @@ def marker(kind: str, x: float, y: float, size: float, color: str, alpha,
 def _dash_attr(dash) -> str:
     if not dash:
         return ""
-    d = _DASH.get(dash, dash)
+    d = _DASH.get(_resolve_linestyle(dash), dash)
     return f' stroke-dasharray="{d}"' if d else ""
 
 
