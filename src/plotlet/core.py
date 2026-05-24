@@ -143,6 +143,21 @@ def _rotated_text(s, x, y, size, angle, axis):
     return f'<g transform="translate({x:.2f},{y:.2f}) rotate({-angle})">{text}</g>'
 
 
+def _record_scale(st, axis, args, kw):
+    """Decode an xscale()/yscale() call into state.
+
+    `args[0]` is the scale kind ("linear", "log", "symlog", "sqrt",
+    "category"). Per-kind kwargs (`order`, `padding`, `linthresh`,
+    `exponent`, `reverse`) are stashed on the matching `<axis>_*`
+    keys when supplied; omitted kwargs leave defaults untouched."""
+    st[f"{axis}scale"] = args[0]
+    if "order" in kw:     st[f"{axis}_order"]     = list(kw["order"])
+    if "padding" in kw:   st[f"{axis}_padding"]   = kw["padding"]
+    if "linthresh" in kw: st[f"{axis}_linthresh"] = float(kw["linthresh"])
+    if "exponent" in kw:  st[f"{axis}_exponent"]  = float(kw["exponent"])
+    if "reverse" in kw:   st[f"{axis}_reverse"]   = bool(kw["reverse"])
+
+
 def _record_ticks(st, axis, args, kw):
     """Decode the matplotlib-style xticks()/yticks() call into state.
 
@@ -288,20 +303,8 @@ def _replay(calls):
         elif name == "ylabel": st["ylabel"] = args[0]
         elif name == "xlim":   st["xlim"] = (args[0], args[1])
         elif name == "ylim":   st["ylim"] = (args[0], args[1])
-        elif name == "xscale":
-            st["xscale"] = args[0]
-            if "order" in kw:     st["x_order"] = list(kw["order"])
-            if "padding" in kw:   st["x_padding"] = kw["padding"]
-            if "linthresh" in kw: st["x_linthresh"] = float(kw["linthresh"])
-            if "exponent" in kw:  st["x_exponent"] = float(kw["exponent"])
-            if "reverse" in kw:   st["x_reverse"] = bool(kw["reverse"])
-        elif name == "yscale":
-            st["yscale"] = args[0]
-            if "order" in kw:     st["y_order"] = list(kw["order"])
-            if "padding" in kw:   st["y_padding"] = kw["padding"]
-            if "linthresh" in kw: st["y_linthresh"] = float(kw["linthresh"])
-            if "exponent" in kw:  st["y_exponent"] = float(kw["exponent"])
-            if "reverse" in kw:   st["y_reverse"] = bool(kw["reverse"])
+        elif name == "xscale": _record_scale(st, "x", args, kw)
+        elif name == "yscale": _record_scale(st, "y", args, kw)
         elif name == "xticks": _record_ticks(st, "x", args, kw)
         elif name == "yticks": _record_ticks(st, "y", args, kw)
         elif name == "x_expand": st["x_expand"] = _normalize_expand(args)
