@@ -126,6 +126,7 @@ def _artist_text(a, xs_, ys_, col):
     color = opts.get("color") or col or _D["text_color"]
     dx = opts.get("dx", 0)
     dy = opts.get("dy", 0)
+    rotation = opts.get("rotation", 0)
     anchor = _HA_TO_ANCHOR.get(ha, "start")
     # va offset on top of the SVG baseline. Cap-height of DejaVu ≈ 0.7 * size;
     # x-height ≈ 0.5. These constants give visually-centered placement for
@@ -147,9 +148,19 @@ def _artist_text(a, xs_, ys_, col):
         py = ys_(y) + dy + va_offset
         if not (math.isfinite(px) and math.isfinite(py)):
             continue
+        parts = []
         if bb is not None:
-            out.append(_text_bbox_rect(str(s), px, py, fontsize, anchor, bb))
-        out.append(text_path(str(s), px, py, fontsize, anchor=anchor, color=color))
+            parts.append(_text_bbox_rect(str(s), px, py, fontsize, anchor, bb))
+        parts.append(text_path(str(s), px, py, fontsize, anchor=anchor, color=color))
+        if rotation:
+            # SVG `rotate(deg, cx, cy)` is clockwise in screen space (y-down);
+            # matplotlib's `rotation=` is counterclockwise. Negate to match.
+            # Rotation anchor is the ha/va alignment point — same as matplotlib's
+            # `rotation_mode="anchor"`.
+            out.append(f'<g transform="rotate({-rotation:g},{px:.2f},{py:.2f})">'
+                       + "".join(parts) + "</g>")
+        else:
+            out.extend(parts)
     return "".join(out)
 
 
