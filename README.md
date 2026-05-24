@@ -23,9 +23,9 @@ Reference plot types beyond the standard vocabulary live in [`src/plotlet/extens
 
 plotlet supports Python 3.10+.
 
-Required: `fonttools`. numpy / pandas / polars inputs work transparently.
+Required: `fonttools`, `scipy` (used by regression, qq, pointplot, dendrogram). numpy / pandas / polars inputs work transparently.
 
-Optional: `cairosvg` for PNG / PDF export; `scipy` for a few statistical artists (regression, qq, pointplot).
+Optional: `cairosvg` for PNG / PDF export.
 
 ## Installation
 
