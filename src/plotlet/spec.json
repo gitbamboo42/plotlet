@@ -100,6 +100,6 @@
   },
   "layout": {
     "gap": 0,
-    "legend_gap": 6
+    "legend_gap": 10
   }
 }

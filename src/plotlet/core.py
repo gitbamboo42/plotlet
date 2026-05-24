@@ -918,12 +918,15 @@ def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     ylabel / title). Used directly by `_render_inner` to position those
     labels and the inline legend just outside the axis band.
 
-    Cross-side text overhang (a centered title wider than `dw` spilling
-    onto left and right, a rotated ylabel taller than `dh` spilling onto
-    top and bottom) is *not* included here — it grows the canvas via
-    `_required_margin` but should not displace axis-attached labels
-    from their natural slots. See `_required_margin` for the overhang
-    application."""
+    Cross-side overhang (a centered title wider than `dw` spilling onto
+    left and right, a rotated ylabel taller than `dh` spilling onto top
+    and bottom, the rightmost x-tick label's rotated AABB spilling past
+    x=iw) is *not* included in the four side keys — those would displace
+    axis-attached labels and outside legends from their natural slots.
+    The rightmost-x-tick spillover is reported separately as
+    `right_xtl_overhang` so `_required_margin` can max it in; the title
+    / xlabel / ylabel overhangs are recomputed inline there. See
+    `_required_margin` for the overhang application."""
     tick_size  = _FONTSPEC["tick_size"]
     label_size = _FONTSPEC["label_size"]
     title_size = _FONTSPEC["title_size"]
@@ -1031,14 +1034,18 @@ def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     if st["ylabel"] and not hide_l:
         left += 2 + label_size + _PADSPEC["ylabel"]
 
-    # Right: outward tick OR the rightmost x-tick label's overhang past
-    # the spine (centered text extends half its width past the tick).
-    # On a joined right side (hide_r), the overhang is allowed to bleed
-    # into the collapsed neighbor's margin — drop the reservation.
-    right_overhang = 0.0 if hide_r else last_bbox_w / 2.0
-    right = max(right_marks, right_overhang)
+    # Right: axis-only — outward tick stubs from `xticks(top=...)` /
+    # `yticks(right=...)`. The rightmost x-tick label's overhang past
+    # the right spine (rotated-text AABB extends past x=iw) is a
+    # cross-axis spillover and lives in `_required_margin` instead, so
+    # an inline right-position legend doesn't get shoved out by the
+    # bottom axis's tick rotation. Exposed separately so the caller can
+    # max it in for total margin reservation.
+    right = right_marks
+    right_xtl_overhang = 0.0 if hide_r else last_bbox_w / 2.0
 
-    return {"top": top, "right": right, "bottom": bottom, "left": left}
+    return {"top": top, "right": right, "bottom": bottom, "left": left,
+            "right_xtl_overhang": right_xtl_overhang}
 
 
 # ---------------------------------------------------------------------------
@@ -1123,6 +1130,13 @@ def _required_margin(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
         ylabel_overhang = max(0.0, (_measure_text(st["ylabel"], label_size) - dh) / 2.0)
         top    = max(top,    ylabel_overhang)
         bottom = max(bottom, ylabel_overhang)
+    # Rightmost x-tick label's rotated AABB extends past x=iw by half its
+    # width — a cross-axis spillover from the bottom axis. Measured in
+    # `_label_band_sizes` and reported separately so an inline right
+    # legend (which positions itself at `iw + bands["right"] + gap`)
+    # hugs the data area instead of being shoved out by a fat 45°-
+    # rotated tick label.
+    right = max(right, bands["right_xtl_overhang"])
 
     # Outside-legend reservation is *additive* with the label band so the
     # legend block sits beyond the title/labels rather than overlapping
