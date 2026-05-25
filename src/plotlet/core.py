@@ -175,7 +175,15 @@ def _record_ticks(st, axis, args, kw):
         st[f"{axis}_ticks"] = list(v) if v is not None else None
     if "labels" in kw:
         v = kw["labels"]
-        st[f"{axis}_labels"] = list(v) if v is not None else None
+        if v is False:
+            # Symmetric counterpart to `marks=False` — keep auto tick
+            # positions + tick marks, suppress the labels. Useful when
+            # tick marks are meant as visual cues but their numeric
+            # labels would crowd a different label (e.g. chrom name as
+            # xlabel under per-chrom tick marks).
+            st[f"{axis}_show_labels"] = False
+        else:
+            st[f"{axis}_labels"] = list(v) if v is not None else None
     if "rotation" in kw:  st[f"{axis}_rotation"]  = kw["rotation"]
     if "fontsize" in kw:  st[f"{axis}_fontsize"]  = kw["fontsize"]
     if "direction" in kw: st[f"{axis}_direction"] = kw["direction"]
@@ -261,11 +269,13 @@ def _replay(calls):
         # xticks/yticks overrides (None = auto, [] = hide):
         "x_ticks": None, "x_labels": None, "x_rotation": 0, "x_fontsize": None,
         "x_direction": _FRAME["tick_direction"], "x_marks": True,
+        "x_show_labels": True,
         "x_top":   _FRAME["tick_top"],
         "x_format": None, "x_minor": None,
         "x_step": None, "x_count": None,
         "y_ticks": None, "y_labels": None, "y_rotation": 0, "y_fontsize": None,
         "y_direction": _FRAME["tick_direction"], "y_marks": True,
+        "y_show_labels": True,
         "y_right": _FRAME["tick_right"],
         "y_format": None, "y_minor": None,
         "y_step": None, "y_count": None,
@@ -974,8 +984,9 @@ def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     # Tick labels render via `text_path`, which short-circuits on empty
     # strings — so a side with all-blank labels visually contributes nothing.
     # On a joined share-pair side, `suppress_*_labels` also drops them.
-    suppress_xt = po is not None and po.suppress_bottom_labels
-    suppress_yt = po is not None and po.suppress_left_labels
+    # `xticks(labels=False)` also fully suppresses them via `x_show_labels`.
+    suppress_xt = (po is not None and po.suppress_bottom_labels) or not st["x_show_labels"]
+    suppress_yt = (po is not None and po.suppress_left_labels)   or not st["y_show_labels"]
     has_xtl = (not suppress_xt) and any(str(l) for l in x_labels)
     if has_xtl:
         max_xtl_w = max((_measure_text(str(l), x_size) for l in x_labels), default=0.0)
@@ -1363,8 +1374,10 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
 
     hide_l, hide_r = panel_opts.hide_left, panel_opts.hide_right
     hide_t, hide_b = panel_opts.hide_top, panel_opts.hide_bottom
-    suppress_yt = panel_opts.suppress_left_labels
-    suppress_xt = panel_opts.suppress_bottom_labels
+    # `xticks(labels=False)` joins forces with the share-pair label
+    # suppression — either one drops tick labels on the corresponding side.
+    suppress_yt = panel_opts.suppress_left_labels   or not st["y_show_labels"]
+    suppress_xt = panel_opts.suppress_bottom_labels or not st["x_show_labels"]
 
     # In-frame legend geometry is computed up front because a top-position
     # legend sits between the title and the data area — the title's y
