@@ -27,6 +27,7 @@ and why-not-X live in [README.md](README.md) and [docs/PHILOSOPHY.md](docs/PHILO
 - **Visual constants live in [`spec.json`](src/plotlet/spec.json); theme overrides in [`src/plotlet/themes/`](src/plotlet/themes/).** Typing a number into render code → ask whether it belongs in the spec.
 - **No premature abstraction.** Three uses before extracting.
 - **`draw.*` is the public SVG-emission API for extensions.** Don't hand-roll `<line>` / `<rect>` f-strings in extensions.
+- **Before hand-rolling a new artist, check [`src/plotlet/extensions/`](src/plotlet/extensions/).** ~45 vetted single-file artists already live there (volcano, manhattan, sankey, raincloud, ecdf, ma_plot, calendar_heatmap, km_curve, upset_plot, …) — the directory listing is the index. Usage: `import plotlet.extensions.<name>` registers the artist, then `c.<name>(...)`. `Chart.__getattr__` hints with the import line when an extension method is called without the import.
 
 ## Deep dives
 

@@ -442,6 +442,13 @@ class Chart(_Renderable):
                 self._calls.append((name, list(args), dict(kwargs)))
                 return self
             return recorder
+        ext_file = Path(__file__).parent / "extensions" / f"{name}.py"
+        if ext_file.is_file():
+            raise AttributeError(
+                f"Chart has no method {name!r}. "
+                f"Did you forget `import plotlet.extensions.{name}`? "
+                f"Extensions register their artist on import."
+            )
         raise AttributeError(
             f"Chart has no method {name!r}. "
             f"Registered artists: {all_artist_names()}"
