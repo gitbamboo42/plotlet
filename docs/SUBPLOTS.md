@@ -35,14 +35,16 @@ fig.fit(canvas_width=800, canvas_height=600).show()
 ## Sharing scales
 
 ```python
-(a | b | c).share_y()                     # all share y; first leaf is the anchor
-(a / b).share_x()                         # all share x
-pt.grid([[A, B], [C, D]], share_x="col")  # column-wise pairs
-pt.grid([[A, B], [C, D]], share_y="row")  # row-wise pairs
-pt.grid([[A, B]], share_x=True)           # all share x (same as "all")
+(a | b | c).share_y()                          # all share y; first leaf is the anchor
+(a / b).share_x()                              # all share x
+pt.grid([[A, B], [C, D]]).share_x("col")       # column-wise pairs
+pt.grid([[A, B], [C, D]]).share_y("row")       # row-wise pairs
+pt.grid([[A, B]]).share_x(True)                # all share x (same as "all")
 ```
 
 Each leaf in a share-equivalence class adopts the anchor's domain (union of all members' data ranges). The shared dimension (`data_height` for shared-y, `data_width` for shared-x) is equalized; the orthogonal dimension scales proportionally to preserve aspect ratio. Inner tick labels redundant with a sharing sibling are dropped — spines and tick marks stay so each panel still reads as a closed rectangle.
+
+`share_x(...)` / `share_y(...)` accept `hide_labels=False` (default `True`) to keep the share equivalence and column-width alignment but render every panel's axis label and tick labels — useful when each row's axis carries different meaning even though widths agree. For pure width alignment without any axis equivalence, use `align_x("col")` / `align_y("row")`.
 
 **Auto-zero-gap**: when share-class neighbors sit adjacent (horizontally for shared-y, vertically for shared-x), the gap between them collapses to 0 — they read as one continuous frame. Same rule for `pt.legend(hm) | hm`-style "reads from immediate neighbor" cases.
 

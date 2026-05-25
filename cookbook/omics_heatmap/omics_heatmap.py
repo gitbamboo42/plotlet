@@ -13,7 +13,7 @@ Mechanics:
   so a left-side dendrogram lines up with heatmap rows.
 - The top strip is a tiny custom artist (`annotation_strip`) registered
   inline. One call per unique category produces one legend swatch each.
-- `pt.grid([[...]], share_x="col", share_y="row")` keeps:
+- `pt.grid([[...]]).share_x("col").share_y("row")` keeps:
     * top strip ↔ heatmap aligned column-wise (share_x);
     * left dendrogram ↔ heatmap aligned row-wise (share_y).
 - `pt.legend()` (no args) auto-harvests from every leaf: the heatmap's
@@ -175,7 +175,7 @@ if __name__ == "__main__":
     fig = pt.grid([
         [None, top, None         ],
         [tree, hm,  pt.legend()  ],
-    ], share_x="col", share_y="row")
+    ]).share_x("col").share_y("row")
 
     out = Path(__file__).with_suffix(".svg")
     fig.save_svg(out)

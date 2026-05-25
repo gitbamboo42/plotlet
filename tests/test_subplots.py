@@ -8,7 +8,7 @@
 Covers: `|`, `/`, `pt.grid`, single-parent invariant, show-on-child raise,
 default gap, auto-zero-gap when adjacent leaves are in the same
 share-equivalence class, scale-sharing via parent-level `.share_x()` /
-`.share_y()` and `pt.grid(share_x=...)` (with `True`/`"all"`/`"col"`/`"row"`),
+`.share_y()` (with `True`/`"all"`/`"col"`/`"row"`),
 range union across share-class members, inner-axis collapse on joined
 share-pairs, body-first leaf size-hint honoring (`pt.chart(data_width=...)`
 acts as a relative width when no explicit ratios are given), and
@@ -204,7 +204,7 @@ def complex_grid_shares():
     return pt.grid([
         [None, top ],
         [tree, main],
-    ], share_x="col", share_y="row")
+    ]).share_x("col").share_y("row")
 
 
 def fit_to_canvas():

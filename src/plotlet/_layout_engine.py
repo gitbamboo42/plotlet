@@ -499,6 +499,12 @@ def _mark_joined_pair(a: Chart | None, b: Chart | None, *, axis: str,
     share_axis = "y" if axis == "h" else "x"
     if _share_root(a, share_axis) is not _share_root(b, share_axis):
         return
+    # Per-leaf opt-out (set by `share_x(..., hide_labels=False)`). If either
+    # cell in the pair has it off, skip the hide/suppress on this joint so
+    # both panels render their own labels at the shared boundary.
+    hide_attr = f"_share_hide_labels_{share_axis}"
+    if not (getattr(a, hide_attr, True) and getattr(b, hide_attr, True)):
+        return
     if axis == "h":
         out[id(a)].hide_right = True
         out[id(b)].hide_left = True

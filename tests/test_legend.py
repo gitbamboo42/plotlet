@@ -119,7 +119,7 @@ def legend_joined_grid():
     return pt.grid([
         [None, top,  None        ],
         [tree, main, pt.legend() ],
-    ], share_x="col", share_y="row")
+    ]).share_x("col").share_y("row")
 
 
 def legend_gap_override():

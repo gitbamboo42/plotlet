@@ -244,8 +244,8 @@ class Chart(_Renderable):
         if "share_x" in kwargs or "share_y" in kwargs:
             raise TypeError(
                 "pt.chart() no longer accepts `share_x=` / `share_y=` "
-                "(moved to compose-time). Use `pt.grid([[...]], share_x=True)` "
-                "or `(a | b).share_x()` instead."
+                "(moved to compose-time). Chain `.share_x()` on the parent "
+                "layout: `pt.grid([[a, b]]).share_x()` or `(a | b).share_x()`."
             )
         if kwargs:
             raise TypeError(f"Chart() got unexpected keyword arguments: {list(kwargs)!r}")
@@ -288,10 +288,17 @@ class Chart(_Renderable):
                      "linetype": linetype,
                      "palette": palette}
         self._parent: "Layout | None" = None
-        # Share-class membership. Set by parent-level .share_x() / .share_y()
-        # (or pt.grid(share_x=...)); not user-settable on the leaf directly.
+        # Share-class membership. Set by parent-level .share_x() / .share_y();
+        # not user-settable on the leaf directly.
         self._share_x: "Chart | None" = None
         self._share_y: "Chart | None" = None
+        # Whether this leaf opts in to joined-pair label hiding on its
+        # shared axis. Default True (matches matplotlib's `sharex=True`).
+        # `share_x(..., hide_labels=False)` flips this to False so the
+        # share-equivalence still applies (xlim sync) but adjacent cells
+        # keep their xlabel/xtick labels visible.
+        self._share_hide_labels_x: bool = True
+        self._share_hide_labels_y: bool = True
         # Leaf discriminator. Values: "data" (default — normal chart leaf
         # with axes and artists), "legend" (set by pt.legend(...), bypasses
         # the frame+artists render path; see legend.py), "diagram" (set by
@@ -970,16 +977,50 @@ class Layout(_Renderable):
 
     # ---------- parent-only ----------
 
-    def share_x(self, mode: bool | str = "all") -> "Layout":
+    def share_x(self, mode: bool | str = "all", *,
+                hide_labels: bool = True) -> "Layout":
         """Wire up x-axis sharing across this layout's leaves. Mutates
         the leaves' private share state so layout.py's pre-pass
-        coordinates them. Returns self for chaining."""
-        self._apply_share("x", mode)
+        coordinates them. Returns self for chaining.
+
+        `hide_labels=True` (default, matches matplotlib's `sharex=True`)
+        also suppresses xlabel and x-tick labels on joined-pair sides so
+        adjacent shared panels read as one frame. Set `hide_labels=False`
+        to keep the share equivalence (xlim auto-syncs, columns align in
+        `"col"` mode) but render every panel's xlabel and tick labels —
+        useful when the same axis range carries different meaning per
+        row, or when the top row needs to own the xlabel.
+
+        For pure column-width alignment without axis equivalence at all,
+        use `align_x()` instead.
+        """
+        self._apply_share("x", mode, hide_labels=hide_labels)
         return self
 
-    def share_y(self, mode: bool | str = "all") -> "Layout":
+    def share_y(self, mode: bool | str = "all", *,
+                hide_labels: bool = True) -> "Layout":
         """Wire up y-axis sharing across this layout's leaves. See `share_x`."""
-        self._apply_share("y", mode)
+        self._apply_share("y", mode, hide_labels=hide_labels)
+        return self
+
+    def align_x(self, mode: bool | str = "col") -> "Layout":
+        """Coordinate per-column widths across rows without sharing the
+        x-axis or hiding any labels.
+
+        On a v-of-h composition with `mode="col"`, flips
+        `_virtual_grid_aligned` so the layout engine pads margins and
+        canvases per column across rows — the same width alignment
+        `share_x("col")` would do, minus the share equivalence and
+        joined-pair label hiding. Use when rows happen to have N
+        matching columns and you want them lined up visually, but
+        each row's x-axis is its own thing (different xlim, different
+        meaning, or each row keeps its xlabel/tick labels)."""
+        self._apply_align("x", mode)
+        return self
+
+    def align_y(self, mode: bool | str = "row") -> "Layout":
+        """Coordinate per-row heights across columns. See `align_x`."""
+        self._apply_align("y", mode)
         return self
 
     def gap(self, value: int | float) -> "Layout":
@@ -1000,7 +1041,8 @@ class Layout(_Renderable):
         self._gap = -2.0 * _MARGIN_FLOOR["top"]
         return self
 
-    def _apply_share(self, axis: str, mode) -> None:
+    def _apply_share(self, axis: str, mode, *,
+                     hide_labels: bool = True) -> None:
         norm = _normalize_share_mode(axis, mode)
         if norm == "none":
             return
@@ -1023,12 +1065,41 @@ class Layout(_Renderable):
             self._virtual_grid_aligned = True
         classes = self._compute_share_classes(norm)
         attr = "_share_x" if axis == "x" else "_share_y"
+        hide_attr = f"_share_hide_labels_{axis}"
         for cls in classes:
             if len(cls) < 2:
                 continue
             anchor = cls[0]
             for leaf in cls[1:]:
                 setattr(leaf, attr, anchor)
+            if not hide_labels:
+                # Flag every leaf in the class (anchor included) so the
+                # joined-pair walk skips hide_* / suppress_*_labels on
+                # both sides of every joint in this share class.
+                for leaf in cls:
+                    setattr(leaf, hide_attr, False)
+
+    def _apply_align(self, axis: str, mode) -> None:
+        """Geometric counterpart to `_apply_share` — flips
+        `_virtual_grid_aligned` so per-column/per-row coordination runs,
+        but never wires share chains or touches `_share_hide_labels_*`."""
+        norm = _normalize_share_mode(axis, mode)
+        if norm in ("none", "all"):
+            # `align_x("all")` doesn't have a meaningful geometric reading
+            # (every leaf shares some axis at once). Restrict to col/row.
+            raise ValueError(
+                f"align_{axis}={mode!r}: expected 'col' or 'row'."
+            )
+        if self._layout_kind != "grid":
+            expected_outer = "v" if norm == "col" else "h"
+            if self._layout_kind != expected_outer:
+                raise ValueError(
+                    f"align_{axis}={norm!r} requires a pt.grid layout, or "
+                    f"a {expected_outer!r} composition of "
+                    f"{'h' if norm == 'col' else 'v'}-sub-layouts; got "
+                    f"{self._layout_kind!r}."
+                )
+        self._virtual_grid_aligned = True
 
     def _compute_share_classes(self, mode: str) -> list[list]:
         from ._layout_engine import _iter_leaves
@@ -1100,8 +1171,6 @@ def chart(data=None, **opts) -> Chart:
 
 
 def grid(cells: list[list],
-         share_x: bool | str = False,
-         share_y: bool | str = False,
          gap: int | float | None = None,
          **kwargs) -> "Layout":
     """Build a grid-layout `Layout` from a list-of-lists of cells.
@@ -1115,18 +1184,11 @@ def grid(cells: list[list],
     charts; the grid then sums their natural canvases plus per-boundary
     gaps.
 
-    Sharing kwargs (matching matplotlib's `subplots(sharex=...)` semantics):
-
-    * `share_x=True` (or `"all"`) — every leaf in the grid shares x with
-      the first leaf (top-left).
-    * `share_x="col"` — each column is its own share class; the topmost
-      leaf in each column is the anchor.
-    * `share_x="row"` — each row is its own share class.
-    * `share_x=False` (default) or `"none"` — no sharing.
-
-    `share_y=` is symmetric. When sharing is active, non-anchor leaves'
-    aspect ratios are preserved and scaled so the shared dimension matches
-    the anchor's.
+    For axis sharing, chain `.share_x("col"/"row"/"all")` /
+    `.share_y(...)` on the returned `Layout`. The constructor takes only
+    the structural arguments (`cells`, `gap`); behavior knobs live on
+    methods so they compose uniformly across grid-built and `|`/`/`-built
+    layouts.
     """
     # Migration error — `widths=` / `heights=` were canvas-ratio overrides
     # in 0.1.x. With body-size-first composition there's no longer a
@@ -1140,6 +1202,17 @@ def grid(cells: list[list],
             "`pt.chart(data_width=200) | pt.chart(data_width=100)`. The grid "
             "sums each cell's natural canvas; per-leaf data sizes give you "
             "all the control ratios used to."
+        )
+    # Migration error — `share_x=` / `share_y=` were constructor kwargs
+    # that duplicated the post-construction methods. Methods scale better
+    # to new options (e.g. `share_x("col", hide_labels=False)`).
+    if "share_x" in kwargs or "share_y" in kwargs:
+        raise TypeError(
+            "pt.grid() no longer accepts `share_x=` / `share_y=` kwargs. "
+            "Call the methods after construction instead: "
+            "`pt.grid([[...]]).share_x('col').share_y('row')`. This keeps "
+            "one configuration path across grid- and `|`/`/`-built layouts "
+            "and leaves room for options like `hide_labels=`."
         )
     if kwargs:
         raise TypeError(f"pt.grid() got unexpected keyword arguments: {list(kwargs)!r}")
@@ -1169,8 +1242,6 @@ def grid(cells: list[list],
     parent._grid_cols = cols
     if gap is not None:
         parent._gap = float(gap)
-    parent.share_x(share_x)
-    parent.share_y(share_y)
     return parent
 
 

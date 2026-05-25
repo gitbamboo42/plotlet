@@ -127,7 +127,12 @@ class FacetGrid:
                 i = r * cols + cidx
                 row.append(panels[i] if i < len(panels) else None)
             cells.append(row)
-        return grid(cells, share_x=self._share_x, share_y=self._share_y)
+        layout = grid(cells)
+        if self._share_x:
+            layout.share_x(self._share_x)
+        if self._share_y:
+            layout.share_y(self._share_y)
+        return layout
 
     def to_svg(self) -> str:
         return self._materialize().to_svg()

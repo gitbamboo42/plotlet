@@ -66,7 +66,7 @@ def diag_multi_share_grid():
     return pt.layout_diagram(pt.grid([
         [None, top ],
         [tree, main],
-    ], share_x="col", share_y="row"))
+    ]).share_x("col").share_y("row"))
 
 
 def diag_composed_with_source():
