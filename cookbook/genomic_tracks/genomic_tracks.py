@@ -1,159 +1,225 @@
-"""Genome-wide tracks across chromosome-proportional subplots.
+"""Genome-wide tracks demo.
 
-Recipe shape: a 3 × N grid where each column is one chromosome and each
-row is one track type. Column widths are proportional to chromosome
-length, so the same Mb-distance reads at the same pixel width regardless
-of which chromosome it's in.
+Stacked, length-weighted faceting via the small coordination layer in
+[track_layout.py](track_layout.py). Each per-chrom track is a (data, paint)
+pair; the paint callback draws whatever you want into one chrom's chart.
+The SV triangle is a different shape — one chart spanning the genome —
+and lives as its own `SVTriangleTrack` type.
 
-    [scatter chr1   ][scatter chr2  ]..[chrX  ][chrY]
-    [coverage chr1  ][coverage chr2 ]..[chrX  ][chrY]
-    [meth chr1      ][meth chr2     ]..[chrX  ][chrY]
-       chr1            chr2          .. chrX    chrY
-
-Mechanics:
-
-- `pt.grid(rows, share_x="col", share_y="row")` does the layout:
-    * `share_x="col"` — each column's three tracks share their x scale,
-      so they read as one continuous panel per chromosome.
-    * `share_y="row"` — each row's panels share their y scale across
-      chromosomes; only the leftmost (chr1) draws y-tick labels, the
-      ylabel, and the left spine. The rest auto-suppress.
-    * Inter-track and inter-chromosome gaps come from the per-panel
-      `_MARGIN_FLOOR` (4 px each side → 8 px joined) — joined sides
-      drop their content reservations naturally, leaving just the floor.
-- Top and right spines are off everywhere; x-axis tick marks and
-  labels are hidden on every panel (whole-genome scale makes per-Mb
-  numbering illegible). The chromosome name sits as the xlabel of the
-  bottom row, naming each column.
-
-Three track types are demonstrated, all using built-in artists:
-
-  - **scatter** — sparse per-position values (e.g. per-variant logR).
-  - **line** — smoothed coverage across the chromosome.
-  - **fill_between with `curve="step-after"`** — binned methylation
-    rendered as a step area under a horizontal baseline.
-
-To extend with a custom track type (e.g. SV triangles), register a
-new artist via `pt.add_artist(pt.ArtistSpec(...))` — see
-`docs/EXTENDING.md`. Once registered, drop it into the same per-column
-stack.
+Patterns shown:
+- one-liner painters (`lambda c, df: c.scatter(...)`).
+- pre-factored painter closures for multi-statement paints
+  (`step_paint`, `bar_paint`).
+- highlight regions passed at the framework level via
+  `Track(..., highlight_df=...)` — drawn into every per-chrom cell before
+  the paint runs, so all tracks share the same overlay without each
+  paint repeating axvspan boilerplate. SV tracks accept the same kwarg.
+- font / size customization via a pre-registered theme passed to
+  `plot_tracks(theme=...)`.
+- alternating chrom banding via `plot_tracks(style="facecolor")`
+  (default); `"spine"` for a dotted-separator look instead.
+- log-scale tracks via `Track(..., yscale="log")`.
+- `chrom=[...]` / `showX=False` filtering via the framework.
+- SV triangle plot — `SVTriangleTrack` mixes into the same `plot_tracks`
+  call as per-chrom tracks and renders below them.
 """
 
-SUMMARY = 'Genome-wide tracks across chromosome-proportional subplots.'
+SUMMARY = "Genome-wide tracks as stacked, length-weighted faceting."
 
 from pathlib import Path
-import math
-import random
 
+import numpy as np
+import pandas as pd
 import plotlet as pt
 
+from track_layout import Track, SVTriangleTrack, plot_tracks
 
-# Chromosome lengths in megabases. A trimmed subset (hg38-flavored) keeps
-# the recipe short; real workflows pull lengths from a genome-build table
-# (UCSC chromInfo, etc.).
-CHROMS = [
+
+# =============================================================================
+# Painter helpers
+# =============================================================================
+
+def step_paint(start_col, end_col, y_col, *, fill=False,
+               alpha=0.9, fill_alpha=0.2):
+    """Step-after line with optional zero-baseline fill. The 'repeat the
+    last value at the right edge' trick closes the trailing bin as a
+    rectangle rather than leaving it as an open step."""
+    def paint(c, df):
+        xs = df[start_col].tolist() + [df[end_col].iloc[-1]]
+        ys = df[y_col].tolist()    + [df[y_col].iloc[-1]]
+        if fill:
+            c.fill_between(xs, [0] * len(xs), ys,
+                           curve="step-after", alpha=fill_alpha)
+        c.step(xs, ys, where="post", alpha=alpha)
+    return paint
+
+
+def bar_paint(start_col, end_col, y_col, *, alpha=0.75):
+    """Bar look: filled step-after area, no line on top. Assumes
+    contiguous bins."""
+    def paint(c, df):
+        xs = df[start_col].tolist() + [df[end_col].iloc[-1]]
+        ys = df[y_col].tolist()    + [df[y_col].iloc[-1]]
+        c.fill_between(xs, [0] * len(xs), ys,
+                       curve="step-after", alpha=alpha)
+    return paint
+
+
+# =============================================================================
+# Synthetic data
+# =============================================================================
+
+GENOME_SIZE = pd.DataFrame([
     ("chr1", 249),
     ("chr2", 242),
     ("chr3", 198),
     ("chrX", 156),
     ("chrY",  57),
-]
-
-PX_PER_MB = 1.0      # pixel scale: how many px per Mb of chromosome
-TRACK_HEIGHT = 60    # px per track row's data region
+], columns=["chrom", "length"])
 
 
-# ---------- synthetic data ---------------------------------------------
-
-def make_scatter(length_mb, seed):
-    """Sparse per-variant points. A faint signal in the left third
-    mimics a focal CNV gain."""
-    rng = random.Random(seed)
-    n = max(20, int(length_mb * 1.2))
-    xs = sorted(rng.uniform(0, length_mb) for _ in range(n))
-    ys = [rng.gauss(0, 0.35) + (0.7 if x < length_mb / 3 else 0.0) for x in xs]
-    return xs, ys
-
-
-def make_line(length_mb, seed):
-    """Smoothed coverage trace via a random walk re-scaled into [0, 2]."""
-    rng = random.Random(seed)
-    bins = max(40, int(length_mb / 3))
-    xs = [i * length_mb / bins for i in range(bins + 1)]
-    v = 0.0
-    ys = []
-    for _ in xs:
-        v += rng.gauss(0, 0.3)
-        ys.append(v)
-    lo, hi = min(ys), max(ys)
-    span = hi - lo or 1.0
-    return xs, [(y - lo) / span * 2 for y in ys]
+def make_points(gs, *, bin_mb=1.0, seed=0):
+    """Sparse per-position logR-style values. chr1's left third carries
+    a +0.7 baseline bump to mimic a focal CNV gain."""
+    rng = np.random.default_rng(seed)
+    rows = []
+    for _, r in gs.iterrows():
+        n = max(20, int(r.length / bin_mb))
+        xs = np.sort(rng.uniform(0, r.length, size=n))
+        ys = rng.normal(0, 0.35, size=n)
+        if r.chrom == "chr1":
+            mask = xs < r.length / 3
+            ys[mask] += 0.7
+        rows.append(pd.DataFrame({"chrom": r.chrom, "start": xs, "value": ys}))
+    return pd.concat(rows, ignore_index=True)
 
 
-def make_bins(length_mb, seed, bin_mb=8):
-    """Binned methylation-style fraction in [0, 1]. Returns step-curve
-    coordinates: xs = bin starts (with one extra at the chromosome end)
-    so `fill_between(curve="step-after")` draws a flat top per bin."""
-    rng = random.Random(seed)
-    n = max(4, math.ceil(length_mb / bin_mb))
-    edges = [i * length_mb / n for i in range(n + 1)]
-    vals  = [rng.uniform(0.15, 0.95) for _ in range(n)]
-    # Repeat the last value at the right edge so step-after renders the
-    # final bin as a closed rectangle, not an open step.
-    step_ys = vals + [vals[-1]]
-    return edges, step_ys
+def make_segments(gs, *, n_segs=6, seed=1):
+    rng = np.random.default_rng(seed)
+    rows = []
+    for _, r in gs.iterrows():
+        edges = np.sort(rng.uniform(0, r.length, size=n_segs * 2))
+        starts, ends = edges[0::2], edges[1::2]
+        vals = rng.uniform(0.2, 1.8, size=len(starts))
+        rows.append(pd.DataFrame({"chrom": r.chrom, "start": starts,
+                                  "end": ends, "value": vals}))
+    return pd.concat(rows, ignore_index=True)
 
 
-# ---------- compose -----------------------------------------------------
+def make_counts(gs, *, bin_mb=10, seed=2):
+    """Poisson counts per 10 Mb bin. chr2 carries a hypermutation spike."""
+    rng = np.random.default_rng(seed)
+    rows = []
+    for _, r in gs.iterrows():
+        starts = np.arange(0, r.length, bin_mb)
+        ends = np.minimum(starts + bin_mb, r.length)
+        counts = rng.poisson(lam=25, size=len(starts)).astype(float)
+        if r.chrom == "chr2":
+            counts[:3] *= 4
+        rows.append(pd.DataFrame({"chrom": r.chrom, "start": starts,
+                                  "end": ends, "count": counts}))
+    return pd.concat(rows, ignore_index=True)
 
-def chrom_panel(length_mb, *, ylim, ylabel=None, xlabel=None):
-    """Build one cell of the grid — one chromosome × one track row."""
-    c = pt.chart(data_width=length_mb * PX_PER_MB, data_height=TRACK_HEIGHT)
-    c.spines(top=False, right=False)
-    # Hide x-axis tick marks and labels — whole-genome scale makes per-Mb
-    # numbering illegible. The chromosome footer label below the bottom
-    # row carries each column's identification.
-    c.xticks([])
-    if ylabel is not None: c.ylabel(ylabel)
-    if xlabel is not None: c.xlabel(xlabel)
-    c.ylim(*ylim)
-    return c
 
+def make_gc(gs, *, bin_mb=5, seed=3):
+    rng = np.random.default_rng(seed)
+    rows = []
+    for _, r in gs.iterrows():
+        starts = np.arange(0, r.length, bin_mb)
+        ends = np.minimum(starts + bin_mb, r.length)
+        gc = rng.uniform(0.38, 0.55, size=len(starts))
+        rows.append(pd.DataFrame({"chrom": r.chrom, "start": starts,
+                                  "end": ends, "value": gc}))
+    return pd.concat(rows, ignore_index=True)
+
+
+def make_svs(gs, *, n_intra=40, n_inter=12, seed=4):
+    """BEDPE-like SV table. Local SVs cluster near the triangle bottom;
+    a handful of inter-chromosomal events float near the apex."""
+    rng = np.random.default_rng(seed)
+    chroms = gs["chrom"].tolist()
+    lens = dict(zip(gs["chrom"], gs["length"]))
+    rows = []
+    for _ in range(n_intra):
+        ch = chroms[rng.integers(len(chroms))]
+        L = lens[ch]
+        a = rng.uniform(0, L)
+        span = abs(rng.normal(0, L * 0.15))
+        b = float(np.clip(a + span, 0, L))
+        s1, s2 = sorted([a, b])
+        rows.append((ch, s1, s1 + 0.1, ch, s2, s2 + 0.1))
+    for _ in range(n_inter):
+        i, j = rng.choice(len(chroms), size=2, replace=False)
+        ca, cb = chroms[i], chroms[j]
+        sa = rng.uniform(0, lens[ca])
+        sb = rng.uniform(0, lens[cb])
+        rows.append((ca, sa, sa + 0.1, cb, sb, sb + 0.1))
+    return pd.DataFrame(rows, columns=["chrom1", "start1", "end1",
+                                       "chrom2", "start2", "end2"])
+
+
+# =============================================================================
+# Demo
+# =============================================================================
 
 if __name__ == "__main__":
-    scatter_row, line_row, meth_row = [], [], []
-    for i, (chrom, length) in enumerate(CHROMS):
-        is_first = (i == 0)
+    points_df = make_points(GENOME_SIZE)
+    segs_df   = make_segments(GENOME_SIZE)
+    counts_df = make_counts(GENOME_SIZE)
+    gc_df     = make_gc(GENOME_SIZE)
+    svs_df    = make_svs(GENOME_SIZE)
 
-        sc = chrom_panel(length, ylim=(-1.5, 2.0),
-                         ylabel="logR" if is_first else None)
-        xs, ys = make_scatter(length, seed=i)
-        sc.scatter(xs, ys, s=4, alpha=0.4)
+    highlight_df = pd.DataFrame([
+        ("chr1", 20, 90),
+        ("chr2",  0, 30),
+        ("chr3", 60, 95),
+    ], columns=["chrom", "start", "end"])
 
-        ln = chrom_panel(length, ylim=(0, 2),
-                         ylabel="coverage" if is_first else None)
-        xs, ys = make_line(length, seed=i + 10)
-        ln.line(xs, ys)
+    # Custom font + matplotlib-convention L-frame (left + bottom only).
+    # The SV row turns all four sides off explicitly to keep the triangle
+    # baseline as its own visual frame.
+    pt.register_theme("genomic_tracks_demo", {
+        "font": {"family": "Helvetica, Arial, sans-serif",
+                 "tick_size": 9, "label_size": 10, "title_size": 11},
+        "frame": {"spine_top": False, "spine_right": False},
+    })
 
-        # Only the bottom row carries an xlabel — it acts as the
-        # chromosome footer for that column.
-        mt = chrom_panel(length, ylim=(0, 1),
-                         ylabel="methylation" if is_first else None,
-                         xlabel=chrom)
-        edges, step_ys = make_bins(length, seed=i + 20)
-        mt.fill_between(edges, [0] * len(edges), step_ys,
-                        curve="step-after", alpha=0.6)
+    tracks = [
+        Track(points_df,
+              paint=lambda c, df: c.scatter(df.start.tolist(),
+                                            df.value.tolist(),
+                                            s=4, alpha=0.4),
+              ylabel="logR", ylim=(-1.5, 2.0),
+              highlight_df=highlight_df),
 
-        scatter_row.append(sc)
-        line_row.append(ln)
-        meth_row.append(mt)
+        Track(segs_df,
+              paint=lambda c, df: c.hlines(df.value.tolist(),
+                                           df.start.tolist(), df.end.tolist(),
+                                           linewidth=1.4, alpha=0.9),
+              ylabel="coverage", ylim=(0, 2.0),
+              highlight_df=highlight_df),
 
-    fig = pt.grid(
-        [scatter_row, line_row, meth_row],
-        share_x="col",                                  # tracks within a chromosome share x
-        share_y="row",                                  # chromosomes within a row share y
-    )
+        Track(counts_df,
+              paint=bar_paint("start", "end", "count"),
+              ylabel="SNV ct", ylim=(0, 120),
+              highlight_df=highlight_df),
 
-    out = Path(__file__).with_suffix(".svg")
-    fig.save_svg(out)
-    print(f"wrote {out}")
+        Track(gc_df,
+              paint=step_paint("start", "end", "value", fill=True),
+              ylabel="GC %", ylim=(0.35, 0.60),
+              highlight_df=highlight_df),
+
+        SVTriangleTrack(svs_df,
+                        highlight_df=highlight_df,
+                        s=10, alpha=0.7),
+    ]
+
+    for style, suffix in [("facecolor", ""), ("spine", "_spine")]:
+        fig = plot_tracks(tracks, GENOME_SIZE,
+                          width=600, track_height=55, gap=8,
+                          style=style,
+                          theme="genomic_tracks_demo")
+        out = Path(__file__).with_name(
+            Path(__file__).stem + suffix + ".svg")
+        fig.save_svg(out)
+        print(f"wrote {out}")
