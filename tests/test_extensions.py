@@ -1,16 +1,27 @@
-"""Smoke test for every extension in `plotlet.extensions`.
+"""Smoke + baseline tests for `plotlet.extensions`.
 
-Imports each extension module, calls its `demo()` function, and checks the
-returned Chart serializes to non-empty SVG. This catches:
-  - import-path breakage (e.g., after a core refactor that moves modules)
-  - registration-time errors in `pt.add_artist(...)`
-  - runtime errors in the extension's `draw` callback
-  - SVG-serialization failures
+Two passes:
 
-It does NOT compare against committed baselines — extensions evolve faster
-than core, and 64 baseline files would bloat the repo. For visual-regression
-coverage of the most-trafficked extensions, see `tests/test_chart.py` (which
-exercises the public chart API that extensions consume).
+1. **Smoke test** (every extension) — import the module, call `demo()`, check
+   it serializes to non-empty SVG. Catches import-path breakage, registration
+   errors, draw-callback exceptions, and serialization failures. Fast and
+   broad; no baseline file required.
+
+2. **Baseline test** (curated set in `BASELINE_EXTENSIONS`) — byte-compare
+   `demo().to_svg()` against `tests/baseline_images/extensions/<name>.svg`.
+   Reserved for extensions that are load-bearing for 2+ cookbook recipes,
+   where silent visual drift would propagate downstream. Promote here only
+   when an extension graduates from "single-file utility" to "depended on."
+
+The vast majority of extensions stay smoke-only — 45+ baseline files for
+leaf artists with one or zero callers would just be repo bloat. The
+`tests/test_chart.py` baselines cover the chart API surface that all
+extensions consume.
+
+Usage:
+    python tests/test_extensions.py            # smoke + baseline check
+    python tests/test_extensions.py --update   # regenerate baselines
+    python tests/test_extensions.py --gallery  # write baseline gallery HTML
 """
 from __future__ import annotations
 
@@ -19,6 +30,13 @@ import pkgutil
 import sys
 
 import plotlet.extensions
+
+import _runner
+
+
+# Extensions that get byte-compared baselines. Add an extension here when
+# 2+ cookbook recipes (or core tests) depend on its rendering.
+BASELINE_EXTENSIONS = {"annotation_strip"}
 
 
 def _iter_extensions():
@@ -77,9 +95,20 @@ def main() -> int:
             print(f"  FAIL  {n}: {e[:120]}")
         for n in no_demo:
             print(f"  MISS  {n}: no demo() function")
-        return 1
-    print(f"\n{ok} of {total} extension smoke tests passed")
-    return 0
+        smoke_rc = 1
+    else:
+        print(f"\n{ok} of {total} extension smoke tests passed")
+        smoke_rc = 0
+
+    # Baseline pass: byte-compare demo() output for the curated set.
+    print()
+    plots = {}
+    for name in sorted(BASELINE_EXTENSIONS):
+        mod = importlib.import_module(f"plotlet.extensions.{name}")
+        plots[name] = mod.demo
+    baseline_rc = _runner.run("extensions", plots)
+
+    return 1 if (smoke_rc or baseline_rc) else 0
 
 
 if __name__ == "__main__":
