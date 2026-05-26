@@ -669,29 +669,6 @@ class Chart(_Renderable):
         mapping = {v: cycle[i % len(cycle)] for i, v in enumerate(seen)}
         return [mapping[v] for v in vals]
 
-    def hist(self, *args, x=None, fill=None, color=None,
-             palette=None, data=None, **opts):
-        x, _, palette = self._resolve_aes(x=x, palette=palette)
-        if fill is None: fill = self._aes.get("fill")
-        if color is None: color = self._aes.get("color")
-        long_form = (x is not None or fill is not None or data is not None)
-        if long_form:
-            # Artist's long-form path resolves `fill=` as literal-vs-column
-            # and shares bin edges across groups.
-            df = self._resolve_data(data, "hist")
-            kw = {"data": df}
-            if x is not None: kw["x"] = x
-            if fill is not None: kw["fill"] = fill
-            if color is not None: kw["color"] = color
-            if palette is not None: kw["palette"] = palette
-            self._record("hist", **kw, **opts)
-        else:
-            if color is not None: opts["color"] = color
-            if fill is not None: opts["fill"] = fill
-            if palette is not None: opts["palette"] = palette
-            self._record("hist", *args, **opts)
-        return self
-
     def fill_between(self, *args, x=None, y1=None, y2=None, data=None, **opts):
         # Aes inheritance: x can come from chart-level x= default.
         x = x if x is not None else self._aes.get("x")
