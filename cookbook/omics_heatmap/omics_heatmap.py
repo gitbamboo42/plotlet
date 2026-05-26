@@ -11,8 +11,9 @@ Mechanics:
 
 - Rows are clustered with scipy; the leaf permutation reorders the matrix
   so a left-side dendrogram lines up with heatmap rows.
-- The top strip is a tiny custom artist (`annotation_strip`) registered
-  inline. One call per unique category produces one legend swatch each.
+- The top strip is `pt.annotation_strip` (registered by importing
+  `plotlet.extensions.annotation_strip`). One call covers the whole row;
+  the palette dict supplies one legend swatch per group.
 - `pt.grid([[...]]).share_x("col").share_y("row")` keeps:
     * top strip ↔ heatmap aligned column-wise (share_x);
     * left dendrogram ↔ heatmap aligned row-wise (share_y).
@@ -25,65 +26,7 @@ import random
 from scipy.cluster.hierarchy import linkage, dendrogram as _dgram_layout
 
 import plotlet as pt
-from plotlet.artists import _to_pylist
-
-
-# ---------- custom artist: categorical annotation strip ----------------
-# A horizontal strip of colored cells. One record per unique category, so
-# the layout legend gets one swatch per group. Spans the row y=[0, 1] in
-# data coords; x positions are integer cell indices (matching imshow's).
-
-def annotation_strip_record(args, kw):
-    return {
-        "type": "annotation_strip",
-        "positions": _to_pylist(args[0]),
-        "opts": kw,
-    }
-
-
-def annotation_strip_xdomain(a):
-    pos = a["positions"]
-    return [min(pos), max(pos) + 1] if pos else []
-
-
-def annotation_strip_ydomain(a):
-    return [0, 1]
-
-
-def annotation_strip_draw(a, ctx):
-    color = a["opts"].get("color") or ctx.color
-    y0 = ctx.y_scale(0); y1 = ctx.y_scale(1)
-    top, h = min(y0, y1), abs(y1 - y0)
-    parts = []
-    for i in a["positions"]:
-        x0 = ctx.x_scale(i); x1 = ctx.x_scale(i + 1)
-        parts.append(
-            f'<rect x="{min(x0, x1):.2f}" y="{top:.2f}" '
-            f'width="{abs(x1 - x0):.2f}" height="{h:.2f}" fill="{color}"/>'
-        )
-    return "".join(parts)
-
-
-def annotation_strip_legend_entries(a):
-    label = a["opts"].get("label")
-    if not label:
-        return []
-    def paint(a, ctx, x0, y_mid):
-        col = a["opts"].get("color") or a["_color"]
-        return (f'<rect x="{x0}" y="{y_mid - 5}" width="22" height="10" '
-                f'fill="{col}"/>')
-    return [{"label": label, "color": a.get("_color"), "paint": paint}]
-
-
-pt.add_artist(pt.ArtistSpec(
-    name="annotation_strip",
-    record=annotation_strip_record,
-    xdomain=annotation_strip_xdomain,
-    ydomain=annotation_strip_ydomain,
-    draw=annotation_strip_draw,
-    legend_entries=annotation_strip_legend_entries,
-    uses_color_cycle=False,
-))
+import plotlet.extensions.annotation_strip  # registers c.annotation_strip
 
 
 # ---------- synthetic data ---------------------------------------------
@@ -134,24 +77,19 @@ if __name__ == "__main__":
     col_labels = [samples[i] for i in col_order]
     col_groups = [groups[i] for i in col_order]
 
-    # Top: one annotation_strip call per unique group → one legend swatch
-    # each. Palette is matplotlib's tab10 first three colors via pt.TAB10
-    # (so the cookbook stays in matplotlib's visual vocabulary).
+    # Top: one annotation_strip call for the whole row. Both panels live on
+    # a category x-scale (sample names), so share_x just lines them up.
+    # Palette = matplotlib's tab10 (via pt.TAB10).
     group_colors = {"ctrl": pt.TAB10[0], "treat": pt.TAB10[1], "resist": pt.TAB10[2]}
     top = pt.chart(title="Treatment", data_width=420, data_height=14)
-    for grp, col in group_colors.items():
-        positions = [i for i, g in enumerate(col_groups) if g == grp]
-        top.annotation_strip(positions, color=col, label=grp)
-    # Strip is a decoration — no spines, no ticks. Inherits the column
-    # scale from the heatmap via share_x.
-    top.spines(left=False, right=False, top=False, bottom=False)
-    top.xticks([])
-    top.yticks([])
+    top.annotation_strip(col_labels, col_groups, palette=group_colors)
 
     # Left dendrogram. Pass the same linkage used to reorder rows so the
-    # tree matches the reordered heatmap exactly.
+    # tree matches the reordered heatmap exactly, and `labels=` so the
+    # dendrogram lives on the same category y-scale as the heatmap to its
+    # right (share_y then matches by gene name).
     tree = pt.chart(data_width=60, data_height=260)
-    tree.dendrogram(linkage=Z_rows, orient="left")
+    tree.dendrogram(linkage=Z_rows, orient="left", labels=row_labels)
 
     # Heatmap body. Diverging cmap centered at zero — typical for
     # row-normalized expression.

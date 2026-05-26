@@ -10,10 +10,9 @@ The pairing is manual — the dendrogram artist doesn't auto-reorder the
 heatmap. The caller computes the linkage, asks scipy for the leaf
 permutation, reorders the matrix, and composes the two charts with `/`.
 
-`share_x()` joins them with zero gap, and the coord conventions match
-out of the box: each leaf occupies the cell `[i, i+1]` with its visual
-endpoint at `i + 0.5`, and `chart.heatmap()` puts cell centers at the
-same positions.
+Both panels live on a category x-scale (sample names): the dendrogram
+gets them via `labels=`, the heatmap via `xticklabels=`. `share_x()`
+then aligns them by category name — no numeric coordinate matching.
 """
 from pathlib import Path
 import random
@@ -51,9 +50,11 @@ if __name__ == "__main__":
     reordered_col_labels = [col_labels[i] for i in leaves]
 
     # Column dendrogram on top. Pass the precomputed linkage so the
-    # tree matches the reordered heatmap exactly.
+    # tree matches the reordered heatmap exactly, and `labels=` so the
+    # dendrogram lives on the same category x-scale as the heatmap below
+    # (share_x then just works — no coordinate gymnastics).
     top = pt.chart(data_height=70, data_width=400)
-    top.dendrogram(linkage=Z)
+    top.dendrogram(linkage=Z, labels=reordered_col_labels)
 
     # Heatmap of the reordered matrix with row + col labels.
     hm = pt.chart(data_height=180, data_width=400)
@@ -63,11 +64,10 @@ if __name__ == "__main__":
                cmap="viridis")
     hm.xticks(rotation=45)
 
-    # share_x collapses the inter-panel gap; the joined-side margins of
-    # both panels (top's bottom, hm's top) collapse to the floor since no
-    # content is rendered there, so the dendrogram butts up against the
-    # heatmap cells with just the floor's worth of breathing room.
-    fig = (top / hm).share_x()
+    # share_x collapses the inter-panel gap to the joined-side margin
+    # floor; .touch() cancels that floor on both sides so the dendrogram
+    # baseline sits flush against the heatmap cells.
+    fig = (top / hm).share_x().touch()
 
     out = Path(__file__).with_suffix(".svg")
     fig.save_svg(out)

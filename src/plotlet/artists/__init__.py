@@ -5,7 +5,7 @@ group mirror pairs or shared-machinery siblings (matches ggplot2's
 per-geom convention, with consolidation only where it earns its keep).
 
 Single-artist files (one plot type each):
-  scatter, line, bar, hist, imshow, dendrogram, errorbar
+  scatter, line, bar, hist, imshow, heatmap, dendrogram, errorbar
   boxplot, violin, swarm, strip
   pointplot, ecdf, rug, density_1d, regression, kde_2d, hexbin
   freqpoly, contour, ridge, qq
@@ -26,6 +26,7 @@ from . import line         # noqa: F401
 from . import bar          # noqa: F401
 from . import hist         # noqa: F401
 from . import imshow       # noqa: F401
+from . import heatmap      # noqa: F401
 from . import dendrogram   # noqa: F401
 from . import errorbar     # noqa: F401
 from . import boxplot      # noqa: F401

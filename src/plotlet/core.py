@@ -748,6 +748,23 @@ def _y_descriptor(st) -> _AxisDescriptor:
                            exponent=st["y_exponent"])
 
 
+def _resolve_shared_padding(states: list[dict], key: str) -> float:
+    """Category padding for a share-equivalence class.
+
+    Anchor (`states[0]`) wins if it set padding explicitly. Otherwise pick
+    the min explicit setting across the rest — a heatmap's `padding=0`
+    (flush cells) propagates to siblings on the same shared scale even
+    when the heatmap isn't the anchor. Falls back to the spec default.
+    """
+    anchor = states[0]
+    if anchor[key] is not None:
+        return anchor[key]
+    others = [st[key] for st in states[1:] if st[key] is not None]
+    if others:
+        return min(others)
+    return _D["category_padding"]
+
+
 def _x_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
     """Build an x-axis descriptor for a share-equivalence class.
 
@@ -768,7 +785,7 @@ def _x_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
             cats = list(anchor["x_order"])
         else:
             cats = _artist_axis_order(all_artists, "x") or collect_categories(all_artists, "x")
-        padding = _D["category_padding"] if anchor["x_padding"] is None else anchor["x_padding"]
+        padding = _resolve_shared_padding(states, "x_padding")
         return _AxisDescriptor(kind="category", cats=cats, padding=padding)
     is_time = anchor["xscale"] == "time" or _is_temporal_axis(all_artists, "x")
     x_lo, x_hi = _scan_domain(all_artists, "x")
@@ -802,7 +819,7 @@ def _y_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
             cats = list(anchor["y_order"])
         else:
             cats = _artist_axis_order(all_artists, "y") or collect_categories(all_artists, "y")
-        padding = _D["category_padding"] if anchor["y_padding"] is None else anchor["y_padding"]
+        padding = _resolve_shared_padding(states, "y_padding")
         return _AxisDescriptor(kind="category", cats=cats, padding=padding)
     is_time = anchor["yscale"] == "time" or _is_temporal_axis(all_artists, "y")
     force_zero = _any_artist_force_zero(all_artists, "y")
