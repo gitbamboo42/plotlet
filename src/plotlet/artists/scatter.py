@@ -19,11 +19,13 @@ with column-driven `color=`.
 import math
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list
+from ..utils import to_list, resolve_aes, palette_color
 from ..draw import marker
+from ..draw.colors import TAB10
 from ..draw.colormaps import colormap_lut, _ContinuousNorm
 from .._spec import _D, _LEGSPEC
-from ._shared import _xy_minmax
+from ._shared import (_xy_minmax, expand_xy_long_form,
+                       DEFAULT_ALPHA_RANGE, _alpha_for_level)
 
 
 def _artist_scatter(a, xs_, ys_, col, xs, ys):
@@ -68,10 +70,163 @@ def _artist_scatter(a, xs_, ys_, col, xs, ys):
     return "".join(out)
 
 
+_STYLE_CYCLE = ("o", "s", "^", "v", "x", "+")
+
+
+def _compute_size_array(values, sizes):
+    vals = to_list(values)
+    nums = [v for v in vals if isinstance(v, (int, float)) and v == v]
+    if not nums:
+        return [sizes[0]] * len(vals)
+    lo, hi = min(nums), max(nums)
+    span = hi - lo
+    s_lo, s_hi = float(sizes[0]), float(sizes[1])
+    if span == 0:
+        mid = (s_lo + s_hi) / 2
+        return [mid if isinstance(v, (int, float)) and v == v else s_lo for v in vals]
+    return [s_lo + (v - lo) / span * (s_hi - s_lo)
+            if isinstance(v, (int, float)) and v == v else s_lo for v in vals]
+
+
+def _compute_style_array(values):
+    vals = to_list(values)
+    seen: list = []
+    for v in vals:
+        if v not in seen:
+            seen.append(v)
+    mapping = {v: _STYLE_CYCLE[i % len(_STYLE_CYCLE)] for i, v in enumerate(seen)}
+    return [mapping[v] for v in vals]
+
+
+def _expand_with_aesthetics(data, x_col, y_col, color, group, alpha,
+                             palette, size, style, sizes, alphas, base_opts):
+    """Long-form scatter with `size=`/`style=` per-point arrays. Splits by
+    `(color, group, alpha)` tuples; size/marker arrays are sliced per
+    sub-record. Equivalent to `expand_xy_long_form` but carries the extra
+    per-point payload that line/fill_between don't have."""
+    xs_all = to_list(data[x_col])
+    ys_all = to_list(data[y_col])
+    n = len(xs_all)
+    s_arr  = _compute_size_array(data[size], sizes) if size is not None else None
+    mk_arr = _compute_style_array(data[style])      if style is not None else None
+
+    def slice_for(idxs):
+        out = dict(base_opts)
+        if s_arr  is not None: out["s"]      = [s_arr[i]  for i in idxs]
+        if mk_arr is not None: out["marker"] = [mk_arr[i] for i in idxs]
+        return out
+
+    color_kind, color_value = resolve_aes(data, color)
+    group_kind, group_value = resolve_aes(data, group)
+    alpha_kind, alpha_value = resolve_aes(data, alpha)
+
+    if (color_kind == "literal" and group_kind == "literal"
+            and alpha_kind == "literal"):
+        opts = slice_for(range(n))
+        if color_value is not None: opts["color"] = color_value
+        if alpha_value is not None: opts["alpha"] = alpha_value
+        return [{"type": "scatter", "xs": xs_all, "ys": ys_all, "opts": opts}]
+
+    color_vec = color_value if color_kind == "column" else [None] * n
+    group_vec = group_value if group_kind == "column" else [None] * n
+    alpha_vec = alpha_value if alpha_kind == "column" else [None] * n
+    color_levels = list(dict.fromkeys(color_vec))
+    alpha_levels = list(dict.fromkeys(alpha_vec))
+    triples = list(dict.fromkeys(zip(color_vec, group_vec, alpha_vec)))
+
+    base_opts.pop("label", None)
+    records = []
+    labeled: set = set()
+    for ck, gk, ak in triples:
+        idxs = [j for j in range(n)
+                if color_vec[j] == ck and group_vec[j] == gk
+                and alpha_vec[j] == ak]
+        xs_g = [xs_all[j] for j in idxs]
+        ys_g = [ys_all[j] for j in idxs]
+        opts = slice_for(idxs)
+        opts.pop("label", None)
+        if color_kind == "column":
+            idx = color_levels.index(ck)
+            opts["color"] = palette_color(palette, ck, idx) or TAB10[idx % 10]
+            if ck not in labeled:
+                opts["label"] = str(ck)
+                labeled.add(ck)
+        elif color_value is not None:
+            opts["color"] = color_value
+        if alpha_kind == "column":
+            opts["alpha"] = _alpha_for_level(alpha_levels.index(ak),
+                                              len(alpha_levels), alphas)
+        elif alpha_value is not None:
+            opts["alpha"] = alpha_value
+        records.append({"type": "scatter", "xs": xs_g, "ys": ys_g, "opts": opts})
+    return records
+
+
 def _scatter_record(args, kw):
+    kw = dict(kw)
+    if "data" in kw or "x" in kw or "y" in kw:
+        data  = kw.pop("data", None)
+        x_col = kw.pop("x", None)
+        y_col = kw.pop("y", None)
+        if data is None or x_col is None or y_col is None:
+            raise TypeError(
+                "scatter long-form requires data=, x=, y= "
+                "(color/group/alpha/c/size/style optional)."
+            )
+        color   = kw.pop("color", None)
+        group   = kw.pop("group", None)
+        alpha   = kw.pop("alpha", None)
+        palette = kw.pop("palette", None)
+        c       = kw.pop("c", None)
+        size    = kw.pop("size", None)
+        style   = kw.pop("style", None)
+        sizes   = kw.pop("sizes", (20, 200))
+        alphas  = kw.pop("alphas", DEFAULT_ALPHA_RANGE)
+        # scatter has no line to dash; ignore inherited linetype/fill.
+        kw.pop("linetype", None)
+        kw.pop("fill", None)
+
+        color_kind, _ = resolve_aes(data, color)
+        if c is not None and color_kind == "column":
+            raise ValueError(
+                "scatter accepts either color=<col> (categorical) or "
+                "c= (numeric), not both — they're alternative color sources."
+            )
+
+        if c is not None:
+            # Numeric color via cmap. `c=` is per-point — no splitting; the
+            # categorical color= and alpha= (if any) are dropped, matching
+            # the previous Chart.scatter behavior. cmap/vmin/vmax/norm
+            # flow through unchanged in kw.
+            if isinstance(c, str):
+                c = to_list(data[c])
+            else:
+                c = to_list(c)
+            kw["c"] = c
+            return {"type": "scatter",
+                    "xs": to_list(data[x_col]),
+                    "ys": to_list(data[y_col]),
+                    "opts": kw}
+
+        if size is not None or style is not None:
+            return _expand_with_aesthetics(data, x_col, y_col, color, group, alpha,
+                                            palette, size, style, sizes, alphas, kw)
+
+        # Default long-form: split by (color, group, alpha). scatter has no
+        # linetype splits (no line to dash).
+        return expand_xy_long_form("scatter", data, x_col, y_col,
+                                    color, group, None, alpha,
+                                    palette, alphas, kw)
+    # Wide-form. Strip inherited-but-inapplicable aes that __getattr__
+    # may have injected (palette only matters for column-driven splits;
+    # fill/group/linetype don't apply to a single-series scatter).
+    kw.pop("fill", None)
+    kw.pop("group", None)
+    kw.pop("linetype", None)
+    kw.pop("palette", None)
     return {"type": "scatter",
             "xs": to_list(args[0]), "ys": to_list(args[1]),
-            "opts": dict(kw)}
+            "opts": kw}
 
 
 def _scatter_xdomain(a): return a["xs"]
