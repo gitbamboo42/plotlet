@@ -43,8 +43,7 @@ from .core import (
     _FRAME_METHODS, _replay, _render,
     _to_px,
 )
-from .draw.colors import TAB10
-from .utils import to_list, to_list_2d, palette_color, resolve_aes
+from .utils import to_list_2d
 from .registry import get_artist, all_artist_names
 
 
@@ -466,15 +465,6 @@ class Chart(_Renderable):
         so they need to record explicitly."""
         self._calls.append((name, list(args), dict(kwargs)))
 
-    def _resolve_aes(self, *, x=None, y=None, palette=None):
-        """Fill in missing x/y/palette from chart-level defaults set on
-        the constructor (`pt.chart(df, x=, y=, palette=)`). Per-call
-        kwargs always win — only `None` slots get the chart-level value."""
-        if x is None: x = self._aes.get("x")
-        if y is None: y = self._aes.get("y")
-        if palette is None: palette = self._aes.get("palette")
-        return x, y, palette
-
     def step(self, *args, where="post", **kwargs):
         """Step plot — sugar over `line(curve=...)`. `where="pre"`,
         `"post"` (default), or `"mid"` map to plotlet's curve names
@@ -535,120 +525,9 @@ class Chart(_Renderable):
         return self
 
     # Reflines, imshow, and any user-registered artist forward through
-    # __getattr__ above. They take raw lists/values, not column names.
-
-    # ---------- helpers ----------
-
-    def _resolve_data(self, data, public_name):
-        df = data if data is not None else self._data
-        if df is None:
-            raise ValueError(
-                f"Chart.{public_name}() with column-name kwargs requires a bound table; "
-                f"pass data=<table> or use chart(<table>)."
-            )
-        return df
-
-    _LINETYPE_CYCLE = (None, "--", ":", "-.")
-    _DEFAULT_ALPHA_RANGE = (0.3, 1.0)
-
-    @staticmethod
-    def _alpha_for_level(idx, n_levels, alphas):
-        """Map a discrete level index to an alpha value within `alphas`
-        (a `(lo, hi)` tuple). One level → the high end; otherwise
-        linearly spaced."""
-        lo, hi = alphas
-        if n_levels <= 1:
-            return hi
-        return lo + (hi - lo) * idx / (n_levels - 1)
-
-    def _tabular(self, public_name, kind, data, x_col, y_col,
-                 color, group, linetype, alpha, palette, opts):
-        """Long-form table → one or more artist records. Splits into one
-        record per unique `(color, group, linetype)` tuple, where each
-        aes may be None, a literal, or a column name.
-
-        Color: column → palette-resolved per level, one legend entry per
-        level (first sub-record of each level carries the label).
-        Group: invisible split — never burns a color or a legend entry.
-        Linetype: column → dash cycle per level. When `linetype` maps the
-        same column as `color`, the existing color legend swatches inherit
-        the dash pattern (via `linestyle` on the labeled sub-record).
-        """
-        df = self._resolve_data(data, public_name)
-        color_kind, color_value = resolve_aes(df, color)
-        group_kind, group_value = resolve_aes(df, group)
-        ltype_kind, ltype_value = resolve_aes(df, linetype)
-        alpha_kind, alpha_value = resolve_aes(df, alpha)
-        alphas = opts.pop("alphas", self._DEFAULT_ALPHA_RANGE)
-        xs_all = to_list(df[x_col])
-        ys_all = to_list(df[y_col])
-        n = len(xs_all)
-
-        # Fast path: no column-driven splits — single record.
-        if (color_kind == "literal" and group_kind == "literal"
-                and ltype_kind == "literal" and alpha_kind == "literal"):
-            if color_value is not None:
-                opts["color"] = color_value
-            if ltype_value is not None:
-                opts["linestyle"] = ltype_value
-            if alpha_value is not None:
-                opts["alpha"] = alpha_value
-            self._record(kind, xs_all, ys_all, **opts)
-            return
-
-        color_vec = color_value if color_kind == "column" else [None] * n
-        group_vec = group_value if group_kind == "column" else [None] * n
-        ltype_vec = ltype_value if ltype_kind == "column" else [None] * n
-        alpha_vec = alpha_value if alpha_kind == "column" else [None] * n
-        color_levels: list = []
-        for v in color_vec:
-            if v not in color_levels:
-                color_levels.append(v)
-        ltype_levels: list = []
-        for v in ltype_vec:
-            if v not in ltype_levels:
-                ltype_levels.append(v)
-        alpha_levels: list = []
-        for v in alpha_vec:
-            if v not in alpha_levels:
-                alpha_levels.append(v)
-        quads: list = []
-        for k in zip(color_vec, group_vec, ltype_vec, alpha_vec):
-            if k not in quads:
-                quads.append(k)
-
-        opts.pop("label", None)  # column-driven grouping overrides any user label
-        labeled: set = set()
-        for ck, gk, lk, ak in quads:
-            idxs = [j for j in range(n)
-                    if color_vec[j] == ck and group_vec[j] == gk
-                    and ltype_vec[j] == lk and alpha_vec[j] == ak]
-            xs_g = [xs_all[j] for j in idxs]
-            ys_g = [ys_all[j] for j in idxs]
-            sub_opts = dict(opts)
-            if color_kind == "column":
-                idx = color_levels.index(ck)
-                sub_opts["color"] = palette_color(palette, ck, idx) or TAB10[idx % 10]
-                if ck not in labeled:
-                    sub_opts["label"] = str(ck)
-                    labeled.add(ck)
-            elif color_value is not None:
-                sub_opts["color"] = color_value
-            if ltype_kind == "column":
-                ls = self._LINETYPE_CYCLE[ltype_levels.index(lk) % len(self._LINETYPE_CYCLE)]
-                if ls is not None:
-                    sub_opts["linestyle"] = ls
-            elif ltype_value is not None:
-                sub_opts["linestyle"] = ltype_value
-            if alpha_kind == "column":
-                sub_opts["alpha"] = self._alpha_for_level(
-                    alpha_levels.index(ak), len(alpha_levels), alphas)
-            elif alpha_value is not None:
-                sub_opts["alpha"] = alpha_value
-            self._record(kind, xs_g, ys_g, **sub_opts)
-
-    # Frame-state methods (title/xlabel/ylabel/xlim/ylim/xscale/yscale/
-    # grid/legend) forward through __getattr__ above.
+    # __getattr__ above — long-form (`data=`, `x=`, etc.) and aes
+    # inheritance are handled inside each artist's `record()` plus the
+    # generic recorder closure in `__getattr__`.
 
     def inset(self, rect, **chart_opts) -> "Chart":
         """Embed a small Chart inside this leaf at axes-fraction coordinates.
