@@ -53,13 +53,29 @@ def _fill_between_data_attrs(a):
     return out
 
 
+def _fill_between_record(args, kw):
+    kw = dict(kw)
+    if "data" in kw or "x" in kw or "y1" in kw or "y2" in kw:
+        data = kw.pop("data", None)
+        x = kw.pop("x", None)
+        y1 = kw.pop("y1", None)
+        y2 = kw.pop("y2", None)
+        if data is None or x is None or y1 is None or y2 is None:
+            raise TypeError(
+                "fill_between long-form requires data=, x=, y1=, y2= "
+                "(or pass positional xs, y1s, y2s)."
+            )
+        return {"type": "fill_between",
+                "xs": to_list(data[x]), "y1": to_list(data[y1]),
+                "y2": to_list(data[y2]), "opts": kw}
+    return {"type": "fill_between",
+            "xs": to_list(args[0]), "y1": to_list(args[1]),
+            "y2": to_list(args[2]), "opts": kw}
+
+
 add_artist(ArtistSpec(
     name="fill_between",
-    record=lambda args, kw: {"type": "fill_between",
-                              "xs": to_list(args[0]),
-                              "y1": to_list(args[1]),
-                              "y2": to_list(args[2]),
-                              "opts": kw},
+    record=_fill_between_record,
     xdomain=lambda a: a["xs"],
     ydomain=lambda a: list(a["y1"]) + list(a["y2"]),
     draw=lambda a, ctx: _artist_fill_between(a, ctx.x_scale, ctx.y_scale, ctx.color),

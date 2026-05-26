@@ -669,18 +669,6 @@ class Chart(_Renderable):
         mapping = {v: cycle[i % len(cycle)] for i, v in enumerate(seen)}
         return [mapping[v] for v in vals]
 
-    def fill_between(self, *args, x=None, y1=None, y2=None, data=None, **opts):
-        # Aes inheritance: x can come from chart-level x= default.
-        x = x if x is not None else self._aes.get("x")
-        if x is not None or y1 is not None or y2 is not None:
-            df = self._resolve_data(data, "fill_between")
-            self._record("fill_between",
-                          to_list(df[x]), to_list(df[y1]), to_list(df[y2]),
-                          **opts)
-        else:
-            self._record("fill_between", *args, **opts)
-        return self
-
     def heatmap(self, df, *, cmap=None, vmin=None, vmax=None, norm="linear",
                 center=None, xticklabels=None, yticklabels=None, legend=None,
                 annot=False, fmt=".2g", annot_color="auto", annot_fontsize=10):
