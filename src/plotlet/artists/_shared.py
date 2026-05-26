@@ -6,6 +6,92 @@ Paint logic is a nested closure; there are no shared swatch helpers.
 """
 from .._spec import _LEGSPEC
 from ..draw import marker, segment, rect
+from ..draw.colors import TAB10
+from ..utils import to_list, resolve_aes, palette_color
+
+
+# Used by long-form expansion for `linetype=` and `alpha=` column splits.
+LINETYPE_CYCLE = (None, "--", ":", "-.")
+DEFAULT_ALPHA_RANGE = (0.3, 1.0)
+
+
+def _alpha_for_level(idx, n_levels, alphas):
+    """Map a discrete level index to an alpha within `alphas` (a `(lo, hi)`
+    tuple). One level → high end; otherwise linearly spaced."""
+    lo, hi = alphas
+    if n_levels <= 1:
+        return hi
+    return lo + (hi - lo) * idx / (n_levels - 1)
+
+
+def expand_xy_long_form(kind, data, x_col, y_col,
+                        color, group, linetype, alpha,
+                        palette, alphas, base_opts):
+    """Long-form xy table → list of artist record dicts split by
+    `(color, group, linetype, alpha)` tuples. One record per unique tuple,
+    each carrying its own `color`/`linestyle`/`alpha`/`label`. Shared by
+    artists that draw one series per record (line, scatter).
+
+    Returns a list of dicts shaped `{"type": kind, "xs": [...], "ys": [...],
+    "opts": {...}}`. Single-record fast path when all four aesthetics are
+    literal (or absent). `base_opts` is the leftover kwargs after popping
+    the long-form aesthetic keys."""
+    color_kind, color_value = resolve_aes(data, color)
+    group_kind, group_value = resolve_aes(data, group)
+    ltype_kind, ltype_value = resolve_aes(data, linetype)
+    alpha_kind, alpha_value = resolve_aes(data, alpha)
+    xs_all = to_list(data[x_col])
+    ys_all = to_list(data[y_col])
+    n = len(xs_all)
+
+    if (color_kind == "literal" and group_kind == "literal"
+            and ltype_kind == "literal" and alpha_kind == "literal"):
+        opts = dict(base_opts)
+        if color_value is not None: opts["color"] = color_value
+        if ltype_value is not None: opts["linestyle"] = ltype_value
+        if alpha_value is not None: opts["alpha"] = alpha_value
+        return [{"type": kind, "xs": xs_all, "ys": ys_all, "opts": opts}]
+
+    color_vec = color_value if color_kind == "column" else [None] * n
+    group_vec = group_value if group_kind == "column" else [None] * n
+    ltype_vec = ltype_value if ltype_kind == "column" else [None] * n
+    alpha_vec = alpha_value if alpha_kind == "column" else [None] * n
+    color_levels = list(dict.fromkeys(color_vec))
+    ltype_levels = list(dict.fromkeys(ltype_vec))
+    alpha_levels = list(dict.fromkeys(alpha_vec))
+    quads = list(dict.fromkeys(zip(color_vec, group_vec, ltype_vec, alpha_vec)))
+
+    base_opts.pop("label", None)  # column-driven grouping overrides any user label
+    records = []
+    labeled: set = set()
+    for ck, gk, lk, ak in quads:
+        idxs = [j for j in range(n)
+                if color_vec[j] == ck and group_vec[j] == gk
+                and ltype_vec[j] == lk and alpha_vec[j] == ak]
+        xs_g = [xs_all[j] for j in idxs]
+        ys_g = [ys_all[j] for j in idxs]
+        opts = dict(base_opts)
+        if color_kind == "column":
+            idx = color_levels.index(ck)
+            opts["color"] = palette_color(palette, ck, idx) or TAB10[idx % 10]
+            if ck not in labeled:
+                opts["label"] = str(ck)
+                labeled.add(ck)
+        elif color_value is not None:
+            opts["color"] = color_value
+        if ltype_kind == "column":
+            ls = LINETYPE_CYCLE[ltype_levels.index(lk) % len(LINETYPE_CYCLE)]
+            if ls is not None:
+                opts["linestyle"] = ls
+        elif ltype_value is not None:
+            opts["linestyle"] = ltype_value
+        if alpha_kind == "column":
+            opts["alpha"] = _alpha_for_level(alpha_levels.index(ak),
+                                              len(alpha_levels), alphas)
+        elif alpha_value is not None:
+            opts["alpha"] = alpha_value
+        records.append({"type": kind, "xs": xs_g, "ys": ys_g, "opts": opts})
+    return records
 
 
 _CURVE_VALUES = ("linear", "step-before", "step-after", "step-mid")

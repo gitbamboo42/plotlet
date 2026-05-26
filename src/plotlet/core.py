@@ -307,7 +307,14 @@ def _replay(calls):
         if spec is not None:
             # Pass fresh copies so a `kw.pop(...)` inside `record()` doesn't
             # corrupt the stored call dict — re-renders walk the same list.
-            st["artists"].append(spec.record(list(args), dict(kw)))
+            # `record()` returns a single dict for one-series artists or a
+            # list of dicts for long-form expansions (line, scatter split
+            # by color/group/linetype levels).
+            result = spec.record(list(args), dict(kw))
+            if isinstance(result, list):
+                st["artists"].extend(result)
+            else:
+                st["artists"].append(result)
         elif name == "title":  st["title"] = args[0]
         elif name == "xlabel": st["xlabel"] = args[0]
         elif name == "ylabel": st["ylabel"] = args[0]

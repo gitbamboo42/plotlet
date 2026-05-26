@@ -19,7 +19,8 @@ from ..registry import ArtistSpec, add_artist
 from ..utils import to_list
 from .._spec import _D
 from ..draw import marker, path as draw_path
-from ._shared import _xy_minmax, _line_legend_entries, _CURVE_VALUES, _step_coords
+from ._shared import (_xy_minmax, _line_legend_entries, _CURVE_VALUES,
+                       _step_coords, expand_xy_long_form, DEFAULT_ALPHA_RANGE)
 
 
 def _artist_line(a, xs_, ys_, col, xs, ys):
@@ -61,9 +62,37 @@ def _artist_line(a, xs_, ys_, col, xs, ys):
 
 
 def _line_record(args, kw):
+    kw = dict(kw)
+    if "data" in kw or "x" in kw or "y" in kw:
+        data = kw.pop("data", None)
+        x_col = kw.pop("x", None)
+        y_col = kw.pop("y", None)
+        if data is None or x_col is None or y_col is None:
+            raise TypeError(
+                "line long-form requires data=, x=, y= "
+                "(color/group/linetype/alpha optional)."
+            )
+        color   = kw.pop("color", None)
+        group   = kw.pop("group", None)
+        ltype   = kw.pop("linetype", None)
+        alpha   = kw.pop("alpha", None)
+        palette = kw.pop("palette", None)
+        alphas  = kw.pop("alphas", DEFAULT_ALPHA_RANGE)
+        return expand_xy_long_form("line", data, x_col, y_col,
+                                    color, group, ltype, alpha,
+                                    palette, alphas, kw)
+    # Wide-form. Aes-inherited kwargs that don't apply here (fill, palette)
+    # may still be present from __getattr__ injection — strip them silently.
+    kw.pop("fill", None)
+    kw.pop("group", None)
+    kw.pop("palette", None)
+    if kw.get("linetype") is not None:
+        kw["linestyle"] = kw.pop("linetype")
+    else:
+        kw.pop("linetype", None)
     return {"type": "line",
             "xs": to_list(args[0]), "ys": to_list(args[1]),
-            "opts": dict(kw)}
+            "opts": kw}
 
 
 def _line_xdomain(a): return a["xs"]

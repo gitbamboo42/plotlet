@@ -475,25 +475,7 @@ class Chart(_Renderable):
         if palette is None: palette = self._aes.get("palette")
         return x, y, palette
 
-    def line(self, *args, x=None, y=None, color=None, group=None,
-             linetype=None, alpha=None, palette=None, data=None, **opts):
-        x, y, palette = self._resolve_aes(x=x, y=y, palette=palette)
-        if color is None: color = self._aes.get("color")
-        if group is None: group = self._aes.get("group")
-        if linetype is None: linetype = self._aes.get("linetype")
-        if x is not None or y is not None:
-            self._tabular("line", "line", data, x, y,
-                          color, group, linetype, alpha, palette, opts)
-        else:
-            if color is not None: opts["color"] = color
-            if linetype is not None: opts["linestyle"] = linetype
-            if alpha is not None: opts["alpha"] = alpha
-            self._record("line", *args, **opts)
-        return self
-
-    def step(self, *args, x=None, y=None, color=None, group=None,
-             linetype=None, alpha=None, palette=None,
-             where="post", data=None, **opts):
+    def step(self, *args, where="post", **kwargs):
         """Step plot — sugar over `line(curve=...)`. `where="pre"`,
         `"post"` (default), or `"mid"` map to plotlet's curve names
         (`step-before`, `step-after`, `step-mid`). matplotlib convention."""
@@ -502,10 +484,8 @@ class Chart(_Renderable):
             raise ValueError(
                 f"step() where= expects 'pre', 'post', or 'mid'; got {where!r}"
             )
-        opts = dict(opts)
-        opts["curve"] = curve
-        return self.line(*args, x=x, y=y, color=color, group=group,
-                         linetype=linetype, palette=palette, data=data, **opts)
+        kwargs["curve"] = curve
+        return self.line(*args, **kwargs)
 
     def scatter(self, *args, x=None, y=None, color=None, group=None,
                 alpha=None, palette=None,
