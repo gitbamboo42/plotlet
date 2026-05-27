@@ -125,30 +125,38 @@ class _PanelOpts:
     M_eff:       dict | None = None
 
 
-def _rotated_text(s, x, y, size, angle, axis):
-    """Tick label as text-as-paths, optionally rotated.
+def _tick_label(s, x, y, size, angle, axis,
+                fontstyle="normal", decoration="none"):
+    """Render a single tick label as text-as-paths.
 
-    `angle=0` is a passthrough to `_text_path` with the unrotated anchor —
-    keeps existing SVG output byte-identical when no rotation is set.
-    Otherwise emits the glyph paths at origin and wraps in
-    `<g transform="translate(x,y) rotate(-angle)">`. The negation matches
-    matplotlib's convention (positive angle = counterclockwise on screen)
-    against SVG's positive-clockwise rotation.
+    Called for every tick label on every render — rotation is opt-in via
+    `angle`. When `angle=0` (default) routes straight to `text_path` with
+    the side-appropriate anchor; when nonzero, emits the glyphs at origin
+    and wraps in `<g transform="translate(x,y) rotate(-angle)">`. The
+    negation matches matplotlib's convention (positive angle = CCW on
+    screen) against SVG's positive-clockwise rotation.
 
     Anchor direction depends on axis + rotation sign so the rotated text
     always grows AWAY from the data area: for bottom x-tick labels,
     positive rotation (CCW) uses anchor="end" (text extends downward);
     negative rotation (CW) uses anchor="start" (also extends downward —
-    without this, CW rotation would push labels into the chart body)."""
+    without this, CW rotation would push labels into the chart body).
+
+    `fontstyle="italic"` propagates through `text_path` for synthesized
+    oblique tick labels (common bio convention for gene names).
+    `decoration="underline"|"overline"|"line-through"` adds a stroke line
+    at the conventional offset."""
     color = _FONTSPEC["color"]
     if not angle:
         anchor = "middle" if axis == "x" else "end"
-        return text_path(s, x, y, size, anchor=anchor, color=color)
+        return text_path(s, x, y, size, anchor=anchor, color=color,
+                         fontstyle=fontstyle, decoration=decoration)
     if axis == "x":
         anchor = "end" if angle > 0 else "start"
     else:
         anchor = "end"
-    text = text_path(s, 0, 0, size, anchor=anchor, color=color)
+    text = text_path(s, 0, 0, size, anchor=anchor, color=color,
+                     fontstyle=fontstyle, decoration=decoration)
     return f'<g transform="translate({x:.2f},{y:.2f}) rotate({-angle})">{text}</g>'
 
 
@@ -195,6 +203,8 @@ def _record_ticks(st, axis, args, kw):
             st[f"{axis}_labels"] = list(v) if v is not None else None
     if "rotation" in kw:  st[f"{axis}_rotation"]  = kw["rotation"]
     if "fontsize" in kw:  st[f"{axis}_fontsize"]  = kw["fontsize"]
+    if "fontstyle" in kw: st[f"{axis}_fontstyle"] = kw["fontstyle"]
+    if "decoration" in kw: st[f"{axis}_decoration"] = kw["decoration"]
     if "direction" in kw: st[f"{axis}_direction"] = kw["direction"]
     if "marks" in kw:     st[f"{axis}_marks"]     = bool(kw["marks"])
     if "format" in kw:    st[f"{axis}_format"]    = kw["format"]
@@ -277,12 +287,14 @@ def _replay(calls):
         "x_expand": None, "y_expand": None,
         # xticks/yticks overrides (None = auto, [] = hide):
         "x_ticks": None, "x_labels": None, "x_rotation": 0, "x_fontsize": None,
+        "x_fontstyle": None, "x_decoration": None,
         "x_direction": _FRAME["tick_direction"], "x_marks": True,
         "x_show_labels": True,
         "x_top":   _FRAME["tick_top"],
         "x_format": None, "x_minor": None,
         "x_step": None, "x_count": None,
         "y_ticks": None, "y_labels": None, "y_rotation": 0, "y_fontsize": None,
+        "y_fontstyle": None, "y_decoration": None,
         "y_direction": _FRAME["tick_direction"], "y_marks": True,
         "y_show_labels": True,
         "y_right": _FRAME["tick_right"],
@@ -1540,6 +1552,10 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     y_size = st["y_fontsize"] if st["y_fontsize"] is not None else tick_size
     x_rot = st["x_rotation"] or 0
     y_rot = st["y_rotation"] or 0
+    x_style = st.get("x_fontstyle") or "normal"
+    y_style = st.get("y_fontstyle") or "normal"
+    x_decor = st.get("x_decoration") or "none"
+    y_decor = st.get("y_decoration") or "none"
     x_dir, y_dir = st["x_direction"], st["y_direction"]
     x_marks, y_marks = st["x_marks"], st["y_marks"]
 
@@ -1583,9 +1599,10 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         if not suppress_xt:
             # baseline = tick_end + tick_pad + cap_height, so the label's cap
             # top sits flush with `tick_pad` past the tick mark.
-            parts.append(_rotated_text(str(lbl), x,
-                                       ih + _FRAME["tick_length"] + _FRAME["tick_pad"] + _cap_height(x_size),
-                                       x_size, x_rot, axis="x"))
+            parts.append(_tick_label(str(lbl), x,
+                                     ih + _FRAME["tick_length"] + _FRAME["tick_pad"] + _cap_height(x_size),
+                                     x_size, x_rot, axis="x",
+                                     fontstyle=x_style, decoration=x_decor))
 
     # Minor ticks — shorter than majors (frame.minor_tick_ratio), no
     # labels. Emit only when the user opted in via xticks(minor=True) or
@@ -1627,8 +1644,9 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         if not suppress_yt:
             # `y + cap_height/2` places the baseline so the cap is vertically
             # centered on the tick line (cap top at y - cap/2, cap bottom at y + cap/2).
-            parts.append(_rotated_text(str(lbl), y_label_x, y + _cap_height(y_size) / 2,
-                                       y_size, y_rot, axis="y"))
+            parts.append(_tick_label(str(lbl), y_label_x, y + _cap_height(y_size) / 2,
+                                     y_size, y_rot, axis="y",
+                                     fontstyle=y_style, decoration=y_decor))
 
     y_minor = _resolve_minor_ticks(st["y_minor"], y_scale, y_ticks)
     if y_minor and y_marks:

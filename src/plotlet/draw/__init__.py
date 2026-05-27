@@ -36,41 +36,44 @@ subsystem (font measurement, color resolution, colormap LUTs) for callers
 that need finer-grained control.
 """
 from .._spec import _D, _DASH
-from .font import _glyph, _measure_text, _UPEM, _GS
+from .font import _measure_text, _glyph_path_d, _decoration_y_offset
 from .linestyles import _resolve_linestyle
 
-from fontTools.pens.svgPathPen import SVGPathPen
-from fontTools.pens.transformPen import TransformPen
-from fontTools.misc.transform import Transform
-
-
 def text_path(s: str, x: float, y: float, size: float,
-              anchor: str = "start", color: str = "#000") -> str:
+              anchor: str = "start", color: str = "#000",
+              fontstyle: str = "normal",
+              decoration: str = "none") -> str:
     """Render `s` as a single SVG <path> with its baseline at pixel (x, y).
 
     `anchor` matches SVG's text-anchor: 'start' | 'middle' | 'end'. Use this
     inside a custom artist's `draw` callback to emit text-as-paths so output
     stays font-independent across machines.
+
+    `fontstyle="italic"` synthesizes an oblique slant via a -12° skew during
+    glyph composition — matches what matplotlib does when only an upright
+    font is available (DejaVu Sans ships no real italic).
+
+    `decoration="underline" | "overline" | "line-through"` appends a stroke
+    line at the conventional offset for that decoration.
     """
-    if not s:
+    d = _glyph_path_d(s, x, y, size, anchor=anchor, fontstyle=fontstyle)
+    if not d:
         return ""
-    width = _measure_text(s, size)
-    if anchor == "middle":
-        x0 = x - width / 2
-    elif anchor == "end":
-        x0 = x - width
-    else:
-        x0 = x
-    pen = SVGPathPen(_GS)
-    scale = size / _UPEM
-    cx = x0
-    for ch in s:
-        g = _glyph(ch)
-        # SVG y points down, font y points up — flip with negative scale.
-        tpen = TransformPen(pen, Transform().translate(cx, y).scale(scale, -scale))
-        g.draw(tpen)
-        cx += g.width * scale
-    return f'<path d="{pen.getCommands()}" fill="{color}"/>'
+    out = f'<path d="{d}" fill="{color}"/>'
+    if decoration != "none":
+        width = _measure_text(s, size)
+        if anchor == "middle":
+            x0 = x - width / 2
+        elif anchor == "end":
+            x0 = x - width
+        else:
+            x0 = x
+        dy = _decoration_y_offset(decoration, size)
+        line_w = max(0.6, size * 0.06)
+        out += (f'<line x1="{x0:.2f}" y1="{y + dy:.2f}" '
+                f'x2="{x0 + width:.2f}" y2="{y + dy:.2f}" '
+                f'stroke="{color}" stroke-width="{line_w:.2f}"/>')
+    return out
 
 
 def op(alpha) -> str:

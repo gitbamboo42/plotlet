@@ -594,6 +594,34 @@ def chart_long_rotated_xticks():
     return c
 
 
+def chart_xticks_fontstyle_italic():
+    # Common bio convention: gene names rendered in italics. DejaVu Sans
+    # ships no real italic, so plotlet synthesizes a -12° oblique skew at
+    # render time (same approach matplotlib uses).
+    df = {"gene": ["TP53", "KRAS", "BRAF", "PIK3CA", "EGFR"],
+          "mut_rate": [0.42, 0.35, 0.28, 0.21, 0.18]}
+    c = pt.chart(data_width=320, data_height=200,
+                 title="italic gene names", ylabel="mut rate")
+    c.bar(data=df, x="gene", y="mut_rate", fill="#5599aa")
+    c.xticks(fontstyle="italic")
+    return c
+
+
+def chart_xticks_decoration():
+    # CSS-style text-decoration on tick labels: underline / line-through /
+    # overline. Each is rendered as a stroke line at the conventional
+    # offset relative to the baseline / cap-top.
+    df = {"cat": ["under", "strike", "over"], "val": [3, 4, 5]}
+    c = pt.chart(data_width=260, data_height=160,
+                 title="tick label decorations")
+    c.bar(data=df, x="cat", y="val", fill="#5599aa")
+    # Single-axis-wide style; mixing three on one chart isn't currently
+    # supported (would need per-tick override).
+    c.xticks(decoration="underline")
+    c.yticks(decoration="line-through")
+    return c
+
+
 def chart_xticks_rotation_negative():
     # Negative rotation (CW on screen) — labels must extend BELOW the
     # tick into the bottom margin, not upward into the data area. Older
@@ -1408,6 +1436,8 @@ PLOTS = {
     "long_title":          chart_long_title,
     "long_ylabel":         chart_long_ylabel,
     "long_rotated_xticks": chart_long_rotated_xticks,
+    "xticks_fontstyle_italic": chart_xticks_fontstyle_italic,
+    "xticks_decoration":       chart_xticks_decoration,
     "xticks_rotation_negative": chart_xticks_rotation_negative,
     "despined":            chart_despined,
     "restyled_spines":     chart_restyled_spines,
