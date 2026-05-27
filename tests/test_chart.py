@@ -626,7 +626,7 @@ def chart_xticks_rotation_negative():
     # Negative rotation (CW on screen) — labels must extend BELOW the
     # tick into the bottom margin, not upward into the data area. Older
     # behavior used anchor="end" for all rotations, which pushed CW-
-    # rotated labels into the chart body. See comut v2 NOTES.
+    # rotated labels into the chart body.
     df = {"sample": ["Sample-1", "Sample-2", "Sample-3", "Sample-4"],
           "value":  [10, 20, 15, 25]}
     c = pt.chart(data_width=300, data_height=180,

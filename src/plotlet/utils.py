@@ -207,7 +207,11 @@ def categorical_groups(data, x_col, y_col, group_col=None):
 
 
 def collect_categories(artists, axis):
-    """Unique values an artist contributes on `axis`, alphabetically sorted."""
+    """Unique values an artist contributes on `axis`, in first-appearance order.
+
+    Preserves the order the user gave (e.g. clustering order, time order)
+    rather than alphabetizing it. To override, pass `xscale("category",
+    order=[...])` explicitly."""
     seen = set()
     out = []
     for a in artists:
@@ -220,7 +224,7 @@ def collect_categories(artists, axis):
             if v is None: continue
             if v not in seen:
                 seen.add(v); out.append(v)
-    return sorted(out, key=str)
+    return out
 
 
 def long_form_xy(data, x_col, y_col, group_col=None):
