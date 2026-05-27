@@ -130,16 +130,25 @@ def _rotated_text(s, x, y, size, angle, axis):
 
     `angle=0` is a passthrough to `_text_path` with the unrotated anchor —
     keeps existing SVG output byte-identical when no rotation is set.
-    Otherwise emits the glyph paths at origin with anchor="end", then
-    wraps in `<g transform="translate(x,y) rotate(-angle)">` so the
-    rotation pivots at the call-site's (x, y). The negation matches
+    Otherwise emits the glyph paths at origin and wraps in
+    `<g transform="translate(x,y) rotate(-angle)">`. The negation matches
     matplotlib's convention (positive angle = counterclockwise on screen)
-    against SVG's positive-clockwise rotation."""
+    against SVG's positive-clockwise rotation.
+
+    Anchor direction depends on axis + rotation sign so the rotated text
+    always grows AWAY from the data area: for bottom x-tick labels,
+    positive rotation (CCW) uses anchor="end" (text extends downward);
+    negative rotation (CW) uses anchor="start" (also extends downward —
+    without this, CW rotation would push labels into the chart body)."""
     color = _FONTSPEC["color"]
     if not angle:
         anchor = "middle" if axis == "x" else "end"
         return text_path(s, x, y, size, anchor=anchor, color=color)
-    text = text_path(s, 0, 0, size, anchor="end", color=color)
+    if axis == "x":
+        anchor = "end" if angle > 0 else "start"
+    else:
+        anchor = "end"
+    text = text_path(s, 0, 0, size, anchor=anchor, color=color)
     return f'<g transform="translate({x:.2f},{y:.2f}) rotate({-angle})">{text}</g>'
 
 

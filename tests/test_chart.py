@@ -594,6 +594,21 @@ def chart_long_rotated_xticks():
     return c
 
 
+def chart_xticks_rotation_negative():
+    # Negative rotation (CW on screen) — labels must extend BELOW the
+    # tick into the bottom margin, not upward into the data area. Older
+    # behavior used anchor="end" for all rotations, which pushed CW-
+    # rotated labels into the chart body. See comut v2 NOTES.
+    df = {"sample": ["Sample-1", "Sample-2", "Sample-3", "Sample-4"],
+          "value":  [10, 20, 15, 25]}
+    c = pt.chart(data_width=300, data_height=180,
+                 title="negative rotation stays below data",
+                 xlabel="samples", ylabel="value")
+    c.bar(data=df, x="sample", y="value", fill="#888")
+    c.xticks(rotation=-90)
+    return c
+
+
 def chart_clip_data_area():
     # clip=False with full spines so the bleeding is visible — most
     # markers sit inside the data area, but a handful near the
@@ -1393,6 +1408,7 @@ PLOTS = {
     "long_title":          chart_long_title,
     "long_ylabel":         chart_long_ylabel,
     "long_rotated_xticks": chart_long_rotated_xticks,
+    "xticks_rotation_negative": chart_xticks_rotation_negative,
     "despined":            chart_despined,
     "restyled_spines":     chart_restyled_spines,
     "hlines_vlines":       chart_hlines_vlines,
