@@ -36,7 +36,7 @@ import _runner
 
 # Extensions that get byte-compared baselines. Add an extension here when
 # 2+ cookbook recipes (or core tests) depend on its rendering.
-BASELINE_EXTENSIONS = {"annotation_strip"}
+BASELINE_EXTENSIONS = {"annotation_strip", "significance_brackets"}
 
 
 def _iter_extensions():
