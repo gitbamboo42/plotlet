@@ -91,7 +91,7 @@ def chart_fill_between():
     }
     c = pt.chart(df, title="fill_between from table",
                  xlabel="x", ylabel="y", legend=True)
-    c.fill_between(x="x", y1="lo", y2="hi", color="C0", alpha=0.25, label="band")
+    c.fill_between(x="x", y1="lo", y2="hi", fill="C0", alpha=0.25, label="band")
     c.line(x="x", y="mean", color="C0", label="mean")
     return c
 
@@ -365,17 +365,29 @@ def chart_text():
 
 
 def chart_errorbar():
-    # Vertical + horizontal error bars, symmetric and asymmetric.
-    xs = [1, 2, 3, 4, 5, 6]
-    ys = [2.1, 3.4, 4.0, 3.8, 5.1, 6.2]
-    yerr = [0.4, 0.3, 0.6, 0.5, 0.4, 0.7]
+    # Vertical error bars: symmetric (column) and asymmetric (tuple of columns).
+    df_meas = {"x": [1, 2, 3, 4, 5, 6],
+               "y": [2.1, 3.4, 4.0, 3.8, 5.1, 6.2],
+               "sd": [0.4, 0.3, 0.6, 0.5, 0.4, 0.7]}
+    df_model = {"x": [1.2, 2.2, 3.2, 4.2, 5.2, 6.2],
+                "y": [1.5, 2.6, 3.3, 4.7, 5.9, 6.8],
+                "lo": [0.2, 0.3, 0.2, 0.4, 0.3, 0.5],
+                "hi": [0.5, 0.4, 0.6, 0.3, 0.5, 0.4]}
     c = pt.chart(title="error bars", xlabel="x", ylabel="y", legend=True)
-    c.errorbar(xs, ys, yerr=yerr, label="measurement")
-    c.errorbar([1.2, 2.2, 3.2, 4.2, 5.2, 6.2],
-               [1.5, 2.6, 3.3, 4.7, 5.9, 6.8],
-               yerr=([0.2, 0.3, 0.2, 0.4, 0.3, 0.5],
-                     [0.5, 0.4, 0.6, 0.3, 0.5, 0.4]),
+    c.errorbar(data=df_meas, x="x", y="y", yerr="sd", label="measurement")
+    c.errorbar(data=df_model, x="x", y="y", yerr=("lo", "hi"),
                marker="s", label="model")
+    return c
+
+
+def chart_errorbar_category_x():
+    # Categorical x + numeric yerr — common "bar with error bars" pattern.
+    df = {"cat":  ["control", "low", "mid", "high"],
+          "mean": [2.1, 3.4, 4.6, 5.2],
+          "sd":   [0.3, 0.4, 0.5, 0.6]}
+    c = pt.chart(title="dose response", xlabel="dose", ylabel="response")
+    c.bar(data=df, x="cat", y="mean", fill="#cccccc")
+    c.errorbar(data=df, x="cat", y="mean", yerr="sd")
     return c
 
 
@@ -482,9 +494,10 @@ def chart_curve_fills():
     hi = [1.5, 1.8, 2.2, 2.5, 2.1, 1.9]
     c = pt.chart(title="curve= on fill_between / area",
                  xlabel="t", ylabel="value", legend=True)
-    c.fill_between(xs, lo, hi, curve="step-after", color="C0",
+    c.fill_between(xs, lo, hi, curve="step-after", fill="C0",
                    alpha=0.3, label="step band")
-    c.area(xs, [1.0, 1.3, 1.7, 2.0, 1.6, 1.4], curve="step-after",
+    df_area = {"x": xs, "y": [1.0, 1.3, 1.7, 2.0, 1.6, 1.4]}
+    c.area(data=df_area, x="x", y="y", curve="step-after",
            color="C1", alpha=0.5, label="step area")
     return c
 
@@ -519,11 +532,13 @@ def chart_area():
     # Area under a curve (base=0, default) and area between a curve and
     # a non-zero baseline. Same artist, different `base=`.
     xs = _xs()
+    df = {"t": xs,
+          "sin": [math.sin(x) for x in xs],
+          "cos_shifted": [math.cos(x) - 0.5 for x in xs]}
     c = pt.chart(title="area (base=0 and base=-0.5)",
                  xlabel="t", ylabel="y", legend=True)
-    c.area(xs, [math.sin(x) for x in xs], color="C0", alpha=0.3,
-           label="sin")
-    c.area(xs, [math.cos(x) - 0.5 for x in xs], base=-0.5,
+    c.area(data=df, x="t", y="sin", color="C0", alpha=0.3, label="sin")
+    c.area(data=df, x="t", y="cos_shifted", base=-0.5,
            color="C3", alpha=0.4, label="cos shifted")
     return c
 
@@ -607,13 +622,15 @@ def chart_inset_zoom():
     # tail (C through J) at a zoomed y-range so those bars become legible.
     labels = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
     counts = [950, 320, 80, 45, 28, 18, 12, 8, 5, 3]
+    df = {"category": labels, "count": counts}
+    df_tail = {"category": labels[2:], "count": counts[2:]}
     c = pt.chart(data_width=440, data_height=240,
                  title="long-tail distribution",
                  xlabel="category", ylabel="count")
-    c.bar(labels, counts)
+    c.bar(data=df, x="category", y="count")
     inset = c.inset(rect=(0.4, 0.45, 0.55, 0.45),
                     ylim=(0, 100))
-    inset.bar(labels[2:], counts[2:])
+    inset.bar(data=df_tail, x="category", y="count")
     return c
 
 
@@ -709,9 +726,11 @@ def chart_reverse_y():
 
 def chart_sqrt_y():
     # sqrt scale on y compresses large counts while keeping small ones visible.
+    df = {"bin": ["A", "B", "C", "D", "E", "F", "G"],
+          "count": [1, 9, 25, 49, 100, 256, 484]}
     c = pt.chart(data_width=320, data_height=180,
                  title="sqrt y", xlabel="bin", ylabel="count")
-    c.bar(["A", "B", "C", "D", "E", "F", "G"], [1, 9, 25, 49, 100, 256, 484])
+    c.bar(data=df, x="bin", y="count")
     c.yscale("sqrt")
     return c
 
@@ -929,14 +948,24 @@ def chart_strip():
 def chart_pointplot():
     rng = random.Random(7)
     cats = ["1 wk", "2 wk", "4 wk", "8 wk"]
-    ctrl = [[rng.gauss(5.0 + 0.04 * i, 1.0) for _ in range(20)] for i in range(4)]
-    drug = [[rng.gauss(5.0 + 0.45 * i, 1.0) for _ in range(20)] for i in range(4)]
+    # Generate values in the same RNG order as the original wide-form to
+    # preserve byte-identical baselines.
+    ctrl_t, ctrl_score = [], []
+    for i, t in enumerate(cats):
+        for _ in range(20):
+            ctrl_t.append(t); ctrl_score.append(rng.gauss(5.0 + 0.04 * i, 1.0))
+    drug_t, drug_score = [], []
+    for i, t in enumerate(cats):
+        for _ in range(20):
+            drug_t.append(t); drug_score.append(rng.gauss(5.0 + 0.45 * i, 1.0))
     c = pt.chart(data_width=320, data_height=200,
                  title="pointplot", xlabel="timepoint", ylabel="score",
                  legend=True)
     c.xscale("category", order=cats)
-    c.pointplot(cats, ctrl, label="control")
-    c.pointplot(cats, drug, label="drug")
+    c.pointplot(data={"t": ctrl_t, "score": ctrl_score},
+                x="t", y="score", label="control")
+    c.pointplot(data={"t": drug_t, "score": drug_score},
+                x="t", y="score", label="drug")
     c.legend(position="right")
     return c
 
@@ -1051,10 +1080,15 @@ def chart_contour():
 def chart_ridge():
     rng = random.Random(15)
     labels = ["Jan", "Feb", "Mar", "Apr", "May"]
-    groups = [[rng.gauss(20 + i, 3) for _ in range(200)] for i in range(5)]
+    rows_label, rows_value = [], []
+    for i, lbl in enumerate(labels):
+        for _ in range(200):
+            rows_label.append(lbl)
+            rows_value.append(rng.gauss(20 + i, 3))
+    df = {"month": rows_label, "value": rows_value}
     c = pt.chart(data_width=320, data_height=260,
                  title="ridge", xlabel="value")
-    c.ridge(labels, groups, overlap=1.6)
+    c.ridge(data=df, x="month", y="value", overlap=1.6)
     c.yticks([])
     return c
 
@@ -1071,44 +1105,46 @@ def chart_qq():
     return c
 
 
-def chart_bar_stack():
+def _bar_quarterly_df():
     cats = ["Q1", "Q2", "Q3", "Q4"]
+    labels = ["A", "B", "C"]
     series = [
         [12, 18, 15, 22],
         [ 8, 14, 16, 18],
         [ 5,  7,  9, 11],
     ]
+    rows = []
+    for i, cat in enumerate(cats):
+        for j, lbl in enumerate(labels):
+            rows.append({"quarter": cat, "series": lbl, "value": series[j][i]})
+    return {"quarter": [r["quarter"] for r in rows],
+            "series":  [r["series"] for r in rows],
+            "value":   [r["value"] for r in rows]}
+
+
+def chart_bar_stack():
+    df = _bar_quarterly_df()
     c = pt.chart(data_width=300, data_height=200,
                  title="bar stack", ylabel="$M", legend=True)
-    c.bar(cats, series, position="stack", labels=["A", "B", "C"])
+    c.bar(data=df, x="quarter", y="value", fill="series", position="stack")
     c.legend(position="right")
     return c
 
 
 def chart_bar_dodge():
-    cats = ["Q1", "Q2", "Q3", "Q4"]
-    series = [
-        [12, 18, 15, 22],
-        [ 8, 14, 16, 18],
-        [ 5,  7,  9, 11],
-    ]
+    df = _bar_quarterly_df()
     c = pt.chart(data_width=320, data_height=200,
                  title="bar dodge", ylabel="$M", legend=True)
-    c.bar(cats, series, position="dodge", labels=["A", "B", "C"])
+    c.bar(data=df, x="quarter", y="value", fill="series", position="dodge")
     c.legend(position="right")
     return c
 
 
 def chart_bar_fill():
-    cats = ["Q1", "Q2", "Q3", "Q4"]
-    series = [
-        [12, 18, 15, 22],
-        [ 8, 14, 16, 18],
-        [ 5,  7,  9, 11],
-    ]
+    df = _bar_quarterly_df()
     c = pt.chart(data_width=300, data_height=200,
                  title="bar fill (100%)", ylabel="share", legend=True)
-    c.bar(cats, series, position="fill", labels=["A", "B", "C"])
+    c.bar(data=df, x="quarter", y="value", fill="series", position="fill")
     c.legend(position="right")
     return c
 
@@ -1280,15 +1316,22 @@ def chart_aes_inheritance():
 def chart_area_stack():
     import math
     xs = list(range(0, 30))
-    coal      = [max(0, 100 - 2 * x + 5 * math.sin(x / 3)) for x in xs]
-    gas       = [50 + 10 * math.sin(x / 4 + 1) for x in xs]
-    nuclear   = [40 for _ in xs]
-    renewable = [5 + 2.5 * x + 8 * math.sin(x / 5) for x in xs]
+    series_data = {
+        "coal":       [max(0, 100 - 2 * x + 5 * math.sin(x / 3)) for x in xs],
+        "gas":        [50 + 10 * math.sin(x / 4 + 1) for x in xs],
+        "nuclear":    [40 for _ in xs],
+        "renewables": [5 + 2.5 * x + 8 * math.sin(x / 5) for x in xs],
+    }
+    rows_year, rows_src, rows_val = [], [], []
+    for x in xs:
+        for src, vals in series_data.items():
+            rows_year.append(x); rows_src.append(src)
+            rows_val.append(vals[x])
     c = pt.chart(data_width=320, data_height=220,
                  title="generation mix", xlabel="year", ylabel="TWh",
                  legend=True)
-    c.area(xs, [coal, gas, nuclear, renewable],
-           labels=["coal", "gas", "nuclear", "renewables"])
+    c.area(data={"year": rows_year, "source": rows_src, "twh": rows_val},
+           x="year", y="twh", fill="source")
     c.legend(position="right")
     return c
 
@@ -1355,6 +1398,7 @@ PLOTS = {
     "hlines_vlines":       chart_hlines_vlines,
     "text":                chart_text,
     "errorbar":            chart_errorbar,
+    "errorbar_category_x":  chart_errorbar_category_x,
     "plot_alpha":          chart_plot_alpha,
     "dendrogram_top":      chart_dendrogram_top,
     "dendrogram_left":     chart_dendrogram_left,

@@ -6,7 +6,8 @@ CI options:
                 any estimator.
   ci=None    -> no CI, just points and connectors.
 
-Wide-form: c.pointplot(cats, values_per_cat)
+API (long-form only):
+  c.pointplot(data=df, x="cat", y="value")
 
 Styling kwargs:
   estimator='mean'   'median' for the central tendency
@@ -25,7 +26,7 @@ import random
 from scipy.stats import t as _t_dist
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list
+from ..utils import categorical_groups
 from ..draw import segment, circle, polyline, errorbar_v
 
 
@@ -62,8 +63,18 @@ def _median(xs):
 
 
 def _pointplot_record(args, kw):
-    cats = to_list(args[0])
-    groups = [list(to_list(g)) for g in args[1]]
+    if args:
+        raise TypeError(
+            "pointplot requires long-form input: "
+            "c.pointplot(data=df, x='col', y='col')."
+        )
+    data = kw.pop("data", None)
+    x = kw.pop("x", None)
+    y = kw.pop("y", None)
+    if data is None or x is None or y is None:
+        raise TypeError("pointplot requires data=, x=, y=.")
+    cats, _, vals = categorical_groups(data, x, y)
+    groups = [v[0] for v in vals]  # one value-list per category (no sub-grouping)
     estimator = kw.get("estimator", "mean")
     ci = kw.get("ci", "t")
     level = kw.get("level", 0.95)

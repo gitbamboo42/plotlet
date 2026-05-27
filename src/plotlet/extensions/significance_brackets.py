@@ -110,9 +110,10 @@ def demo():
     # We'll need the boxplot recipe registered too; the demo just uses the
     # built-in bar(mean) for simplicity so this file runs standalone.
     means = [sum(g) / len(g) for g in groups]
+    df = {"cat": cats, "mean": means}
     c = pt.chart(data_height=320)
     c.xscale("category", order=cats)
-    c.bar(cats, means)
+    c.bar(data=df, x="cat", y="mean")
     # Brackets above bars: comparisons + annotations.
     c.significance_brackets(
         [("control", "drug A", "**"),

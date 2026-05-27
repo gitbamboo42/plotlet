@@ -1,6 +1,16 @@
-"""Points with vertical (and/or horizontal) error bars and optional caps —
-the matplotlib `ax.errorbar` staple. `yerr`/`xerr` accept a scalar,
-a per-point sequence, or a `(lower, upper)` tuple for asymmetric bars.
+"""Points with vertical (and/or horizontal) error bars and optional caps.
+
+Long-form table input:
+  c.errorbar(data=df, x="cat", y="mean", yerr="sd")            # offset (sym)
+  c.errorbar(data=df, x="cat", y="mean", yerr=0.5)             # scalar offset
+  c.errorbar(data=df, x="cat", y="mean", yerr=("lo", "hi"))     # offset (asym)
+  c.errorbar(data=df, x="cat", y="mean", ymin="lo", ymax="hi")  # absolute bounds
+  c.errorbar(data=df, x="t", y="mean", xerr="terr", yerr="sd")  # both axes
+
+`yerr=` / `xerr=` accept a column name, a scalar, or a `(lower, upper)`
+tuple of column names or scalars for asymmetric bars. `ymin=`/`ymax=`
+(and `xmin=`/`xmax=`) take column names for absolute bounds and are
+mutually exclusive with the matching `*err=`.
 """
 import math
 
@@ -11,27 +21,97 @@ from .._spec import _D, _LEGSPEC
 from ._shared import _xy_minmax
 
 
-def _expand_err(err, n):
-    """Normalize an error-spec into (lower, upper) lists of length n.
-    Accepts scalar, list/array, or a 2-tuple (lower, upper) for asymmetric."""
+def _is_numeric_axis(vs):
+    return all(isinstance(v, (int, float)) for v in vs)
+
+
+def _resolve_offset(data, spec, n):
+    """One side of an error spec (a column name or scalar) → length-n list."""
+    if isinstance(spec, str):
+        return to_list(data[spec])
+    return [float(spec)] * n
+
+
+def _resolve_err(data, err, n):
+    """Normalize an error specification to (lower, upper) offset lists."""
     if err is None:
         return [0.0] * n, [0.0] * n
     if isinstance(err, tuple) and len(err) == 2:
-        lo = to_list(err[0]); hi = to_list(err[1])
-        if len(lo) == 1: lo = lo * n
-        if len(hi) == 1: hi = hi * n
-        return lo, hi
-    if hasattr(err, "__iter__") and not isinstance(err, str):
-        v = to_list(err)
-        return list(v), list(v)
-    return [float(err)] * n, [float(err)] * n
+        return _resolve_offset(data, err[0], n), _resolve_offset(data, err[1], n)
+    v = _resolve_offset(data, err, n)
+    return list(v), list(v)
+
+
+def _resolve_bounds(data, vals, min_spec, max_spec, err_lo, err_hi, axis):
+    """If absolute bounds are given, convert to offsets relative to `vals`.
+    Otherwise return the existing offset lists unchanged."""
+    if min_spec is None and max_spec is None:
+        return err_lo, err_hi
+    if min_spec is None or max_spec is None:
+        raise TypeError(
+            f"errorbar: provide both {axis}min= and {axis}max= "
+            f"(or use {axis}err=)."
+        )
+    lo_vals = to_list(data[min_spec])
+    hi_vals = to_list(data[max_spec])
+    return ([v - lo for v, lo in zip(vals, lo_vals)],
+            [hi - v for v, hi in zip(vals, hi_vals)])
+
+
+def _errorbar_record(args, kw):
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "errorbar requires long-form input: "
+            "c.errorbar(data=df, x='col', y='col', yerr='col')."
+        )
+    data = kw.pop("data", None)
+    x_col = kw.pop("x", None)
+    y_col = kw.pop("y", None)
+    if data is None or x_col is None or y_col is None:
+        raise TypeError(
+            "errorbar requires data=, x=, y= "
+            "(yerr/xerr/ymin/ymax/xmin/xmax optional)."
+        )
+    xs = to_list(data[x_col])
+    ys = to_list(data[y_col])
+    n = len(xs)
+
+    xerr = kw.pop("xerr", None)
+    yerr = kw.pop("yerr", None)
+    xmin = kw.pop("xmin", None); xmax = kw.pop("xmax", None)
+    ymin = kw.pop("ymin", None); ymax = kw.pop("ymax", None)
+    if xerr is not None and (xmin is not None or xmax is not None):
+        raise TypeError("errorbar: xerr= and xmin=/xmax= are mutually exclusive.")
+    if yerr is not None and (ymin is not None or ymax is not None):
+        raise TypeError("errorbar: yerr= and ymin=/ymax= are mutually exclusive.")
+
+    xlo, xhi = _resolve_err(data, xerr, n)
+    ylo, yhi = _resolve_err(data, yerr, n)
+    xlo, xhi = _resolve_bounds(data, xs, xmin, xmax, xlo, xhi, "x")
+    ylo, yhi = _resolve_bounds(data, ys, ymin, ymax, ylo, yhi, "y")
+
+    return {"type": "errorbar",
+            "xs": xs, "ys": ys,
+            "xlo": xlo, "xhi": xhi, "ylo": ylo, "yhi": yhi,
+            "opts": kw}
 
 
 def _artist_errorbar(a, xs_, ys_, col):
     xs, ys, opts = a["xs"], a["ys"], a["opts"]
-    n = len(xs)
-    xlo, xhi = _expand_err(opts.get("xerr"), n)
-    ylo, yhi = _expand_err(opts.get("yerr"), n)
+    xlo, xhi, ylo, yhi = a["xlo"], a["xhi"], a["ylo"], a["yhi"]
+    has_xerr = any(xlo) or any(xhi)
+    has_yerr = any(ylo) or any(yhi)
+    if has_xerr and not _is_numeric_axis(xs):
+        raise TypeError(
+            "errorbar: xerr/xmin/xmax requires a numeric x; "
+            "got non-numeric values."
+        )
+    if has_yerr and not _is_numeric_axis(ys):
+        raise TypeError(
+            "errorbar: yerr/ymin/ymax requires a numeric y; "
+            "got non-numeric values."
+        )
     capsize = opts.get("capsize", _D["errorbar_capsize"])
     lw = opts.get("linewidth", _D["errorbar_linewidth"])
     mk = opts.get("marker", "o")
@@ -55,13 +135,17 @@ def _artist_errorbar(a, xs_, ys_, col):
 
 def _errorbar_xdomain(a):
     xs = a["xs"]
-    xlo, xhi = _expand_err(a["opts"].get("xerr"), len(xs))
+    if not _is_numeric_axis(xs):
+        return list(xs)
+    xlo, xhi = a["xlo"], a["xhi"]
     return [x - lo for x, lo in zip(xs, xlo)] + [x + hi for x, hi in zip(xs, xhi)]
 
 
 def _errorbar_ydomain(a):
     ys = a["ys"]
-    ylo, yhi = _expand_err(a["opts"].get("yerr"), len(ys))
+    if not _is_numeric_axis(ys):
+        return list(ys)
+    ylo, yhi = a["ylo"], a["yhi"]
     return [y - lo for y, lo in zip(ys, ylo)] + [y + hi for y, hi in zip(ys, yhi)]
 
 
@@ -90,10 +174,7 @@ def _errorbar_legend_entries(a):
 
 add_artist(ArtistSpec(
     name="errorbar",
-    record=lambda args, kw: {"type": "errorbar",
-                              "xs": to_list(args[0]),
-                              "ys": to_list(args[1]),
-                              "opts": kw},
+    record=_errorbar_record,
     xdomain=_errorbar_xdomain,
     ydomain=_errorbar_ydomain,
     draw=lambda a, ctx: _artist_errorbar(a, ctx.x_scale, ctx.y_scale, ctx.color),

@@ -3,8 +3,9 @@
 No per-render RNG — jitter offsets are derived from a splitmix64 hash of each
 point's indices so the SVG is byte-identical across runs.
 
-Wide-form: c.strip(cats, values_per_cat)
-Long-form: c.strip(data=df, x="cat", y="value", fill="group", palette={...})
+Long-form only:
+  c.strip(data=df, x="cat", y="value")
+  c.strip(data=df, x="cat", y="value", fill="group", palette={...})
 
 Long-form with `fill="col"` dodges sub-strips side-by-side within each cat and
 emits one legend entry per group level.
@@ -26,7 +27,7 @@ Other styling kwargs:
   linewidth=0       outline stroke width (0 = no outline)
 """
 from ..registry import ArtistSpec, add_artist
-from ..utils import (to_list, resolve_aes, palette_color,
+from ..utils import (resolve_aes, palette_color,
                      dodge_positions, categorical_groups)
 from ..draw.colors import TAB10, _resolve_color
 from ..draw import circle
@@ -60,27 +61,20 @@ def _resolve_fill_kwarg(data, kw):
 
 
 def _strip_record(args, kw):
-    if "data" in kw or "x" in kw or "y" in kw:
-        data = kw.pop("data", None)
-        x = kw.pop("x", None)
-        y = kw.pop("y", None)
-        if data is None or x is None or y is None:
-            raise TypeError(
-                "strip long-form requires data=, x=, y= (fill= optional)."
-            )
-        fill_literal, group_col = _resolve_fill_kwarg(data, kw)
-        cats, groups, vals = categorical_groups(data, x, y, group_col)
-    elif len(args) >= 2:
-        cats = to_list(args[0])
-        vals_1d = [list(to_list(g)) for g in args[1]]
-        groups = [None]
-        vals = [[g] for g in vals_1d]
-        fill_literal, _ = _resolve_fill_kwarg(None, kw)
-    else:
+    if args:
         raise TypeError(
-            "strip requires either positional (cats, values_per_cat) "
-            "or keyword (data=, x=, y=)."
+            "strip requires long-form input: "
+            "c.strip(data=df, x='col', y='col', fill='col')."
         )
+    data = kw.pop("data", None)
+    x = kw.pop("x", None)
+    y = kw.pop("y", None)
+    if data is None or x is None or y is None:
+        raise TypeError(
+            "strip requires data=, x=, y= (fill= optional)."
+        )
+    fill_literal, group_col = _resolve_fill_kwarg(data, kw)
+    cats, groups, vals = categorical_groups(data, x, y, group_col)
     if fill_literal is not None:
         kw["_fill_literal"] = fill_literal
     return {"type": "strip", "cats": cats, "groups": groups,

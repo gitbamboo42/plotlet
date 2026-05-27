@@ -9,7 +9,8 @@ The whole stack is rendered as one artist so it owns its own y-baselines.
 Categories are placed at integer y; densities are scaled to a fraction of
 the row spacing.
 
-API: c.ridge(labels, samples_per_label)
+API (long-form only):
+  c.ridge(data=df, x="label", y="value")
 
 Styling kwargs:
   overlap=1.4    height of each ridge as a fraction of row spacing
@@ -20,12 +21,22 @@ Styling kwargs:
 """
 from ..registry import ArtistSpec, add_artist
 from ..draw import path, text_path
-from ..utils import to_list, silverman_bw, kde_1d
+from ..utils import silverman_bw, kde_1d, categorical_groups
 
 
 def _ridge_record(args, kw):
-    labels = to_list(args[0])
-    groups = [list(to_list(g)) for g in args[1]]
+    if args:
+        raise TypeError(
+            "ridge requires long-form input: "
+            "c.ridge(data=df, x='label', y='value')."
+        )
+    data = kw.pop("data", None)
+    x = kw.pop("x", None)
+    y = kw.pop("y", None)
+    if data is None or x is None or y is None:
+        raise TypeError("ridge requires data=, x=, y=.")
+    labels, _, vals = categorical_groups(data, x, y)
+    groups = [v[0] for v in vals]  # one value-list per label (no sub-grouping)
     return {"type": "ridge", "labels": labels, "groups": groups, "opts": kw}
 
 

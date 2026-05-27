@@ -1,7 +1,8 @@
 """Tukey-style box-and-whisker: Q1-Q3 box, median line, 1.5*IQR whiskers, outlier dots.
 
-Wide-form: c.boxplot(cats, values_per_cat)
-Long-form: c.boxplot(data=df, x="cat", y="value", fill="group", palette={...})
+Long-form only:
+  c.boxplot(data=df, x="cat", y="value")
+  c.boxplot(data=df, x="cat", y="value", fill="group", palette={...})
 
 Long-form with `fill="col"` dodges sub-boxes side-by-side within each cat and
 emits one legend entry per group level. A literal `fill="#hex"` paints every
@@ -32,7 +33,7 @@ Other styling kwargs:
 import math
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import (to_list, quantile, resolve_aes, palette_color,
+from ..utils import (quantile, resolve_aes, palette_color,
                      dodge_positions, categorical_groups)
 from ..utils import _drop_nan
 from ..draw.colors import TAB10, _resolve_color
@@ -60,27 +61,20 @@ def _resolve_fill_kwarg(data, kw):
 
 
 def _boxplot_record(args, kw):
-    if "data" in kw or "x" in kw or "y" in kw:
-        data = kw.pop("data", None)
-        x = kw.pop("x", None)
-        y = kw.pop("y", None)
-        if data is None or x is None or y is None:
-            raise TypeError(
-                "boxplot long-form requires data=, x=, y= (fill= optional)."
-            )
-        do_fill, fill_literal, group_col = _resolve_fill_kwarg(data, kw)
-        cats, groups, vals = categorical_groups(data, x, y, group_col)
-    elif len(args) >= 2:
-        cats = to_list(args[0])
-        vals_1d = [list(to_list(g)) for g in args[1]]
-        groups = [None]
-        vals = [[g] for g in vals_1d]
-        do_fill, fill_literal, _ = _resolve_fill_kwarg(None, kw)
-    else:
+    if args:
         raise TypeError(
-            "boxplot requires either positional (cats, values_per_cat) "
-            "or keyword (data=, x=, y=)."
+            "boxplot requires long-form input: "
+            "c.boxplot(data=df, x='col', y='col', fill='col')."
         )
+    data = kw.pop("data", None)
+    x = kw.pop("x", None)
+    y = kw.pop("y", None)
+    if data is None or x is None or y is None:
+        raise TypeError(
+            "boxplot requires data=, x=, y= (fill= optional)."
+        )
+    do_fill, fill_literal, group_col = _resolve_fill_kwarg(data, kw)
+    cats, groups, vals = categorical_groups(data, x, y, group_col)
     kw["_do_fill"] = do_fill
     if fill_literal is not None:
         kw["_fill_literal"] = fill_literal

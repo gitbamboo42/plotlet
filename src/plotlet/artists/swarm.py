@@ -1,7 +1,8 @@
 """Bee-swarm plot: categorical scatter with greedy non-overlapping point placement.
 
-Wide-form: c.swarm(cats, values_per_cat)
-Long-form: c.swarm(data=df, x="cat", y="value", fill="group", palette={...})
+Long-form only:
+  c.swarm(data=df, x="cat", y="value")
+  c.swarm(data=df, x="cat", y="value", fill="group", palette={...})
 
 Long-form with `fill="col"` dodges sub-swarms side-by-side within each cat
 and emits one legend entry per group level.
@@ -22,7 +23,7 @@ Other styling kwargs:
 """
 from ..registry import ArtistSpec, add_artist
 from ..draw import circle
-from ..utils import (to_list, resolve_aes, palette_color,
+from ..utils import (resolve_aes, palette_color,
                      dodge_positions, categorical_groups)
 from ..draw.colors import TAB10, _resolve_color
 from .._spec import _FRAME
@@ -39,27 +40,20 @@ def _resolve_fill_kwarg(data, kw):
 
 
 def _swarm_record(args, kw):
-    if "data" in kw or "x" in kw or "y" in kw:
-        data = kw.pop("data", None)
-        x = kw.pop("x", None)
-        y = kw.pop("y", None)
-        if data is None or x is None or y is None:
-            raise TypeError(
-                "swarm long-form requires data=, x=, y= (fill= optional)."
-            )
-        fill_literal, group_col = _resolve_fill_kwarg(data, kw)
-        cats, groups, vals = categorical_groups(data, x, y, group_col)
-    elif len(args) >= 2:
-        cats = to_list(args[0])
-        vals_1d = [list(to_list(g)) for g in args[1]]
-        groups = [None]
-        vals = [[g] for g in vals_1d]
-        fill_literal, _ = _resolve_fill_kwarg(None, kw)
-    else:
+    if args:
         raise TypeError(
-            "swarm requires either positional (cats, values_per_cat) "
-            "or keyword (data=, x=, y=)."
+            "swarm requires long-form input: "
+            "c.swarm(data=df, x='col', y='col', fill='col')."
         )
+    data = kw.pop("data", None)
+    x = kw.pop("x", None)
+    y = kw.pop("y", None)
+    if data is None or x is None or y is None:
+        raise TypeError(
+            "swarm requires data=, x=, y= (fill= optional)."
+        )
+    fill_literal, group_col = _resolve_fill_kwarg(data, kw)
+    cats, groups, vals = categorical_groups(data, x, y, group_col)
     if fill_literal is not None:
         kw["_fill_literal"] = fill_literal
     return {"type": "swarm", "cats": cats, "groups": groups,

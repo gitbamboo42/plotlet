@@ -1,7 +1,8 @@
 """Mirrored KDE outline per category with a mini-boxplot inside.
 
-Wide-form: c.violin(cats, values_per_cat)
-Long-form: c.violin(data=df, x="cat", y="value", fill="group", palette={...})
+Long-form only:
+  c.violin(data=df, x="cat", y="value")
+  c.violin(data=df, x="cat", y="value", fill="group", palette={...})
 
 Long-form with `fill="col"` dodges sub-violins side-by-side within each cat
 and emits one legend entry per group level.
@@ -29,7 +30,7 @@ Other styling kwargs:
   bw_adjust=1.0         Silverman bandwidth multiplier (>1 smoother)
 """
 from ..registry import ArtistSpec, add_artist
-from ..utils import (to_list, quantile, resolve_aes, palette_color,
+from ..utils import (quantile, resolve_aes, palette_color,
                      dodge_positions, categorical_groups,
                      silverman_bw, kde_1d)
 from ..utils import _drop_nan
@@ -51,27 +52,20 @@ def _resolve_fill_kwarg(data, kw):
 
 
 def _violin_record(args, kw):
-    if "data" in kw or "x" in kw or "y" in kw:
-        data = kw.pop("data", None)
-        x = kw.pop("x", None)
-        y = kw.pop("y", None)
-        if data is None or x is None or y is None:
-            raise TypeError(
-                "violin long-form requires data=, x=, y= (fill= optional)."
-            )
-        do_fill, fill_literal, group_col = _resolve_fill_kwarg(data, kw)
-        cats, groups, vals = categorical_groups(data, x, y, group_col)
-    elif len(args) >= 2:
-        cats = to_list(args[0])
-        vals_1d = [list(to_list(g)) for g in args[1]]
-        groups = [None]
-        vals = [[g] for g in vals_1d]
-        do_fill, fill_literal, _ = _resolve_fill_kwarg(None, kw)
-    else:
+    if args:
         raise TypeError(
-            "violin requires either positional (cats, values_per_cat) "
-            "or keyword (data=, x=, y=)."
+            "violin requires long-form input: "
+            "c.violin(data=df, x='col', y='col', fill='col')."
         )
+    data = kw.pop("data", None)
+    x = kw.pop("x", None)
+    y = kw.pop("y", None)
+    if data is None or x is None or y is None:
+        raise TypeError(
+            "violin requires data=, x=, y= (fill= optional)."
+        )
+    do_fill, fill_literal, group_col = _resolve_fill_kwarg(data, kw)
+    cats, groups, vals = categorical_groups(data, x, y, group_col)
     kw["_do_fill"] = do_fill
     if fill_literal is not None:
         kw["_fill_literal"] = fill_literal

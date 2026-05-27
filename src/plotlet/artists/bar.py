@@ -1,24 +1,16 @@
-"""Bar chart — single-series or multi-series with stack / dodge / fill.
+"""Bar chart — long-form only.
 
-Three input shapes, picked by which kwargs are present:
+  c.bar(data=df, x="cat", y="val")                                  # single
+  c.bar(data=df, x="cat", y="val", fill="C0")                       # constant color
+  c.bar(data=df, x="cat", y="val", fill="series", position="stack") # grouped
+  c.bar(data=df, x="cat", y="val", fill="series", position="dodge")
+  c.bar(data=df, x="cat", y="val", fill="series", position="fill")  # 100% stack
 
-  Single-series (wide-form):
-    c.bar(cats, vals)
-
-  Multi-series (wide-form):
-    c.bar(cats, [s_a, s_b, s_c], position="stack", labels=["A", "B", "C"])
-    c.bar(cats, [...], position="dodge", labels=[...])
-    c.bar(cats, [...], position="fill",  labels=[...])   # 100% stacked
-
-  Long-form (table + column names):
-    c.bar(data=df, x="cat", y="val", fill="series", position="stack")
-
-`position` defaults to `"stack"` whenever there is more than one series.
-Ignored for the single-series case. Long-form sums duplicate (cat, group)
-rows.
+`position` defaults to `"stack"` whenever `fill=` is a column with more
+than one unique value. Duplicate (cat, group) rows are summed.
 
 Aesthetics:
-  fill=         constant color OR column name → grouped multi-series
+  fill=         literal color OR column name → grouped multi-series
   color=        stroke color (constant, default None = no stroke)
   palette=      maps group levels → colors when `fill=` is a column
 
@@ -29,8 +21,7 @@ Other styling kwargs:
   linewidth=<themed>  stroke width (used only when color is set)
   width=0.8           dodged-group total width as a band fraction
   gap=0.1             slot-gap fraction between dodged bars
-  labels=None         legend labels for wide-form multi-series
-  label=None          legend label for single-series
+  label=None          legend label (overridden by column-driven grouping)
 """
 from ..registry import ArtistSpec, add_artist
 from ..utils import to_list, resolve_aes, palette_color, dodge_positions
@@ -64,35 +55,32 @@ def _aggregate_long(data, x_col, y_col, group_col):
 
 def _bar_record(args, kw):
     kw = dict(kw)
-    if "data" in kw or "x" in kw or "y" in kw:
-        data = kw.pop("data", None)
-        x_col = kw.pop("x", None)
-        y_col = kw.pop("y", None)
-        if data is None or x_col is None or y_col is None:
-            raise TypeError(
-                "bar long-form requires data=, x=, y= (fill= optional)."
-            )
-        # `fill=` may be a literal color or a column name. Column → drives
-        # grouping; literal → applied to every bar.
-        fill = kw.pop("fill", None)
-        fill_kind, fill_value = resolve_aes(data, fill)
-        group_col = fill if fill_kind == "column" else None
-        cats, groups, series = _aggregate_long(data, x_col, y_col, group_col)
-        if fill_kind == "literal":
-            kw["_fill_literal"] = fill_value
-    else:
-        cats = to_list(args[0])
-        v = to_list(args[1])
-        if v and hasattr(v[0], "__iter__") and not isinstance(v[0], str):
-            series = [to_list(s) for s in v]
-            labels = kw.pop("labels", None)
-            groups = list(labels) if labels else [None] * len(series)
-        else:
-            series = [v]
-            groups = [None]
-            fill = kw.pop("fill", None)
-            if fill is not None:
-                kw["_fill_literal"] = fill
+    if args:
+        raise TypeError(
+            "bar requires long-form input: "
+            "c.bar(data=df, x='col', y='col', fill='col')."
+        )
+    data = kw.pop("data", None)
+    x_col = kw.pop("x", None)
+    y_col = kw.pop("y", None)
+    if data is None or x_col is None or y_col is None:
+        raise TypeError(
+            "bar requires data=, x=, y= (fill= optional)."
+        )
+    # `fill=` may be a literal color or a column name. Column → drives
+    # grouping; literal → applied to every bar.
+    fill = kw.pop("fill", None)
+    fill_kind, fill_value = resolve_aes(data, fill)
+    group_col = fill if fill_kind == "column" else None
+    cats, groups, series = _aggregate_long(data, x_col, y_col, group_col)
+    if fill_kind == "literal":
+        kw["_fill_literal"] = fill_value
+    bottom = kw.get("bottom", 0)
+    if hasattr(bottom, "__iter__") and not isinstance(bottom, str):
+        raise TypeError(
+            "bar: bottom= must be a scalar baseline; for grouped bars "
+            "pass fill='series_col' with position='stack'."
+        )
     position = kw.pop("position", "stack" if len(series) > 1 else None)
     if position is not None and position not in _POSITIONS:
         raise ValueError(

@@ -1,12 +1,12 @@
 """Filled-region artists over x/y series.
 
-`fill_between(xs, y1, y2)` fills between two curves. `area(xs, ys)`
-is the single-series shorthand. Passing a list-of-series turns it into a
-stacked area chart, and `data=` + `fill=` accepts a long-form table.
+`fill_between(xs, y1, y2)` fills between two curves (wide-form). `area`
+is long-form only: each row contributes y at x, optionally grouped by
+the `fill=` column for stacked areas.
 
-  c.area(xs, ys)                                              # single
-  c.area(xs, [s_a, s_b, s_c], labels=["A", "B", "C"])         # stacked
-  c.area(data=df, x="x", y="y", fill="series")                # long-form
+  c.fill_between(xs, y1, y2, fill="C0")                       # wide-form
+  c.area(data=df, x="x", y="y")                               # single
+  c.area(data=df, x="x", y="y", fill="series")                # stacked
 """
 from ..registry import ArtistSpec, add_artist
 from ..utils import to_list, resolve_aes, palette_color
@@ -55,6 +55,12 @@ def _fill_between_data_attrs(a):
 
 def _fill_between_record(args, kw):
     kw = dict(kw)
+    if "color" in kw:
+        raise TypeError(
+            "fill_between: use `fill=` for the interior color, not `color=`."
+        )
+    if "fill" in kw:
+        kw["_fill_literal"] = kw.pop("fill")
     if "data" in kw or "x" in kw or "y1" in kw or "y2" in kw:
         data = kw.pop("data", None)
         x = kw.pop("x", None)
@@ -109,33 +115,24 @@ def _aggregate_long_xy(data, x_col, y_col, group_col):
 def _area_record(args, kw):
     kw = dict(kw)
     base = kw.pop("base", 0)
-    if "data" in kw or "x" in kw or "y" in kw:
-        data = kw.pop("data", None)
-        x_col = kw.pop("x", None)
-        y_col = kw.pop("y", None)
-        if data is None or x_col is None or y_col is None:
-            raise TypeError(
-                "area long-form requires data=, x=, y= (fill= optional)."
-            )
-        fill = kw.pop("fill", None)
-        fill_kind, fill_value = resolve_aes(data, fill)
-        group_col = fill if fill_kind == "column" else None
-        xs, groups, series = _aggregate_long_xy(data, x_col, y_col, group_col)
-        if fill_kind == "literal" and fill_value is not None:
-            kw["_fill_literal"] = fill_value
-    else:
-        xs = to_list(args[0])
-        v = to_list(args[1])
-        if v and hasattr(v[0], "__iter__") and not isinstance(v[0], str):
-            series = [to_list(s) for s in v]
-            labels = kw.pop("labels", None)
-            groups = list(labels) if labels else [None] * len(series)
-        else:
-            series = [v]
-            groups = [None]
-            fill = kw.pop("fill", None)
-            if fill is not None:
-                kw["_fill_literal"] = fill
+    if args:
+        raise TypeError(
+            "area requires long-form input: "
+            "c.area(data=df, x='col', y='col', fill='col')."
+        )
+    data = kw.pop("data", None)
+    x_col = kw.pop("x", None)
+    y_col = kw.pop("y", None)
+    if data is None or x_col is None or y_col is None:
+        raise TypeError(
+            "area requires data=, x=, y= (fill= optional)."
+        )
+    fill = kw.pop("fill", None)
+    fill_kind, fill_value = resolve_aes(data, fill)
+    group_col = fill if fill_kind == "column" else None
+    xs, groups, series = _aggregate_long_xy(data, x_col, y_col, group_col)
+    if fill_kind == "literal" and fill_value is not None:
+        kw["_fill_literal"] = fill_value
     return {"type": "area", "xs": xs, "groups": groups, "series": series,
             "base": base, "opts": kw}
 
