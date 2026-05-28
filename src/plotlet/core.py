@@ -655,6 +655,58 @@ def _is_categorical_axis(artists, axis):
     return False
 
 
+def _leaf_axis_kind(st, axis):
+    """Classify a leaf's natural axis kind on `axis`: 'categorical', 'numeric',
+    'time', or 'empty' (no artists contributing). Explicit `*scale("category")`
+    overrides artist-derived classification."""
+    if st[f"{axis}scale"] == "category":
+        return "categorical"
+    if st[f"{axis}scale"] == "time":
+        return "time"
+    artists = st["artists"]
+    if not artists:
+        return "empty"
+    has_str = has_num = False
+    for a in artists:
+        spec = get_artist(a["type"])
+        if spec is None: continue
+        fn = spec.xdomain if axis == "x" else spec.ydomain
+        vals = fn(a)
+        if vals is None: continue
+        for v in vals:
+            if v is None: continue
+            if isinstance(v, str):
+                has_str = True
+            else:
+                has_num = True
+            if has_str and has_num:
+                break
+        if has_str and has_num:
+            break
+    if has_str: return "categorical"  # string wins (matches _is_categorical_axis)
+    if has_num: return "numeric"
+    return "empty"
+
+
+def _check_share_kinds_compatible(states, axis):
+    """Raise if leaves in a share class have incompatible axis kinds —
+    e.g. one categorical (heatmap, bar) and another numeric (line on
+    floats). Without this check, the mismatch crashes deep in
+    `_scan_domain` (`'<' not supported between str and float`) or
+    silently produces a category scale over mixed string/numeric values."""
+    kinds = {_leaf_axis_kind(st, axis) for st in states}
+    kinds.discard("empty")
+    if len(kinds) <= 1:
+        return
+    raise TypeError(
+        f"share_{axis}= mixes incompatible axis kinds {sorted(kinds)} "
+        f"across the share class; all leaves must agree on categorical / "
+        f"numeric / time. Cast numeric leaves with "
+        f"{axis}scale('category', order=[...]) or rework the data so "
+        f"every shared leaf uses the same kind."
+    )
+
+
 def _x_descriptor(st) -> _AxisDescriptor:
     """Compute this panel's natural x-axis descriptor from its own state.
 
@@ -802,6 +854,7 @@ def _x_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
     `_x_descriptor(states[0])`."""
     if len(states) == 1:
         return _x_descriptor(states[0])
+    _check_share_kinds_compatible(states, "x")
     for st in states:
         _prebin_hist(st)
     anchor = states[0]
@@ -836,6 +889,7 @@ def _y_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
     leaf in the share class plots bar or hist artists."""
     if len(states) == 1:
         return _y_descriptor(states[0])
+    _check_share_kinds_compatible(states, "y")
     for st in states:
         _prebin_hist(st)
     anchor = states[0]
