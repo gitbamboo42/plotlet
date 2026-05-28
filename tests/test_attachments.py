@@ -1,0 +1,183 @@
+#!/usr/bin/env python3
+"""Tests for `chart.attach_left/right/above/below`.
+
+    python tests/test_attachments.py            # check vs. baselines
+    python tests/test_attachments.py --update   # regenerate baselines
+    python tests/test_attachments.py --gallery  # write index.html
+
+Programmatic invariants first (fail-fast), then a handful of baseline
+SVGs covering the shapes that exercise different code paths.
+"""
+from __future__ import annotations
+
+import sys
+import warnings
+
+import plotlet as pt
+
+import _runner
+
+
+# ---------------------------------------------------------------------------
+# Plot builders — realistic annotated-heatmap-style content so attached
+# charts inherit the host's axis range meaningfully (data coords on the
+# attachment line up with the host's rows/columns).
+# ---------------------------------------------------------------------------
+
+def attach_multi_left_and_top():
+    # Heatmap with two stacked attachments on the left and two on top:
+    #   left:  inner = per-gene line plot, outer = another per-gene line plot
+    #   top:   inner = per-sample line plot, outer = another per-sample line plot
+    # Exercises chained attachments and cross-side independence.
+    rows = ["g1", "g2", "g3", "g4"]
+    cols = ["s1", "s2", "s3", "s4", "s5"]
+    matrix = [[i + j for j in range(5)] for i in range(4)]
+
+    host = pt.chart(data_width=200, data_height=140, title="annotated heatmap")
+    host.heatmap(matrix, xticklabels=cols, yticklabels=rows)
+
+    left_inner = pt.chart(data_width=44)
+    left_inner.yscale("category", order=rows, padding=0)
+    left_inner.line([2, 4, 1, 3], rows)
+
+    left_outer = pt.chart(data_width=44)
+    left_outer.yscale("category", order=rows, padding=0)
+    left_outer.line([3, 1, 4, 2], rows)
+
+    top_inner = pt.chart(data_height=34)
+    top_inner.xscale("category", order=cols, padding=0)
+    top_inner.line(cols, [1, 3, 2, 4, 2])
+
+    top_outer = pt.chart(data_height=34)
+    top_outer.xscale("category", order=cols, padding=0)
+    top_outer.line(cols, [4, 2, 3, 1, 5])
+
+    return host.attach_left(left_inner, left_outer).attach_above(top_inner, top_outer)
+
+
+def attach_with_peer_legend():
+    # Attachment composed with a layout-level legend as a peer — the
+    # host-with-attachments is a single block from the outside.
+    host = pt.chart(data_width=180, data_height=120)
+    host.line([1, 2, 3, 4, 5], [2, 4, 1, 3, 5], label="series A")
+    host.line([1, 2, 3, 4, 5], [1, 2, 3, 4, 5], label="series B")
+    top_track = pt.chart(data_height=28)
+    top_track.line([1, 2, 3, 4, 5], [0.2, 0.7, 0.4, 0.6, 0.3])
+    host.attach_above(top_track)
+    return host | pt.legend()
+
+
+# ---------------------------------------------------------------------------
+# Programmatic invariants — essential behavioral guarantees.
+# ---------------------------------------------------------------------------
+
+def _run_invariants() -> int:
+    checks = 0
+    failed = 0
+
+    def _check(cond, msg):
+        nonlocal checks, failed
+        checks += 1
+        if not cond:
+            failed += 1
+            print(f"FAIL   {msg}")
+
+    # Size lock: attached chart's perpendicular dim matches host; parallel preserved.
+    host = pt.chart(data_width=200, data_height=150)
+    host.line([1, 2, 3], [1, 2, 3])
+    left = pt.chart(data_width=40, data_height=999)
+    left.text(0.5, 1.0, "L")
+    host.attach_left(left)
+    host.to_svg()
+    _check(left._data_height == 150 and left._data_width == 40,
+           "left attachment height locks to host; width preserved")
+
+    top = pt.chart(data_width=999, data_height=40)
+    host2 = pt.chart(data_width=200, data_height=150)
+    host2.line([1, 2, 3], [1, 2, 3])
+    top.line([0, 1, 2], [1, 2, 1])
+    host2.attach_above(top)
+    host2.to_svg()
+    _check(top._data_width == 200 and top._data_height == 40,
+           "above attachment width locks to host; height preserved")
+
+    # Validation: double-attach the same chart, attach already-parented chart.
+    h3 = pt.chart(); h3.line([1, 2, 3], [1, 2, 3])
+    label = pt.chart(); label.text(0.5, 1.0, "x")
+    h3.attach_left(label)
+    try:
+        h3.attach_left(label)
+        _check(False, "re-attaching same chart should raise")
+    except ValueError:
+        _check(True, "re-attaching same chart raises")
+
+    a = pt.chart(); a.line([1, 2, 3], [1, 2, 3])
+    b = pt.chart(); b.line([1, 2, 3], [3, 2, 1])
+    _ = a | b
+    c = pt.chart()
+    try:
+        c.attach_left(a)
+        _check(False, "attaching parented chart should raise")
+    except ValueError:
+        _check(True, "attaching parented chart raises")
+
+    # Warning on existing share, but host wins.
+    h4 = pt.chart(); h4.line([1, 2, 3], [1, 2, 3])
+    other = pt.chart(); other.line([1, 2, 3], [1, 2, 3])
+    side = pt.chart(); side.text(0.5, 1.0, "s")
+    side._share_y = other
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        h4.attach_left(side)
+    _check(any("share_y" in str(w.message) for w in caught)
+           and side._share_y is h4,
+           "existing share warns and host overrides")
+
+    # Peer composition still works: host's _parent stays None until composed.
+    h5 = pt.chart(); h5.line([1, 2, 3], [1, 2, 3])
+    side2 = pt.chart(); side2.text(0.5, 1.0, "s")
+    h5.attach_left(side2)
+    _check(h5._parent is None, "host's _parent stays None until composed as peer")
+    fig = h5 | pt.legend()
+    _check(h5._parent is fig, "host gets _parent when composed")
+
+    # Data-area alignment via positioning: host with title + attachment
+    # without → each keeps its own top margin, but the attachment's
+    # canvas is offset so its data area starts at the same y as the
+    # host's data area.
+    h6 = pt.chart(data_width=200, data_height=150, title="TITLE")
+    h6.line([1, 2, 3], [1, 2, 3])
+    left2 = pt.chart(data_width=40)
+    left2.text(0.5, 2.0, "L")
+    h6.attach_left(left2)
+    from plotlet._layout_engine import _build_panel_opts, _measure, _allocate
+    po, _ = _build_panel_opts(h6)
+    W, H = _measure(h6)
+    placements = []
+    _allocate(h6, 0, 0, W, H, placements)
+    rects = dict(placements)
+    h6_M = po[id(h6)].M_eff
+    left_M = po[id(left2)].M_eff
+    h6_data_y = rects[h6][1] + h6_M["top"]
+    left_data_y = rects[left2][1] + left_M["top"]
+    _check(h6_data_y == left_data_y,
+           f"host/left data areas align in y (host_data_y={h6_data_y}, "
+           f"left_data_y={left_data_y})")
+
+    if failed:
+        print(f"\n{failed} of {checks} attachment invariants FAILED")
+    else:
+        print(f"OK     invariants ({checks} checks)")
+    return failed
+
+
+PLOTS = {
+    "attach_multi_left_and_top": attach_multi_left_and_top,
+    "attach_with_peer_legend": attach_with_peer_legend,
+}
+
+
+if __name__ == "__main__":
+    rc1 = _run_invariants()
+    rc2 = _runner.run("attachments", PLOTS)
+    sys.exit(rc1 + rc2)

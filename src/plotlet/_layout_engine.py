@@ -46,6 +46,7 @@ from .core import (
     _figure_root_attrs, _panel_open,
 )
 from .chart import Chart, _extract_theme
+from . import _attachments
 
 # Layout gaps stay captured — they're parent-level positional, not
 # per-leaf-themable. Font family and background read live from the spec
@@ -163,7 +164,13 @@ def _measure(node: Chart) -> tuple[int, int]:
     so a 100-row heatmap stays 100 rows tall and an attached dendrogram
     sits next to it at its own natural width."""
     if not node._is_parent:
-        return _leaf_rect_size(node)
+        w, h = _leaf_rect_size(node)
+        if _attachments.has_attachments(node):
+            l, r = _attachments.attached_size_h(node)
+            a, b = _attachments.attached_size_v(node)
+            w += l + r
+            h += a + b
+        return w, h
     if node._layout_kind == "h":
         sizes = [_measure(c) for c in node._children]
         gaps = _gaps_h(node._children)
@@ -270,6 +277,10 @@ def _hint_ratios(sizes: list[float], n: int) -> list[float]:
 def _iter_leaves(node: Chart):
     if not node._is_parent:
         yield node
+        # Attached charts are leaves of the composition too — they
+        # participate in share validation, descriptor building, etc.
+        for c in _attachments.all_attachments(node):
+            yield from _iter_leaves(c)
         return
     for c in node._children:
         if c is None:
@@ -284,6 +295,18 @@ def _allocate(node: Chart, x: float, y: float, w: float, h: float, out: list):
     `hm | pt.colorbar(hm)` self-sizes without forcing the user to declare
     explicit widths."""
     if not node._is_parent:
+        if _attachments.has_attachments(node):
+            # Carve out the slot for the host itself, then place
+            # attachments in the surrounding margin space.
+            l, r = _attachments.attached_size_h(node)
+            a, b = _attachments.attached_size_v(node)
+            host_x = x + l
+            host_y = y + a
+            host_w = w - l - r
+            host_h = h - a - b
+            out.append((node, (host_x, host_y, host_w, host_h)))
+            _attachments.allocate(node, host_x, host_y, host_w, host_h, out)
+            return
         out.append((node, (x, y, w, h)))
         return
     if node._layout_kind == "h":
@@ -374,12 +397,21 @@ def _apply_share_scaling(leaves: list[Chart]) -> None:
             new_w = sx._data_width
             new_h = sy._data_height
         elif sx is not None:
-            # Width forced to anchor; height scales to preserve aspect
+            # Width forced to anchor; height scales to preserve aspect —
+            # except for attached charts, which keep the user's height as-is
+            # (attachments lock only the shared dim; the other side is
+            # user-controlled, matching axis-decoration semantics).
             new_w = sx._data_width
-            new_h = old_h * (new_w / old_w) if old_w > 0 else old_h
+            if leaf._is_attached:
+                new_h = old_h
+            else:
+                new_h = old_h * (new_w / old_w) if old_w > 0 else old_h
         else:  # sy is not None
             new_h = sy._data_height
-            new_w = old_w * (new_h / old_h) if old_h > 0 else old_w
+            if leaf._is_attached:
+                new_w = old_w
+            else:
+                new_w = old_w * (new_h / old_h) if old_h > 0 else old_w
         leaf._data_width  = new_w
         leaf._data_height = new_h
         # Refresh derived canvas dims so downstream `_measure` sees them.
@@ -610,6 +642,7 @@ def _build_panel_opts(root: Chart) -> tuple[dict[int, _PanelOpts], dict[int, dic
         for l in leaves
     }
     _annotate_collapses(root, panel_opts)
+    _attachments.annotate_joined_pairs(leaves, panel_opts)
     _propagate_grid_joins(root, panel_opts)
     _compute_measured_margins(leaves, states, panel_opts)
     _coordinate_margins(root, panel_opts)
@@ -798,6 +831,10 @@ def _update_canvases_for_margins(leaves: list[Chart],
         M = po.M_eff
         leaf._canvas_width  = leaf._data_width  + M["left"] + M["right"]
         leaf._canvas_height = leaf._data_height + M["top"]  + M["bottom"]
+        # Cache the effective margin on the leaf so `_attachments.allocate`
+        # can read per-side margins to compute data-area-aligned offsets
+        # without threading panel_opts through the allocation recursion.
+        leaf._last_M_eff = dict(M)
 
 
 def _effective_margin(leaf: Chart, po: _PanelOpts, w: float, h: float) -> dict:

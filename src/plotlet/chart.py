@@ -314,6 +314,22 @@ class Chart(_Renderable):
         # Set on a Chart that has been registered as an inset of another.
         # Suppresses standalone `.show()` / `.to_svg()` calls.
         self._inset_owner: "Chart" | None = None
+
+        # Attachments — user-defined sub-charts placed in this chart's
+        # margin space, like extended axis decorations. Index 0 is closest
+        # to the host's data area; later entries extend further out.
+        # Left/right attachments auto-share y with this host (heights
+        # align, row order propagates); top/bottom auto-share x. Composing
+        # the host with `|` / `/` treats host-with-attachments as one
+        # block — peer composition is unchanged.
+        self._attached_left:  list["Chart"] = []
+        self._attached_right: list["Chart"] = []
+        self._attached_above: list["Chart"] = []
+        self._attached_below: list["Chart"] = []
+        # Set on a Chart that has been attached to a host. Tells the
+        # share-scaling pre-pass to lock only the shared dim and preserve
+        # the user's perpendicular dim (no aspect-ratio scaling).
+        self._is_attached: bool = False
         # Cache of the effective margin from the most recent render — read
         # by an embedding parent (inset loop) to align this chart's data
         # region, not its canvas.
@@ -373,6 +389,11 @@ class Chart(_Renderable):
         leaf._insets = []
         leaf._inset_owner = None
         leaf._last_M_eff = None
+        leaf._attached_left  = []
+        leaf._attached_right = []
+        leaf._attached_above = []
+        leaf._attached_below = []
+        leaf._is_attached = False
         return leaf
 
     def legend(self, *args, position: str | None = None, **kwargs) -> "Chart":
@@ -554,6 +575,97 @@ class Chart(_Renderable):
         self._insets.append((tuple(rect), inset))
         return inset
 
+    # ---------- attachments ----------
+
+    def attach_left(self, *charts, hide_labels: bool = True) -> "Chart":
+        """Attach one or more charts to this chart's left side.
+
+        Attachments extend the host's margin: they occupy reserved space
+        around the data area, like axis labels and ticks do, but with
+        user-defined content. The host-with-attachments behaves as one
+        Chart from the outside — peer composition (`|` / `/`) sees it
+        as a single block.
+
+        Order is host-outward: the first arg sits immediately left of
+        the host's data area; later args extend further left. Each
+        attachment auto-shares y with the host so row order propagates
+        and the heights align. Call multiple times to append.
+
+        `hide_labels=True` (default) suppresses tick labels and axis
+        labels on the inner-facing edge of each pair (the attachment's
+        host-facing side and the host's attachment-facing side) so the
+        composite reads as one frame without duplicated decorations.
+        Pass `hide_labels=False` to keep both sides labeled — useful
+        when the attachment is an independent chart whose own axis
+        carries meaning at the joined edge.
+        """
+        return self._attach("left", charts, hide_labels=hide_labels)
+
+    def attach_right(self, *charts, hide_labels: bool = True) -> "Chart":
+        """Attach charts to the right side. See `attach_left`."""
+        return self._attach("right", charts, hide_labels=hide_labels)
+
+    def attach_above(self, *charts, hide_labels: bool = True) -> "Chart":
+        """Attach charts above. First arg sits immediately above the host;
+        later args extend further up. Top/bottom attachments auto-share x
+        with the host (widths align, column order propagates). See
+        `attach_left` for `hide_labels=`."""
+        return self._attach("above", charts, hide_labels=hide_labels)
+
+    def attach_below(self, *charts, hide_labels: bool = True) -> "Chart":
+        """Attach charts below. First arg sits immediately below the host;
+        later args extend further down. See `attach_above`."""
+        return self._attach("below", charts, hide_labels=hide_labels)
+
+    def _attach(self, side: str, charts, *, hide_labels: bool = True) -> "Chart":
+        target_list = {
+            "left":  self._attached_left,
+            "right": self._attached_right,
+            "above": self._attached_above,
+            "below": self._attached_below,
+        }[side]
+        share_axis = "y" if side in ("left", "right") else "x"
+        share_attr = "_share_x" if share_axis == "x" else "_share_y"
+        for c in charts:
+            if not isinstance(c, Chart):
+                raise TypeError(
+                    f"attach_{side}() expects Chart instances; got {type(c).__name__}."
+                )
+            if c is self:
+                raise ValueError("cannot attach a chart to itself.")
+            if c._parent is not None:
+                raise ValueError(
+                    "each chart can be in at most one parent. "
+                    "Compose fresh charts, or copy your sub-assembly."
+                )
+            if (c._attached_left or c._attached_right
+                    or c._attached_above or c._attached_below):
+                raise ValueError(
+                    "nested attachments are not supported (attached charts "
+                    "cannot themselves have attachments)."
+                )
+            # Existing share targets get a warning; we still wire the host
+            # as the new share target so size and descriptors lock to it.
+            existing = getattr(c, share_attr, None)
+            if existing is not None and existing is not self:
+                import warnings
+                warnings.warn(
+                    f"attach_{side}(): chart already has share_{share_axis}= "
+                    f"set; overriding to share with host.",
+                    stacklevel=3,
+                )
+            setattr(c, share_attr, self)
+            c._parent = self
+            c._is_attached = True
+            if not hide_labels:
+                # Per-leaf flag read by the joined-pair walk; setting it on
+                # the attachment alone is enough — `_mark_joined_pair`
+                # skips the hide step if either side opts out.
+                hide_flag = f"_share_hide_labels_{share_axis}"
+                setattr(c, hide_flag, False)
+            target_list.append(c)
+        return self
+
     # ---------- render ----------
 
     def _to_svg_unchecked(self) -> str:
@@ -565,6 +677,13 @@ class Chart(_Renderable):
         if self._leaf_kind == "diagram":
             from .layout_diagram import _render_standalone_diagram
             return _render_standalone_diagram(self)
+        # Chart with attachments behaves as a mini-layout — route through
+        # the full layout engine so attachments get measured, allocated,
+        # and rendered as siblings.
+        if (self._attached_left or self._attached_right
+                or self._attached_above or self._attached_below):
+            from ._layout_engine import _render_layout
+            return _render_layout(self)
         # Data leaf. Route through the same pre-pass parents use — single
         # leaf is a degenerate single-cell case; share-scaling, collapse
         # annotation, and margin coordination all no-op for it, leaving
