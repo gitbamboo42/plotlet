@@ -98,6 +98,12 @@ def allocate(host: Chart, host_x: float, host_y: float,
     host_data_x = host_x + host_M["left"]
     host_data_y = host_y + host_M["top"]
 
+    # Each side places the attachment so its DATA area edge is flush against
+    # the host's data area edge. The attachment's inner-facing margin floor
+    # (cM["right"] for left, cM["bottom"] for above, etc.) overlaps into the
+    # host's collapsed inner margin floor — both are blank floor regions,
+    # so no visible collision; this matches the symmetric right/below path.
+
     # Left: walk outward (decreasing x). Data y/h locks to host (share_y);
     # canvas y is offset so the attachment's data area starts at host_data_y.
     cx_right = host_x + host_M["left"]
@@ -105,7 +111,7 @@ def allocate(host: Chart, host_x: float, host_y: float,
         cM = _M_eff(c)
         cw = c._data_width + cM["left"] + cM["right"]
         ch = c._data_height + cM["top"] + cM["bottom"]
-        c_canvas_x = cx_right - cM["right"] - c._data_width - cM["left"]
+        c_canvas_x = cx_right - cM["left"] - c._data_width
         c_canvas_y = host_data_y - cM["top"]
         _allocate(c, c_canvas_x, c_canvas_y, cw, ch, out)
         cx_right = c_canvas_x
@@ -126,7 +132,7 @@ def allocate(host: Chart, host_x: float, host_y: float,
         cw = c._data_width + cM["left"] + cM["right"]
         ch = c._data_height + cM["top"] + cM["bottom"]
         c_canvas_x = host_data_x - cM["left"]
-        c_canvas_y = cy_bottom - cM["bottom"] - c._data_height - cM["top"]
+        c_canvas_y = cy_bottom - cM["top"] - c._data_height
         _allocate(c, c_canvas_x, c_canvas_y, cw, ch, out)
         cy_bottom = c_canvas_y
     # Below: walk outward (increasing y).
