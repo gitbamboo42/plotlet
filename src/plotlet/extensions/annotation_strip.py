@@ -1,20 +1,24 @@
 """Custom artist: categorical annotation strip.
 
-A horizontal row of colored cells encoding a category per position along
-the x axis. Designed to align with a host panel above or below via
-`share_x` — sample-group bars on top of a heatmap, regime tags above a
-time series, cluster labels alongside a dendrogram, etc.
+A row or column of colored cells encoding a category per position. The
+default is horizontal (positions along the x axis), designed to align
+with a host panel above or below via `share_x` — sample-group bars on
+top of a heatmap, regime tags above a time series, cluster labels
+alongside a dendrogram, etc. Pass `orient="y"` for a vertical column
+that aligns with a host panel via `share_y` (per-row group labels next
+to a heatmap, marsilea-style chunk strips).
 
-Two scale kinds supported:
+Two scale kinds supported on the position axis:
 
-- **Categorical x** (heatmap-style): pass `positions` as category names
-  (e.g. sample IDs). Cell width comes from `ctx.x_scale.bandwidth`.
-- **Numeric x** (time-series-style): pass `positions` as numbers and set
-  `width=` in data units.
+- **Categorical** (heatmap-style): pass `positions` as category names
+  (e.g. sample IDs). Cell size on that axis comes from `bandwidth`.
+- **Numeric** (time-series-style): pass `positions` as numbers and set
+  `width=` in data units of the position axis.
 
 API:
 
     c.annotation_strip(positions, values, palette={...}, name="Group")
+    c.annotation_strip(positions, values, orient="y", ...)  # vertical
 
 `palette` maps each unique `value` to a color. Unmapped values fall back
 to `ctx.color`. `None` / `""` in `values` means missing data (drawn as
@@ -42,21 +46,31 @@ def annotation_strip_record(args, kw):
             f"annotation_strip: positions ({len(positions)}) and "
             f"values ({len(values)}) must be the same length."
         )
+    orient = kw.get("orient", "x")
+    if orient not in ("x", "y"):
+        raise ValueError(
+            f"annotation_strip: orient= must be 'x' or 'y'; got {orient!r}."
+        )
     return {
         "type": "annotation_strip",
         "positions": positions,
         "values": values,
+        "_orient": orient,
         "opts": kw,
     }
 
 
 def annotation_strip_xdomain(a):
-    # Mirror what the host panel uses. If positions are strings we hand
-    # them to the category scale; if numeric, the linear scale.
+    # Position axis carries the categories/numeric ticks; the orthogonal
+    # axis spans [0, 1] (the cell's extent on its decorative side).
+    if a.get("_orient") == "y":
+        return [0, 1]
     return list(a["positions"])
 
 
 def annotation_strip_ydomain(a):
+    if a.get("_orient") == "y":
+        return list(a["positions"])
     return [0, 1]
 
 
@@ -79,48 +93,55 @@ def _ordered_values(values, palette):
 def annotation_strip_draw(a, ctx):
     opts = a["opts"]
     palette = opts.get("palette") or {}
-    x_pad = opts.get("x_padding", 0.0)
-    y_pad = opts.get("y_padding", 0.0)
+    cat_pad = opts.get("x_padding", 0.0)   # padding along the position axis
+    orth_pad = opts.get("y_padding", 0.0)  # padding along the orthogonal axis
     absent_fill = opts.get("absent_fill")
     width = opts.get("width")
     fallback = ctx.color
+    orient = a.get("_orient", "x")
+    cat_scale  = ctx.y_scale if orient == "y" else ctx.x_scale
+    orth_scale = ctx.x_scale if orient == "y" else ctx.y_scale
 
-    # Cell height from y data range [0, 1].
-    y0 = ctx.y_scale(0); y1 = ctx.y_scale(1)
-    yt, yb = min(y0, y1), max(y0, y1)
-    h = yb - yt
-    y_inner = yt + h * y_pad
-    h_inner = h * (1 - 2 * y_pad)
+    # Cell extent on the orthogonal axis (which spans [0, 1] by ydomain).
+    o0 = orth_scale(0); o1 = orth_scale(1)
+    o_lo, o_hi = min(o0, o1), max(o0, o1)
+    h_orth = o_hi - o_lo
+    o_inner = o_lo + h_orth * orth_pad
+    h_inner_orth = h_orth * (1 - 2 * orth_pad)
 
-    # Cell width: bandwidth for category scale, user-supplied for numeric.
-    bw_attr = getattr(ctx.x_scale, "bandwidth", None)
+    # Cell extent on the position axis: bandwidth for category scale,
+    # user-supplied width for numeric.
+    bw_attr = getattr(cat_scale, "bandwidth", None)
     if bw_attr is not None:
         bw = bw_attr
     elif width is not None:
-        # Convert data-unit width to pixels via scale.
-        bw = abs(ctx.x_scale(width) - ctx.x_scale(0))
+        bw = abs(cat_scale(width) - cat_scale(0))
     else:
         raise ValueError(
-            "annotation_strip on a non-categorical x scale needs "
-            "`width=<data-units>` (e.g. `width=1.0` for unit-spaced "
-            "integer positions)."
+            f"annotation_strip on a non-categorical {orient} scale needs "
+            f"`width=<data-units>` (e.g. `width=1.0` for unit-spaced "
+            f"integer positions)."
         )
 
     out = []
     for pos, v in zip(a["positions"], a["values"]):
-        cx = ctx.x_scale(pos)
-        x0 = cx - bw / 2
-        w = bw
-        x_inner = x0 + w * x_pad
-        w_inner = w * (1 - 2 * x_pad)
+        cp = cat_scale(pos)
+        c_lo = cp - bw / 2
+        c_inner = c_lo + bw * cat_pad
+        c_inner_w = bw * (1 - 2 * cat_pad)
+
+        # Map (cat-axis, orth-axis) → (x, y) based on orientation.
+        if orient == "y":
+            x0, y0, w, h = o_inner, c_inner, h_inner_orth, c_inner_w
+        else:
+            x0, y0, w, h = c_inner, o_inner, c_inner_w, h_inner_orth
 
         if absent_fill is not None:
-            out.append(rect(x_inner, y_inner, w_inner, h_inner,
-                            fill=absent_fill))
+            out.append(rect(x0, y0, w, h, fill=absent_fill))
         if v is None or v == "":
             continue
         fill = palette.get(v, fallback)
-        out.append(rect(x_inner, y_inner, w_inner, h_inner, fill=fill))
+        out.append(rect(x0, y0, w, h, fill=fill))
     return "".join(out)
 
 
@@ -146,19 +167,25 @@ def annotation_strip_legend_entries(a):
 
 
 def annotation_strip_frame_defaults(args, kw):
-    """Decorative row: hide spines + x-tick marks. If `name=` is given,
-    use it as a single y-tick label at the band center; otherwise hide
-    the y axis entirely. The caller can override any of this with their
-    own `xticks(...)` / `yticks(...)` after the artist call (e.g. to
-    surface sample labels under the bottom row of a stack)."""
+    """Decorative strip: hide spines + the position-axis tick marks. If
+    `name=` is given, use it as a single tick label on the ORTHOGONAL
+    axis (at the band center); otherwise hide that axis entirely. The
+    caller can override any of this with their own `xticks(...)` /
+    `yticks(...)` after the artist call (e.g. to surface sample labels
+    under the bottom row of a stack)."""
+    orient = kw.get("orient", "x")
     name = kw.get("name")
     out = [("spines", [], {"top": False, "right": False,
                            "bottom": False, "left": False})]
-    out.append(("xticks", [None], {"marks": False}))
+    # Position axis: keep auto category labels but drop tick marks.
+    # Orthogonal axis: collapse to a single `name=` label or hide.
+    pos_ticks  = "yticks" if orient == "y" else "xticks"
+    orth_ticks = "xticks" if orient == "y" else "yticks"
+    out.append((pos_ticks, [None], {"marks": False}))
     if name is not None:
-        out.append(("yticks", [[0.5], [name]], {"marks": False}))
+        out.append((orth_ticks, [[0.5], [name]], {"marks": False}))
     else:
-        out.append(("yticks", [[]], {}))
+        out.append((orth_ticks, [[]], {}))
     return out
 
 
