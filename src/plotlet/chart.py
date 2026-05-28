@@ -38,7 +38,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ._spec import _SIZESPEC, _MARGIN_FLOOR, active_theme
+from ._spec import _SIZESPEC, _MARGIN_FLOOR, _LAYOUTSPEC, active_theme
 from .core import (
     _FRAME_METHODS, _replay, _render,
     _to_px,
@@ -577,7 +577,8 @@ class Chart(_Renderable):
 
     # ---------- attachments ----------
 
-    def attach_left(self, *charts, hide_labels: bool = True) -> "Chart":
+    def attach_left(self, *charts, hide_labels: bool = True,
+                    gap: float | None = None) -> "Chart":
         """Attach one or more charts to this chart's left side.
 
         Attachments extend the host's margin: they occupy reserved space
@@ -598,26 +599,35 @@ class Chart(_Renderable):
         Pass `hide_labels=False` to keep both sides labeled — useful
         when the attachment is an independent chart whose own axis
         carries meaning at the joined edge.
+
+        `gap=` is the pixel separation between each attachment's data
+        area and its inward neighbor (host or previous attachment).
+        Defaults to `spec.json:layout.attach_gap`. Pass `gap=0` for a
+        flush join with no visual separation.
         """
-        return self._attach("left", charts, hide_labels=hide_labels)
+        return self._attach("left", charts, hide_labels=hide_labels, gap=gap)
 
-    def attach_right(self, *charts, hide_labels: bool = True) -> "Chart":
+    def attach_right(self, *charts, hide_labels: bool = True,
+                     gap: float | None = None) -> "Chart":
         """Attach charts to the right side. See `attach_left`."""
-        return self._attach("right", charts, hide_labels=hide_labels)
+        return self._attach("right", charts, hide_labels=hide_labels, gap=gap)
 
-    def attach_above(self, *charts, hide_labels: bool = True) -> "Chart":
+    def attach_above(self, *charts, hide_labels: bool = True,
+                     gap: float | None = None) -> "Chart":
         """Attach charts above. First arg sits immediately above the host;
         later args extend further up. Top/bottom attachments auto-share x
         with the host (widths align, column order propagates). See
-        `attach_left` for `hide_labels=`."""
-        return self._attach("above", charts, hide_labels=hide_labels)
+        `attach_left` for `hide_labels=` and `gap=`."""
+        return self._attach("above", charts, hide_labels=hide_labels, gap=gap)
 
-    def attach_below(self, *charts, hide_labels: bool = True) -> "Chart":
+    def attach_below(self, *charts, hide_labels: bool = True,
+                     gap: float | None = None) -> "Chart":
         """Attach charts below. First arg sits immediately below the host;
         later args extend further down. See `attach_above`."""
-        return self._attach("below", charts, hide_labels=hide_labels)
+        return self._attach("below", charts, hide_labels=hide_labels, gap=gap)
 
-    def _attach(self, side: str, charts, *, hide_labels: bool = True) -> "Chart":
+    def _attach(self, side: str, charts, *, hide_labels: bool = True,
+                gap: float | None = None) -> "Chart":
         target_list = {
             "left":  self._attached_left,
             "right": self._attached_right,
@@ -663,6 +673,10 @@ class Chart(_Renderable):
                 # skips the hide step if either side opts out.
                 hide_flag = f"_share_hide_labels_{share_axis}"
                 setattr(c, hide_flag, False)
+            # Per-attachment gap to inward neighbor. None falls back to the
+            # spec default at allocate time so a theme override flows in.
+            c._attachment_gap = (float(gap) if gap is not None
+                                 else _LAYOUTSPEC["attach_gap"])
             target_list.append(c)
         return self
 

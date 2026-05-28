@@ -24,35 +24,35 @@ import _runner
 # attachment line up with the host's rows/columns).
 # ---------------------------------------------------------------------------
 
-def attach_multi_left_and_top():
-    # Heatmap with two stacked attachments on the left and two on top:
-    #   left:  inner = per-gene line plot, outer = another per-gene line plot
-    #   top:   inner = per-sample line plot, outer = another per-sample line plot
-    # Exercises chained attachments and cross-side independence.
+def attach_four_sides_chained():
+    # Heatmap with TWO chained attachments on every side. Exercises:
+    #   - innermost-flush placement (each first attachment touches the host)
+    #   - chained-flush placement (each second attachment touches the first)
+    #   - independence between perpendicular sides
     rows = ["g1", "g2", "g3", "g4"]
     cols = ["s1", "s2", "s3", "s4", "s5"]
     matrix = [[i + j for j in range(5)] for i in range(4)]
 
-    host = pt.chart(data_width=200, data_height=140, title="annotated heatmap")
+    host = pt.chart(data_width=200, data_height=140, title="four sides")
     host.heatmap(matrix, xticklabels=cols, yticklabels=rows)
 
-    left_inner = pt.chart(data_width=44)
-    left_inner.yscale("category", order=rows, padding=0)
-    left_inner.line([2, 4, 1, 3], rows)
+    def row_line(values):
+        c = pt.chart(data_width=44)
+        c.yscale("category", order=rows, padding=0)
+        c.line(values, rows)
+        return c
 
-    left_outer = pt.chart(data_width=44)
-    left_outer.yscale("category", order=rows, padding=0)
-    left_outer.line([3, 1, 4, 2], rows)
+    def col_line(values):
+        c = pt.chart(data_height=34)
+        c.xscale("category", order=cols, padding=0)
+        c.line(cols, values)
+        return c
 
-    top_inner = pt.chart(data_height=34)
-    top_inner.xscale("category", order=cols, padding=0)
-    top_inner.line(cols, [1, 3, 2, 4, 2])
-
-    top_outer = pt.chart(data_height=34)
-    top_outer.xscale("category", order=cols, padding=0)
-    top_outer.line(cols, [4, 2, 3, 1, 5])
-
-    return host.attach_left(left_inner, left_outer).attach_above(top_inner, top_outer)
+    host.attach_left(row_line([2, 4, 1, 3]), row_line([3, 1, 4, 2]))
+    host.attach_right(row_line([1, 2, 4, 3]), row_line([4, 3, 2, 1]))
+    host.attach_above(col_line([1, 3, 2, 4, 2]), col_line([4, 2, 3, 1, 5]))
+    host.attach_below(col_line([2, 1, 3, 5, 4]), col_line([5, 4, 2, 1, 3]))
+    return host
 
 
 def attach_with_peer_legend():
@@ -172,8 +172,8 @@ def _run_invariants() -> int:
 
 
 PLOTS = {
-    "attach_multi_left_and_top": attach_multi_left_and_top,
-    "attach_with_peer_legend": attach_with_peer_legend,
+    "attach_four_sides_chained": attach_four_sides_chained,
+    "attach_with_peer_legend":   attach_with_peer_legend,
 }
 
 
