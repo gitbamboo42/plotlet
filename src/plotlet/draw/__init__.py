@@ -240,6 +240,38 @@ def polygon(points, *,
                 alpha=alpha, fill_alpha=fill_alpha, stroke_alpha=stroke_alpha)
 
 
+def arc(x0: float, y0: float, x1: float, y1: float, *,
+        height: float, **path_kwargs) -> str:
+    """Half-ellipse arc from `(x0, y0)` to `(x1, y1)` in pixel coords.
+
+    `height` is the perpendicular distance from the chord midpoint to
+    the arc apex. **Positive height** curves toward smaller SVG y
+    (visually "above" a horizontal chord); negative flips to the other
+    side. Returns an empty string for a zero-length chord.
+
+    Use this for chord / arc-diagram edges and other "bulge between two
+    points" curves. For closed sankey-ribbon shapes, build with `polygon`
+    or two `arc` calls instead. All extra kwargs forward to `path`
+    (`stroke=`, `stroke_width=`, `fill=`, `alpha=`, etc.).
+    """
+    import math
+    dx = x1 - x0
+    dy = y1 - y0
+    L = math.hypot(dx, dy)
+    if L == 0:
+        return ""
+    rx = L / 2
+    ry = abs(height)
+    angle = math.degrees(math.atan2(dy, dx))
+    # SVG sweep-flag: 0 sweeps CCW in user space (SVG y down), 1 sweeps CW.
+    # For positive height = curve toward smaller y on a horizontal chord,
+    # we need CCW from (x0,y0) to (x1,y1) → sweep=0.
+    sweep = 0 if height > 0 else 1
+    d = (f"M {x0:.2f},{y0:.2f} "
+         f"A {rx:.2f},{ry:.2f} {angle:.2f} 0 {sweep} {x1:.2f},{y1:.2f}")
+    return path(d, **path_kwargs)
+
+
 def errorbar_v(x: float, y_lo: float, y_hi: float, *,
                capsize: float = 4, color: str = "#000",
                width: float = 1, alpha=1) -> str:
