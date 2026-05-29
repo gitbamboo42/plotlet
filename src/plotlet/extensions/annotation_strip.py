@@ -1,35 +1,45 @@
-"""Custom artist: categorical annotation strip.
+"""Custom artist: annotation strip.
 
-A row or column of colored cells encoding a category per position. The
+A row or column of colored cells encoding one value per position. The
 default is horizontal (positions along the x axis), designed to align
 with a host panel above or below via `share_x` — sample-group bars on
 top of a heatmap, regime tags above a time series, cluster labels
-alongside a dendrogram, etc. Pass `orient="y"` for a vertical column
-that aligns with a host panel via `share_y` (per-row group labels next
-to a heatmap, marsilea-style chunk strips).
+alongside a dendrogram, score tracks aligned with a coverage plot, etc.
+Pass `orient="y"` for a vertical column that aligns with a host panel
+via `share_y` (per-row group labels next to a heatmap, marsilea-style
+chunk strips).
 
-Two scale kinds supported on the position axis:
+Two color modes — same artist, the color spec chooses:
 
-- **Categorical** (heatmap-style): pass `positions` as category names
-  (e.g. sample IDs). Cell size on that axis comes from `bandwidth`.
+- **Categorical** (`palette={...}`): each unique value gets a discrete
+  color via a label→color dict. Legend renders as swatches.
+- **Continuous** (`cmap=...`): numeric values are mapped through a
+  colormap with optional `vmin`/`vmax`/`norm`. Legend renders as a
+  gradient strip (same shape as `heatmap` / `bubble_grid`).
+
+Two scale kinds on the position axis:
+
+- **Categorical** (heatmap-style): pass `positions` as category names.
+  Cell size on that axis comes from `bandwidth`.
 - **Numeric** (time-series-style): pass `positions` as numbers and set
   `width=` in data units of the position axis.
 
 API:
 
     c.annotation_strip(positions, values, palette={...}, name="Group")
+    c.annotation_strip(positions, values, cmap="viridis", name="Score")
     c.annotation_strip(positions, values, orient="y", ...)  # vertical
 
-`palette` maps each unique `value` to a color. Unmapped values fall back
-to `ctx.color`. `None` / `""` in `values` means missing data (drawn as
-`absent_fill` if set, otherwise transparent).
+`None` / `""` (or NaN in cmap mode) means missing data — drawn as
+`absent_fill` if set, otherwise transparent.
 """
 
-SUMMARY = 'Categorical color strip — one cell per position, for annotation tracks aligned to a host panel.'
+SUMMARY = 'One-cell-per-position color strip (categorical palette or continuous cmap) for annotation tracks aligned to a host panel.'
 from pathlib import Path
 
 import plotlet as pt
 from plotlet.draw import rect
+from plotlet.draw.colormaps import colormap, _ContinuousNorm
 from plotlet.utils import to_list
 
 
@@ -51,11 +61,34 @@ def annotation_strip_record(args, kw):
         raise ValueError(
             f"annotation_strip: orient= must be 'x' or 'y'; got {orient!r}."
         )
+    if kw.get("palette") is not None and kw.get("cmap") is not None:
+        raise ValueError(
+            "annotation_strip: pass either palette= (categorical mode) "
+            "or cmap= (continuous mode), not both."
+        )
+    # Precompute vmin/vmax for cmap mode so the legend gradient and the
+    # draw step agree on the range without recomputing.
+    vmin = vmax = None
+    if kw.get("cmap") is not None:
+        norm = kw.get("norm", "linear")
+        if norm == "log":
+            flat = [v for v in values if isinstance(v, (int, float)) and v == v and v > 0]
+        else:
+            flat = [v for v in values if isinstance(v, (int, float)) and v == v]
+        user_vmin = kw.get("vmin"); user_vmax = kw.get("vmax")
+        if flat:
+            vmin = user_vmin if user_vmin is not None else min(flat)
+            vmax = user_vmax if user_vmax is not None else max(flat)
+        else:
+            vmin = user_vmin if user_vmin is not None else (1.0 if norm == "log" else 0.0)
+            vmax = user_vmax if user_vmax is not None else (10.0 if norm == "log" else 1.0)
     return {
         "type": "annotation_strip",
         "positions": positions,
         "values": values,
         "_orient": orient,
+        "_vmin": vmin,
+        "_vmax": vmax,
         "opts": kw,
     }
 
@@ -93,6 +126,7 @@ def _ordered_values(values, palette):
 def annotation_strip_draw(a, ctx):
     opts = a["opts"]
     palette = opts.get("palette") or {}
+    cmap_name = opts.get("cmap")
     cat_pad = opts.get("x_padding", 0.0)   # padding along the position axis
     orth_pad = opts.get("y_padding", 0.0)  # padding along the orthogonal axis
     absent_fill = opts.get("absent_fill")
@@ -101,6 +135,14 @@ def annotation_strip_draw(a, ctx):
     orient = a.get("_orient", "x")
     cat_scale  = ctx.y_scale if orient == "y" else ctx.x_scale
     orth_scale = ctx.x_scale if orient == "y" else ctx.y_scale
+
+    # cmap-mode setup: precomputed range from record(); norm + LUT here.
+    cmap_fn = norm = None
+    if cmap_name is not None:
+        cmap_fn = colormap(cmap_name)
+        norm = _ContinuousNorm(a["_vmin"], a["_vmax"],
+                               kind=opts.get("norm", "linear"),
+                               center=opts.get("center"))
 
     # Cell extent on the orthogonal axis (which spans [0, 1] by ydomain).
     o0 = orth_scale(0); o1 = orth_scale(1)
@@ -138,15 +180,23 @@ def annotation_strip_draw(a, ctx):
 
         if absent_fill is not None:
             out.append(rect(x0, y0, w, h, fill=absent_fill))
-        if v is None or v == "":
+        missing = v is None or v == "" or (cmap_fn is not None and v != v)
+        if missing:
             continue
-        fill = palette.get(v, fallback)
+        if cmap_fn is not None:
+            r, g, b = cmap_fn(norm.to_unit(v))
+            fill = f"rgb({r},{g},{b})"
+        else:
+            fill = palette.get(v, fallback)
         out.append(rect(x0, y0, w, h, fill=fill))
     return "".join(out)
 
 
 def annotation_strip_legend_entries(a):
     opts = a["opts"]
+    # cmap mode emits its own gradient via legend_gradient.
+    if opts.get("cmap") is not None:
+        return []
     palette = opts.get("palette") or {}
     order = _ordered_values(a["values"], palette)
     if not order:
@@ -164,6 +214,23 @@ def annotation_strip_legend_entries(a):
         col = palette.get(v, a.get("_color"))
         entries.append({"label": str(v), "color": col})
     return entries
+
+
+def annotation_strip_legend_gradient(a):
+    opts = a["opts"]
+    if opts.get("cmap") is None:
+        return None
+    legend_opts = opts.get("legend") or {}
+    return {
+        "kind": "continuous",
+        "cmap": opts["cmap"],
+        "vmin": a["_vmin"],
+        "vmax": a["_vmax"],
+        "norm": opts.get("norm", "linear"),
+        "center": opts.get("center"),
+        "label": legend_opts.get("label") or opts.get("name"),
+        "ticks": legend_opts.get("ticks"),
+    }
 
 
 def annotation_strip_frame_defaults(args, kw):
@@ -196,6 +263,7 @@ pt.add_artist(pt.ArtistSpec(
     ydomain=annotation_strip_ydomain,
     draw=annotation_strip_draw,
     legend_entries=annotation_strip_legend_entries,
+    legend_gradient=annotation_strip_legend_gradient,
     frame_defaults=annotation_strip_frame_defaults,
     uses_color_cycle=False,
     tight_domain=True,
@@ -205,14 +273,27 @@ pt.add_artist(pt.ArtistSpec(
 def demo():
     """Build the demonstration chart with synthetic data.
 
+    Two stacked strips on the same sample axis: a categorical group track
+    (palette) above a continuous score track (cmap). The cmap-mode strip
+    pulls a gradient legend on the right via `pt.legend()`.
+
     Returns a `pt.Chart` ready for `.save_svg()` or further composition."""
+    import math
     samples = [f"S{i+1:02d}" for i in range(12)]
     groups = (["ctrl"] * 4) + (["treat"] * 5) + (["resist"] * 3)
     palette = {"ctrl": pt.TAB10[0], "treat": pt.TAB10[1], "resist": pt.TAB10[2]}
-    c = pt.chart(data_width=420, data_height=24)
-    c.annotation_strip(samples, groups, palette=palette, name="Treatment")
-    c.xticks(rotation=45)
-    return c
+    scores = [math.sin(i * 0.6) for i in range(12)]
+
+    cat = pt.chart(data_width=420, data_height=24)
+    cat.annotation_strip(samples, groups, palette=palette, name="Treatment")
+    cat.xticks([])
+
+    cont = pt.chart(data_width=420, data_height=24)
+    cont.annotation_strip(samples, scores, cmap="RdBu_r",
+                          vmin=-1, vmax=1, name="Score")
+    cont.xticks(rotation=45)
+
+    return pt.grid([[cat], [cont]]).share_x(True) | pt.legend()
 
 
 if __name__ == "__main__":
