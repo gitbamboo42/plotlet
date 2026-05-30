@@ -2,6 +2,15 @@
 
 These functions emit SVG fragments at *pixel* coordinates. Import them
 via `plotlet.draw` (the package `__init__` re-exports everything here).
+Combine fragments with `"".join(...)` and return the result from your
+`draw=` callback.
+
+`rect`, `circle`, `path`, and `polygon` accept optional `fill_alpha` /
+`stroke_alpha` for per-channel opacity (translucent fill, opaque outline
+or vice versa); leave them `None` and `alpha=` applies to the whole element.
+
+For chart-recording counterparts in data coordinates, use `Chart` methods
+directly — `c.scatter(xs, ys)`, `c.text(x, y, s)`, etc.
 """
 import math
 
