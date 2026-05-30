@@ -125,3 +125,28 @@ add_artist(ArtistSpec(
     legend_entries=_line_legend_entries,
     data_attrs=_line_data_attrs,
 ))
+
+
+_STEP_WHERE = {"pre": "step-before", "post": "step-after", "mid": "step-mid"}
+
+
+def _step_record(args, kw):
+    where = kw.pop("where", "post")
+    curve = _STEP_WHERE.get(where)
+    if curve is None:
+        raise ValueError(
+            f"step() where= expects 'pre', 'post', or 'mid'; got {where!r}"
+        )
+    kw["curve"] = curve
+    return _line_record(args, kw)
+
+
+add_artist(ArtistSpec(
+    name="step",
+    record=_step_record,
+    xdomain=_line_xdomain,
+    ydomain=_line_ydomain,
+    draw=_line_draw,
+    legend_entries=_line_legend_entries,
+    data_attrs=_line_data_attrs,
+))

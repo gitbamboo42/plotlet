@@ -486,65 +486,6 @@ class Chart(_Renderable):
         so they need to record explicitly."""
         self._calls.append((name, list(args), dict(kwargs)))
 
-    def step(self, *args, where="post", **kwargs):
-        """Step plot — sugar over `line(curve=...)`. `where="pre"`,
-        `"post"` (default), or `"mid"` map to plotlet's curve names
-        (`step-before`, `step-after`, `step-mid`). matplotlib convention."""
-        curve = {"pre": "step-before", "post": "step-after", "mid": "step-mid"}.get(where)
-        if curve is None:
-            raise ValueError(
-                f"step() where= expects 'pre', 'post', or 'mid'; got {where!r}"
-            )
-        kwargs["curve"] = curve
-        return self.line(*args, **kwargs)
-
-    def heatmap(self, df, *, cmap=None, vmin=None, vmax=None, norm="linear",
-                center=None, xticklabels=None, yticklabels=None, legend=None,
-                annot=False, fmt=".2g", annot_color="auto", annot_fontsize=10):
-        # User-facing categorical heatmap. Both axes are category scales
-        # with padding=0 (flush cells); index/columns become the categories
-        # themselves, so share_x / share_y with any other category-scale
-        # panel (bars, annotation_strip, dendrogram with `labels=`) just
-        # works by passing the same names. Numeric image data should use
-        # `c.imshow(...)` directly — that artist stays on numeric scales.
-        if hasattr(df, "values") and hasattr(df, "columns") and hasattr(df, "index"):
-            cols = list(df.columns) if xticklabels is None else list(xticklabels)
-            rows = list(df.index)   if yticklabels is None else list(yticklabels)
-            matrix = df.values
-        else:
-            d = to_list_2d(df)
-            n_rows = len(d); n_cols = len(d[0]) if d else 0
-            cols = list(xticklabels) if xticklabels is not None else list(range(n_cols))
-            rows = list(yticklabels) if yticklabels is not None else list(range(n_rows))
-            matrix = d
-        cols = [str(x) for x in cols]
-        rows = [str(x) for x in rows]
-
-        # padding=0 keeps cells flush. The category scale draws cats[0]
-        # at the top of the y axis by default, matching the "row 0 at top"
-        # matrix convention — no origin flip needed.
-        self._record("xscale", "category", order=cols, padding=0)
-        self._record("yscale", "category", order=rows, padding=0)
-        # Mute tick marks — the cells already demarcate every column/row.
-        # Labels are still emitted by the category scale.
-        self._record("xticks", None, marks=False)
-        self._record("yticks", None, marks=False)
-
-        opts = {}
-        if cmap is not None:    opts["cmap"]   = cmap
-        if vmin is not None:    opts["vmin"]   = vmin
-        if vmax is not None:    opts["vmax"]   = vmax
-        if norm != "linear":    opts["norm"]   = norm
-        if center is not None:  opts["center"] = center
-        if legend is not None:  opts["legend"] = legend
-        if annot is not False and annot is not None:
-            opts["annot"] = annot
-            opts["fmt"] = fmt
-            opts["annot_color"] = annot_color
-            opts["annot_fontsize"] = annot_fontsize
-        self._record("heatmap", matrix, cols, rows, **opts)
-        return self
-
     # Reflines, imshow, and any user-registered artist forward through
     # __getattr__ above — long-form (`data=`, `x=`, etc.) and aes
     # inheritance are handled inside each artist's `record()` plus the

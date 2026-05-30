@@ -456,6 +456,32 @@ def chart_heatmap_annot():
     return c
 
 
+def chart_heatmap_categorical():
+    genes   = ["TP53", "KRAS", "EGFR", "BRAF", "PIK3CA"]
+    samples = ["S1", "S2", "S3", "S4", "S5", "S6"]
+    matrix = [
+        ["Missense", "WT",        "Frameshift", "WT",        "Missense", None      ],
+        ["WT",       "Nonsense",  "WT",          "Missense",  "WT",       "CNV"     ],
+        ["CNV",      "WT",        "WT",          "CNV",       "Nonsense", "WT"      ],
+        ["WT",       "Missense",  "CNV",         None,        "WT",       "Missense"],
+        ["Nonsense", "CNV",       "Missense",    "Frameshift","WT",       "WT"      ],
+    ]
+    palette = {
+        "WT":         "#e8e8e8",
+        "Missense":   "#3a6dbf",
+        "Nonsense":   "#c0392b",
+        "Frameshift": "#e67e22",
+        "CNV":        "#27ae60",
+    }
+    c = pt.chart(title="heatmap (categorical palette, absent=grey)",
+                 xlabel="sample", ylabel="gene")
+    c.heatmap(matrix, xticklabels=samples, yticklabels=genes,
+              palette=palette, absent_fill="#dddddd")
+    c.xticks(rotation=45)
+    c.legend(position="right")
+    return c
+
+
 def chart_imshow_annot_custom():
     # annot=<2D array> for independent labels; annot_color fixed.
     # Mixes numbers (formatted via fmt) and strings (verbatim).
@@ -1432,6 +1458,7 @@ PLOTS = {
     "heatmap_labeled":     chart_heatmap_labeled,
     "heatmap_dataframe":   chart_heatmap_dataframe,
     "heatmap_annot":       chart_heatmap_annot,
+    "heatmap_categorical": chart_heatmap_categorical,
     "imshow_annot_custom": chart_imshow_annot_custom,
     "long_title":          chart_long_title,
     "long_ylabel":         chart_long_ylabel,
