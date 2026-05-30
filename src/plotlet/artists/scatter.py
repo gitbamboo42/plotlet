@@ -21,8 +21,8 @@ import math
 from ..registry import ArtistSpec, add_artist
 from ..utils import to_list, resolve_aes, palette_color
 from ..draw import marker
-from ..draw.colors import TAB10
-from ..draw.colormaps import colormap_lut, _ContinuousNorm
+from ..draw import TAB10
+from ..draw import colormap_lut, ContinuousNorm
 from .._spec import _D, _LEGSPEC
 from ._shared import (_xy_minmax, expand_xy_long_form,
                        DEFAULT_ALPHA_RANGE, _alpha_for_level)
@@ -48,7 +48,7 @@ def _artist_scatter(a, xs_, ys_, col, xs, ys):
         vmax = opts.get("vmax")
         if vmin is None: vmin = min(numeric) if numeric else 0.0
         if vmax is None: vmax = max(numeric) if numeric else 1.0
-        normalizer = _ContinuousNorm(vmin, vmax, kind=opts.get("norm", "linear"))
+        normalizer = ContinuousNorm(vmin, vmax, kind=opts.get("norm", "linear"))
         point_colors = []
         for v in c_vals:
             if not (isinstance(v, (int, float)) and v == v):

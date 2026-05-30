@@ -6,7 +6,7 @@ Paint logic is a nested closure; there are no shared swatch helpers.
 """
 from .._spec import _LEGSPEC
 from ..draw import marker, segment, rect
-from ..draw.colors import TAB10
+from ..draw import TAB10
 from ..utils import to_list, resolve_aes, palette_color
 
 

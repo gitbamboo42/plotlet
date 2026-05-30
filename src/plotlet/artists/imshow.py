@@ -7,8 +7,8 @@ from ..registry import ArtistSpec, add_artist
 from ..utils import to_list_2d
 from .._spec import _D
 from ..draw import rect, text_path
-from ..draw._png import encode_rgb
-from ..draw.colormaps import colormap_lut, _ContinuousNorm
+from ..draw import encode_rgb
+from ..draw import colormap_lut, ContinuousNorm
 
 
 def _rel_luminance(r, g, b):
@@ -28,7 +28,7 @@ def _artist_imshow(a, xs_, ys_, col):
     array); the panel auto-inverts the y-axis in that case so tick "0"
     lands next to row 0, matching matplotlib.
 
-    Color mapping goes through `_ContinuousNorm`, which supports `norm="log"`
+    Color mapping goes through `ContinuousNorm`, which supports `norm="log"`
     and `center=` on top of the default linear range.
     """
     nrows = a["_nrows"]; ncols = a["_ncols"]
@@ -36,7 +36,7 @@ def _artist_imshow(a, xs_, ys_, col):
         return ""
     data = a["_data"]
     opts = a["opts"]
-    norm = _ContinuousNorm(a["_vmin"], a["_vmax"],
+    norm = ContinuousNorm(a["_vmin"], a["_vmax"],
                            kind=opts.get("norm", "linear"),
                            center=opts.get("center"))
     lut = colormap_lut(opts.get("cmap", _D["default_cmap"]))
@@ -181,7 +181,7 @@ def _imshow_record(args, kw):
     norm = kw.get("norm", "linear")
     # For log norm, autoscale ignores non-positive values (they can't be
     # log-mapped). User-supplied vmin/vmax are still trusted as-is; the
-    # _ContinuousNorm constructor will raise if they're non-positive.
+    # ContinuousNorm constructor will raise if they're non-positive.
     if vmin is None or vmax is None:
         if norm == "log":
             flat = [v for row in d for v in row if v == v and v > 0]

@@ -25,7 +25,7 @@ from ..registry import ArtistSpec, add_artist
 from ..draw import circle
 from ..utils import (resolve_aes, palette_color,
                      dodge_positions, categorical_groups)
-from ..draw.colors import TAB10, _resolve_color
+from ..draw import TAB10, resolve_color
 from .._spec import _FRAME
 
 
@@ -119,8 +119,8 @@ def _swarm_draw(a, ctx):
     r         = opts.get("size", 3)
     alpha     = opts.get("alpha", 0.9)
     lw        = opts.get("linewidth", 0)
-    stroke    = _resolve_color(opts.get("color")) or _FRAME["color"]
-    fill_literal = _resolve_color(opts.get("_fill_literal"))
+    stroke    = resolve_color(opts.get("color")) or _FRAME["color"]
+    fill_literal = resolve_color(opts.get("_fill_literal"))
     fill_fallback = fill_literal if fill_literal is not None else ctx.color
     horizontal = _swarm_horizontal(a)
     cat_scale, val_scale = (ctx.y_scale, ctx.x_scale) if horizontal else (ctx.x_scale, ctx.y_scale)
@@ -152,7 +152,7 @@ def _swarm_legend_entries(a):
     r = opts.get("size", 3)
     alpha = opts.get("alpha", 0.9)
     lw = opts.get("linewidth", 0)
-    stroke = _resolve_color(opts.get("color")) or _FRAME["color"]
+    stroke = resolve_color(opts.get("color")) or _FRAME["color"]
     entries = []
     for j, g in enumerate(groups):
         col = _group_fill(groups, palette, j, _FRAME["color"])

@@ -13,8 +13,8 @@ For non-tabular use, the chained form works directly on the same Chart:
     c
 """
 from ._spec import SPEC
-from .draw.colors import TAB10, colors
-from .draw.colormaps import colormap, list_colormaps
+from .draw import TAB10, colors
+from .draw import colormap, list_colormaps
 from .chart import Chart, Layout, chart, grid
 from .legend import legend
 from .registry import ArtistSpec, add_artist

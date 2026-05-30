@@ -21,7 +21,7 @@ Other styling kwargs:
 from ..registry import ArtistSpec, add_artist
 from ..draw import polyline, segment
 from ..utils import to_list, long_form_1d, resolve_aes, palette_color
-from ..draw.colors import TAB10, _resolve_color
+from ..draw import TAB10, resolve_color
 from .._spec import _LEGSPEC
 
 
@@ -64,7 +64,7 @@ def _ecdf_draw(a, ctx):
     palette = a["opts"].get("palette")
     lw = a["opts"].get("linewidth", 1.5)
     complement = a["opts"].get("complement", False)
-    color_literal = _resolve_color(a["opts"].get("_color_literal"))
+    color_literal = resolve_color(a["opts"].get("_color_literal"))
     fallback = color_literal if color_literal is not None else ctx.color
     out = []
     for j, data in enumerate(a["vals"]):

@@ -54,7 +54,7 @@ import plotlet as pt
 from plotlet.utils import (to_list, quantile, resolve_aes, palette_color,
                             dodge_positions, categorical_groups,
                             silverman_bw, kde_1d)
-from plotlet.draw.colors import TAB10, _resolve_color
+from plotlet.draw import TAB10, resolve_color
 from plotlet.draw import path, rect, segment, circle
 from plotlet._spec import _FRAME
 
@@ -154,8 +154,8 @@ def raincloud_draw(a, ctx):
     r          = opts.get("dot_size", 2.5)
     dot_alpha  = opts.get("dot_alpha", 0.55)
     jitter     = opts.get("jitter", 0.5)
-    line       = _resolve_color(opts.get("color")) or _FRAME["color"]
-    fill_literal = _resolve_color(opts.get("_fill_literal"))
+    line       = resolve_color(opts.get("color")) or _FRAME["color"]
+    fill_literal = resolve_color(opts.get("_fill_literal"))
     fill_fallback = fill_literal if fill_literal is not None else ctx.color
     horizontal = _rc_horizontal(a)
     cat_scale, val_scale = (ctx.y_scale, ctx.x_scale) if horizontal else (ctx.x_scale, ctx.y_scale)
@@ -250,7 +250,7 @@ def raincloud_legend_entries(a):
     palette = opts.get("palette")
     fill_alpha = opts.get("fill_alpha", 0.45)
     lw = opts.get("linewidth", 1)
-    line = _resolve_color(opts.get("color")) or _FRAME["color"]
+    line = resolve_color(opts.get("color")) or _FRAME["color"]
     entries = []
     for j, g in enumerate(groups):
         col = _group_fill(groups, palette, j, _FRAME["color"])

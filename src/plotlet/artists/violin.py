@@ -34,7 +34,7 @@ from ..utils import (quantile, resolve_aes, palette_color,
                      dodge_positions, categorical_groups,
                      silverman_bw, kde_1d)
 from ..utils import _drop_nan
-from ..draw.colors import TAB10, _resolve_color
+from ..draw import TAB10, resolve_color
 from ..draw import path, rect, segment
 from .._spec import _FRAME, _FIGSPEC
 
@@ -107,8 +107,8 @@ def _violin_draw(a, ctx):
     lw         = opts.get("linewidth", 1)
     whis       = opts.get("whis", 1.5)
     do_fill    = opts.get("_do_fill", True)
-    line       = _resolve_color(opts.get("color")) or _FRAME["color"]
-    fill_literal = _resolve_color(opts.get("_fill_literal"))
+    line       = resolve_color(opts.get("color")) or _FRAME["color"]
+    fill_literal = resolve_color(opts.get("_fill_literal"))
     fill_fallback = fill_literal if fill_literal is not None else ctx.color
     horizontal = _violin_horizontal(a)
     cat_scale, val_scale = (ctx.y_scale, ctx.x_scale) if horizontal else (ctx.x_scale, ctx.y_scale)
@@ -202,7 +202,7 @@ def _violin_legend_entries(a):
     fill_alpha = opts.get("fill_alpha", 0.4)
     lw = opts.get("linewidth", 1)
     do_fill = opts.get("_do_fill", True)
-    line = _resolve_color(opts.get("color")) or _FRAME["color"]
+    line = resolve_color(opts.get("color")) or _FRAME["color"]
     entries = []
     for j, g in enumerate(groups):
         col = _group_fill(groups, palette, j, line)

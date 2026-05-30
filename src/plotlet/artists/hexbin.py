@@ -19,7 +19,7 @@ import math
 
 from ..registry import ArtistSpec, add_artist
 from ..draw import polygon
-from ..draw.colormaps import colormap, _ContinuousNorm
+from ..draw import colormap, ContinuousNorm
 from ..utils import to_list
 from .._spec import _D
 
@@ -79,7 +79,7 @@ def _hexbin_draw(a, ctx):
     counts = list(bins.values())
     vmin = a["opts"].get("vmin", 0)
     vmax = a["opts"].get("vmax", max(counts))
-    norm = _ContinuousNorm(vmin or 1e-9, vmax or 1.0, "linear")
+    norm = ContinuousNorm(vmin or 1e-9, vmax or 1.0, "linear")
 
     out = []
     for (cc, rr), n in bins.items():

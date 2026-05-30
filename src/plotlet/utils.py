@@ -19,7 +19,7 @@ The inverse-direction primitives (emit SVG strings) live in `plotlet.draw`.
 import math
 
 from .registry import get_artist
-from .draw.colors import TAB10
+from .draw import TAB10
 
 
 def to_list(obj):

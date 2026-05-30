@@ -30,7 +30,7 @@ from scipy.stats import t as _t_dist
 
 from ..registry import ArtistSpec, add_artist
 from ..utils import to_list, long_form_xy, resolve_aes, palette_color
-from ..draw.colors import TAB10, _resolve_color
+from ..draw import TAB10, resolve_color
 from .._spec import _LEGSPEC
 from ..draw import polygon, polyline, rect, segment
 
@@ -116,7 +116,7 @@ def _regression_draw(a, ctx):
     lw = a["opts"].get("linewidth", 1.8)
     level = a["opts"].get("level", 0.95)
     n_grid = a["opts"].get("n_grid", 80)
-    color_literal = _resolve_color(a["opts"].get("_color_literal"))
+    color_literal = resolve_color(a["opts"].get("_color_literal"))
     fallback = color_literal if color_literal is not None else ctx.color
     out = []
     for j, ((xs, _ys), fit) in enumerate(zip(a["xy"], a["fits"])):

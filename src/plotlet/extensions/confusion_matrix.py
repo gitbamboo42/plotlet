@@ -18,7 +18,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.utils import to_list
-from plotlet.draw.colormaps import colormap, _ContinuousNorm
+from plotlet.draw import colormap, ContinuousNorm
 from plotlet.draw import rect, text_path
 
 
@@ -65,7 +65,7 @@ def cm_draw(a, ctx):
     cmap = colormap(cmap_name)
     flat = [v for row in mat for v in row]
     vmax = a["opts"].get("vmax", max(flat) if flat else 1)
-    norm = _ContinuousNorm(0, vmax or 1, "linear")
+    norm = ContinuousNorm(0, vmax or 1, "linear")
     normalize = a["opts"].get("normalize", "row")
     bw = getattr(ctx.x_scale, "bandwidth", 1.0)
     bh = getattr(ctx.y_scale, "bandwidth", 1.0)

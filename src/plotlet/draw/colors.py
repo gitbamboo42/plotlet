@@ -26,7 +26,7 @@ _COLOR_NAMES = {
 }
 
 
-def _resolve_color(c):
+def resolve_color(c):
     """Map a color spec to a hex string. Pass-through unrecognized strings.
 
     Accepts: 'C0'..'C9' tab10 shortcuts, named colors ('red', 'blue', …),

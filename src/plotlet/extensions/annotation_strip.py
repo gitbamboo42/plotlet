@@ -39,7 +39,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.draw import rect
-from plotlet.draw.colormaps import colormap, _ContinuousNorm
+from plotlet.draw import colormap, ContinuousNorm
 from plotlet.utils import to_list
 
 
@@ -140,7 +140,7 @@ def annotation_strip_draw(a, ctx):
     cmap_fn = norm = None
     if cmap_name is not None:
         cmap_fn = colormap(cmap_name)
-        norm = _ContinuousNorm(a["_vmin"], a["_vmax"],
+        norm = ContinuousNorm(a["_vmin"], a["_vmax"],
                                kind=opts.get("norm", "linear"),
                                center=opts.get("center"))
 

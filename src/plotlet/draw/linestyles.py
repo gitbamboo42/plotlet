@@ -2,7 +2,7 @@
 
 `_DASH` (loaded from `spec.json:linestyles`) is keyed on matplotlib's short
 codes (`-`, `--`, `:`, `-.`). Users often type the long names (`"solid"`,
-`"dashed"`, `"dotted"`, `"dashdot"`) — `_resolve_linestyle` maps those to
+`"dashed"`, `"dotted"`, `"dashdot"`) — `resolve_linestyle` maps those to
 the short code so they hit `_DASH` correctly. Pass-through for raw SVG
 dasharray strings (`"6,3"`) and anything else unrecognized.
 """
@@ -15,7 +15,7 @@ _LINESTYLE_NAMES = {
 }
 
 
-def _resolve_linestyle(ls):
+def resolve_linestyle(ls):
     """Map a linestyle spec to a `_DASH` key.
 
     Long names (`"dotted"`, …) → short matplotlib codes. Everything else

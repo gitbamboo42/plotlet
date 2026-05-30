@@ -65,7 +65,7 @@ def list_colormaps() -> list[str]:
 # tick positioning on the gradient strip.
 # ---------------------------------------------------------------------------
 
-class _ContinuousNorm:
+class ContinuousNorm:
     def __init__(self, vmin: float, vmax: float,
                  kind: str = "linear", center: float | None = None):
         if kind == "log" and (vmin <= 0 or vmax <= 0):

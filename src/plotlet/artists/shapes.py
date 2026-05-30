@@ -9,7 +9,7 @@ from ..registry import ArtistSpec, add_artist
 from ..utils import broadcast, to_list
 from .._spec import _D
 from ..draw import rect as draw_rect, polygon as draw_polygon
-from ..draw.colors import _resolve_color
+from ..draw import resolve_color
 from ._shared import _xy_minmax, _bar_legend_entries
 
 
@@ -25,7 +25,7 @@ def _fill_stroke_params(a, ctx_color):
     lw = opts.get("linewidth", _D["linewidth"])
     alpha = opts.get("alpha", _D["bar_alpha"])
     if edge is not None:
-        stroke = _resolve_color(edge)
+        stroke = resolve_color(edge)
     elif not do_fill:
         # No fill and no explicit edge: draw the outline in the artist color
         # so the shape is visible at all (matplotlib's `fill=False` idiom).

@@ -20,9 +20,9 @@ Mixed sources stack continuous-first, discrete-second.
 from __future__ import annotations
 
 from .chart import Chart
-from .draw.colormaps import colormap, _ContinuousNorm
+from .draw import colormap, ContinuousNorm
 from .registry import RenderContext, get_artist
-from .draw.font import _measure_text
+from .draw import measure_text
 from .draw import text_path
 from .scales import _fmt_tick
 from ._spec import _D, _DASH, _FIGSPEC, _FONTSPEC, _FRAME, _LEGSPEC
@@ -198,7 +198,7 @@ def _render_continuous_entry(entry: dict, x: float, y: float,
                  f'height="{strip_h:.2f}" fill="none" '
                  f'stroke="{_FRAME["color"]}" stroke-width="{_FRAME["width"]}"/>')
 
-    norm = _ContinuousNorm(entry["vmin"], entry["vmax"],
+    norm = ContinuousNorm(entry["vmin"], entry["vmax"],
                            kind=entry.get("norm", "linear"),
                            center=entry.get("center"))
     ticks = (list(entry["ticks"]) if entry.get("ticks") is not None
@@ -250,13 +250,13 @@ def _inline_gradient_block_size(cont_entries: list[dict]) -> tuple[float, float]
     for i, entry in enumerate(cont_entries):
         label = entry.get("label")
         if label:
-            max_w = max(max_w, _measure_text(label, tick_size))
+            max_w = max(max_w, measure_text(label, tick_size))
             total_h += tick_size + 4
         ticks = (list(entry["ticks"]) if entry.get("ticks") is not None
-                 else _ContinuousNorm(entry["vmin"], entry["vmax"],
+                 else ContinuousNorm(entry["vmin"], entry["vmax"],
                                       kind=entry.get("norm", "linear"),
                                       center=entry.get("center")).ticks(n_ticks))
-        max_tw = max((_measure_text(_fmt_tick(t), tick_size) for t in ticks), default=0.0)
+        max_tw = max((measure_text(_fmt_tick(t), tick_size) for t in ticks), default=0.0)
         strip_col_w = _LEGSPEC["gradient_width"] + _FRAME["tick_length"] + _FRAME["tick_pad"] + max_tw
         max_w = max(max_w, strip_col_w)
         total_h += _LEGSPEC["gradient_height"]
@@ -295,25 +295,25 @@ def _legend_content_size(leaf: Chart, sources: list[Chart],
     total_h = 2 * pad_y
     for gi, g in enumerate(groups):
         if g["header"]:
-            max_w = max(max_w, _measure_text(g["header"], label_size))
+            max_w = max(max_w, measure_text(g["header"], label_size))
             total_h += header_h
         for entry in g["cont"]:
             label = entry.get("label")
             if label:
-                max_w = max(max_w, _measure_text(label, tick_size))
+                max_w = max(max_w, measure_text(label, tick_size))
                 total_h += tick_size + 4
             ticks = (list(entry["ticks"]) if entry.get("ticks") is not None
-                     else _ContinuousNorm(entry["vmin"], entry["vmax"],
+                     else ContinuousNorm(entry["vmin"], entry["vmax"],
                                           kind=entry.get("norm", "linear"),
                                           center=entry.get("center")).ticks(n_ticks))
-            max_tw = max((_measure_text(_fmt_tick(t), tick_size) for t in ticks), default=0.0)
+            max_tw = max((measure_text(_fmt_tick(t), tick_size) for t in ticks), default=0.0)
             strip_col_w = _LEGSPEC["gradient_width"] + _FRAME["tick_length"] + _FRAME["tick_pad"] + max_tw
             max_w = max(max_w, strip_col_w)
             total_h += _LEGSPEC["gradient_height"]
         if g["cont"] and g["disc"]:
             total_h += _LEGSPEC["section_gap"]
         for entry in g["disc"]:
-            disc_w = sw + 6 + _measure_text(entry["label"], tick_size)
+            disc_w = sw + 6 + measure_text(entry["label"], tick_size)
             max_w = max(max_w, disc_w)
         total_h += len(g["disc"]) * row_h
         if gi < len(groups) - 1:

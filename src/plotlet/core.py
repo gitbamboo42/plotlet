@@ -30,12 +30,12 @@ from ._spec import (
     SPEC, _SIZESPEC, _MARGIN_FLOOR, _FRAME, _GRIDSPEC, _FONTSPEC, _LEGSPEC,
     _LAYOUTSPEC, _PADSPEC, _D, _DASH,
 )
-from .draw.colors import _resolve_color, TAB10
+from .draw import resolve_color, TAB10
 from .scales import (_LinearScale, _LogScale, _CategoryScale, _SymlogScale,
                       _PowerScale, _TimeScale, _nice_domain, _fmt_tick,
                       _to_epoch, _coerce_time_lim)
-from .draw.font import _measure_text, _cap_height, _descender
-from .draw import text_path, segment, _dash_attr
+from .draw import measure_text, cap_height, descender
+from .draw import text_path, segment, dash_attr
 from .utils import histogram, collect_categories
 from .registry import RenderContext, get_artist, all_artist_names
 from . import artists  # noqa: F401  — registers built-ins on import
@@ -994,7 +994,7 @@ def _inline_legend_layout(st):
     if horizontal:
         # Discrete-only horizontal row (gradients on top/bottom would
         # have raised above). Entries arranged left-to-right.
-        entry_ws = [sw + 6 + _measure_text(e["label"], tick_size) for _, e in disc]
+        entry_ws = [sw + 6 + measure_text(e["label"], tick_size) for _, e in disc]
         spacer = 2 * pad_x
         lw = 2 * pad_x + sum(entry_ws) + (len(disc) - 1) * spacer
         lh = row_h + 2 * pad_y
@@ -1009,7 +1009,7 @@ def _inline_legend_layout(st):
         # strips on top, discrete rows below, with section_gap between.
         # Background rect wraps everything → outer padding.
         from .legend import _inline_gradient_block_size
-        disc_max_text = (max(_measure_text(e["label"], tick_size) for _, e in disc)
+        disc_max_text = (max(measure_text(e["label"], tick_size) for _, e in disc)
                           if disc else 0.0)
         disc_w = sw + 6 + disc_max_text if disc else 0.0
         cont_w, cont_h = _inline_gradient_block_size([d for _, d in cont])
@@ -1088,8 +1088,8 @@ def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     suppress_yt = (po is not None and po.suppress_left_labels)   or not st["y_show_labels"]
     has_xtl = (not suppress_xt) and any(str(l) for l in x_labels)
     if has_xtl:
-        max_xtl_w = max((_measure_text(str(l), x_size) for l in x_labels), default=0.0)
-        last_xtl_w = _measure_text(str(x_labels[-1]), x_size)
+        max_xtl_w = max((measure_text(str(l), x_size) for l in x_labels), default=0.0)
+        last_xtl_w = measure_text(str(x_labels[-1]), x_size)
         _, xtl_bbox_h = _rotated_label_bbox(max_xtl_w, x_size, x_rot)
         last_bbox_w, _ = _rotated_label_bbox(last_xtl_w, x_size, x_rot)
     else:
@@ -1098,7 +1098,7 @@ def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
 
     has_ytl = (not suppress_yt) and any(str(l) for l in y_labels)
     if has_ytl:
-        max_ytl_w = max((_measure_text(str(l), y_size) for l in y_labels), default=0.0)
+        max_ytl_w = max((measure_text(str(l), y_size) for l in y_labels), default=0.0)
         ytl_bbox_w, _ = _rotated_label_bbox(max_ytl_w, y_size, y_rot)
     else:
         ytl_bbox_w = 0.0
@@ -1229,15 +1229,15 @@ def _required_margin(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     hide_b = po is not None and po.hide_bottom
     hide_l = po is not None and po.hide_left
     if st["title"] and not hide_t:
-        title_overhang = max(0.0, (_measure_text(st["title"], title_size) - dw) / 2.0)
+        title_overhang = max(0.0, (measure_text(st["title"], title_size) - dw) / 2.0)
         left  = max(left,  title_overhang)
         right = max(right, title_overhang)
     if st["xlabel"] and not hide_b:
-        xlabel_overhang = max(0.0, (_measure_text(st["xlabel"], label_size) - dw) / 2.0)
+        xlabel_overhang = max(0.0, (measure_text(st["xlabel"], label_size) - dw) / 2.0)
         left  = max(left,  xlabel_overhang)
         right = max(right, xlabel_overhang)
     if st["ylabel"] and not hide_l:
-        ylabel_overhang = max(0.0, (_measure_text(st["ylabel"], label_size) - dh) / 2.0)
+        ylabel_overhang = max(0.0, (measure_text(st["ylabel"], label_size) - dh) / 2.0)
         top    = max(top,    ylabel_overhang)
         bottom = max(bottom, ylabel_overhang)
     # Rightmost x-tick label's rotated AABB extends past x=iw by half its
@@ -1501,7 +1501,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
 
     if st["facecolor"] is not None:
         parts.append(f'<rect x="0" y="0" width="{iw}" height="{ih}" '
-                     f'fill="{_resolve_color(st["facecolor"])}"/>')
+                     f'fill="{resolve_color(st["facecolor"])}"/>')
 
     # grid
     if st["grid"]:
@@ -1524,7 +1524,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         # literal (fill-defaulted artists, e.g. bar) as the artist's
         # user-set primary color — both should skip the cycle and supply
         # `_color` for the legend.
-        user_color = _resolve_color(a["opts"].get("color")
+        user_color = resolve_color(a["opts"].get("color")
                                     or a["opts"].get("_fill_literal"))
         if user_color is not None:
             a["_color"] = user_color
@@ -1580,7 +1580,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     def _side_stroke(side):
         c = st[f"spine_{side}_color"]
         w = st[f"spine_{side}_width"]
-        col = _resolve_color(c) if c is not None else _FRAME["color"]
+        col = resolve_color(c) if c is not None else _FRAME["color"]
         return col, (w if w is not None else _FRAME["width"])
 
     def _side_dash(side):
@@ -1596,7 +1596,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             continue
         col, w = _side_stroke(side)
         parts.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" '
-                     f'stroke="{col}" stroke-width="{w}"{_dash_attr(_side_dash(side))}/>')
+                     f'stroke="{col}" stroke-width="{w}"{dash_attr(_side_dash(side))}/>')
 
     tick_size = _FONTSPEC["tick_size"]
     label_size = _FONTSPEC["label_size"]
@@ -1654,7 +1654,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             # baseline = tick_end + tick_pad + cap_height, so the label's cap
             # top sits flush with `tick_pad` past the tick mark.
             parts.append(_tick_label(str(lbl), x,
-                                     ih + _FRAME["tick_length"] + _FRAME["tick_pad"] + _cap_height(x_size),
+                                     ih + _FRAME["tick_length"] + _FRAME["tick_pad"] + cap_height(x_size),
                                      x_size, x_rot, axis="x",
                                      fontstyle=x_style, decoration=x_decor))
 
@@ -1698,7 +1698,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         if not suppress_yt:
             # `y + cap_height/2` places the baseline so the cap is vertically
             # centered on the tick line (cap top at y - cap/2, cap bottom at y + cap/2).
-            parts.append(_tick_label(str(lbl), y_label_x, y + _cap_height(y_size) / 2,
+            parts.append(_tick_label(str(lbl), y_label_x, y + cap_height(y_size) / 2,
                                      y_size, y_rot, axis="y",
                                      fontstyle=y_style, decoration=y_decor))
 
@@ -1745,7 +1745,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         # pad.xlabel minus the glyph descender — visible glyph bottom
         # is exactly `pad.xlabel` above the axis band's outer edge.
         parts.append(text_path(st["xlabel"], iw / 2,
-                                ih + M["bottom"] - bottom_inflation - _PADSPEC["xlabel"] - _descender(label_size),
+                                ih + M["bottom"] - bottom_inflation - _PADSPEC["xlabel"] - descender(label_size),
                                 label_size, anchor="middle", color=text_color))
     if st["ylabel"] and not hide_l:
         # Center sits at -(M["left"] - inflation - pad.ylabel - label_size/2)
@@ -1830,7 +1830,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
                 tx = cx + sw + 6
                 parts.append(text_path(entry["label"], tx, ry + 4,
                                         tick_size, anchor="start", color=text_color))
-                cx = tx + _measure_text(entry["label"], tick_size) + spacer
+                cx = tx + measure_text(entry["label"], tick_size) + spacer
         else:
             # Vertical layout: gradient strips on top, discrete rows below.
             # Ticks face away from the data area — right-position gets

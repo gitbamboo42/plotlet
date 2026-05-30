@@ -25,7 +25,7 @@ Other styling kwargs:
 """
 from ..registry import ArtistSpec, add_artist
 from ..utils import to_list, resolve_aes, palette_color, dodge_positions
-from ..draw.colors import TAB10, _resolve_color
+from ..draw import TAB10, resolve_color
 from .._spec import _D, _LEGSPEC
 from ..draw import rect as draw_rect
 
@@ -147,10 +147,10 @@ def _bar_draw(a, ctx):
     bottom = opts.get("bottom", 0)
     base_px = val_scale(bottom)
     alpha = opts.get("alpha", _D["bar_alpha"])
-    stroke = _resolve_color(opts.get("color"))
+    stroke = resolve_color(opts.get("color"))
     lw = opts.get("linewidth", _D["linewidth"]) if stroke else 1
     sr = "crispEdges" if getattr(cat_scale, "padding", 0.2) == 0 else None
-    fill_literal = _resolve_color(opts.get("_fill_literal"))
+    fill_literal = resolve_color(opts.get("_fill_literal"))
     fill_fallback = fill_literal if fill_literal is not None else ctx.color
     multi = len(series) > 1
 

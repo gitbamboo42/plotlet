@@ -19,7 +19,7 @@ Styling kwargs:
 """
 from ..registry import ArtistSpec, add_artist
 from ..draw import segment
-from ..draw.colormaps import colormap, _ContinuousNorm
+from ..draw import colormap, ContinuousNorm
 from ..utils import to_list_2d
 
 
@@ -90,7 +90,7 @@ def _contour_draw(a, ctx):
         x0d, y0d = 0, 0; dxd, dyd = 1, 1
     if cmap_name:
         cm = colormap(cmap_name)
-        norm = _ContinuousNorm(min(levels), max(levels), "linear")
+        norm = ContinuousNorm(min(levels), max(levels), "linear")
     out = []
     for lvl in levels:
         if cmap_name:

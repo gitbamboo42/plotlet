@@ -41,7 +41,7 @@ def _glyph(ch):
     return _GS[_CMAP.get(ord(ch), ".notdef")]
 
 
-def _measure_text(s: str, size: float) -> float:
+def measure_text(s: str, size: float) -> float:
     """Exact pixel width of `s` rendered in DejaVu Sans at `size` pt."""
     if not s:
         return 0.0
@@ -49,14 +49,14 @@ def _measure_text(s: str, size: float) -> float:
     return sum(_glyph(ch).width * scale for ch in s)
 
 
-def _cap_height(size: float) -> float:
+def cap_height(size: float) -> float:
     """Cap height in px for the bundled font at `size`. Equals the distance
     from baseline up to the top of a capital letter — i.e. the conversion
     between `text_path`'s baseline anchor and the visual glyph top."""
     return size * _CAP_HEIGHT_RATIO
 
 
-def _descender(size: float) -> float:
+def descender(size: float) -> float:
     """Descender depth in px (positive) for the bundled font at `size`.
     Equals the worst-case distance baseline → glyph bottom, used to place
     text so its visible bottom edge sits at a target pixel."""
@@ -71,7 +71,7 @@ def _glyph_path_d(s: str, x: float, y: float, size: float,
     `fontstyle="italic"` applies the synthetic oblique skew."""
     if not s:
         return ""
-    width = _measure_text(s, size)
+    width = measure_text(s, size)
     if anchor == "middle":
         x0 = x - width / 2
     elif anchor == "end":

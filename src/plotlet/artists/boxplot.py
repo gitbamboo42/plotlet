@@ -36,7 +36,7 @@ from ..registry import ArtistSpec, add_artist
 from ..utils import (quantile, resolve_aes, palette_color,
                      dodge_positions, categorical_groups)
 from ..utils import _drop_nan
-from ..draw.colors import TAB10, _resolve_color
+from ..draw import TAB10, resolve_color
 from ..draw import segment, rect, circle, errorbar_v, errorbar_h, polygon, marker
 from .._spec import _FRAME
 
@@ -120,9 +120,9 @@ def _boxplot_draw(a, ctx):
     mean_marker_k = opts.get("mean_marker", "^")
     notch      = opts.get("notch", False)
     do_fill    = opts.get("_do_fill", True)
-    line       = _resolve_color(opts.get("color")) or _FRAME["color"]
-    flier_line = _resolve_color(opts.get("flier_color")) or line
-    fill_literal = _resolve_color(opts.get("_fill_literal"))
+    line       = resolve_color(opts.get("color")) or _FRAME["color"]
+    flier_line = resolve_color(opts.get("flier_color")) or line
+    fill_literal = resolve_color(opts.get("_fill_literal"))
     fill_fallback = fill_literal if fill_literal is not None else ctx.color
     horizontal = _boxplot_horizontal(a)
     cat_scale, val_scale = (ctx.y_scale, ctx.x_scale) if horizontal else (ctx.x_scale, ctx.y_scale)
@@ -230,7 +230,7 @@ def _boxplot_legend_entries(a):
     fill_alpha = opts.get("fill_alpha", 0.55)
     lw = opts.get("linewidth", 1)
     do_fill = opts.get("_do_fill", True)
-    line = _resolve_color(opts.get("color")) or _FRAME["color"]
+    line = resolve_color(opts.get("color")) or _FRAME["color"]
     entries = []
     for j, g in enumerate(groups):
         col = _group_fill(groups, palette, j, line)

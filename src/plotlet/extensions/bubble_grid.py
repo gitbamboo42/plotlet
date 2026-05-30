@@ -18,7 +18,7 @@ from pathlib import Path
 import plotlet as pt
 from plotlet.draw import circle
 from plotlet.utils import to_list, to_list_2d
-from plotlet.draw.colormaps import colormap, _ContinuousNorm
+from plotlet.draw import colormap, ContinuousNorm
 from plotlet._spec import _D
 
 
@@ -44,7 +44,7 @@ def bubble_draw(a, ctx):
     s_hi = max(flat_s) if flat_s else 1
     c_lo = a["opts"].get("vmin", min(flat_c) if flat_c else 0.0)
     c_hi = a["opts"].get("vmax", max(flat_c) if flat_c else 1.0)
-    cnorm = _ContinuousNorm(c_lo, c_hi, "linear")
+    cnorm = ContinuousNorm(c_lo, c_hi, "linear")
     out = []
     for i, y in enumerate(a["y_cats"]):
         for j, x in enumerate(a["x_cats"]):

@@ -24,9 +24,9 @@ from ..registry import ArtistSpec, add_artist
 from ..utils import to_list_2d
 from .._spec import _D
 from ..draw import rect, text_path
-from ..draw._png import encode_rgb
-from ..draw.colormaps import colormap_lut, _ContinuousNorm
-from ..draw.colors import _resolve_color
+from ..draw import encode_rgb
+from ..draw import colormap_lut, ContinuousNorm
+from ..draw import resolve_color
 
 
 def _hex_to_rgb(h):
@@ -119,8 +119,8 @@ def _heatmap_draw_categorical(a, ctx):
         return ""
     cols = a["_cols"]; rows = a["_rows"]
     opts = a["opts"]
-    palette = {k: _resolve_color(v) for k, v in a["_palette"].items()}
-    absent_fill = _resolve_color(opts.get("absent_fill", "#eeeeee"))
+    palette = {k: resolve_color(v) for k, v in a["_palette"].items()}
+    absent_fill = resolve_color(opts.get("absent_fill", "#eeeeee"))
 
     bw = ctx.x_scale.bandwidth
     bh = ctx.y_scale.bandwidth
@@ -201,7 +201,7 @@ def _heatmap_draw(a, ctx):
         return ""
     cols = a["_cols"]; rows = a["_rows"]
     opts = a["opts"]
-    norm = _ContinuousNorm(a["_vmin"], a["_vmax"],
+    norm = ContinuousNorm(a["_vmin"], a["_vmax"],
                            kind=opts.get("norm", "linear"),
                            center=opts.get("center"))
     lut = colormap_lut(opts.get("cmap", _D["default_cmap"]))
@@ -304,7 +304,7 @@ def _heatmap_legend_entries(a):
     palette = a["_palette"]
     legend_opts = a["opts"].get("legend") or {}
     order = legend_opts.get("order", list(palette.keys()))
-    return [{"label": str(k), "color": _resolve_color(palette[k])}
+    return [{"label": str(k), "color": resolve_color(palette[k])}
             for k in order if k in palette]
 
 

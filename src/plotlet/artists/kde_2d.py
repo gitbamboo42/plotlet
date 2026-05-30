@@ -21,7 +21,7 @@ import math
 
 from ..registry import ArtistSpec, add_artist
 from ..draw import segment
-from ..draw.colormaps import colormap, _ContinuousNorm
+from ..draw import colormap, ContinuousNorm
 from ..utils import to_list, silverman_bw
 
 
@@ -104,7 +104,7 @@ def _kde_2d_draw(a, ctx):
     lw = a["opts"].get("linewidth", 1.2)
     if cmap_name:
         cm = colormap(cmap_name)
-        norm = _ContinuousNorm(min(levels), max(levels), "linear")
+        norm = ContinuousNorm(min(levels), max(levels), "linear")
     x0, x1, y0, y1 = a["_extent"]
     dxd = (x1 - x0) / (n - 1)
     dyd = (y1 - y0) / (n - 1)

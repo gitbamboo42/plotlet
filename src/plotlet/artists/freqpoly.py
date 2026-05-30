@@ -22,7 +22,7 @@ Other styling kwargs:
 from ..registry import ArtistSpec, add_artist
 from ..utils import to_list, long_form_1d, resolve_aes, palette_color
 from ..utils import _drop_nan
-from ..draw.colors import TAB10, _resolve_color
+from ..draw import TAB10, resolve_color
 from .._spec import _LEGSPEC
 from ..draw import polyline, segment
 
@@ -99,7 +99,7 @@ def _group_color(groups, palette, j, fallback):
 def _freqpoly_draw(a, ctx):
     palette = a["opts"].get("palette")
     lw = a["opts"].get("linewidth", 1.6)
-    color_literal = _resolve_color(a["opts"].get("_color_literal"))
+    color_literal = resolve_color(a["opts"].get("_color_literal"))
     fallback = color_literal if color_literal is not None else ctx.color
     out = []
     for j, (centers, heights) in enumerate(zip(a["_centers_groups"],

@@ -14,7 +14,7 @@ import datetime
 from pathlib import Path
 
 import plotlet as pt
-from plotlet.draw.colormaps import colormap, _ContinuousNorm
+from plotlet.draw import colormap, ContinuousNorm
 from plotlet._spec import _D
 from plotlet.draw import rect, text_path
 
@@ -54,7 +54,7 @@ def calhm_ydomain(a):
 
 def calhm_draw(a, ctx):
     cmap = colormap(a["opts"].get("cmap", "Greens"))
-    norm = _ContinuousNorm(a["_vmin"], a["_vmax"], "linear")
+    norm = ContinuousNorm(a["_vmin"], a["_vmax"], "linear")
     pad = a["opts"].get("pad", 1)
     out = []
     # Cell width / height in pixels, from the scale's mapping of integer steps.

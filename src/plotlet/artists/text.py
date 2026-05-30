@@ -14,7 +14,7 @@ from ..registry import ArtistSpec, add_artist
 from ..utils import to_list
 from .._spec import _D
 from ..draw import text_path, segment, rect as draw_rect, polygon as draw_polygon
-from ..draw.font import _measure_text
+from ..draw import measure_text
 from ._shared import _xy_minmax
 
 
@@ -43,7 +43,7 @@ def _text_bbox_rect(s, x, y_baseline, fontsize, anchor, bb):
     """Emit the rectangle that sits behind a text label. `(x, y_baseline)`
     is the same anchor SVG `text_path` uses; we recover the bounding box
     from the anchor offsets plus the measured glyph width."""
-    w = _measure_text(s, fontsize)
+    w = measure_text(s, fontsize)
     if anchor == "middle":   rx = x - w / 2
     elif anchor == "end":    rx = x - w
     else:                    rx = x

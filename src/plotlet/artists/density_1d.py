@@ -23,7 +23,7 @@ Other styling kwargs:
 from ..registry import ArtistSpec, add_artist
 from ..utils import (to_list, long_form_1d, resolve_aes, palette_color,
                      silverman_bw, kde_1d)
-from ..draw.colors import TAB10, _resolve_color
+from ..draw import TAB10, resolve_color
 from .._spec import _LEGSPEC
 from ..draw import path, polyline, segment
 
@@ -89,7 +89,7 @@ def _density_1d_draw(a, ctx):
     lw = a["opts"].get("linewidth", 1.6)
     fill_flag = a["opts"].get("fill", False)
     alpha = a["opts"].get("alpha", 0.25)
-    color_literal = _resolve_color(a["opts"].get("_color_literal"))
+    color_literal = resolve_color(a["opts"].get("_color_literal"))
     fallback = color_literal if color_literal is not None else ctx.color
     out = []
     for j, (grid, d) in enumerate(zip(a["_grids"], a["_ds"])):

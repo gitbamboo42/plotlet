@@ -10,7 +10,7 @@ the `fill=` column for stacked areas.
 """
 from ..registry import ArtistSpec, add_artist
 from ..utils import to_list, resolve_aes, palette_color
-from ..draw.colors import TAB10, _resolve_color
+from ..draw import TAB10, resolve_color
 from .._spec import _D, _LEGSPEC
 from ..draw import polygon as draw_polygon, rect as draw_rect
 from ._shared import (_xy_minmax, _line_legend_entries,
@@ -176,7 +176,7 @@ def _area_draw(a, ctx):
         raise ValueError(
             f"unknown curve={curve!r}; expected one of {_CURVE_VALUES}"
         )
-    fill_literal = _resolve_color(opts.get("_fill_literal"))
+    fill_literal = resolve_color(opts.get("_fill_literal"))
     fill_fallback = fill_literal if fill_literal is not None else ctx.color
     multi = len(series) > 1
     out = []

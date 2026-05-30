@@ -23,7 +23,7 @@ import math
 from ..registry import ArtistSpec, add_artist
 from ..draw import segment
 from ..utils import to_list, long_form_1d, resolve_aes, palette_color
-from ..draw.colors import TAB10, _resolve_color
+from ..draw import TAB10, resolve_color
 
 
 def _rug_record(args, kw):
@@ -71,7 +71,7 @@ def _rug_draw(a, ctx):
     lw = a["opts"].get("linewidth", 0.8)
     alpha = a["opts"].get("alpha", 0.6)
     length = a["opts"].get("length", 0.04)
-    color_literal = _resolve_color(a["opts"].get("_color_literal"))
+    color_literal = resolve_color(a["opts"].get("_color_literal"))
     fallback = color_literal if color_literal is not None else ctx.color
     axis = _rug_axis(a)
     out = []

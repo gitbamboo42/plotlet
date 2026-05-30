@@ -13,7 +13,7 @@ from scipy.cluster.hierarchy import dendrogram as _scipy_dendrogram
 from ..registry import ArtistSpec, add_artist
 from .._spec import _D
 from ..draw import polyline
-from ..draw.colors import _resolve_color
+from ..draw import resolve_color
 
 
 _ORIENTS = ("top", "bottom", "left", "right")
@@ -137,7 +137,7 @@ def _leaf_axis_pos(scale, labels, idx):
 
 
 def _dendrogram_draw(a, ctx):
-    col = _resolve_color(a["opts"].get("color")) or ctx.color or _D["dendrogram_color"]
+    col = resolve_color(a["opts"].get("color")) or ctx.color or _D["dendrogram_color"]
     lw = a["opts"].get("linewidth", _D["dendrogram_linewidth"])
     orient = a["orient"]
     max_h = a["_max_h"]
