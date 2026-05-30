@@ -482,6 +482,142 @@ def chart_heatmap_categorical():
     return c
 
 
+def chart_split_rect():
+    # Row 1 "sym":     n=1..8, symmetric=True  — cuts land on corners.
+    # Row 2 "n":       n=1..8, symmetric=False — equal arc length.
+    # Row 3 "rotate":  n=4, start sweeps 0..7/8.
+    # Row 4 "weights": n=4, first sector weight grows 1..8.
+    from plotlet import draw
+    from plotlet.registry import ArtistSpec, add_artist
+
+    _SR_COLORS = ["#4e79a7", "#f28e2b", "#e15759", "#76b7b2",
+                  "#59a14f", "#edc948", "#b07aa1", "#ff9da7"]
+    _COLS = [str(k) for k in range(8)]
+    _ROWS = ["sym", "n", "rotate", "weights"]
+
+    def _sr_record(args, kw):
+        return {"type": "split_rect_demo", "opts": kw}
+
+    def _sr_xdomain(a): return _COLS
+    def _sr_ydomain(a): return _ROWS
+
+    def _sr_draw(a, ctx):
+        out = []
+        bw = ctx.x_scale.bandwidth
+        bh = ctx.y_scale.bandwidth
+        for k, col in enumerate(_COLS):
+            cx = ctx.x_scale(col)
+            for row in _ROWS:
+                cy = ctx.y_scale(row)
+                px, py = cx - bw / 2, cy - bh / 2
+                if row == "sym":
+                    n = k + 1
+                    for i in range(n):
+                        out.append(draw.split_rect(
+                            px, py, bw, bh, n, i,
+                            fill=_SR_COLORS[i % len(_SR_COLORS)], padding=2,
+                            symmetric=True))
+                elif row == "n":
+                    n = k + 1
+                    for i in range(n):
+                        out.append(draw.split_rect(
+                            px, py, bw, bh, n, i,
+                            fill=_SR_COLORS[i % len(_SR_COLORS)], padding=2))
+                elif row == "rotate":
+                    for i in range(4):
+                        out.append(draw.split_rect(
+                            px, py, bw, bh, 4, i,
+                            fill=_SR_COLORS[i], padding=2, start=k / 8))
+                elif row == "weights":
+                    wts = [k + 1, 1, 1, 1]
+                    for i in range(4):
+                        out.append(draw.split_rect(
+                            px, py, bw, bh, 4, i,
+                            fill=_SR_COLORS[i], padding=2, weights=wts))
+        return "".join(out)
+
+    add_artist(ArtistSpec(
+        name="split_rect_demo",
+        record=_sr_record,
+        xdomain=_sr_xdomain,
+        ydomain=_sr_ydomain,
+        draw=_sr_draw,
+    ))
+    c = pt.chart(data_width=480, data_height=280,
+                 title="draw.split_rect — symmetric / arc / rotate / weights")
+    c.split_rect_demo()
+    c.xticks(marks=False)
+    c.yticks(marks=False)
+    return c
+
+
+def chart_split_pie():
+    # Row 1 "n":       n=1..8 equal sectors.
+    # Row 2 "rotate":  n=4, start sweeps 0..7/8.
+    # Row 3 "weights": n=4, first sector weight grows 1..8.
+    # Row 4 "gap":     n=4, gap grows 0..14°.
+    from plotlet import draw
+    from plotlet.registry import ArtistSpec, add_artist
+
+    _SP_COLORS = ["#4e79a7", "#f28e2b", "#e15759", "#76b7b2",
+                  "#59a14f", "#edc948", "#b07aa1", "#ff9da7"]
+    _COLS = [str(k) for k in range(8)]
+    _ROWS = ["n", "rotate", "weights", "gap"]
+
+    def _sp_record(args, kw):
+        return {"type": "split_pie_demo", "opts": kw}
+
+    def _sp_xdomain(a): return _COLS
+    def _sp_ydomain(a): return _ROWS
+
+    def _sp_draw(a, ctx):
+        out = []
+        bw = ctx.x_scale.bandwidth
+        bh = ctx.y_scale.bandwidth
+        for k, col in enumerate(_COLS):
+            cx = ctx.x_scale(col)
+            for row in _ROWS:
+                cy = ctx.y_scale(row)
+                px, py = cx - bw / 2, cy - bh / 2
+                if row == "n":
+                    n = k + 1
+                    for i in range(n):
+                        out.append(draw.split_pie(
+                            px, py, bw, bh, n, i,
+                            fill=_SP_COLORS[i % len(_SP_COLORS)], padding=2))
+                elif row == "rotate":
+                    for i in range(4):
+                        out.append(draw.split_pie(
+                            px, py, bw, bh, 4, i,
+                            fill=_SP_COLORS[i], padding=2, start=k / 8))
+                elif row == "weights":
+                    wts = [k + 1, 1, 1, 1]
+                    for i in range(4):
+                        out.append(draw.split_pie(
+                            px, py, bw, bh, 4, i,
+                            fill=_SP_COLORS[i], padding=2, weights=wts))
+                elif row == "gap":
+                    for i in range(4):
+                        out.append(draw.split_pie(
+                            px, py, bw, bh, 4, i,
+                            fill=_SP_COLORS[i], padding=2, gap=k * 2))
+        return "".join(out)
+
+    add_artist(ArtistSpec(
+        name="split_pie_demo",
+        record=_sp_record,
+        xdomain=_sp_xdomain,
+        ydomain=_sp_ydomain,
+        draw=_sp_draw,
+    ))
+    c = pt.chart(data_width=480, data_height=280,
+                 title="draw.split_pie — n / rotate / weights / gap")
+    c.split_pie_demo()
+    c.xticks(marks=False)
+    c.yticks(marks=False)
+    return c
+
+
 def chart_imshow_annot_custom():
     # annot=<2D array> for independent labels; annot_color fixed.
     # Mixes numbers (formatted via fmt) and strings (verbatim).
@@ -1436,6 +1572,8 @@ PLOTS = {
     "curve_steps":         chart_curve_steps,
     "curve_fills":         chart_curve_fills,
     "rect":                chart_rect,
+    "split_rect":          chart_split_rect,
+    "split_pie":           chart_split_pie,
     "polygon":             chart_polygon,
     "area":                chart_area,
     "reflines":            chart_reflines,

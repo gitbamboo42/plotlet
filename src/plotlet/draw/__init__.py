@@ -306,5 +306,182 @@ def errorbar_h(y: float, x_lo: float, x_hi: float, *,
     return "".join(parts)
 
 
+def split_rect(x: float, y: float, w: float, h: float,
+               n: int, i: int, *,
+               fill: str = None, stroke: str = None,
+               stroke_width: float = 1, alpha=1,
+               fill_alpha=None, stroke_alpha=None,
+               padding: float = 0,
+               start: float = 0.0,
+               weights=None,
+               symmetric: bool = False) -> str:
+    """One sector of a rectangle divided into n perimeter sectors.
+
+    Divides the rectangle by splitting its perimeter into n segments and
+    connecting each to the center. Sector 0 starts at the top-left corner
+    and proceeds clockwise. Useful for multi-valued cells in oncoprint /
+    compound-glyph heatmaps:
+
+        for i, color in enumerate(colors):
+            out += draw.split_rect(px, py, cw, ch, len(colors), i,
+                                   fill=color, padding=2)
+
+    `padding`   — inward shrink on all four sides; creates visible gaps.
+    `start`     — offset as a fraction [0, 1) of the perimeter where sector
+                  0 begins. Default 0 = top-left corner.
+    `weights`   — list of n positive numbers giving proportional sector sizes.
+                  Default None = equal sectors.
+    `symmetric` — if True (default), each edge is weighted equally so sector
+                  boundaries always fall on corners for n that divides 4
+                  (n=2,4,8). If False, boundaries are spaced by actual arc
+                  length, which can be unequal for non-square rectangles.
+    n=1 returns a plain rect. No hard cap on n.
+    """
+    if n < 1 or not (0 <= i < n):
+        raise ValueError(
+            f"split_rect: need n >= 1 and 0 <= i < n, got n={n!r}, i={i!r}"
+        )
+    if n == 1:
+        return rect(x, y, w, h, fill=fill, stroke=stroke,
+                    stroke_width=stroke_width, alpha=alpha,
+                    fill_alpha=fill_alpha, stroke_alpha=stroke_alpha)
+    cx, cy = x + w / 2, y + h / 2
+    rx, ry = x + padding, y + padding
+    rw, rh = w - 2 * padding, h - 2 * padding
+    if rw <= 0 or rh <= 0:
+        return ""
+
+    if symmetric:
+        # Each edge gets weight 1 regardless of actual length — P = 4.
+        P = 4.0
+        def _pt(t):
+            t = t % P
+            if t <= 1.0: return (rx + t * rw,           ry)
+            t -= 1.0
+            if t <= 1.0: return (rx + rw,               ry + t * rh)
+            t -= 1.0
+            if t <= 1.0: return (rx + rw * (1.0 - t),   ry + rh)
+            t -= 1.0
+            return              (rx,                     ry + rh * (1.0 - t))
+        base_corners = [1.0, 2.0, 3.0]
+    else:
+        P = 2.0 * (rw + rh)
+        def _pt(t):
+            t = t % P
+            if t <= rw:       return (rx + t,       ry)
+            t -= rw
+            if t <= rh:       return (rx + rw,      ry + t)
+            t -= rh
+            if t <= rw:       return (rx + rw - t,  ry + rh)
+            t -= rw
+            return                   (rx,            ry + rh - t)
+        base_corners = [rw, rw + rh, 2 * rw + rh]
+
+    if weights is not None:
+        if len(weights) != n:
+            raise ValueError(
+                f"split_rect: weights must have length n={n}, got {len(weights)}"
+            )
+        total = sum(weights)
+        if total <= 0:
+            return ""
+        cum = [0.0]
+        for wt in weights:
+            cum.append(cum[-1] + wt / total * P)
+        t0_base, t1_base = cum[i], cum[i + 1]
+    else:
+        seg = P / n
+        t0_base, t1_base = i * seg, (i + 1) * seg
+
+    start_off = start * P
+    t0, t1 = start_off + t0_base, start_off + t1_base
+
+    # P = top-left corner in offset space; corners repeated at +P handle
+    # sectors that wrap past t=0.
+    corner_ts = base_corners + [P] + [tc + P for tc in base_corners]
+
+    pts = [(cx, cy), _pt(t0)]
+    for tc in corner_ts:
+        if t0 < tc < t1:
+            pts.append(_pt(tc))
+    pts.append(_pt(t1))
+    return polygon(pts, fill=fill, stroke=stroke, stroke_width=stroke_width,
+                   alpha=alpha, fill_alpha=fill_alpha, stroke_alpha=stroke_alpha)
+
+
+def split_pie(x: float, y: float, w: float, h: float,
+              n: int, i: int, *,
+              fill: str = None, stroke: str = None,
+              stroke_width: float = 1, alpha=1,
+              fill_alpha=None, stroke_alpha=None,
+              r: float = None,
+              padding: float = 0,
+              start: float = 0.0,
+              weights=None,
+              gap: float = 0) -> str:
+    """One sector of a perfect circle inscribed in the bounding box.
+
+    Always draws a round circle regardless of the cell's aspect ratio:
+    `r` defaults to `min(w, h) / 2 - padding`; pass an explicit `r` to
+    fix the radius independent of cell size (sized-dot use case).
+
+    `start`   — fraction [0, 1) of a full turn where sector 0 begins.
+                0 (default) = 12 o'clock, proceeding clockwise.
+    `weights` — list of n positive numbers for proportional sector angles.
+    `gap`     — degrees to cut from each side of a slice edge; creates
+                visible separation between adjacent sectors.
+    n=1 returns a full circle.
+    """
+    import math
+    if n < 1 or not (0 <= i < n):
+        raise ValueError(
+            f"split_pie: need n >= 1 and 0 <= i < n, got n={n!r}, i={i!r}"
+        )
+    cx, cy = x + w / 2, y + h / 2
+    if r is None:
+        r = min(w, h) / 2 - padding
+    if r <= 0:
+        return ""
+    full = 2 * math.pi
+    if weights is not None:
+        if len(weights) != n:
+            raise ValueError(
+                f"split_pie: weights must have length n={n}, got {len(weights)}"
+            )
+        total = sum(weights)
+        if total <= 0:
+            return ""
+        cum = [0.0]
+        for wt in weights:
+            cum.append(cum[-1] + wt / total * full)
+        t0_base, t1_base = cum[i], cum[i + 1]
+    else:
+        seg = full / n
+        t0_base, t1_base = i * seg, (i + 1) * seg
+    # start=0 → 12 o'clock = -π/2 in SVG coords (y points down)
+    origin = -math.pi / 2 + start * full
+    t0 = origin + t0_base
+    t1 = origin + t1_base
+    if gap > 0:
+        gap_rad = gap * math.pi / 180
+        t0 += gap_rad / 2
+        t1 -= gap_rad / 2
+        if t1 <= t0:
+            return ""
+    # Full 360° arc degenerates in SVG — emit a circle element instead.
+    if t1 - t0 >= full - 1e-9:
+        return circle(cx, cy, r, fill=fill, stroke=stroke,
+                      stroke_width=stroke_width, alpha=alpha,
+                      fill_alpha=fill_alpha, stroke_alpha=stroke_alpha)
+    large_arc = 1 if (t1 - t0) > math.pi else 0
+    x0 = cx + r * math.cos(t0);  y0 = cy + r * math.sin(t0)
+    x1 = cx + r * math.cos(t1);  y1 = cy + r * math.sin(t1)
+    d = (f"M {cx:.2f},{cy:.2f} L {x0:.2f},{y0:.2f} "
+         f"A {r:.2f},{r:.2f} 0 {large_arc} 1 {x1:.2f},{y1:.2f} Z")
+    return path(d, fill=fill, stroke=stroke, stroke_width=stroke_width,
+                alpha=alpha, fill_alpha=fill_alpha, stroke_alpha=stroke_alpha)
+
+
 __all__ = ["text_path", "marker", "op", "segment", "rect", "circle",
-           "path", "polyline", "polygon", "errorbar_v", "errorbar_h"]
+           "path", "polyline", "polygon", "split_rect", "split_pie",
+           "errorbar_v", "errorbar_h"]
