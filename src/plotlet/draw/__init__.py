@@ -100,7 +100,7 @@ def _shape_opacity(alpha, fill_alpha, stroke_alpha,
 def marker(kind: str, x: float, y: float, size: float, color: str, alpha,
            edgecolor: str | None = None, edgewidth: float | None = None) -> str:
     """Emit a single marker glyph (one of `"o" "s" "^" "v" "x" "+"`) at
-    pixel `(x, y)`. Returns an empty string for unknown marker codes.
+    pixel `(x, y)`. Raises `ValueError` for unknown marker codes.
 
     `edgecolor=` adds an outline to filled markers (`o`/`s`/`^`/`v`).
     `edgewidth=` overrides the stroke width for ALL markers (including the
@@ -128,7 +128,7 @@ def marker(kind: str, x: float, y: float, size: float, color: str, alpha,
         return (f'<path d="M{x - size:.2f},{y:.2f}L{x + size:.2f},{y:.2f}'
                 f'M{x:.2f},{y - size:.2f}L{x:.2f},{y + size:.2f}" '
                 f'stroke="{color}" stroke-width="{msw}"{_op}/>')
-    return ""
+    raise ValueError(f"unknown marker kind {kind!r}; expected one of 'o' 's' '^' 'v' 'x' '+'.")
 
 
 def _dash_attr(dash) -> str:
