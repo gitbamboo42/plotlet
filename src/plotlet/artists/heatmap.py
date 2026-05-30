@@ -95,9 +95,9 @@ def _heatmap_record(args, kw):
     norm = opts.get("norm", "linear")
     if vmin is None or vmax is None:
         if norm == "log":
-            flat = [v for row in matrix for v in row if v == v and v > 0]
+            flat = [v for row in matrix for v in row if v is not None and v == v and v > 0]
         else:
-            flat = [v for row in matrix for v in row if v == v]
+            flat = [v for row in matrix for v in row if v is not None and v == v]
         if flat:
             if vmin is None: vmin = min(flat)
             if vmax is None: vmax = max(flat)
@@ -205,6 +205,8 @@ def _heatmap_draw(a, ctx):
                            kind=opts.get("norm", "linear"),
                            center=opts.get("center"))
     lut = colormap_lut(opts.get("cmap", _D["default_cmap"]))
+    absent_fill = resolve_color(opts.get("absent_fill", "#eeeeee"))
+    absent_rgb  = _hex_to_rgb(absent_fill)
 
     bw = ctx.x_scale.bandwidth
     bh = ctx.y_scale.bandwidth
@@ -219,8 +221,8 @@ def _heatmap_draw(a, ctx):
                 cx = ctx.x_scale(cols[c])
                 x0 = cx - bw / 2
                 v = matrix[r][c]
-                if v != v:
-                    fill = "rgb(0,0,0)"
+                if v is None or v != v:
+                    fill = absent_fill
                 else:
                     i = int(norm.to_unit(v) * 255 + 0.5) * 3
                     fill = f"rgb({lut[i]},{lut[i+1]},{lut[i+2]})"
@@ -243,8 +245,8 @@ def _heatmap_draw(a, ctx):
         for r in range(nrows):
             for c in range(ncols):
                 v = matrix[r][c]
-                if v != v:
-                    buf.append(0); buf.append(0); buf.append(0)
+                if v is None or v != v:
+                    buf.append(absent_rgb[0]); buf.append(absent_rgb[1]); buf.append(absent_rgb[2])
                 else:
                     i = int(norm.to_unit(v) * 255 + 0.5) * 3
                     buf.append(lut[i]); buf.append(lut[i+1]); buf.append(lut[i+2])
@@ -281,8 +283,8 @@ def _heatmap_draw(a, ctx):
                       else str(label)
                 if color_opt == "auto":
                     v = matrix[r][c]
-                    if v != v:
-                        txt_col = "#ffffff"
+                    if v is None or v != v:
+                        txt_col = "#ffffff" if _rel_luminance(*absent_rgb) < 0.55 else "#000000"
                     else:
                         i = int(norm.to_unit(v) * 255 + 0.5) * 3
                         if _rel_luminance(lut[i], lut[i+1], lut[i+2]) < 0.55:

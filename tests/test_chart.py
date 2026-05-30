@@ -482,6 +482,21 @@ def chart_heatmap_categorical():
     return c
 
 
+def chart_heatmap_nan():
+    import math
+    cols = ["A", "B", "C", "D"]
+    rows = ["r1", "r2", "r3"]
+    matrix = [
+        [1.0,       float("nan"), 3.0,  None],
+        [None,      2.0,          None, 4.0 ],
+        [float("nan"), 1.5,       2.5,  None],
+    ]
+    c = pt.chart(title="heatmap (NaN/None → absent_fill)")
+    c.heatmap(matrix, xticklabels=cols, yticklabels=rows,
+              cmap="viridis", absent_fill="#ff9999")
+    return c
+
+
 def chart_split_rect():
     # Row 1 "sym":     n=1..8, symmetric=True  — cuts land on corners.
     # Row 2 "n":       n=1..8, symmetric=False — equal arc length.
@@ -1597,6 +1612,7 @@ PLOTS = {
     "heatmap_dataframe":   chart_heatmap_dataframe,
     "heatmap_annot":       chart_heatmap_annot,
     "heatmap_categorical": chart_heatmap_categorical,
+    "heatmap_nan":         chart_heatmap_nan,
     "imshow_annot_custom": chart_imshow_annot_custom,
     "long_title":          chart_long_title,
     "long_ylabel":         chart_long_ylabel,
