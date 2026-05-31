@@ -22,7 +22,8 @@ from .linestyles import resolve_linestyle
 def text_path(s: str, x: float, y: float, size: float,
               anchor: str = "start", color: str = "#000",
               fontstyle: str = "normal",
-              decoration: str = "none") -> str:
+              decoration: str = "none",
+              rotate: float = 0) -> str:
     """Render `s` as a single SVG <path> with its baseline at pixel (x, y).
 
     `anchor` matches SVG's text-anchor: 'start' | 'middle' | 'end'. Use this
@@ -35,6 +36,11 @@ def text_path(s: str, x: float, y: float, size: float,
 
     `decoration="underline" | "overline" | "line-through"` appends a stroke
     line at the conventional offset for that decoration.
+
+    `rotate=` (degrees, positive = CCW) rotates the glyph (and any
+    decoration line) around the anchor point (x, y). Convention matches
+    `xticks(rotation=...)` and the rest of the lib — SVG's positive-CW
+    is negated at emission so callers think in matplotlib's visual CCW.
     """
     d = _glyph_path_d(s, x, y, size, anchor=anchor, fontstyle=fontstyle)
     if not d:
@@ -53,6 +59,8 @@ def text_path(s: str, x: float, y: float, size: float,
         out += (f'<line x1="{x0:.2f}" y1="{y + dy:.2f}" '
                 f'x2="{x0 + width:.2f}" y2="{y + dy:.2f}" '
                 f'stroke="{color}" stroke-width="{line_w:.2f}"/>')
+    if rotate:
+        out = f'<g transform="rotate({-rotate:.2f} {x:.2f} {y:.2f})">{out}</g>'
     return out
 
 

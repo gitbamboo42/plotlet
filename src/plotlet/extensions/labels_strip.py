@@ -145,10 +145,8 @@ def labels_strip_draw(a, ctx):
                 x = o_lo + pad
             y = cp + (cap - desc) / 2
 
-        glyph = text_path(s, x, y, fontsize, anchor=anchor, color=color)
-        if rotation != 0:
-            glyph = (f'<g transform="rotate({-rotation:.2f} {x:.2f} {y:.2f})">'
-                     f'{glyph}</g>')
+        glyph = text_path(s, x, y, fontsize, anchor=anchor, color=color,
+                          rotate=rotation)
         out.append(glyph)
     return "".join(out)
 
