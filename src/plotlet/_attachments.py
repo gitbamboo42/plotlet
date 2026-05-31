@@ -207,3 +207,31 @@ def annotate_joined_pairs(leaves: list[Chart],
                     _mark_joined_pair(outer, inner, axis=axis, out=panel_opts)
                 else:
                     _mark_joined_pair(inner, outer, axis=axis, out=panel_opts)
+
+
+def promote_titles(leaves: list[Chart], states: dict[int, dict]) -> None:
+    """`c.title("...")` is a figure-title gesture: it should render above
+    everything stacked on top of `c`, not buried inside `c`'s own title
+    margin under the attached panels. When `c` has `_attached_above` and
+    sets a title, move the title's render state to the outermost
+    attached_above chart so the layout reserves margin in the right
+    panel. The host's own state has the title cleared so the renderer
+    doesn't draw it twice.
+
+    Only the top side is promoted — title is conventionally above the
+    data. xlabel/ylabel are not symmetric concepts (axis labels belong
+    to the axis they describe, not to the figure), so they stay put.
+    """
+    for leaf in leaves:
+        if not leaf._attached_above:
+            continue
+        host_st = states.get(id(leaf))
+        if host_st is None or not host_st.get("title"):
+            continue
+        # Index 0 = innermost, last = outermost — title goes to the very top.
+        outermost = leaf._attached_above[-1]
+        outer_st = states.get(id(outermost))
+        if outer_st is None:
+            continue
+        outer_st["title"] = host_st["title"]
+        host_st["title"] = ""

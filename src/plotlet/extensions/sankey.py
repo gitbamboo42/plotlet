@@ -22,8 +22,7 @@ API:
            `target` reference `nodes` by name or by index.
 
 The recipe is ~150 lines including the layout solver; the heavy bit is
-the cubic-bezier ribbon path. See marsilea and d3-sankey for the
-production-quality versions of this idea.
+the cubic-bezier ribbon path.
 """
 
 SUMMARY = "Flows between nodes drawn as cubic-bezier ribbons; layers inferred via longest-path layering."

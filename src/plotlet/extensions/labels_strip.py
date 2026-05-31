@@ -1,9 +1,8 @@
 """Custom artist: per-position text labels rendered as a thin strip.
 
-Marsilea calls the equivalent `Labels`; ComplexHeatmap calls it
-`anno_text`. The job: paint one text label per category position along
-a thin attached panel — column names above a heatmap, row names beside
-it, group tags between split row groups in a `pt.grid` composition.
+Paints one text label per category position along a thin attached
+panel — column names above a heatmap, row names beside it, group
+tags between split row groups in a `pt.grid` composition.
 
 Why it's an artist (not just `xticks(labels=...)`). Tick labels are
 suppressed by `share_x`/`share_y`'s default `hide_labels=True` along
@@ -15,8 +14,7 @@ suppression machinery entirely — no per-leaf opt-out, no asymmetric
 joined-pair flag, no fight with `hide_labels`.
 
 Side semantics. Labels sit on the strip's *inner* edge — the edge
-pointing toward the host panel they describe — matching the
-marsilea/ComplexHeatmap convention. Pick `side=` accordingly:
+pointing toward the host panel they describe. Pick `side=` accordingly:
 
   strip attached ABOVE host  →  side="bottom"  (default for orient="x")
   strip attached BELOW host  →  side="top"
@@ -118,15 +116,24 @@ def labels_strip_draw(a, ctx):
         cp = cat_scale(pos)
 
         if orient == "x":
-            anchor = "middle"
             x = cp
-            # Baseline anchored to the inner edge with `pad` px of breathing
-            # room. "bottom" → baseline near panel bottom, glyphs extend up.
-            # "top" → baseline `cap` px below panel top, glyphs reach the top.
+            # When unrotated: anchor at horizontal midpoint of the column,
+            # baseline `pad` px inside the inner edge. When rotated: switch
+            # to an edge anchor so the rotated text body sits *inside* the
+            # strip instead of straddling the anchor (half spilling into
+            # the host panel). `rotation` follows matplotlib's CCW-positive
+            # convention; SVG's `rotate()` is screen-CW so we negate when
+            # emitting the transform.
             if side == "bottom":
-                y = o_hi - desc - pad
+                if rotation == 0:
+                    anchor, y = "middle", o_hi - desc - pad
+                else:
+                    anchor, y = "start", o_hi - pad
             else:  # "top"
-                y = o_lo + cap + pad
+                if rotation == 0:
+                    anchor, y = "middle", o_lo + cap + pad
+                else:
+                    anchor, y = "end", o_lo + pad
         else:  # orient == "y"
             # Horizontal text anchored against the inner vertical edge.
             # Vertical center of cap-box lines up with the category center.
@@ -140,10 +147,7 @@ def labels_strip_draw(a, ctx):
 
         glyph = text_path(s, x, y, fontsize, anchor=anchor, color=color)
         if rotation != 0:
-            # Rotate around the anchor point — same approach as the marsilea
-            # text.py workaround. Replaceable once `text_path` grows a native
-            # `rotate=` kwarg (separate todo).
-            glyph = (f'<g transform="rotate({rotation:.2f} {x:.2f} {y:.2f})">'
+            glyph = (f'<g transform="rotate({-rotation:.2f} {x:.2f} {y:.2f})">'
                      f'{glyph}</g>')
         out.append(glyph)
     return "".join(out)
@@ -183,17 +187,14 @@ pt.add_artist(pt.ArtistSpec(
 
 
 def demo():
-    """Reproduce the marsilea minimal figure: heatmap + top labels strip
-    + top dendrogram + left labels strip, all sharing the categorical
-    axes.
+    """Annotated heatmap: clustered dendrogram on top, column-name strip
+    between dendrogram and heatmap, row-name strip on the left.
 
-    The labels strip is the load-bearing piece: it sits between the
-    dendrogram and the heatmap with labels hugging the heatmap on its
-    BOTTOM (inner) edge. Default `share_x(hide_labels=True)` would
-    silence those labels if they were tick labels — but they're artist
-    glyphs, so they render regardless. The dendrogram above continues
-    to render with its own conventions, no `xticks([])` workaround
-    needed."""
+    The labels strip is the load-bearing piece — it sits inside a
+    `share_x` group with the heatmap and dendrogram but its labels still
+    render, because they're artist glyphs rather than tick labels (which
+    `share_x(hide_labels=True)` would suppress on joined-pair inner
+    edges)."""
     import numpy as np
     from scipy.cluster.hierarchy import linkage, leaves_list
     rng = np.random.default_rng(0)
@@ -215,12 +216,16 @@ def demo():
 
     hm = pt.chart(data_width="4in", data_height="3in")
     hm.heatmap(data_clustered, xticklabels=cols_clustered,
-               yticklabels=row_names, cmap="RdBu_r")
+               yticklabels=row_names, cmap="RdBu_r", border=False)
     # Suppress the heatmap's own auto tick labels — the strips own them now.
     hm.xticks([]); hm.yticks([])
 
-    top_labels = pt.chart(data_height="0.35in")
-    top_labels.labels_strip(cols_clustered, cols_clustered, side="bottom")
+    # rotation=90 — column labels read vertically so narrow columns can
+    # carry long labels without horizontal crowding. The artist itself
+    # defaults to rotation=0; the caller picks per use case.
+    top_labels = pt.chart(data_height="0.5in")
+    top_labels.labels_strip(cols_clustered, cols_clustered, side="bottom",
+                            rotation=90)
 
     tree = pt.chart(data_height="0.7in")
     tree.dendrogram(linkage=Z, orient="top", labels=col_names)
@@ -233,7 +238,7 @@ def demo():
     hm.attach_above(top_labels)
     hm.attach_above(tree)
     hm.attach_left(left_labels)
-    hm.title("plotlet labels_strip + dendrogram + heatmap")
+    hm.title("Annotated heatmap")
     return hm
 
 

@@ -166,13 +166,29 @@ def _dendrogram_draw(a, ctx):
 
 
 def _dendrogram_frame_defaults(args, kw):
-    leaf_on_x = kw.get("orient", "top") in ("top", "bottom")
+    orient = kw.get("orient", "top")
+    leaf_on_x = orient in ("top", "bottom")
     has_labels = kw.get("labels") is not None
     out = [("spines", [], {"top": False, "right": False,
                             "bottom": False, "left": False})]
     out.append(("yticks" if leaf_on_x else "xticks", [[]], {}))
     if not has_labels:
         out.append(("xticks" if leaf_on_x else "yticks", [[]], {}))
+    # Root-side breathing room: the topmost merge sits at the data-area
+    # boundary by default (because `tight_domain=True` skips the usual
+    # x_expand/y_expand padding), which half-clips its stroke against the
+    # inner clip. Reuse the same expand mechanism scatter/line plots use
+    # for keeping content away from the spine, but apply only to the
+    # root side so leaves stay flush against any panel attached below.
+    # Explicit expand calls win over tight_domain's implicit zero.
+    if orient == "top":
+        out.append(("y_expand", [0, 0.05], {}))
+    elif orient == "bottom":
+        out.append(("y_expand", [0.05, 0], {}))
+    elif orient == "right":
+        out.append(("x_expand", [0, 0.05], {}))
+    elif orient == "left":
+        out.append(("x_expand", [0.05, 0], {}))
     return out
 
 

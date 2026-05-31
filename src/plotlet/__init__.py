@@ -1,4 +1,4 @@
-"""plotlet — pure-Python SVG renderer, matplotlib-flavored.
+"""plotlet — pure-Python deferred-rendering SVG plot library.
 
     import plotlet as pt
     c = pt.chart(df, title="...", xlabel="x", ylabel="y", legend=True, grid=True)

@@ -644,6 +644,7 @@ def _build_panel_opts(root: Chart) -> tuple[dict[int, _PanelOpts], dict[int, dic
     _annotate_collapses(root, panel_opts)
     _attachments.annotate_joined_pairs(leaves, panel_opts)
     _propagate_grid_joins(root, panel_opts)
+    _attachments.promote_titles(leaves, states)
     _compute_measured_margins(leaves, states, panel_opts)
     _coordinate_margins(root, panel_opts)
     _update_canvases_for_margins(leaves, panel_opts)

@@ -65,12 +65,20 @@ def _parse_heatmap_input(args, kw):
 
 def _heatmap_frame_defaults(args, kw):
     _, cols, rows = _parse_heatmap_input(args, kw)
-    return [
+    out = [
         ("xscale", ["category"], {"order": cols, "padding": 0}),
         ("yscale", ["category"], {"order": rows, "padding": 0}),
         ("xticks", [None], {"marks": False}),
         ("yticks", [None], {"marks": False}),
     ]
+    # `border=False` drops the axis-spine rectangle around the heatmap so
+    # the colored cells alone define the data block — the typical look
+    # when the heatmap is wrapped by annotation strips. Default (True)
+    # keeps the spine frame.
+    if not kw.get("border", True):
+        out.append(("spines", [], {"top": False, "right": False,
+                                   "bottom": False, "left": False}))
+    return out
 
 
 def _heatmap_record(args, kw):
@@ -83,7 +91,7 @@ def _heatmap_record(args, kw):
             f"labels (rows={len(rows)}, cols={len(cols)})"
         )
     opts = {k: v for k, v in kw.items()
-            if k not in ("xticklabels", "yticklabels")}
+            if k not in ("xticklabels", "yticklabels", "border")}
 
     palette = opts.get("palette")
     if palette is not None:

@@ -6,8 +6,8 @@ with a host panel above or below via `share_x` — sample-group bars on
 top of a heatmap, regime tags above a time series, cluster labels
 alongside a dendrogram, score tracks aligned with a coverage plot, etc.
 Pass `orient="y"` for a vertical column that aligns with a host panel
-via `share_y` (per-row group labels next to a heatmap, marsilea-style
-chunk strips).
+via `share_y` (per-row group labels next to a heatmap, per-row chunk
+strips).
 
 Two color modes — same artist, the color spec chooses:
 
