@@ -33,7 +33,7 @@ paint over tick labels.
 | --- | --- |
 | `"linear"` | default |
 | `"log"` | log10; respect positive data |
-| `"category"` | for strings; auto-selected when data is string-valued. `c.xscale("category", order=[...], padding=0)` for explicit ordering. `padding=0` makes bands contiguous (heatmap-track look). |
+| `"category"` | for strings; auto-selected when data is string-valued. `c.xscale("category", order=[...], padding=0)` for explicit ordering. `padding=0` makes bands contiguous (heatmap-track look). `groups={cat: group}` + `split_gap=<px>` reserves gap space at every group-change boundary in `cats` — used by `heatmap(column_split=...)` / `dendrogram(column_split=...)` for ComplexHeatmap-style splits; any other category artist on the same scale inherits the gaps automatically. |
 | `"symlog"` | accepts `linthresh=` (default `1.0`) sizing the linear region around zero |
 | `"power"` | accepts `exponent=` |
 | `"sqrt"` | shorthand for `"power"` with `exponent=0.5` |
@@ -132,8 +132,8 @@ universal and not repeated.
 | call | options |
 | --- | --- |
 | `.imshow(data, **opts)` | `cmap` (~180 vendored, default `"viridis"`), `vmin`, `vmax`, `extent`, `annot`, `fmt`, `annot_color`, `annot_fontsize` |
-| `.heatmap(df, **opts)` | `cmap`, `vmin`, `vmax`, `norm`, `center`, `xticklabels`, `yticklabels`, `legend`, `annot`, `fmt`, `annot_color`, `annot_fontsize` |
-| `.dendrogram(matrix, **opts)` | `orient="top"\|"left"\|"right"\|"bottom"`, `linkage="single"\|"average"\|"complete"`, `metric` |
+| `.heatmap(df, **opts)` | `cmap`, `vmin`, `vmax`, `norm`, `center`, `xticklabels`, `yticklabels`, `legend`, `annot`, `fmt`, `annot_color`, `annot_fontsize`, `border`, `column_split=[...]`, `row_split=[...]`, `split_gap` |
+| `.dendrogram(data, **opts)` | `orient="top"\|"left"\|"right"\|"bottom"`, `labels`, `method="single"\|"complete"\|"average"\|"ward"\|...` (scipy), `metric`, `linkage=<Z>` (skip scipy.linkage), `tree=<SplitTree>` (skip clustering entirely), `column_split=[...]` / `row_split=[...]` (two-level cluster), `parent=True\|<frac>` (render centroid tree above per-block trees), `split_gap` |
 | `.axhline(y, **opts)` / `.axvline(x, **opts)` | `color`, `linewidth`, `linestyle`, `alpha`, axes-fraction `xmin`/`xmax` |
 | `.axhspan(ymin, ymax, **opts)` / `.axvspan(xmin, xmax, **opts)` | `color`, `alpha`, `label` |
 | `.rect(x, y, w, h, **opts)` / `.polygon(pts, **opts)` | data-coord shapes, `fill`, `stroke` |
@@ -146,8 +146,21 @@ universal and not repeated.
 - On `line` / `scatter`, `group=<col>` is the **invisible** split — finer-grained sub-records (one polyline per subject, say) without burning a color channel or a legend row. `alpha=<col>` interpolates opacity per level via `alphas=(min, max)`. `line` additionally has `linetype=<col>` (dash cycle per level); not on `scatter`. When `color=` and `linetype=` (or `alpha=`) map the *same* column, the existing color legend swatches inherit the dash / opacity — the canonical pattern for colorblind-safe or B&W-print redundancy.
 - Reference lines / spans default to black, are drawn outside the data color cycle, and don't participate in autoscaling.
 - On `scatter`, `size=<col>` maps a numeric column to per-point area (pixels², rescaled into `sizes=(min, max)` — default `(20, 200)`); `style=<col>` cycles markers per unique value (`o`, `s`, `^`, `v`, `x`, `+`). `color`, `group`, `size`, `style`, `alpha` all compose.
-- `.imshow` emits one `<rect>` per cell for small grids (≤10000 cells, vector-clean at any zoom) and a base64 PNG above that. `.heatmap` is the DataFrame-aware companion — `df.index` becomes row labels, `df.columns` becomes column labels; cells render at integer + 0.5 centers so a top/left dendrogram pairs cleanly via `share_x` / `share_y`.
+- `.imshow` emits one `<rect>` per cell for small grids (≤10000 cells, vector-clean at any zoom) and a base64 PNG above that. `.heatmap` is the DataFrame-aware companion — `df.index` becomes row labels, `df.columns` becomes column labels; cells render at integer + 0.5 centers so a top/left dendrogram pairs cleanly via `share_x` / `share_y` (or `attach_above` / `attach_left`, which auto-share).
 - On both, `annot=True` overlays each cell's value as a text label (correlation / confusion matrices). `annot=<2D array>` uses custom labels — numbers formatted via `fmt`, strings verbatim — so labels independent of cell values (e.g. significance asterisks over a correlation cmap) are a string-array away. `fmt=".2g"` is the format spec (passed to `format(value, fmt)`, matching seaborn). `annot_color="auto"` picks black or white per cell via luminance; pass any CSS color for uniform text.
+- **Splits.** `column_split=[group_per_col]` / `row_split=[group_per_row]` on `.heatmap` reorders cells to cluster same-group columns/rows together and reserves a 6-px (default) gap at every block boundary. Pass the same grouping vector to `.dendrogram` and it runs scipy *per block* for within-block leaf order plus once more on the per-block centroids for between-block order — ComplexHeatmap-style. The dendrogram exposes the resulting leaf order via `axis_order`, so the heatmap follows automatically when both share a category axis (`attach_above` / `attach_left`). `parent=True` on the dendrogram also renders the centroid tree above the per-block trees in the same panel. See [`cookbook/annotated_heatmap/`](../cookbook/annotated_heatmap/) for the worked example.
+
+## Clustering helpers
+
+Independent of any artist; the dendrogram and `curved_tree` extension both build on these.
+
+| call | returns | notes |
+| --- | --- | --- |
+| `pt.cluster(data, labels=, method=, metric=)` | `SplitTree` | One scipy.linkage on `data`; wraps as a one-block `SplitTree`. |
+| `pt.cluster_split(data, split=, labels=, method=, metric=)` | `SplitTree` | ComplexHeatmap-style two-level cluster: scipy.linkage per group (within-block) plus scipy.linkage on the per-group centroids (between-block order). |
+| `pt.SplitTree(blocks=, between_order=, between_Z=)` | dataclass | `blocks: [(Z, labels), ...]` + display order + the centroid linkage. Pass as `dendrogram(tree=...)` / `curved_tree(tree=...)` to skip redundant scipy work when the same cluster drives multiple charts. |
+
+Deeper layout helpers — `pt.cluster.layout_tree(tree)`, `pt.cluster.layout_parent(tree)`, `pt.cluster.fit_parent(...)`, `pt.cluster.leaf_position(...)`, `pt.cluster.block_apex_centers(...)`, `pt.cluster.parent_leaf_px(...)`, `pt.cluster.build_tree(...)`, `pt.cluster.tree_frame_defaults(...)` — exist for writing new tree-shaped artists; see [`EXTENDING.md`](EXTENDING.md).
 
 ## Color shortcuts
 

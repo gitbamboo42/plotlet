@@ -495,6 +495,157 @@ def chart_heatmap_nan():
     return c
 
 
+def chart_heatmap_split():
+    # ComplexHeatmap-style row_split + column_split. Both grouping
+    # vectors are deliberately interleaved so the auto cluster-and-gap
+    # reordering is exercised on both axes — rows regroup to A,A,A /
+    # B,B,B / C,C and cols regroup to X,X,X / Y,Y,Y,Y,Y / Z,Z,Z,Z. The
+    # uneven block sizes (3-3-2 rows × 3-5-4 cols) make the gaps obvious.
+    nrows, ncols = 8, 12
+    matrix = [[r * ncols + c for c in range(ncols)] for r in range(nrows)]
+    c = pt.chart(title="heatmap (row_split + column_split)")
+    c.heatmap(matrix,
+              xticklabels=[f"c{i+1}" for i in range(ncols)],
+              yticklabels=[f"r{i+1}" for i in range(nrows)],
+              row_split=   ["A", "B", "A", "C", "A", "B", "C", "B"],
+              column_split=["X", "Y", "Z", "X", "Y", "Z", "Y", "Z",
+                            "X", "Y", "Z", "Y"],
+              annot=True)
+    return c
+
+
+def chart_dendrogram_split():
+    """Two-level cluster + split-driven heatmap.
+
+    The dendrogram runs scipy on each group (within-block topology + leaf
+    order) and on the per-group centroids (between-block order), then
+    exposes the full leaf order via `axis_order`. The heatmap below has
+    the *same* grouping vector — its `frame_defaults` order is the
+    first-seen clustering, which loses to the dendrogram's `axis_order`
+    in the new precedence rule. Group X has a low signature, Y mid, Z
+    high; the centroid cluster should arrange the blocks in that order.
+    """
+    import random
+    rng = random.Random(7)
+    nrows_hm, ncols_hm = 6, 12
+    col_labels = [f"c{i+1}" for i in range(ncols_hm)]
+    col_groups = ["X", "Y", "Z", "X", "Y", "Z", "Y", "Z",
+                  "X", "Y", "Z", "Y"]
+    sig = {"X": 0.0, "Y": 5.0, "Z": 10.0}
+    matrix = [[sig[col_groups[c]] + rng.gauss(0, 0.3)
+               for c in range(ncols_hm)]
+              for _ in range(nrows_hm)]
+    # Transpose: dendrogram clusters cols-of-heatmap as its observations.
+    data_t = [[matrix[r][c] for r in range(nrows_hm)] for c in range(ncols_hm)]
+
+    tree = pt.chart(data_height=60)
+    tree.dendrogram(data_t, labels=col_labels, orient="top",
+                    column_split=col_groups, method="ward")
+
+    hm = pt.chart(title="dendrogram-driven split heatmap",
+                  data_width=420, data_height=180)
+    hm.heatmap(matrix, xticklabels=col_labels,
+               yticklabels=[f"r{i+1}" for i in range(nrows_hm)],
+               column_split=col_groups,
+               cmap="viridis", legend={"label": "value"})
+    hm.attach_above(tree)
+    return pt.grid([[hm, pt.legend()]]).touch()
+
+
+def chart_dendrogram_split_parent():
+    """Both axes split + parent-tree on top and left, dendrogram + the
+    curved_tree extension on each side. Same grouping vector flows to:
+    (a) both top trees via `column_split=`, (b) both left trees via
+    `row_split=`, (c) the heatmap via both — all four trees and the
+    heatmap pick up the dendrogram's between-cluster order through the
+    artist `axis_order` precedence rule.
+
+    Stresses `cluster.fit_parent` on both orient=top and orient=left,
+    via both the built-in (`dendrogram`) and an extension
+    (`curved_tree`) — regression on either renderer or on the public
+    cluster API trips this baseline."""
+    import random
+    import plotlet.extensions.curved_tree  # registers c.curved_tree
+    rng = random.Random(7)
+    nrows_hm, ncols_hm = 9, 12
+    col_labels = [f"c{i+1}" for i in range(ncols_hm)]
+    row_labels = [f"r{i+1}" for i in range(nrows_hm)]
+    col_groups = ["X", "Y", "Z", "X", "Y", "Z", "Y", "Z",
+                  "X", "Y", "Z", "Y"]
+    row_groups = ["A", "B", "C", "A", "B", "C", "B", "C", "A"]
+    col_sig = {"X": 0.0, "Y": 5.0, "Z": 10.0}
+    row_sig = {"A": 0.0, "B": 2.0, "C": 4.0}
+    matrix = [[col_sig[col_groups[c]] + row_sig[row_groups[r]] + rng.gauss(0, 0.3)
+               for c in range(ncols_hm)]
+              for r in range(nrows_hm)]
+    # Observations for the dendrograms: rows for the left tree, the
+    # transpose for the top tree.
+    data_top = [[matrix[r][c] for r in range(nrows_hm)] for c in range(ncols_hm)]
+    data_left = matrix
+
+    top_d = pt.chart(data_height=90)
+    top_d.dendrogram(data_top, labels=col_labels, orient="top",
+                     column_split=col_groups, method="ward", parent=True)
+    top_c = pt.chart(data_height=90)
+    top_c.curved_tree(data_top, labels=col_labels, orient="top",
+                      column_split=col_groups, method="ward", parent=True)
+
+    left_d = pt.chart(data_width=100)
+    left_d.dendrogram(data_left, labels=row_labels, orient="left",
+                      row_split=row_groups, method="ward", parent=True)
+    left_c = pt.chart(data_width=100)
+    left_c.curved_tree(data_left, labels=row_labels, orient="left",
+                       row_split=row_groups, method="ward", parent=True)
+
+    hm = pt.chart(title="split heatmap with parent trees on both sides",
+                  data_width=360, data_height=240)
+    hm.heatmap(matrix, xticklabels=col_labels, yticklabels=row_labels,
+               column_split=col_groups, row_split=row_groups,
+               cmap="viridis", legend={"label": "value"})
+    # First arg sits closest to host; outermost arg sits furthest.
+    hm.attach_above(top_c, top_d)
+    hm.attach_left(left_c, left_d)
+
+    return pt.grid([[hm, pt.legend()]]).touch()
+
+
+def chart_heatmap_split_attached():
+    # Top strip + top bar both share x with the split heatmap, so they
+    # inherit the column reorder and the 6-px gaps via the shared scale
+    # — no per-artist split kwargs on the attachments. The legend on the
+    # right auto-harvests across all leaves (continuous gradient from the
+    # heatmap, discrete swatches from the strip).
+    import plotlet.extensions.annotation_strip  # registers c.annotation_strip
+    nrows, ncols = 8, 12
+    matrix = [[r * ncols + c for c in range(ncols)] for r in range(nrows)]
+    col_labels = [f"c{i+1}" for i in range(ncols)]
+    row_labels = [f"r{i+1}" for i in range(nrows)]
+    row_groups = ["A", "B", "A", "C", "A", "B", "C", "B"]
+    col_groups = ["X", "Y", "Z", "X", "Y", "Z", "Y", "Z",
+                  "X", "Y", "Z", "Y"]
+    palette = {"X": pt.TAB10[0], "Y": pt.TAB10[1], "Z": pt.TAB10[2]}
+    col_sums = [sum(matrix[r][c] for r in range(nrows)) for c in range(ncols)]
+
+    bar = pt.chart({"col": col_labels, "sum": col_sums},
+                   data_height=40, ylabel="sum")
+    bar.bar(x="col", y="sum", fill="#555")
+
+    strip = pt.chart(data_height=14)
+    strip.annotation_strip(col_labels, col_groups, palette=palette,
+                           name="group")
+
+    hm = pt.chart(title="heatmap (split + attached)",
+                  data_width=420, data_height=240)
+    hm.heatmap(matrix,
+               xticklabels=col_labels, yticklabels=row_labels,
+               row_split=row_groups, column_split=col_groups,
+               legend={"label": "value"})
+    # First arg sits closest to the host; order outward is strip, bar.
+    hm.attach_above(strip, bar)
+
+    return pt.grid([[hm, pt.legend()]]).touch()
+
+
 def chart_split_rect():
     # Row 1 "sym":     n=1..8, symmetric=True  — cuts land on corners.
     # Row 2 "n":       n=1..8, symmetric=False — equal arc length.
@@ -1612,6 +1763,10 @@ PLOTS = {
     "heatmap_annot":       chart_heatmap_annot,
     "heatmap_categorical": chart_heatmap_categorical,
     "heatmap_nan":         chart_heatmap_nan,
+    "heatmap_split":          chart_heatmap_split,
+    "heatmap_split_attached": chart_heatmap_split_attached,
+    "dendrogram_split":          chart_dendrogram_split,
+    "dendrogram_split_parent":   chart_dendrogram_split_parent,
     "imshow_annot_custom": chart_imshow_annot_custom,
     "long_title":          chart_long_title,
     "long_ylabel":         chart_long_ylabel,

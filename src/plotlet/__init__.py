@@ -22,6 +22,7 @@ from .layout_diagram import layout_diagram
 from .themes import load_theme, available_themes, register_theme
 from .facet import facet, FacetGrid
 from .data import load, list_datasets
+from .cluster import cluster, cluster_split, SplitTree
 from . import draw, utils
 
 __all__ = ["chart", "Chart", "Layout", "SPEC", "TAB10", "colors",
@@ -30,6 +31,7 @@ __all__ = ["chart", "Chart", "Layout", "SPEC", "TAB10", "colors",
            "load_theme", "available_themes", "register_theme",
            "facet", "FacetGrid",
            "load", "list_datasets",
+           "cluster", "cluster_split", "SplitTree",
            "draw", "utils"]
 
 # Single source of truth: pyproject.toml. importlib.metadata reads it at

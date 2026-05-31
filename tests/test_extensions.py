@@ -33,9 +33,12 @@ import pytest
 
 
 # Extensions that get byte-compared baselines. Add an extension here when
-# 2+ cookbook recipes (or core tests) depend on its rendering.
+# 2+ cookbook recipes (or core tests) depend on its rendering, OR the
+# extension is built entirely on a public API surface we want to keep
+# stable (a canary that catches drift in `pt.cluster_split` /
+# `pt.cluster.layout_tree` / `pt.add_artist` — see `curved_tree`).
 BASELINE_EXTENSIONS = {"annotation_strip", "bubble_grid", "labels_strip",
-                       "significance_brackets"}
+                       "significance_brackets", "curved_tree"}
 
 
 def _iter_extensions():

@@ -23,6 +23,7 @@ import base64
 from ..registry import ArtistSpec, add_artist
 from ..utils import to_list_2d
 from .._spec import _D
+from .. import _splits
 from ..draw import rect, text_path
 from ..draw import encode_rgb
 from ..draw import colormap_lut, ContinuousNorm
@@ -63,11 +64,58 @@ def _parse_heatmap_input(args, kw):
     return matrix, [str(x) for x in cols], [str(x) for x in rows]
 
 
+def _png_for_blocks(ctx, cols, rows, bw, bh, rgb_at):
+    """Emit one `<image>` per (row-block × col-block) cell-flush region.
+
+    Reads block boundaries straight off the shared scales — this is the
+    only place that needs them, and the scale's `.splits` are always in
+    display order even when a peer artist (dendrogram) drove the cats
+    order. `_splits.block_bboxes_2d` yields a single full-range block
+    when no splits are set, so this is also the no-split fallback — one
+    PNG covering all cells, byte-identical to a hand-rolled single-
+    image path.
+    """
+    out = []
+    for r0, r1, c0, c1, sy_t, sy_b, sx_l, sx_r in _splits.block_bboxes_2d(
+            ctx, rows, cols, bw, bh,
+            ctx.y_scale.splits, ctx.x_scale.splits):
+        buf = bytearray()
+        for r in range(r0, r1):
+            for c in range(c0, c1):
+                rr, gg, bb = rgb_at(r, c)
+                buf.append(rr); buf.append(gg); buf.append(bb)
+        png = encode_rgb(bytes(buf), c1 - c0, r1 - r0)
+        b64 = base64.b64encode(png).decode("ascii")
+        out.append(f'<image x="{sx_l:.3f}" y="{sy_t:.3f}" '
+                   f'width="{sx_r - sx_l:.3f}" height="{sy_b - sy_t:.3f}" '
+                   f'preserveAspectRatio="none" image-rendering="pixelated" '
+                   f'href="data:image/png;base64,{b64}"/>')
+    return out
+
+
 def _heatmap_frame_defaults(args, kw):
-    _, cols, rows = _parse_heatmap_input(args, kw)
+    _, cols_orig, rows_orig = _parse_heatmap_input(args, kw)
+    sp = _splits.Splits.from_kwargs(kw, rows_orig, cols_orig)
+    _, rows, cols = sp.apply(rows=rows_orig, cols=cols_orig)
+    gap = float(kw.get("split_gap", _D["category_split_gap"]))
+    # `order=` provides the heatmap's first-seen clustered order as a
+    # default — it routes to `x_order_default` via the frame-default
+    # tagging in core, so a peer artist's `axis_order` (e.g. a clustering
+    # dendrogram) can override.
+    # `groups=` is the cat->group dict; the scale derives gaps from
+    # (final cats, groups) so they land in the right place regardless
+    # of who won the order race.
+    xkw = {"order": cols, "padding": 0}
+    ykw = {"order": rows, "padding": 0}
+    if kw.get("column_split") is not None:
+        xkw["groups"] = dict(zip(cols_orig, kw["column_split"]))
+        xkw["split_gap"] = gap
+    if kw.get("row_split") is not None:
+        ykw["groups"] = dict(zip(rows_orig, kw["row_split"]))
+        ykw["split_gap"] = gap
     out = [
-        ("xscale", ["category"], {"order": cols, "padding": 0}),
-        ("yscale", ["category"], {"order": rows, "padding": 0}),
+        ("xscale", ["category"], xkw),
+        ("yscale", ["category"], ykw),
         ("xticks", [None], {"marks": False}),
         ("yticks", [None], {"marks": False}),
     ]
@@ -83,6 +131,8 @@ def _heatmap_frame_defaults(args, kw):
 
 def _heatmap_record(args, kw):
     matrix, cols, rows = _parse_heatmap_input(args, kw)
+    sp = _splits.Splits.from_kwargs(kw, rows, cols)
+    matrix, rows, cols = sp.apply(matrix, rows, cols)
     nrows  = len(matrix)
     ncols  = len(matrix[0]) if matrix else 0
     if nrows != len(rows) or (matrix and ncols != len(cols)):
@@ -91,13 +141,21 @@ def _heatmap_record(args, kw):
             f"labels (rows={len(rows)}, cols={len(cols)})"
         )
     opts = {k: v for k, v in kw.items()
-            if k not in ("xticklabels", "yticklabels", "border")}
+            if k not in ("xticklabels", "yticklabels", "border",
+                         "row_split", "column_split", "split_gap")}
 
+    # A custom annot array is indexed like the original matrix; reorder
+    # it the same way so each label stays on its cell after a split.
+    annot = opts.get("annot")
+    if annot not in (None, True, False) and sp.has_any:
+        opts["annot"] = sp.apply_2d(to_list_2d(annot))
+
+    base = {"_splits": sp}
     palette = opts.get("palette")
     if palette is not None:
         return {"type": "heatmap", "_matrix": matrix, "_cols": cols, "_rows": rows,
                 "_nrows": nrows, "_ncols": ncols, "_is_categorical": True,
-                "_palette": palette, "opts": opts}
+                "_palette": palette, "opts": opts, **base}
 
     vmin = opts.get("vmin"); vmax = opts.get("vmax")
     norm = opts.get("norm", "linear")
@@ -113,19 +171,46 @@ def _heatmap_record(args, kw):
             vmin, vmax = (1.0, 10.0) if norm == "log" else (0.0, 1.0)
     return {"type": "heatmap", "_matrix": matrix, "_cols": cols, "_rows": rows,
             "_nrows": nrows, "_ncols": ncols, "_vmin": vmin, "_vmax": vmax,
-            "opts": opts}
+            "opts": opts, **base}
 
 
 def _heatmap_xdomain(a): return list(a["_cols"])
 def _heatmap_ydomain(a): return list(a["_rows"])
 
 
-def _heatmap_draw_categorical(a, ctx):
+def _align_to_scale(a, ctx):
+    """Return `(cols, rows, matrix, annot)` in scale display order.
+
+    Heatmap's record stores everything in its own first-seen clustered
+    order. When a peer artist (e.g. a clustering dendrogram) wins the
+    axis via `axis_order`, `ctx.x_scale.cats` differs from `a["_cols"]`
+    — we reorder matrix + custom annot once here so the rest of draw
+    can index by position. Fast path (no copy) when the scale agrees.
+    """
+    cols = ctx.x_scale.cats
+    rows = ctx.y_scale.cats
     matrix = a["_matrix"]
-    nrows = a["_nrows"]; ncols = a["_ncols"]
+    annot = a["opts"].get("annot")
+    if cols == a["_cols"] and rows == a["_rows"]:
+        return cols, rows, matrix, annot
+    col_pos = {c: i for i, c in enumerate(a["_cols"])}
+    row_pos = {r: i for i, r in enumerate(a["_rows"])}
+    cp = [col_pos[c] for c in cols]
+    rp = [row_pos[r] for r in rows]
+    matrix = [[a["_matrix"][rp[r]][cp[c]] for c in range(len(cols))]
+              for r in range(len(rows))]
+    if annot not in (None, True, False):
+        a_orig = to_list_2d(annot)
+        annot = [[a_orig[rp[r]][cp[c]] for c in range(len(cols))]
+                 for r in range(len(rows))]
+    return cols, rows, matrix, annot
+
+
+def _heatmap_draw_categorical(a, ctx):
+    cols, rows, matrix, annot_arg = _align_to_scale(a, ctx)
+    nrows = len(rows); ncols = len(cols)
     if nrows == 0 or ncols == 0:
         return ""
-    cols = a["_cols"]; rows = a["_rows"]
     opts = a["opts"]
     palette = {k: resolve_color(v) for k, v in a["_palette"].items()}
     absent_fill = resolve_color(opts.get("absent_fill", "#eeeeee"))
@@ -146,28 +231,14 @@ def _heatmap_draw_categorical(a, ctx):
                 fill = palette.get(v, absent_fill) if v is not None else absent_fill
                 out.append(rect(x0, y0, bw, bh, fill=fill))
     else:
-        x_left  = ctx.x_scale(cols[0])  - bw / 2
-        x_right = ctx.x_scale(cols[-1]) + bw / 2
-        y_top   = ctx.y_scale(rows[0])  - bh / 2
-        y_bot   = ctx.y_scale(rows[-1]) + bh / 2
-        sy_t = min(y_top, y_bot); sy_b = max(y_top, y_bot)
-        sx_l = min(x_left, x_right); sx_r = max(x_left, x_right)
         rgb_map = {k: _hex_to_rgb(v) for k, v in palette.items()}
         absent_rgb = _hex_to_rgb(absent_fill)
-        buf = bytearray()
-        for r in range(nrows):
-            for c in range(ncols):
-                v = matrix[r][c]
-                rr, gg, bb = rgb_map.get(v, absent_rgb) if v is not None else absent_rgb
-                buf.append(rr); buf.append(gg); buf.append(bb)
-        png = encode_rgb(bytes(buf), ncols, nrows)
-        b64 = base64.b64encode(png).decode("ascii")
-        out.append(f'<image x="{sx_l:.3f}" y="{sy_t:.3f}" '
-                   f'width="{sx_r - sx_l:.3f}" height="{sy_b - sy_t:.3f}" '
-                   f'preserveAspectRatio="none" image-rendering="pixelated" '
-                   f'href="data:image/png;base64,{b64}"/>')
+        def rgb_at(r, c):
+            v = matrix[r][c]
+            return rgb_map.get(v, absent_rgb) if v is not None else absent_rgb
+        out.extend(_png_for_blocks(ctx, cols, rows, bw, bh, rgb_at))
 
-    annot = opts.get("annot", False)
+    annot = annot_arg
     if annot is not False and annot is not None:
         label_source = matrix if annot is True else to_list_2d(annot)
         if len(label_source) != nrows or (label_source and len(label_source[0]) != ncols):
@@ -203,11 +274,10 @@ def _heatmap_draw(a, ctx):
     if a.get("_is_categorical"):
         return _heatmap_draw_categorical(a, ctx)
 
-    matrix = a["_matrix"]
-    nrows  = a["_nrows"]; ncols = a["_ncols"]
+    cols, rows, matrix, annot_arg = _align_to_scale(a, ctx)
+    nrows = len(rows); ncols = len(cols)
     if nrows == 0 or ncols == 0:
         return ""
-    cols = a["_cols"]; rows = a["_rows"]
     opts = a["opts"]
     norm = ContinuousNorm(a["_vmin"], a["_vmax"],
                            kind=opts.get("norm", "linear"),
@@ -236,36 +306,18 @@ def _heatmap_draw(a, ctx):
                     fill = f"rgb({lut[i]},{lut[i+1]},{lut[i+2]})"
                 out.append(rect(x0, y0, bw, bh, fill=fill))
     else:
-        # Category-scale PNG fallback. Extent is first-band-left to
-        # last-band-right; the image spans every cell flush since
-        # category_padding is forced to 0 by Chart.heatmap.
-        x_left  = ctx.x_scale(cols[0])  - bw / 2
-        x_right = ctx.x_scale(cols[-1]) + bw / 2
-        y_top    = ctx.y_scale(rows[0])  - bh / 2
-        y_bot    = ctx.y_scale(rows[-1]) + bh / 2
-        # y-category puts rows[0] at TOP (cy decreases with index). So
-        # y_top here is actually the smaller pixel-y of rows[0]'s band,
-        # which corresponds to row 0 = top of image. Good — no flip needed.
-        sy_t = min(y_top, y_bot); sy_b = max(y_top, y_bot)
-        sx_l = min(x_left, x_right); sx_r = max(x_left, x_right)
+        # Category-scale PNG fallback. `_png_for_blocks` covers the
+        # no-split case as a single full-range block — one image flush
+        # across all cells, byte-identical to the hand-rolled path.
+        def rgb_at(r, c):
+            v = matrix[r][c]
+            if v is None or v != v:
+                return absent_rgb
+            i = int(norm.to_unit(v) * 255 + 0.5) * 3
+            return lut[i], lut[i + 1], lut[i + 2]
+        out.extend(_png_for_blocks(ctx, cols, rows, bw, bh, rgb_at))
 
-        buf = bytearray()
-        for r in range(nrows):
-            for c in range(ncols):
-                v = matrix[r][c]
-                if v is None or v != v:
-                    buf.append(absent_rgb[0]); buf.append(absent_rgb[1]); buf.append(absent_rgb[2])
-                else:
-                    i = int(norm.to_unit(v) * 255 + 0.5) * 3
-                    buf.append(lut[i]); buf.append(lut[i+1]); buf.append(lut[i+2])
-        png = encode_rgb(bytes(buf), ncols, nrows)
-        b64 = base64.b64encode(png).decode("ascii")
-        out.append(f'<image x="{sx_l:.3f}" y="{sy_t:.3f}" '
-                   f'width="{sx_r - sx_l:.3f}" height="{sy_b - sy_t:.3f}" '
-                   f'preserveAspectRatio="none" image-rendering="pixelated" '
-                   f'href="data:image/png;base64,{b64}"/>')
-
-    annot = opts.get("annot", False)
+    annot = annot_arg
     if annot is not False and annot is not None:
         # Same convention as imshow: `True` → format the cell value;
         # 2-D array → use the supplied labels (numbers via `fmt`,
@@ -335,12 +387,17 @@ def _heatmap_legend_gradient(a):
 
 
 def _heatmap_data_attrs(a):
+    sp = a["_splits"]
+    blocks = {}
+    if sp.n_row_blocks: blocks["row-blocks"] = sp.n_row_blocks
+    if sp.n_col_blocks: blocks["col-blocks"] = sp.n_col_blocks
     if a.get("_is_categorical"):
         return {
             "rows": a["_nrows"],
             "cols": a["_ncols"],
             "mode": "categorical",
             "categories": list(a["_palette"].keys()),
+            **blocks,
         }
     out = {
         "rows": a["_nrows"],
@@ -360,6 +417,7 @@ def _heatmap_data_attrs(a):
     annot = a["opts"].get("annot", False)
     if annot is not False and annot is not None:
         out["annot"] = "values" if annot is True else "custom"
+    out.update(blocks)
     return out
 
 

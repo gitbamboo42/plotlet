@@ -188,22 +188,50 @@ class _CategoryScale:
     `.bandwidth` and subtract half to get the rect's left edge.
     """
 
-    def __init__(self, cats, r0, r1, padding):
+    def __init__(self, cats, r0, r1, padding, splits=None, gap=0.0, groups=None):
         self.cats = list(cats)
         self.r0, self.r1 = r0, r1
         self.padding = padding
         n = len(self.cats) or 1
-        total = r1 - r0
+        # Two ways to declare splits, kept separate so neither path penalises
+        # the other:
+        # - `splits=` is the low-level form: explicit band indices. Stable
+        #   across reorders by external callers, used by tests / hand-rolled
+        #   scales.
+        # - `groups=` is the cat->group dict form: the scale walks `cats` in
+        #   final order and inserts a boundary wherever the group label
+        #   changes. Lets the heatmap stay agnostic about the eventual axis
+        #   order — gaps land in the right place even when a peer artist
+        #   (e.g. dendrogram) drives the order through `axis_order`.
+        # `groups=` wins when both are passed.
+        if groups:
+            derived, prev = [], None
+            for i, c in enumerate(self.cats):
+                g = groups.get(c)
+                if i > 0 and g != prev:
+                    derived.append(i)
+                prev = g
+            self.splits = derived
+        else:
+            self.splits = sorted({b for b in splits if 0 < b < n}) if splits else []
+        self.gap = float(gap) if self.splits else 0.0
+        total = (r1 - r0) - self.gap * len(self.splits)
         self.step = total / (n + padding)
         self.bandwidth = self.step * (1 - padding)
         self._center = self.r0 + padding * self.step + self.bandwidth / 2
+
+    def _gap_before(self, i):
+        """Accumulated split-gap px sitting to the left of band `i`."""
+        if not self.splits:
+            return 0.0
+        return self.gap * sum(1 for b in self.splits if b <= i)
 
     def __call__(self, cat):
         try:
             i = self.cats.index(cat)
         except ValueError:
             return float("nan")
-        return self._center + i * self.step
+        return self._center + i * self.step + self._gap_before(i)
 
     def ticks(self, n=None):
         return list(self.cats)

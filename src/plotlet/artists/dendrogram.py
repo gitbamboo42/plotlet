@@ -1,17 +1,42 @@
-"""Hierarchical-clustering tree.
+"""Hierarchical-clustering tree renderer.
 
-Standalone artist — doesn't auto-couple to imshow; the caller reorders
-heatmap data with the leaf permutation. Compute + draw co-located here.
+The artist is a *tree renderer*: it consumes a `cluster.SplitTree`
+(N linkage matrices + their display order) and emits the SVG. The
+clustering math lives in [`cluster.py`](../cluster.py).
+
+Three input paths, all funnel into the same SplitTree → layout → draw
+pipeline:
+
+- `data=` (+ optional `column_split=` / `row_split=`) → `cluster()` or
+  `cluster_split()` builds the tree.
+- `linkage=` → one-block tree wrap (skip scipy.linkage, user has Z).
+- `tree=` → use a pre-built SplitTree directly (lets the same cluster
+  result drive multiple charts without redoing scipy work).
+
+When split is in play, the dendrogram exposes its final leaf order via
+`axis_order`, so a peer heatmap with the same grouping vector picks up
+the ComplexHeatmap-style block order automatically — artist
+`axis_order` beats `frame_defaults` order in core's precedence rule.
+
+**`labels=` indexes the ORIGINAL input order, NOT the display order.**
+scipy's Z matrix uses original observation indices throughout; so
+`labels[i]` must still refer to original observation `i` after the
+tree reorders things. The renderer applies the scipy leaf permutation
+internally — the user supplies labels aligned with `data=` (row-by-row)
+and never has to reorder them. This is also what makes it safe for a
+peer heatmap to share a category x/y axis by name: both artists see the
+same labels (in original input order); the SplitTree's `axis_order`
+hook then drives the *final* display order downstream.
 """
 from __future__ import annotations
 
 import math
 
-from scipy.cluster.hierarchy import linkage as _scipy_linkage
-from scipy.cluster.hierarchy import dendrogram as _scipy_dendrogram
-
 from ..registry import ArtistSpec, add_artist
 from .._spec import _D
+from ..cluster import (layout_tree, layout_parent,
+                       leaf_position, block_apex_centers, parent_leaf_px,
+                       fit_parent, build_tree, tree_frame_defaults)
 from ..draw import polyline
 from ..draw import resolve_color
 
@@ -19,76 +44,54 @@ from ..draw import resolve_color
 _ORIENTS = ("top", "bottom", "left", "right")
 
 
-def _normalize_dcoords(dcoord_rows):
-    # Rescale non-zero merge heights so the shortest merge isn't visually
-    # zero. Zero entries stay zero (leaf endpoints).
-    nonzero = [v for row in dcoord_rows for v in row if v != 0.0]
-    if not nonzero:
-        return dcoord_rows
-    y_min, y_max = min(nonzero), max(nonzero)
-    interval = y_max - y_min
-    if interval == 0.0:
-        return dcoord_rows
-    return [
-        [((v - y_min) / interval + 0.2) if v != 0.0 else 0.0 for v in row]
-        for row in dcoord_rows
-    ]
-
-
-def _compute_coords(data, linkage, method, metric):
-    if linkage is None:
-        if data is None:
-            raise ValueError("dendrogram(): pass either data= or linkage=")
-        if len(data) < 2:
-            raise ValueError(
-                f"dendrogram(): need at least 2 observations, got {len(data)}"
-            )
-        Z = _scipy_linkage(data, method=method, metric=metric)
-    else:
-        Z = linkage
-    info = _scipy_dendrogram(Z, no_plot=True)
-    # scipy emits icoord at 5, 15, 25, ... — rescale via (v-5)/10 so leaf
-    # endpoints land at integer category positions 0..n-1, aligning with
-    # plotlet's category scale when labels= is supplied. Cast to Python
-    # types to keep np scalars out of SVG attrs.
-    icoord = [[(float(v) - 5.0) / 10.0 for v in row] for row in info["icoord"]]
-    dcoord = _normalize_dcoords([[float(v) for v in row] for row in info["dcoord"]])
-    leaves = [int(v) for v in info["leaves"]]
-    return icoord, dcoord, leaves
-
-
 def _dendrogram_record(args, kw):
     kw = dict(kw)
-    data = args[0] if args else kw.pop("data", None)
-    if data is not None and hasattr(data, "tolist"):
-        data = data.tolist()
-    linkage = kw.pop("linkage", None)
-    method = kw.pop("method", "single")
-    metric = kw.pop("metric", "euclidean")
     orient = kw.pop("orient", "top")
-    labels = kw.pop("labels", None)
     if orient not in _ORIENTS:
         raise ValueError(
             f"dendrogram(): orient={orient!r}; expected one of {_ORIENTS}"
         )
-    icoord, dcoord, leaves = _compute_coords(data, linkage, method, metric)
-    n_leaves = len(leaves)
-    max_h = max((v for row in dcoord for v in row), default=1.0) or 1.0
-    leaf_labels = None
-    if labels is not None:
-        labels = list(labels)
-        if len(labels) != n_leaves:
+    # Split kwarg follows the leaf axis: column_split for top/bottom
+    # (leaves on x), row_split for left/right (leaves on y) — matches the
+    # heatmap naming so the same grouping vector flows to both artists.
+    split_key = "column_split" if orient in ("top", "bottom") else "row_split"
+    split = kw.pop(split_key, None)
+    kw.pop("split_gap", None)  # consumed by frame_defaults
+    # `parent=` opt-in: False (default) = today's behavior; True = enable
+    # with default 0.30 height fraction; float = custom fraction.
+    # Silently a no-op when the tree has no `between_Z` (single block).
+    parent_kw = kw.pop("parent", False)
+
+    tree, had_labels = build_tree(args, kw, split)
+    blocks, offsets, final_labels = layout_tree(tree)
+
+    parent_block = None
+    if parent_kw and tree.between_Z is not None:
+        parent_frac = (_D["tree_parent_height"] if parent_kw is True
+                       else float(parent_kw))
+        if not (0.0 < parent_frac < 0.8):
             raise ValueError(
-                f"dendrogram(): labels has {len(labels)} entries but data "
-                f"has {n_leaves} leaves"
+                f"dendrogram(): parent= must be in (0, 0.8); got {parent_frac}"
             )
-        leaf_labels = [str(labels[i]) for i in leaves]
+        blocks, parent_block = fit_parent(
+            blocks, layout_parent(tree), parent_frac,
+            gap_frac=_D["tree_parent_gap"],
+        )
+    # No user-supplied labels = numeric leaf axis (legacy fallback);
+    # `cluster` / `cluster_split` fabricate string indices in this case,
+    # but the renderer keeps the unlabeled path active so `_leaf_axis_pos`
+    # uses scale.idx instead of cat lookup.
+    leaf_labels = final_labels if had_labels else None
+    all_dc = [v for _, dc, _ in blocks for row in dc for v in row]
+    if parent_block is not None:
+        all_dc.extend(v for row in parent_block[1] for v in row)
+    max_h = max(all_dc, default=1.0) or 1.0
     return {
         "type": "dendrogram",
-        "_icoord": icoord,
-        "_dcoord": dcoord,
-        "_leaves": leaves,
-        "_n_leaves": n_leaves,
+        "_blocks": blocks,
+        "_block_offsets": offsets,
+        "_parent": parent_block,
+        "_n_leaves": sum(len(lv) for _, _, lv in blocks),
         "_max_h": max_h,
         "_leaf_labels": leaf_labels,
         "orient": orient,
@@ -122,20 +125,6 @@ def _orient_xy(orient, ic, dc, max_h):
     return [max_h - v for v in dc], ic  # left
 
 
-def _leaf_axis_pos(scale, labels, idx):
-    # Numeric path: each leaf occupies the cell [i, i+1] in axis units;
-    # center it at i + 0.5. xdomain is [0, n], so the n leaves tile the
-    # axis exactly.
-    if labels is None:
-        return scale(idx + 0.5)
-    n = len(labels)
-    lo = int(math.floor(idx))
-    if idx == lo and 0 <= lo < n:
-        return scale(labels[lo])
-    lo = max(0, min(n - 2, lo))
-    return scale(labels[lo]) + (idx - lo) * scale.step
-
-
 def _dendrogram_draw(a, ctx):
     col = resolve_color(a["opts"].get("color")) or ctx.color or _D["dendrogram_color"]
     lw = a["opts"].get("linewidth", _D["dendrogram_linewidth"])
@@ -144,52 +133,64 @@ def _dendrogram_draw(a, ctx):
     labels = a["_leaf_labels"]
     leaf_on_x = orient in ("top", "bottom")
     out = []
-    for ic, dc in zip(a["_icoord"], a["_dcoord"]):
-        xs, ys = _orient_xy(orient, ic, dc, max_h)
-        pts = []
-        ok = True
-        for x, y in zip(xs, ys):
-            if leaf_on_x:
-                px = _leaf_axis_pos(ctx.x_scale, labels, x)
-                py = ctx.y_scale(y)
-            else:
-                px = ctx.x_scale(x)
-                py = _leaf_axis_pos(ctx.y_scale, labels, y)
-            if not (math.isfinite(px) and math.isfinite(py)):
-                ok = False
-                break
-            pts.append((px, py))
-        if not ok:
-            continue
-        out.append(polyline(pts, color=col, width=lw))
+    # One pass over blocks (single tree = one block, so this loop also
+    # covers the unsplit case). Per-block leaf indices are local to the
+    # block; `offset` shifts them into the global display coordinate.
+    # The gap-aware scale lookup then places them at the right pixel.
+    for offset, (ic_block, dc_block, _) in zip(a["_block_offsets"], a["_blocks"]):
+        for ic, dc in zip(ic_block, dc_block):
+            xs, ys = _orient_xy(orient, ic, dc, max_h)
+            pts = []
+            ok = True
+            for x, y in zip(xs, ys):
+                if leaf_on_x:
+                    px = leaf_position(ctx.x_scale, labels, offset + x)
+                    py = ctx.y_scale(y)
+                else:
+                    px = ctx.x_scale(x)
+                    py = leaf_position(ctx.y_scale, labels, offset + y)
+                if not (math.isfinite(px) and math.isfinite(py)):
+                    ok = False
+                    break
+                pts.append((px, py))
+            if not ok:
+                continue
+            out.append(polyline(pts, color=col, width=lw))
+    # Parent tree (optional, opt-in via `parent=True`/`parent=<frac>`):
+    # leaves sit at block midpoints on the leaf axis; merges live above
+    # the per-block region thanks to `_apply_parent_layout`'s dcoord
+    # rescale. Same draw shape as per-block — just a different leaf-
+    # position function.
+    parent = a.get("_parent")
+    if parent is not None:
+        p_ic, p_dc, _ = parent
+        midpoints = block_apex_centers(
+            ctx.x_scale if leaf_on_x else ctx.y_scale,
+            labels, a["_block_offsets"], a["_blocks"],
+        )
+        for ic, dc in zip(p_ic, p_dc):
+            xs, ys = _orient_xy(orient, ic, dc, max_h)
+            pts = []
+            ok = True
+            for x, y in zip(xs, ys):
+                if leaf_on_x:
+                    px = parent_leaf_px(midpoints, x)
+                    py = ctx.y_scale(y)
+                else:
+                    px = ctx.x_scale(x)
+                    py = parent_leaf_px(midpoints, y)
+                if not (math.isfinite(px) and math.isfinite(py)):
+                    ok = False
+                    break
+                pts.append((px, py))
+            if not ok:
+                continue
+            out.append(polyline(pts, color=col, width=lw))
     return "".join(out)
 
 
 def _dendrogram_frame_defaults(args, kw):
-    orient = kw.get("orient", "top")
-    leaf_on_x = orient in ("top", "bottom")
-    has_labels = kw.get("labels") is not None
-    out = [("spines", [], {"top": False, "right": False,
-                            "bottom": False, "left": False})]
-    out.append(("yticks" if leaf_on_x else "xticks", [[]], {}))
-    if not has_labels:
-        out.append(("xticks" if leaf_on_x else "yticks", [[]], {}))
-    # Root-side breathing room: the topmost merge sits at the data-area
-    # boundary by default (because `tight_domain=True` skips the usual
-    # x_expand/y_expand padding), which half-clips its stroke against the
-    # inner clip. Reuse the same expand mechanism scatter/line plots use
-    # for keeping content away from the spine, but apply only to the
-    # root side so leaves stay flush against any panel attached below.
-    # Explicit expand calls win over tight_domain's implicit zero.
-    if orient == "top":
-        out.append(("y_expand", [0, 0.05], {}))
-    elif orient == "bottom":
-        out.append(("y_expand", [0.05, 0], {}))
-    elif orient == "right":
-        out.append(("x_expand", [0, 0.05], {}))
-    elif orient == "left":
-        out.append(("x_expand", [0.05, 0], {}))
-    return out
+    return tree_frame_defaults(kw, split_gap_default=_D["category_split_gap"])
 
 
 def _dendrogram_axis_order(a):
@@ -204,10 +205,13 @@ def _dendrogram_data_attrs(a):
         "orient": a["orient"],
         "n-leaves": a["_n_leaves"],
         "max-height": round(a["_max_h"], 6),
-        "leaves": a["_leaves"],
+        # Concatenated scipy leaves across blocks (one block in the unsplit case).
+        "leaves": [int(i) for _, _, lv in a["_blocks"] for i in lv],
     }
     if a["_leaf_labels"] is not None:
         out["leaf-labels"] = a["_leaf_labels"]
+    if len(a["_blocks"]) > 1:
+        out["blocks"] = len(a["_blocks"])
     return out
 
 

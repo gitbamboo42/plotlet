@@ -52,7 +52,11 @@ def _extract_theme(calls) -> str | None:
     chart never set a theme — `active_theme(None)` is a passthrough that
     leaves the spec dicts on their current values."""
     name = None
-    for call_name, args, _ in calls:
+    for call in calls:
+        # Calls are 3-tuples from user code or 4-tuples from frame_defaults
+        # (see Chart.__getattr__). Theme is always user-set, but iterating
+        # the same list requires tolerating both shapes.
+        call_name, args = call[0], call[1]
         if call_name == "theme":
             name = args[0] if args else None
     return name
@@ -458,7 +462,13 @@ class Chart(_Renderable):
                         kwargs["data"] = self._data
                 if spec is not None and spec.frame_defaults is not None:
                     for call in spec.frame_defaults(list(args), dict(kwargs)) or ():
-                        self._calls.append(call)
+                        # Tag with a 4th element so `_replay` can route
+                        # `xscale(order=...)` from frame_defaults to
+                        # `<axis>_order_default` — letting a peer artist's
+                        # `axis_order` hook (e.g. dendrogram) win over the
+                        # frame_default's suggested order without
+                        # disturbing user-explicit `c.xscale(order=...)`.
+                        self._calls.append((*call, True))
                 self._calls.append((name, list(args), dict(kwargs)))
                 return self
             return recorder

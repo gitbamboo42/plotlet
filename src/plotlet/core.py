@@ -83,12 +83,17 @@ class _AxisDescriptor:
     flip: bool = False
     linthresh: float = 1.0  # symlog only
     exponent: float = 1.0   # power only
+    splits: list | None = None   # category only: band indices that begin a block
+    split_gap: float = 0.0       # category only: px reserved before each split
+    groups: dict | None = None   # category only: cat -> group label; scale derives splits
 
     def build(self, r0, r1):
         if self.kind == "log":
             return _LogScale(self.lo, self.hi, r0, r1)
         if self.kind == "category":
-            return _CategoryScale(self.cats or [], r0, r1, padding=self.padding)
+            return _CategoryScale(self.cats or [], r0, r1, padding=self.padding,
+                                  splits=self.splits, gap=self.split_gap,
+                                  groups=self.groups)
         if self.kind == "symlog":
             return _SymlogScale(self.lo, self.hi, r0, r1, linthresh=self.linthresh)
         if self.kind == "power":
@@ -160,19 +165,30 @@ def _tick_label(s, x, y, size, angle, axis,
     return f'<g transform="translate({x:.2f},{y:.2f}) rotate({-angle})">{text}</g>'
 
 
-def _record_scale(st, axis, args, kw):
+def _record_scale(st, axis, args, kw, *, from_default=False):
     """Decode an xscale()/yscale() call into state.
 
     `args[0]` is the scale kind ("linear", "log", "symlog", "sqrt",
     "category"). Per-kind kwargs (`order`, `padding`, `linthresh`,
     `exponent`, `reverse`) are stashed on the matching `<axis>_*`
-    keys when supplied; omitted kwargs leave defaults untouched."""
+    keys when supplied; omitted kwargs leave defaults untouched.
+
+    `from_default=True` (only set when the call was emitted by an
+    artist's `frame_defaults`) routes `order=` to `<axis>_order_default`
+    instead of `<axis>_order`, so a peer artist's `axis_order` hook can
+    win over an artist-suggested order while a user-explicit
+    `c.xscale(order=...)` still wins over both."""
     st[f"{axis}scale"] = args[0]
-    if "order" in kw:     st[f"{axis}_order"]     = list(kw["order"])
+    if "order" in kw:
+        target = f"{axis}_order_default" if from_default else f"{axis}_order"
+        st[target] = list(kw["order"])
     if "padding" in kw:   st[f"{axis}_padding"]   = kw["padding"]
     if "linthresh" in kw: st[f"{axis}_linthresh"] = float(kw["linthresh"])
     if "exponent" in kw:  st[f"{axis}_exponent"]  = float(kw["exponent"])
     if "reverse" in kw:   st[f"{axis}_reverse"]   = bool(kw["reverse"])
+    if "splits" in kw:    st[f"{axis}_splits"]    = list(kw["splits"]) if kw["splits"] else None
+    if "split_gap" in kw: st[f"{axis}_split_gap"] = float(kw["split_gap"])
+    if "groups" in kw:    st[f"{axis}_groups"]    = dict(kw["groups"]) if kw["groups"] else None
 
 
 def _record_ticks(st, axis, args, kw):
@@ -282,6 +298,10 @@ def _replay(calls):
         "x_linthresh": 1.0, "y_linthresh": 1.0,
         "x_exponent": 1.0, "y_exponent": 1.0,
         "x_reverse": False, "y_reverse": False,
+        "x_splits": None, "y_splits": None,
+        "x_split_gap": 0.0, "y_split_gap": 0.0,
+        "x_groups": None, "y_groups": None,
+        "x_order_default": None, "y_order_default": None,
         # Data-range expansion (matches matplotlib `axes.xmargin` / ggplot `expand`).
         # None = use spec default; (lo, hi) = explicit fractions of data span.
         "x_expand": None, "y_expand": None,
@@ -323,7 +343,17 @@ def _replay(calls):
         "clip": True,
         "facecolor": None,
     }
-    for name, args, kw in calls:
+    for call in calls:
+        # Calls are stored as 3-tuples `(name, args, kw)` from user code
+        # or 4-tuples `(name, args, kw, from_default=True)` when emitted by
+        # an artist's `frame_defaults` (see Chart.__getattr__). The flag
+        # lets `_record_scale` distinguish a frame-default `order=` (loses
+        # to a peer artist's `axis_order` hook) from a user-explicit one.
+        if len(call) == 4:
+            name, args, kw, from_default = call
+        else:
+            name, args, kw = call
+            from_default = False
         spec = get_artist(name)
         if spec is not None:
             # Pass fresh copies so a `kw.pop(...)` inside `record()` doesn't
@@ -341,8 +371,8 @@ def _replay(calls):
         elif name == "ylabel": st["ylabel"] = args[0]
         elif name == "xlim":   st["xlim"] = (args[0], args[1])
         elif name == "ylim":   st["ylim"] = (args[0], args[1])
-        elif name == "xscale": _record_scale(st, "x", args, kw)
-        elif name == "yscale": _record_scale(st, "y", args, kw)
+        elif name == "xscale": _record_scale(st, "x", args, kw, from_default=from_default)
+        elif name == "yscale": _record_scale(st, "y", args, kw, from_default=from_default)
         elif name == "xticks": _record_ticks(st, "x", args, kw)
         elif name == "yticks": _record_ticks(st, "y", args, kw)
         elif name == "x_expand": st["x_expand"] = _normalize_expand(args)
@@ -711,12 +741,11 @@ def _x_descriptor(st) -> _AxisDescriptor:
     """Compute this panel's natural x-axis descriptor from its own state.
 
     Categorical precedence:
-      1. explicit `xscale("category", order=[...])` → that exact order
+      1. user-explicit `c.xscale("category", order=[...])` → that exact order
       2. an artist's `axis_order` hook (e.g. dendrogram's leaf order)
-      3. `xscale("category")` with no order → alphabetical of unique x values
-      4. any artist contributes string-valued x (bar, scatter on strings,
-         …) → alphabetical of unique x values
-      5. otherwise → linear/log path
+      3. an artist `frame_defaults` `xscale(order=[...])` (e.g. heatmap's
+         first-seen clustered order) → x_order_default
+      4. `collect_categories` → first-appearance of unique x values
     """
     _prebin_hist(st)
     artists = st["artists"]
@@ -727,9 +756,13 @@ def _x_descriptor(st) -> _AxisDescriptor:
         if st["x_order"] is not None:
             cats = list(st["x_order"])
         else:
-            cats = _artist_axis_order(artists, "x") or collect_categories(artists, "x")
+            cats = (_artist_axis_order(artists, "x")
+                    or st["x_order_default"]
+                    or collect_categories(artists, "x"))
         padding = _D["category_padding"] if st["x_padding"] is None else st["x_padding"]
-        return _AxisDescriptor(kind="category", cats=cats, padding=padding)
+        return _AxisDescriptor(kind="category", cats=cats, padding=padding,
+                               splits=st["x_splits"], split_gap=st["x_split_gap"],
+                               groups=st["x_groups"])
 
     is_time = st["xscale"] == "time" or _is_temporal_axis(artists, "x")
     x_lo, x_hi = _scan_domain(artists, "x")
@@ -808,9 +841,13 @@ def _y_descriptor(st) -> _AxisDescriptor:
         if st["y_order"] is not None:
             cats = list(st["y_order"])
         else:
-            cats = _artist_axis_order(artists, "y") or collect_categories(artists, "y")
+            cats = (_artist_axis_order(artists, "y")
+                    or st["y_order_default"]
+                    or collect_categories(artists, "y"))
         padding = _D["category_padding"] if st["y_padding"] is None else st["y_padding"]
-        return _AxisDescriptor(kind="category", cats=cats, padding=padding)
+        return _AxisDescriptor(kind="category", cats=cats, padding=padding,
+                               splits=st["y_splits"], split_gap=st["y_split_gap"],
+                               groups=st["y_groups"])
 
     is_time = st["yscale"] == "time" or _is_temporal_axis(artists, "y")
     force_zero = _any_artist_force_zero(artists, "y")
@@ -865,9 +902,13 @@ def _x_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
         if anchor["x_order"] is not None:
             cats = list(anchor["x_order"])
         else:
-            cats = _artist_axis_order(all_artists, "x") or collect_categories(all_artists, "x")
+            cats = (_artist_axis_order(all_artists, "x")
+                    or anchor["x_order_default"]
+                    or collect_categories(all_artists, "x"))
         padding = _resolve_shared_padding(states, "x_padding")
-        return _AxisDescriptor(kind="category", cats=cats, padding=padding)
+        return _AxisDescriptor(kind="category", cats=cats, padding=padding,
+                               splits=anchor["x_splits"], split_gap=anchor["x_split_gap"],
+                               groups=anchor["x_groups"])
     is_time = anchor["xscale"] == "time" or _is_temporal_axis(all_artists, "x")
     x_lo, x_hi = _scan_domain(all_artists, "x")
     x_tight = _axis_is_tight(all_artists, "x")
@@ -900,9 +941,13 @@ def _y_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
         if anchor["y_order"] is not None:
             cats = list(anchor["y_order"])
         else:
-            cats = _artist_axis_order(all_artists, "y") or collect_categories(all_artists, "y")
+            cats = (_artist_axis_order(all_artists, "y")
+                    or anchor["y_order_default"]
+                    or collect_categories(all_artists, "y"))
         padding = _resolve_shared_padding(states, "y_padding")
-        return _AxisDescriptor(kind="category", cats=cats, padding=padding)
+        return _AxisDescriptor(kind="category", cats=cats, padding=padding,
+                               splits=anchor["y_splits"], split_gap=anchor["y_split_gap"],
+                               groups=anchor["y_groups"])
     is_time = anchor["yscale"] == "time" or _is_temporal_axis(all_artists, "y")
     force_zero = _any_artist_force_zero(all_artists, "y")
     y_lo, y_hi = _scan_domain(all_artists, "y")

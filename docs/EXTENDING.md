@@ -156,3 +156,31 @@ stash pre-processed data in [`builtin_artists.py`](../src/plotlet/builtin_artist
 
 Respect deferred rendering: `record` runs early, `draw` runs at `to_svg()`
 time. Don't compute scales or colors in `record` — they don't exist yet.
+
+---
+
+## Tree-shaped artists
+
+If you're writing a dendrogram variant (radial, icicle, curved branches,
+sunburst, …), don't reach for `scipy.cluster.hierarchy` directly — the
+`pt.cluster` module exposes the full layout pipeline so a third-party
+tree artist is purely a *renderer*. Canonical example:
+[`extensions/curved_tree.py`](../src/plotlet/extensions/curved_tree.py).
+
+| Public helper | Use |
+|---|---|
+| `pt.cluster(data, labels=, method=, metric=)` | One scipy.linkage → `SplitTree` (one block). |
+| `pt.cluster_split(data, split=, labels=, …)` | Two-level cluster (within-block + centroid between-block) → multi-block `SplitTree`. |
+| `pt.cluster.build_tree(args, kw, split)` | Standard input dispatch: pops `tree=` / `linkage=` / `data=` from `kw` and returns `(SplitTree, had_labels)`. Drop into your artist's `record`. |
+| `pt.cluster.layout_tree(tree)` | `SplitTree` → `(blocks, offsets, final_labels)` ready for drawing. Per-block scipy.dendrogram + pooled height normalize. |
+| `pt.cluster.layout_parent(tree)` | The optional centroid tree's `(icoord, dcoord, leaves)`, or `None` for single-block trees. |
+| `pt.cluster.fit_parent(blocks, parent_layout, frac, gap_frac=)` | Shrinks per-block dcoords + drops parent leaves to each block's apex so both fit in one panel. |
+| `pt.cluster.leaf_position(scale, labels, disp)` | Float leaf-position → pixel; gap-aware on split scales. |
+| `pt.cluster.block_apex_centers(scale, labels, offsets, blocks)` | x-center of each block's topmost merge bar — where parent leaves should land. |
+| `pt.cluster.parent_leaf_px(midpoints, x)` | Interpolate between block midpoints for fractional parent-tree x values. |
+| `pt.cluster.tree_frame_defaults(kw, *, split_gap_default)` | Standard `frame_defaults` boilerplate for tree artists: spines off, hide height-axis ticks, inject `groups=` on the leaf scale when `column_split=` / `row_split=` is set, root-side expand. |
+
+A new tree variant is then ~3 callbacks (record / draw / axis_order),
+each a thin wrapper around these helpers — the clustering and layout
+are not your concern. The visible API stays uniform: `c.<artist>(data,
+labels=, orient=, column_split=, parent=, ...)`.
