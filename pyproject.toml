@@ -44,6 +44,13 @@ dev = [
   "jupyter",
   "nbconvert",
 ]
+test = [
+  "pytest>=7",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
 
 [project.urls]
 Homepage = "https://github.com/gitbamboo42/plotlet"

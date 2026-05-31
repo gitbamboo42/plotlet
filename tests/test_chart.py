@@ -1,22 +1,20 @@
-#!/usr/bin/env python3
 """Baseline SVG regression tests for the `pt.chart(df, ...)` API.
 
-    python tests/test_chart.py            # check vs. baselines, exit 1 on mismatch
-    python tests/test_chart.py --update   # regenerate baselines (review diff!)
-    python tests/test_chart.py --gallery  # write baseline_images/chart/index.html
+    pytest tests/test_chart.py           # check vs. baselines
+    pytest tests/test_chart.py --update  # regenerate baselines (review diff!)
+    python tests/gen_gallery.py chart    # write baseline_images/chart/index.html
 
-The diff/update/gallery plumbing lives in `_runner.py`.
+The compare/update plumbing lives in `conftest.py`'s `baseline_compare`
+fixture; gallery emission is a separate script.
 """
 from __future__ import annotations
 
 import datetime
 import math
 import random
-import sys
 
 import plotlet as pt
-
-import _runner
+import pytest
 
 
 def _xs():
@@ -1685,5 +1683,6 @@ PLOTS = {
 }
 
 
-if __name__ == "__main__":
-    sys.exit(_runner.run("chart", PLOTS))
+@pytest.mark.parametrize("name,fn", list(PLOTS.items()), ids=list(PLOTS.keys()))
+def test_chart_baseline(name, fn, baseline_compare):
+    baseline_compare("chart", name, fn().to_svg())

@@ -15,7 +15,6 @@ import warnings
 
 import plotlet as pt
 
-import _runner
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +176,18 @@ PLOTS = {
 }
 
 
-if __name__ == "__main__":
-    rc1 = _run_invariants()
-    rc2 = _runner.run("attachments", PLOTS)
-    sys.exit(rc1 + rc2)
+import pytest
+
+@pytest.mark.parametrize("name,fn", list(PLOTS.items()), ids=list(PLOTS.keys()))
+def test_attachments_baseline(name, fn, baseline_compare):
+    baseline_compare("attachments", name, fn().to_svg())
+
+
+def test_attachments_invariants():
+    """Wraps the existing `_run_invariants` print-based runner so its
+    behavioral checks (size lock, share warning, data-area alignment)
+    run under pytest. A non-zero return surfaces as a single failure
+    with the count of failed invariants; individual failures get
+    printed to captured stdout."""
+    failed = _run_invariants()
+    assert failed == 0, f"{failed} attachment invariant(s) failed (see captured stdout)"

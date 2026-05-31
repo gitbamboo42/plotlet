@@ -16,7 +16,6 @@ import sys
 
 import plotlet as pt
 
-import _runner
 
 
 def _xs():
@@ -82,5 +81,8 @@ PLOTS = {
 }
 
 
-if __name__ == "__main__":
-    sys.exit(_runner.run("themes", PLOTS))
+import pytest
+
+@pytest.mark.parametrize("name,fn", list(PLOTS.items()), ids=list(PLOTS.keys()))
+def test_themes_baseline(name, fn, baseline_compare):
+    baseline_compare("themes", name, fn().to_svg())

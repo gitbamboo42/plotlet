@@ -16,7 +16,6 @@ import sys
 
 import plotlet as pt
 
-import _runner
 
 
 def _xs():
@@ -89,5 +88,8 @@ PLOTS = {
 }
 
 
-if __name__ == "__main__":
-    sys.exit(_runner.run("layout_diagram", PLOTS))
+import pytest
+
+@pytest.mark.parametrize("name,fn", list(PLOTS.items()), ids=list(PLOTS.keys()))
+def test_layout_diagram_baseline(name, fn, baseline_compare):
+    baseline_compare("layout_diagram", name, fn().to_svg())

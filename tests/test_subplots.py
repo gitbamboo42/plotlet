@@ -21,7 +21,6 @@ import sys
 
 import plotlet as pt
 
-import _runner
 
 
 def _xs():
@@ -413,7 +412,15 @@ def _run_invariants():
     return 0
 
 
-if __name__ == "__main__":
-    rc1 = _run_invariants()
-    rc2 = _runner.run("subplots", PLOTS)
-    sys.exit(rc1 or rc2)
+import pytest
+
+@pytest.mark.parametrize("name,fn", list(PLOTS.items()), ids=list(PLOTS.keys()))
+def test_subplots_baseline(name, fn, baseline_compare):
+    baseline_compare("subplots", name, fn().to_svg())
+
+
+def test_subplots_invariants():
+    """Wraps the existing `_run_invariants` runner — see `test_attachments`
+    for the same pattern."""
+    failed = _run_invariants()
+    assert failed == 0, f"{failed} subplot invariant(s) failed (see captured stdout)"

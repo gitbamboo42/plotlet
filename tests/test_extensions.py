@@ -27,11 +27,9 @@ from __future__ import annotations
 
 import importlib
 import pkgutil
-import sys
 
 import plotlet.extensions
-
-import _runner
+import pytest
 
 
 # Extensions that get byte-compared baselines. Add an extension here when
@@ -47,70 +45,27 @@ def _iter_extensions():
         yield info.name
 
 
-def main() -> int:
-    failed = []
-    no_demo = []
-    ok = 0
-    total = 0
-
-    for name in sorted(_iter_extensions()):
-        total += 1
-        try:
-            mod = importlib.import_module(f"plotlet.extensions.{name}")
-        except Exception as e:
-            failed.append((name, f"import {type(e).__name__}: {e}"))
-            print(f"FAIL   extensions/{name}.py  (import {type(e).__name__})")
-            continue
-
-        if not hasattr(mod, "demo"):
-            no_demo.append(name)
-            print(f"MISS   extensions/{name}.py  (no demo() function)")
-            continue
-
-        try:
-            chart = mod.demo()
-        except Exception as e:
-            failed.append((name, f"demo() {type(e).__name__}: {e}"))
-            print(f"FAIL   extensions/{name}.py  (demo() {type(e).__name__})")
-            continue
-
-        try:
-            svg = chart.to_svg()
-        except Exception as e:
-            failed.append((name, f"to_svg() {type(e).__name__}: {e}"))
-            print(f"FAIL   extensions/{name}.py  (to_svg() {type(e).__name__})")
-            continue
-
-        if "<svg" not in svg:
-            failed.append((name, "no <svg in output"))
-            print(f"FAIL   extensions/{name}.py  (no <svg in output)")
-            continue
-
-        ok += 1
-        print(f"OK     extensions/{name}.py  ({len(svg)} chars)")
-
-    n_failed = len(failed) + len(no_demo)
-    if n_failed:
-        print(f"\n{n_failed} of {total} extension smoke tests FAILED")
-        for n, e in failed:
-            print(f"  FAIL  {n}: {e[:120]}")
-        for n in no_demo:
-            print(f"  MISS  {n}: no demo() function")
-        smoke_rc = 1
-    else:
-        print(f"\n{ok} of {total} extension smoke tests passed")
-        smoke_rc = 0
-
-    # Baseline pass: byte-compare demo() output for the curated set.
-    print()
-    plots = {}
-    for name in sorted(BASELINE_EXTENSIONS):
-        mod = importlib.import_module(f"plotlet.extensions.{name}")
-        plots[name] = mod.demo
-    baseline_rc = _runner.run("extensions", plots)
-
-    return 1 if (smoke_rc or baseline_rc) else 0
+_ALL_EXTENSIONS = sorted(_iter_extensions())
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+@pytest.mark.parametrize("ext_name", _ALL_EXTENSIONS)
+def test_extension_smoke(ext_name):
+    """Every extension must import cleanly, expose a `demo()` callable, and
+    produce SVG output. Catches registration/import/draw regressions across
+    all ~45 extensions without per-file baseline files."""
+    mod = importlib.import_module(f"plotlet.extensions.{ext_name}")
+    assert hasattr(mod, "demo"), (
+        f"extensions/{ext_name}.py has no `demo()` function"
+    )
+    chart = mod.demo()
+    svg = chart.to_svg()
+    assert "<svg" in svg, f"extensions/{ext_name}.py demo().to_svg() produced no <svg>"
+
+
+@pytest.mark.parametrize("ext_name", sorted(BASELINE_EXTENSIONS))
+def test_extension_baseline(ext_name, baseline_compare):
+    """Byte-compare demo() output for the curated set in
+    `BASELINE_EXTENSIONS`. Promote here when 2+ cookbook recipes
+    (or core tests) depend on the extension's rendering."""
+    mod = importlib.import_module(f"plotlet.extensions.{ext_name}")
+    baseline_compare("extensions", ext_name, mod.demo().to_svg())

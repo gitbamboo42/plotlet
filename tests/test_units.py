@@ -223,5 +223,9 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+def test_dimensional():
+    """Wraps the existing print-based `main()` runner. A non-zero return
+    surfaces as a single pytest failure; individual failures get printed
+    to captured stdout. Easy to split into per-section tests later if we
+    want pytest to report each assertion separately."""
+    assert main() == 0, "dimensional API tests failed (see captured stdout)"

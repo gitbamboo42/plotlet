@@ -38,7 +38,7 @@ and why-not-X live in [README.md](README.md) and [docs/PHILOSOPHY.md](docs/PHILO
 
 ## Running tests
 
-`pip install -e .` then `python tests/test_chart.py` (add `--update` after intentional visual changes). Machine-specific Python paths in `CLAUDE.local.md` (gitignored).
+`pip install -e ".[test]"` then `pytest tests/` (add `--update` after intentional visual changes to regenerate baselines). For per-set gallery HTML: `python tests/gen_gallery.py <set>` or `python tests/gen_gallery.py all`. Machine-specific Python paths in `CLAUDE.local.md` (gitignored).
 
 ## Style
 
