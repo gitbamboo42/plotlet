@@ -15,6 +15,23 @@ directly — `c.scatter(xs, ys)`, `c.text(x, y, s)`, etc.
 import math
 
 from .._spec import _D, _DASH
+
+# Pre-computed unit-radius vertices of a 5-point star (outer radius = 1,
+# inner radius = 0.382 ≈ 1/φ², the classic plotting look). Listed
+# alternating outer/inner starting from the top tip and walking CW.
+_STAR5_VERTICES = [
+    (math.cos(-math.pi / 2 + i * math.pi / 5) * (1.0 if i % 2 == 0 else 0.382),
+     math.sin(-math.pi / 2 + i * math.pi / 5) * (1.0 if i % 2 == 0 else 0.382))
+    for i in range(10)
+]
+
+# Pre-computed unit-radius vertices of a vertex-up hexagon (top vertex
+# pointing up, walking CW). Matches matplotlib's `h` (hexagon1).
+_HEX_VERTICES = [
+    (math.cos(-math.pi / 2 + i * math.pi / 3),
+     math.sin(-math.pi / 2 + i * math.pi / 3))
+    for i in range(6)
+]
 from .font import measure_text, _glyph_path_d, _decoration_y_offset
 from .linestyles import resolve_linestyle
 
@@ -87,10 +104,11 @@ def _shape_opacity(alpha, fill_alpha, stroke_alpha,
 
 def marker(kind: str, x: float, y: float, size: float, color: str, alpha,
            edgecolor: str | None = None, edgewidth: float | None = None) -> str:
-    """Emit a single marker glyph (one of `"o" "s" "^" "v" "x" "+"`) at
-    pixel `(x, y)`. Raises `ValueError` for unknown marker codes.
+    """Emit a single marker glyph (one of
+    `"o" "s" "^" "v" "<" ">" "x" "+" "*" "D" "h"`) at pixel `(x, y)`.
+    Raises `ValueError` for unknown marker codes.
 
-    `edgecolor=` adds an outline to filled markers (`o`/`s`/`^`/`v`).
+    `edgecolor=` adds an outline to filled markers (`o`/`s`/`^`/`v`/`<`/`>`/`*`/`D`/`h`).
     `edgewidth=` overrides the stroke width for ALL markers (including the
     `x`/`+` outlines, which use `color` as their stroke); falls back to
     `_D["marker_stroke_width"]`."""
@@ -116,7 +134,30 @@ def marker(kind: str, x: float, y: float, size: float, color: str, alpha,
         return (f'<path d="M{x - size:.2f},{y:.2f}L{x + size:.2f},{y:.2f}'
                 f'M{x:.2f},{y - size:.2f}L{x:.2f},{y + size:.2f}" '
                 f'stroke="{color}" stroke-width="{msw}"{_op}/>')
-    raise ValueError(f"unknown marker kind {kind!r}; expected one of 'o' 's' '^' 'v' 'x' '+'.")
+    if kind == "*":
+        d = "M" + " L".join(f"{x + size*dx:.2f},{y + size*dy:.2f}"
+                            for dx, dy in _STAR5_VERTICES) + "Z"
+        return f'<path d="{d}" fill="{color}"{edge}{_op}/>'
+    if kind == "D":
+        # Diamond: 4 vertices (top/right/bottom/left), `size` is center-to-vertex.
+        return (f'<path d="M{x:.2f},{y - size:.2f}L{x + size:.2f},{y:.2f}'
+                f'L{x:.2f},{y + size:.2f}L{x - size:.2f},{y:.2f}Z" '
+                f'fill="{color}"{edge}{_op}/>')
+    if kind == "<":
+        # Triangle-left: tip at left, two corners at right.
+        return (f'<path d="M{x - size:.2f},{y:.2f}L{x + size:.2f},{y - size:.2f}'
+                f'L{x + size:.2f},{y + size:.2f}Z" fill="{color}"{edge}{_op}/>')
+    if kind == ">":
+        # Triangle-right: tip at right, two corners at left.
+        return (f'<path d="M{x + size:.2f},{y:.2f}L{x - size:.2f},{y - size:.2f}'
+                f'L{x - size:.2f},{y + size:.2f}Z" fill="{color}"{edge}{_op}/>')
+    if kind == "h":
+        # Hexagon, vertex-up orientation (matches matplotlib's `h`).
+        d = "M" + " L".join(f"{x + size*dx:.2f},{y + size*dy:.2f}"
+                            for dx, dy in _HEX_VERTICES) + "Z"
+        return f'<path d="{d}" fill="{color}"{edge}{_op}/>'
+    raise ValueError(f"unknown marker kind {kind!r}; expected one of "
+                     f"'o' 's' '^' 'v' '<' '>' 'x' '+' '*' 'D' 'h'.")
 
 
 def dash_attr(dash) -> str:
