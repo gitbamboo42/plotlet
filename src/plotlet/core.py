@@ -1089,11 +1089,14 @@ def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     has_xtl = (not suppress_xt) and any(str(l) for l in x_labels)
     if has_xtl:
         max_xtl_w = max((measure_text(str(l), x_size) for l in x_labels), default=0.0)
+        first_xtl_w = measure_text(str(x_labels[0]), x_size)
         last_xtl_w = measure_text(str(x_labels[-1]), x_size)
         _, xtl_bbox_h = _rotated_label_bbox(max_xtl_w, x_size, x_rot)
+        first_bbox_w, _ = _rotated_label_bbox(first_xtl_w, x_size, x_rot)
         last_bbox_w, _ = _rotated_label_bbox(last_xtl_w, x_size, x_rot)
     else:
         xtl_bbox_h = 0.0
+        first_bbox_w = 0.0
         last_bbox_w = 0.0
 
     has_ytl = (not suppress_yt) and any(str(l) for l in y_labels)
@@ -1145,16 +1148,31 @@ def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
         left += 2 + label_size + _PADSPEC["ylabel"]
 
     # Right: axis-only — outward tick stubs from `xticks(top=...)` /
-    # `yticks(right=...)`. The rightmost x-tick label's overhang past
-    # the right spine (rotated-text AABB extends past x=iw) is a
-    # cross-axis spillover and lives in `_required_margin` instead, so
-    # an inline right-position legend doesn't get shoved out by the
-    # bottom axis's tick rotation. Exposed separately so the caller can
-    # max it in for total margin reservation.
+    # `yticks(right=...)`. The leftmost / rightmost x-tick label's
+    # overhang past x=0 / x=iw is a cross-axis spillover that lives in
+    # `_required_margin`. The share of the rotated AABB that lands past
+    # the spine depends on the tick-label anchor (see `_tick_label`):
+    #   rot == 0  → anchor="middle"  → bbox extends w/2 each side
+    #   rot >  0  → anchor="end"     → bbox extends fully LEFT  (0 right)
+    #   rot <  0  → anchor="start"   → bbox extends fully RIGHT (0 left)
+    # Tick-inset distance: the first/last tick sits ~dw/(2N) px inside
+    # the data area (true for category scales, approx for numeric), so
+    # the actual past-spine overhang is `bbox * share - tick_inset`.
     right = right_marks
-    right_xtl_overhang = 0.0 if hide_r else last_bbox_w / 2.0
+    if x_rot == 0:
+        left_share, right_share = 0.5, 0.5
+    elif x_rot > 0:
+        left_share, right_share = 1.0, 0.0
+    else:
+        left_share, right_share = 0.0, 1.0
+    tick_inset = dw / (2 * len(x_ticks)) if x_ticks else 0.0
+    left_xtl_overhang  = (0.0 if hide_l
+                          else max(0.0, first_bbox_w * left_share - tick_inset))
+    right_xtl_overhang = (0.0 if hide_r
+                          else max(0.0, last_bbox_w * right_share - tick_inset))
 
     return {"top": top, "right": right, "bottom": bottom, "left": left,
+            "left_xtl_overhang": left_xtl_overhang,
             "right_xtl_overhang": right_xtl_overhang}
 
 
@@ -1246,6 +1264,7 @@ def _required_margin(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     # legend (which positions itself at `iw + bands["right"] + gap`)
     # hugs the data area instead of being shoved out by a fat 45°-
     # rotated tick label.
+    left  = max(left,  bands["left_xtl_overhang"])
     right = max(right, bands["right_xtl_overhang"])
 
     # Outside-legend reservation is *additive* with the label band so the

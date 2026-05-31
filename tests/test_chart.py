@@ -751,6 +751,7 @@ def chart_dendrogram_labeled():
     labels = ["sample_" + ch for ch in "ABCDEFGH"]
     c = pt.chart(title="dendrogram with labels", data_height=200)
     c.dendrogram(_dendro_sample(), method="ward", labels=labels)
+    c.xticks(rotation=90)
     return c
 
 

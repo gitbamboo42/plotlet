@@ -32,21 +32,20 @@ from plotlet.core import _to_px
 # Spines have all-integer-valued coords — `0` and `iw` / `ih`. Standalone
 # emits them as bare ints (`240`); the layout path emits floats (`240.0`)
 # because iw/ih come from float arithmetic. The regex accepts both.
-# Tick lines use `_TICK_LEN = 3.5`, so their endpoints always carry a
-# non-zero decimal (e.g. `176.5`) and can't masquerade as a spine even
-# when their other coord happens to be integer-valued (`0.00`, `80.00`).
-# Grid lines use `_GRID` (not `#000000`) so they're filtered by stroke.
+# Tick endpoints carry the non-zero decimal from `frame.tick_length`, so
+# they can't masquerade as a spine even when their other coord happens to
+# be integer-valued (`0.00`, `80.00`). Grid lines use `_GRID` (not
+# `#000000`) so they're filtered by stroke. The spine width is read from
+# spec so the regex stays in sync with size retunes.
+_SPEC_FRAME = pt.SPEC["frame"]
+_SPINES_PER_PANEL = sum(
+    1 for s in ("top", "right", "bottom", "left") if _SPEC_FRAME[f"spine_{s}"]
+)
 _INT_COORD = r'\d+(?:\.0+)?'
 _SPINE_LINE_RE = re.compile(
     rf'<line x1="({_INT_COORD})" y1="({_INT_COORD})" '
     rf'x2="({_INT_COORD})" y2="({_INT_COORD})" '
-    rf'stroke="#000000" stroke-width="0\.8"/>'
-)
-
-
-_SPEC_FRAME = pt.SPEC["frame"]
-_SPINES_PER_PANEL = sum(
-    1 for s in ("top", "right", "bottom", "left") if _SPEC_FRAME[f"spine_{s}"]
+    rf'stroke="#000000" stroke-width="{re.escape(str(_SPEC_FRAME["width"]))}"/>'
 )
 
 
