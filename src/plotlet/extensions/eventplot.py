@@ -1,9 +1,9 @@
 """Custom artist: eventplot (raster / tick).
 
-A grid of short vertical (or horizontal) tick marks, one per event time.
-Used for spike trains, sequence motif hits, log timelines — matplotlib's
-`plt.eventplot`. Each call adds one *row* of ticks at a given y; call
-multiple times for multiple rows.
+A grid of short vertical (or horizontal) tick marks, one per event
+time. Used for spike trains, sequence motif hits, log timelines. Each
+call adds one *row* of ticks at a given y; call multiple times for
+multiple rows.
 
 API: c.eventplot(positions, y=0, length=0.6, orientation="vertical").
 - `positions`  -> 1-D iterable of event times along the data axis.

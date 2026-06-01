@@ -1,8 +1,7 @@
 # Themes
 
 A theme is a per-chart visual preset — background, spines, ticks, grid,
-font color. Conceptually the same idea as ggplot2's `theme_classic` /
-`theme_minimal` / `theme_dark`. plotlet ships four:
+font color. plotlet ships four:
 
 | theme     | look                                                                |
 |-----------|---------------------------------------------------------------------|
@@ -78,7 +77,8 @@ Convention: **the data palette stays orthogonal to theme.** TAB10 and
 the named-color shortcuts live in [`src/plotlet/draw/colors.py`](../src/plotlet/draw/colors.py)
 as plain constants — not in `spec.json`, not theme-overridable. Themes
 change frame chrome; the data palette is for users to override at the
-chart / call level. Same split as ggplot2's `theme_*` vs `scale_color_*`.
+chart / call level. Frame-chrome and data-color knobs stay separate so
+swapping a theme never changes the data colors.
 
 ## Writing your own theme
 

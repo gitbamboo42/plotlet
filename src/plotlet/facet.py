@@ -4,8 +4,8 @@
 methods as `Chart`. Each call is stored; on render the recorder splits
 `data` by unique values of `by`, builds one `Chart` per subset, replays
 the recorded calls against it, and lays the panels out in a `pt.grid`
-with `share_x` / `share_y` on by default (matching seaborn FacetGrid /
-ggplot facet_wrap conventions).
+with `share_x` / `share_y` on by default — adjacent panels read as one
+continuous coordinate system.
 
     g = pt.facet(df, by="species", col_wrap=3)
     g.scatter(x="bill_length", y="bill_depth")

@@ -36,10 +36,9 @@ pip install plotlet
 ## Testing
 
 ```bash
-python tests/test_chart.py            # check vs. committed baselines
-python tests/test_chart.py --update   # regenerate (review the diff!)
-python tests/test_subplots.py
-python tests/test_themes.py
+pip install -e ".[test]"
+pytest tests/                  # check vs. committed baselines
+pytest tests/ --update         # regenerate (review the diff!)
 ```
 
 ## Development

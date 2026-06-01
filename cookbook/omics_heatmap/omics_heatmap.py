@@ -79,8 +79,8 @@ if __name__ == "__main__":
 
     # Top: one annotation_strip call for the whole row. Both panels live on
     # a category x-scale (sample names), so share_x just lines them up.
-    # Palette = matplotlib's tab10 (via pt.TAB10).
-    group_colors = {"ctrl": pt.TAB10[0], "treat": pt.TAB10[1], "resist": pt.TAB10[2]}
+    # Palette = matplotlib's tab10 via the "C0".."C9" shortcuts.
+    group_colors = {"ctrl": "C0", "treat": "C1", "resist": "C2"}
     top = pt.chart(title="Treatment", data_width=420, data_height=14)
     top.annotation_strip(col_labels, col_groups, palette=group_colors)
 

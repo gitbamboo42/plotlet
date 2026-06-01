@@ -12,9 +12,9 @@ using `pt.grid([[...]])`:
     |         |
     +---------+--+
 
-The seaborn `jointplot` staple. Showcases plotlet's grid composition
-plus a small per-panel sizing trick (top / right histograms are short
-in their long-axis dimension).
+Bivariate scatter with marginal histograms on the top and right edges.
+Showcases plotlet's grid composition plus a small per-panel sizing
+trick (top / right histograms are short in their long-axis dimension).
 
 API:
     jointplot(xs, ys, kind="scatter", bins=30, panel_size=320, marg_size=80)

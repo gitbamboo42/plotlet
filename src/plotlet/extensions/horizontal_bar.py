@@ -1,10 +1,9 @@
-"""Custom artist: horizontal bar (a.k.a. `barh`).
+"""Custom artist: horizontal bar (`barh`).
 
-matplotlib calls this `barh`. Categorical y, numeric x. Useful when the
-category names are long — horizontal labels read more easily than rotated
-vertical ones.
+Categorical y, numeric x. Useful when the category names are long —
+horizontal labels read more easily than rotated vertical ones.
 
-API: c.barh(cats, vals, width=0.8). Mirrors plt.barh.
+API: c.barh(cats, vals, width=0.8).
 """
 
 SUMMARY = '`barh` for long category labels.'

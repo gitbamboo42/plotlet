@@ -1,5 +1,5 @@
-"""Text-rendering artists — `text` for data-anchored labels, `annotate` for
-matplotlib-style label-with-arrow.
+"""Text-rendering artists — `text` for data-anchored labels, `annotate`
+for a label connected to a point by an arrow.
 
   c.text(x, y, "label")                          # single label (scalars)
   c.text(xs, ys, ["A", "B", "C"])                # multiple labels (lists)
@@ -153,10 +153,10 @@ def _artist_text(a, xs_, ys_, col):
             parts.append(_text_bbox_rect(str(s), px, py, fontsize, anchor, bb))
         parts.append(text_path(str(s), px, py, fontsize, anchor=anchor, color=color))
         if rotation:
-            # SVG `rotate(deg, cx, cy)` is clockwise in screen space (y-down);
-            # matplotlib's `rotation=` is counterclockwise. Negate to match.
-            # Rotation anchor is the ha/va alignment point — same as matplotlib's
-            # `rotation_mode="anchor"`.
+            # `rotation=` uses the convention positive = CCW; SVG's
+            # native rotation is CW in screen space (y-down), so we
+            # negate at emission. Rotation anchor is the ha/va alignment
+            # point so the labeled glyph stays pinned.
             out.append(f'<g transform="rotate({-rotation:g},{px:.2f},{py:.2f})">'
                        + "".join(parts) + "</g>")
         else:
@@ -224,9 +224,9 @@ add_artist(ArtistSpec(
 
 
 # --- annotate ---
-# Text label at `xytext` with optional arrow to `xy` — matplotlib's
-# `ax.annotate(...)` staple. Both points are in data coordinates so the
-# arrow follows the axis through resizes / share_x scaling.
+# Text label at `xytext` with optional arrow to `xy`. Both points are in
+# data coordinates so the arrow follows the axis through resizes /
+# share_x scaling.
 
 def _annotate_record(args, kw):
     # Don't mutate `kw` — record() is called on every re-render against

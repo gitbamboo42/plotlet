@@ -284,8 +284,8 @@ class Chart(_Renderable):
 
         # ---- Composition state ---------------------------------------------
         self._data = data
-        # Chart-level aesthetic defaults (ggplot-style inheritance). Artist
-        # calls with matching kwargs override; missing kwargs fall back here.
+        # Chart-level aesthetic defaults inherited by artist calls — set
+        # once at chart construction, overridden by per-artist kwargs.
         self._aes = {"x": x, "y": y,
                      "fill": fill, "color": color, "group": group,
                      "linetype": linetype,
@@ -296,10 +296,10 @@ class Chart(_Renderable):
         self._share_x: "Chart | None" = None
         self._share_y: "Chart | None" = None
         # Whether this leaf opts in to joined-pair label hiding on its
-        # shared axis. Default True (matches matplotlib's `sharex=True`).
-        # `share_x(..., hide_labels=False)` flips this to False so the
-        # share-equivalence still applies (xlim sync) but adjacent cells
-        # keep their xlabel/xtick labels visible.
+        # shared axis. Default True. `share_x(..., hide_labels=False)`
+        # flips this to False so the share-equivalence still applies
+        # (xlim sync) but adjacent cells keep their xlabel/xtick labels
+        # visible.
         self._share_hide_labels_x: bool = True
         self._share_hide_labels_y: bool = True
         # Leaf discriminator. Values: "data" (default — normal chart leaf
@@ -505,8 +505,8 @@ class Chart(_Renderable):
         """Embed a small Chart inside this leaf at axes-fraction coordinates.
 
         `rect=(x, y, w, h)` is in axes-fraction units (0..1) of this leaf's
-        data area, with the origin at the *bottom-left* (matplotlib's
-        `inset_axes` convention). Returns a fresh Chart configured to
+        data area, with the origin at the *bottom-left*. Returns a fresh
+        Chart configured to
         render at the requested pixel size — record artists on it normally.
         Render the parent leaf; the inset draws on top of the parent's
         artists with its own scales and frame."""
@@ -718,8 +718,8 @@ class Layout(_Renderable):
         the leaves' private share state so layout.py's pre-pass
         coordinates them. Returns self for chaining.
 
-        `hide_labels=True` (default, matches matplotlib's `sharex=True`)
-        also suppresses xlabel and x-tick labels on joined-pair sides so
+        `hide_labels=True` (default) also suppresses xlabel and x-tick
+        labels on joined-pair sides so
         adjacent shared panels read as one frame. Set `hide_labels=False`
         to keep the share equivalence (xlim auto-syncs, columns align in
         `"col"` mode) but render every panel's xlabel and tick labels —
@@ -1021,8 +1021,7 @@ def _rasterize(svg: str, path, fmt: str, *, scale: float = 1.0, dpi: int | None 
 
 def _normalize_share_mode(axis: str, mode) -> str:
     """Map share_x / share_y param to one of "all" / "col" / "row" / "none".
-    Accepts True ("all"), False / None ("none"), or the four literal strings.
-    Mirrors matplotlib's `sharex` semantics."""
+    Accepts True ("all"), False / None ("none"), or the four literal strings."""
     if mode is True:
         return "all"
     if mode is False or mode is None:

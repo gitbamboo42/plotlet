@@ -6,8 +6,8 @@ common case, but sometimes you want bars anchored at *numeric* positions
 (e.g. genome coordinates, time-series with explicit numeric x), where the
 bar width is a fixed data-unit distance you control directly.
 
-This recipe gives `c.numeric_bar(xs, heights, width=0.8, ...)` — same
-matplotlib-style API as `pyplot.bar`, but lives in your project, not core.
+This recipe gives `c.numeric_bar(xs, heights, width=0.8, ...)` — bars
+on a numeric x scale, living in your project rather than core.
 """
 
 SUMMARY = 'Bars anchored at numeric x with an explicit data-unit width (no category scale).'

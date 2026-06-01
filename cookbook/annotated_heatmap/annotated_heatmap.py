@@ -107,9 +107,8 @@ if __name__ == "__main__":
 
     # Palette for the categorical annotation strips. Pathway palette
     # also drives the row-side strip's legend entries.
-    cond_palette = {"Control": pt.TAB10[0], "Treated": pt.TAB10[3]}
-    path_palette = {"Apoptosis": pt.TAB10[2], "Cell cycle": pt.TAB10[1],
-                    "Immune":    pt.TAB10[4]}
+    cond_palette = {"Control": "C0", "Treated": "C3"}
+    path_palette = {"Apoptosis": "C2", "Cell cycle": "C1", "Immune": "C4"}
 
     # Top dendrogram + condition strip — both keyed to sample names so
     # they line up with the heatmap columns via attach_above's auto-share.

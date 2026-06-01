@@ -8,7 +8,7 @@ drive a heatmap's column/row order by passing `tree.display_labels` to
 Two entry points:
 
 - `cluster(data, labels, ...)` — one observation set, one linkage.
-- `cluster_split(data, split, labels, ...)` — ComplexHeatmap-style: per-
+- `cluster_split(data, split, labels, ...)` — two-level cluster: per-
   group linkage for within-block leaf order, plus a centroid linkage to
   pick the between-group order. Equivalent to calling `cluster` per
   group and reordering the groups by similarity.
@@ -79,7 +79,7 @@ def cluster(data, labels=None, method="single", metric="euclidean") -> SplitTree
 
 def cluster_split(data, split, labels=None,
                   method="single", metric="euclidean") -> SplitTree:
-    """Two-level cluster (ComplexHeatmap-style).
+    """Two-level cluster: within-group + between-group centroid order.
 
     Within each group: scipy linkage on the group's observations →
     block tree + leaf order within block. Between groups: scipy linkage
@@ -313,8 +313,7 @@ def fit_parent(blocks, parent_layout, parent_frac, gap_frac=0.10):
 
     - **Leaves** (dc == 0 in scipy's centroid tree) drop to the
       *apex of their corresponding block*. So a short per-block tree
-      gets a parent leaf close to its top — no big visual disconnect
-      ComplexHeatmap-style.
+      gets a parent leaf close to its top — no big visual disconnect.
     - **Merges** (dc > 0) linearly map into
       `[max_apex + gap, HEIGHT_NORM_MAX]` so the parent tree's
       relative merge heights are preserved.

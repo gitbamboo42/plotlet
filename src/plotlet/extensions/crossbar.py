@@ -1,10 +1,9 @@
 """Custom artist: crossbar.
 
-Three horizontal lines per category — middle (median or mean), upper, and
-lower — forming a flat "I". The `geom_crossbar` from ggplot2: a clean
-"summary mark" to layer over a strip / swarm so you see the raw points
-plus the central tendency and spread without the visual weight of a
-full boxplot.
+Three horizontal lines per category — middle (median or mean), upper,
+and lower — forming a flat "I". A clean "summary mark" to layer over a
+strip / swarm so you see the raw points plus the central tendency and
+spread without the visual weight of a full boxplot.
 
 API:
     c.crossbar(cats, mids, lowers, uppers, width=0.5, lw_mid=2.2, lw_outer=1.2)

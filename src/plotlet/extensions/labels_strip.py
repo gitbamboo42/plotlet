@@ -121,8 +121,8 @@ def labels_strip_draw(a, ctx):
             # baseline `pad` px inside the inner edge. When rotated: switch
             # to an edge anchor so the rotated text body sits *inside* the
             # strip instead of straddling the anchor (half spilling into
-            # the host panel). `rotation` follows matplotlib's CCW-positive
-            # convention; SVG's `rotate()` is screen-CW so we negate when
+            # the host panel). `rotation` uses the convention positive =
+            # CCW; SVG's native `rotate()` is screen-CW so we negate when
             # emitting the transform.
             if side == "bottom":
                 if rotation == 0:

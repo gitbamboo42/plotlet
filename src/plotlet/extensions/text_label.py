@@ -1,7 +1,7 @@
 """Custom artist: data-anchored text labels.
 
-Add labels to specific data points — equivalent to a stripped-down
-matplotlib `ax.annotate(..., xy=(...))` or `ax.text(...)`. Renders text
+Add labels to specific data points — a stripped-down `text` variant
+with a pixel-offset (`dx`, `dy`) from each anchor point. Renders text
 as paths via plotlet's bundled DejaVu Sans, so output stays font-
 independent and reproducible.
 

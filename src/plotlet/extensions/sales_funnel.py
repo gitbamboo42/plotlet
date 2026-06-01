@@ -70,9 +70,9 @@ def demo():
     labels = ["Visited", "Signed up", "Activated", "Purchased", "Returned"]
     values = [10000, 3200, 1800, 600, 220]
     c = pt.chart(data_height=260)
-    # Plotlet's category scale places the first entry at the *top* of the
-    # y axis (unlike matplotlib), so passing `labels` directly puts the
-    # top-of-funnel stage at the visual top.
+    # Plotlet's category scale places the first entry at the *top* of
+    # the y axis, so passing `labels` directly puts the top-of-funnel
+    # stage at the visual top.
     c.yscale("category", order=labels)
     c.sales_funnel(labels, values)
     c.title("Onboarding funnel")

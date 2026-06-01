@@ -15,8 +15,8 @@ pipeline:
 
 When split is in play, the dendrogram exposes its final leaf order via
 `axis_order`, so a peer heatmap with the same grouping vector picks up
-the ComplexHeatmap-style block order automatically — artist
-`axis_order` beats `frame_defaults` order in core's precedence rule.
+the two-level block order automatically — artist `axis_order` beats
+`frame_defaults` order in core's precedence rule.
 
 **`labels=` indexes the ORIGINAL input order, NOT the display order.**
 scipy's Z matrix uses original observation indices throughout; so

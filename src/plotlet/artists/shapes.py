@@ -28,7 +28,7 @@ def _fill_stroke_params(a, ctx_color):
         stroke = resolve_color(edge)
     elif not do_fill:
         # No fill and no explicit edge: draw the outline in the artist color
-        # so the shape is visible at all (matplotlib's `fill=False` idiom).
+        # so an outline-only shape is still visible.
         stroke = ctx_color
     else:
         stroke = None
@@ -61,8 +61,8 @@ def _artist_rect(a, xs_, ys_, col):
 
 
 def _artist_polygon(a, xs_, ys_, col):
-    """Closed polygon from `(xs, ys)` vertices. Always emits a closed path
-    (trailing `Z`) — matches matplotlib's `plt.fill()` which auto-closes."""
+    """Closed polygon from `(xs, ys)` vertices. Always emits a closed
+    path (trailing `Z`) so callers don't need to repeat the first point."""
     pts = [(xs_(x), ys_(y)) for x, y in zip(a["xs"], a["ys"])]
     pts = [(px, py) for px, py in pts if math.isfinite(px) and math.isfinite(py)]
     return draw_polygon(pts, **_fill_stroke_params(a, col))

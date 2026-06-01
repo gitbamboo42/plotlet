@@ -81,7 +81,7 @@ framework wraps your fragment in a `<g>` that carries `data-plotlet-*` attrs.
 | `marker(kind, x, y, size, color, alpha)` | One of `"o" "s" "^" "v" "x" "+"` at pixel `(x, y)`. |
 | `text_path(s, x, y, size, anchor, color)` | Text as glyph paths (font-independent across machines). |
 
-`dash=` accepts matplotlib codes (`"--"`, `":"`, `"-."`) or a raw SVG
+`dash=` accepts the short codes (`"--"`, `":"`, `"-."`) or a raw SVG
 dasharray (`"6,3"`). `fill_alpha` / `stroke_alpha` override `alpha` per
 channel — leave them `None` for the lean single-`opacity` path.
 

@@ -26,7 +26,7 @@ _STAR5_VERTICES = [
 ]
 
 # Pre-computed unit-radius vertices of a vertex-up hexagon (top vertex
-# pointing up, walking CW). Matches matplotlib's `h` (hexagon1).
+# pointing up, walking CW). Used by the `"h"` marker glyph.
 _HEX_VERTICES = [
     (math.cos(-math.pi / 2 + i * math.pi / 3),
      math.sin(-math.pi / 2 + i * math.pi / 3))
@@ -47,17 +47,17 @@ def text_path(s: str, x: float, y: float, size: float,
     inside a custom artist's `draw` callback to emit text-as-paths so output
     stays font-independent across machines.
 
-    `fontstyle="italic"` synthesizes an oblique slant via a -12° skew during
-    glyph composition — matches what matplotlib does when only an upright
-    font is available (DejaVu Sans ships no real italic).
+    `fontstyle="italic"` synthesizes an oblique slant via a -12° skew
+    during glyph composition (the bundled DejaVu Sans ships no real
+    italic face).
 
     `decoration="underline" | "overline" | "line-through"` appends a stroke
     line at the conventional offset for that decoration.
 
     `rotate=` (degrees, positive = CCW) rotates the glyph (and any
     decoration line) around the anchor point (x, y). Convention matches
-    `xticks(rotation=...)` and the rest of the lib — SVG's positive-CW
-    is negated at emission so callers think in matplotlib's visual CCW.
+    `xticks(rotation=...)` and the rest of the lib; SVG's native
+    positive-CW is negated at emission so callers think in screen CCW.
     """
     d = _glyph_path_d(s, x, y, size, anchor=anchor, fontstyle=fontstyle)
     if not d:
@@ -152,7 +152,7 @@ def marker(kind: str, x: float, y: float, size: float, color: str, alpha,
         return (f'<path d="M{x + size:.2f},{y:.2f}L{x - size:.2f},{y - size:.2f}'
                 f'L{x - size:.2f},{y + size:.2f}Z" fill="{color}"{edge}{_op}/>')
     if kind == "h":
-        # Hexagon, vertex-up orientation (matches matplotlib's `h`).
+        # Hexagon, vertex-up orientation.
         d = "M" + " L".join(f"{x + size*dx:.2f},{y + size*dy:.2f}"
                             for dx, dy in _HEX_VERTICES) + "Z"
         return f'<path d="{d}" fill="{color}"{edge}{_op}/>'
@@ -171,7 +171,7 @@ def segment(x1: float, y1: float, x2: float, y2: float, *,
             color: str = "#000", width: float = 1, dash=None, alpha=1) -> str:
     """Emit a single SVG `<line>` segment from pixel (x1, y1) to (x2, y2).
 
-    `dash` accepts a matplotlib code (`"--"`, `":"`, `"-."`) or a raw SVG
+    `dash` accepts a short code (`"--"`, `":"`, `"-."`) or a raw SVG
     dasharray string (`"6,3"`); `None` (default) is solid.
     """
     return (f'<line x1="{x1:.2f}" x2="{x2:.2f}" y1="{y1:.2f}" y2="{y2:.2f}" '

@@ -1,9 +1,8 @@
 """Contour-line isolines on a 2-D scalar grid via marching squares.
 
 Pre-computed grid input — the companion to `kde_2d` (which estimates a
-grid from data). The classic 2-D analytic-function viewer; matplotlib's
-`plt.contour`. Useful for posterior surfaces, energy landscapes, and
-2-D KDE visualisations.
+grid from data). The classic 2-D analytic-function viewer — useful for
+posterior surfaces, energy landscapes, and 2-D KDE visualisations.
 
 API: c.contour(grid, levels=[...], extent=(x0, x1, y0, y1))
 

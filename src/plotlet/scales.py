@@ -92,7 +92,7 @@ class _PowerScale:
     `exponent < 1` (typical 0.5 for square-root) compresses large values
     and spreads small ones — useful for count data, areas, intensities.
     Negative inputs are mapped through `sign * |x|**exponent` so the scale
-    works on both signs (matches d3 `scalePow`).
+    works on both signs.
     """
 
     def __init__(self, d0, d1, r0, r1, exponent=0.5):
@@ -125,7 +125,7 @@ class _PowerScale:
 class _SymlogScale:
     """Symmetric log: linear inside [-linthresh, +linthresh], log outside.
 
-    Mirrors matplotlib's `symlog` semantics. The forward map is
+    The forward map is
     `t(x) = sign(x) * (linthresh + log10(|x|/linthresh) * linthresh)` for
     `|x| > linthresh`, and `x` itself inside the linear region. Useful for
     fold-change axes (volcano / MA plots) where both signs matter and the
@@ -182,7 +182,8 @@ class _SymlogScale:
 
 
 class _CategoryScale:
-    """Categorical scale — mirrors d3.scaleBand().padding(p) (inner = outer = p).
+    """Categorical scale — equally-spaced bands with padding `p` on each
+    end (inner band gap and outer margin both = `p` * band width).
 
     Returns the *center* of the band for each category. Bar artists fetch
     `.bandwidth` and subtract half to get the rect's left edge.

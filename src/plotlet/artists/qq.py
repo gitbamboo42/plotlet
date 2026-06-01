@@ -2,15 +2,15 @@
 
 The classic "is my sample normal?" diagnostic. Default comparison is the
 standard normal; pass a `scipy.stats` distribution (or another sample)
-for an arbitrary reference. ggplot2's `geom_qq`, statsmodels' `qqplot`.
+for an arbitrary reference.
 
 API:
   c.qq(values, dist="normal")              # vs N(0, 1)
   c.qq(values, dist=other_sample)          # two-sample
   c.qq(values, dist=scipy.stats.t(df=5))   # arbitrary scipy.stats RV
 
-The dashed reference line passes through the 0.25/0.75 quantile pair
-(matplotlib's `qqline="q"` rule — robust to outliers in the tails).
+The dashed reference line passes through the 0.25/0.75 quantile pair —
+robust to outliers in the tails.
 
 Styling kwargs:
   dist="normal"   "normal" | another sample | scipy.stats RV

@@ -1,8 +1,8 @@
 """Custom artist: LOESS smoother (statsmodels-backed).
 
-Locally-weighted regression smoother, equivalent to ggplot2's default
-`geom_smooth(method="loess")`. Uses `statsmodels.nonparametric.lowess`
-under the hood, which gives:
+Locally-weighted regression smoother — fits a smooth curve through
+noisy `(x, y)` data without assuming a parametric form. Uses
+`statsmodels.nonparametric.lowess` under the hood, which gives:
   - degree 1 local linear fits
   - 3 robustifying iterations by default (downweight outliers)
   - configurable `frac` (the "span" — fraction of points used per fit)

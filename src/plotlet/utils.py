@@ -19,7 +19,7 @@ The inverse-direction primitives (emit SVG strings) live in `plotlet.draw`.
 import math
 
 from .registry import get_artist
-from .draw import TAB10
+from .draw import TAB10, resolve_color
 
 
 def to_list(obj):
@@ -70,8 +70,7 @@ def broadcast(*vals):
 def histogram(data, bins, density=False):
     """Equal-width binning. Returns list of {'x0', 'x1', 'count'} dicts.
     With `density=True`, `count` is the probability density (count divided
-    by `total × bin_width`) so the integral over bins equals 1 — matches
-    matplotlib `hist(density=True)` / numpy `histogram(density=True)`."""
+    by `total × bin_width`) so the integral over bins equals 1."""
     data = [v for v in to_list(data)
             if v is not None and not (isinstance(v, float) and math.isnan(v))]
     if not data:
@@ -136,8 +135,8 @@ def resolve_aes(data, value):
     string that does not match a column of `data`. Returns
     `("column", values_list)` when `value` is a string and `data` has a
     column with that name — in which case the per-row column values are
-    materialized via `to_list(...)`. Matches seaborn's "string-meaning-
-    depends-on-data" rule; with no `data=` bound, every value is literal."""
+    materialized via `to_list(...)`. With no `data=` bound, every value
+    is literal."""
     if value is None or not isinstance(value, str):
         return ("literal", value)
     if _data_has_column(data, value):
@@ -150,12 +149,14 @@ def palette_color(palette, value, index):
     `None` when `palette` is `None`/empty or doesn't cover `value`, in
     which case the caller falls through to its own cycle. Accepts a
     dict (category → color) or a sequence indexed by category-appearance
-    order (wraps modulo length)."""
+    order (wraps modulo length). Palette values pass through
+    `resolve_color`, so the standard shortcuts (`"C0"`–`"C9"`, named
+    colors, single-letter codes) work alongside hex / CSS strings."""
     if not palette:
         return None
     if isinstance(palette, dict):
-        return palette.get(value)
-    return palette[index % len(palette)]
+        return resolve_color(palette.get(value))
+    return resolve_color(palette[index % len(palette)])
 
 
 def dodge_positions(cat_scale, cat, n_groups, j, *, band_frac=0.6, gap=0.1):

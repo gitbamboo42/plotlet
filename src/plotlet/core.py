@@ -138,8 +138,8 @@ def _tick_label(s, x, y, size, angle, axis,
     `angle`. When `angle=0` (default) routes straight to `text_path` with
     the side-appropriate anchor; when nonzero, emits the glyphs at origin
     and wraps in `<g transform="translate(x,y) rotate(-angle)">`. The
-    negation matches matplotlib's convention (positive angle = CCW on
-    screen) against SVG's positive-clockwise rotation.
+    `angle` argument uses the convention positive = CCW on screen;
+    SVG's native rotation is CW, so we negate at emission.
 
     Anchor direction depends on axis + rotation sign so the rotated text
     always grows AWAY from the data area: for bottom x-tick labels,
@@ -192,12 +192,12 @@ def _record_scale(st, axis, args, kw, *, from_default=False):
 
 
 def _record_ticks(st, axis, args, kw):
-    """Decode the matplotlib-style xticks()/yticks() call into state.
+    """Decode the xticks()/yticks() call into state.
 
     Signature: xticks(ticks=None, labels=None, *, rotation=0, fontsize=None).
-    Accepts the first arg positionally (matches `plt.xticks`); pass `[]`
-    to hide. Omitted kwargs leave the corresponding state alone, so
-    `c.xticks(rotation=45)` rotates without disturbing auto positions.
+    Accepts the first arg positionally; pass `[]` to hide. Omitted
+    kwargs leave the corresponding state alone, so `c.xticks(rotation=45)`
+    rotates without disturbing auto positions.
     """
     if args:
         st[f"{axis}_ticks"] = list(args[0]) if args[0] is not None else None
@@ -302,7 +302,7 @@ def _replay(calls):
         "x_split_gap": 0.0, "y_split_gap": 0.0,
         "x_groups": None, "y_groups": None,
         "x_order_default": None, "y_order_default": None,
-        # Data-range expansion (matches matplotlib `axes.xmargin` / ggplot `expand`).
+        # Data-range expansion: extra fraction of span padded around the data.
         # None = use spec default; (lo, hi) = explicit fractions of data span.
         "x_expand": None, "y_expand": None,
         # xticks/yticks overrides (None = auto, [] = hide):
@@ -337,9 +337,8 @@ def _replay(calls):
         # reserved margin space outside the data region.
         "legend_position": "inside",
         # Data-area clipping on by default — artists past xlim/ylim get
-        # cropped at the data boundary. Set False (`c.clip(False)`) for
-        # matplotlib-default behavior where lines and large markers can
-        # bleed into the margin space.
+        # cropped at the data boundary. Set False (`c.clip(False)`) to
+        # let lines and large markers bleed into the margin space.
         "clip": True,
         "facecolor": None,
     }
@@ -1624,7 +1623,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         # Nested <svg> with overflow="hidden" establishes the clip; SVG2
         # makes that the default for nested-svg but SVG1.1 viewers leave
         # overflow visible, so we set it explicitly. Caller can opt out
-        # via `c.clip(False)` for matplotlib-default no-clip behavior.
+        # via `c.clip(False)` to allow artists to paint past the data area.
         if layer == "data" and clip_data:
             parts.append(f'<svg x="0" y="0" width="{iw}" height="{ih}" overflow="hidden">')
         for idx, a in by_layer[layer]:
@@ -1958,8 +1957,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         tx = x_frac * iw - inset_M["left"]
         ty = (1 - y_frac - h_frac) * ih - inset_M["top"]
         # Opaque background covering the inset's data area only — tick
-        # labels in the inset's margins stay transparent (matches
-        # matplotlib Axes facecolor and ggplot panel.background defaults).
+        # labels in the inset's margins stay transparent.
         bg_x = inset_M["left"]
         bg_y = inset_M["top"]
         bg_w = inset_chart._data_width

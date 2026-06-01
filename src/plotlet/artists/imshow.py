@@ -26,7 +26,7 @@ def _artist_imshow(a, xs_, ys_, col):
     the BOTTOM of the data rectangle (Cartesian). Opt in to `"upper"` for
     matrix-style display (row 0 at top, what you see when you print the
     array); the panel auto-inverts the y-axis in that case so tick "0"
-    lands next to row 0, matching matplotlib.
+    lands next to row 0.
 
     Color mapping goes through `ContinuousNorm`, which supports `norm="log"`
     and `center=` on top of the default linear range.

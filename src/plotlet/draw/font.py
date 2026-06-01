@@ -21,9 +21,9 @@ _GS = _TTF.getGlyphSet()
 _ASCENT = _TTF["hhea"].ascent
 _DESCENT = _TTF["hhea"].descent
 
-# DejaVu Sans ships no italic variant; the official DejaVu Sans Oblique is
-# itself a synthesized skew. Match matplotlib's approach: tilt the upright
-# font at render time by -12° (skewX) when `fontstyle="italic"`.
+# DejaVu Sans ships no italic variant; the official DejaVu Sans Oblique
+# is itself a synthesized skew. We do the same: tilt the upright font at
+# render time by -12° (skewX) when `fontstyle="italic"`.
 _ITALIC_SKEW_RAD = -0.20943951023931953  # math.radians(-12)
 # Cap height of the bundled DejaVu Sans, measured from the 'H' glyph
 # bounds: 1493 / 2048 (font units / unitsPerEm). Used to convert between

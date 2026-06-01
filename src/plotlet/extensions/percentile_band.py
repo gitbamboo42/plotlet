@@ -2,8 +2,8 @@
 
 Given a 2-D sample (rows = x positions, cols = repetitions), draw the
 median as a solid line and the band between two percentiles (default
-25/75) as a translucent ribbon — the classic confidence-band idiom
-also seen in seaborn `lineplot(estimator='median')`.
+25/75) as a translucent ribbon — the classic non-parametric
+confidence-band idiom for noisy repeated-measure data.
 
 This recipe is also a composition example: most of the work is done by
 two `fill_between` + `line` calls under the hood, but we wrap them in
@@ -16,7 +16,7 @@ API: c.percentile_band(xs, samples, qs=(0.25, 0.75)).
 `samples` is a list of rows, each a list of repetitions at xs[i].
 """
 
-SUMMARY = "Median line plus filled percentile ribbon (seaborn `estimator='median'` analogue)."
+SUMMARY = "Median line plus filled percentile ribbon for repeated-measure data."
 from pathlib import Path
 
 import plotlet as pt

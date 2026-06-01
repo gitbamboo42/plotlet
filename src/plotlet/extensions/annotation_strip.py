@@ -38,7 +38,7 @@ SUMMARY = 'One-cell-per-position color strip (categorical palette or continuous 
 from pathlib import Path
 
 import plotlet as pt
-from plotlet.draw import rect
+from plotlet.draw import rect, resolve_color
 from plotlet.draw import colormap, ContinuousNorm
 from plotlet.utils import to_list
 
@@ -66,6 +66,9 @@ def annotation_strip_record(args, kw):
             "annotation_strip: pass either palette= (categorical mode) "
             "or cmap= (continuous mode), not both."
         )
+    if kw.get("palette"):
+        kw = dict(kw)
+        kw["palette"] = {k: resolve_color(v) for k, v in kw["palette"].items()}
     # Precompute vmin/vmax for cmap mode so the legend gradient and the
     # draw step agree on the range without recomputing.
     vmin = vmax = None

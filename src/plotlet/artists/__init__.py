@@ -1,8 +1,8 @@
 """Built-in artist registrations.
 
 Hybrid layout: one file per distinct plot type, plus category files that
-group mirror pairs or shared-machinery siblings (matches ggplot2's
-per-geom convention, with consolidation only where it earns its keep).
+group mirror pairs or shared-machinery siblings — consolidation only
+where the related artists share enough structure to earn it.
 
 Single-artist files (one plot type each):
   scatter, line, bar, hist, imshow, heatmap, dendrogram, errorbar
