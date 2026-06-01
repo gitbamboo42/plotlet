@@ -49,8 +49,9 @@ def _cos(data_width=220, data_height=320):
 
 
 def _bar(label="bar", data_width=220, data_height=320):
-    c = pt.chart(title=label, data_width=data_width, data_height=data_height)
-    c.bar(["a", "b", "c"], [3, 1, 2])
+    c = pt.chart({"x": ["a", "b", "c"], "y": [3, 1, 2]},
+                 title=label, data_width=data_width, data_height=data_height)
+    c.bar(x="x", y="y")
     return c
 
 
@@ -87,7 +88,7 @@ def two_by_two():
 
 def grid_with_spacers():
     # 3-col 2-row irregular grid with None corners.
-    top  = pt.chart(title="top",   data_width=120, data_height=24);  top.bar(["a","b","c"], [3,1,2])
+    top  = pt.chart({"x":["a","b","c"], "y":[3,1,2]}, title="top",   data_width=120, data_height=24);  top.bar(x="x", y="y")
     left = pt.chart(title="left",  data_width=120, data_height=220); left.line([1,2,3], [3,1,2])
     main = pt.chart(title="main",  data_width=120, data_height=220); main.line([1,2,3], [1,4,9])
     right= pt.chart(title="right", data_width=120, data_height=220); right.line([1,2,3], [2,2,1])
@@ -171,9 +172,9 @@ def width_hint_narrow_side():
 
 def height_hint_short_top():
     # Short top track over a main panel.
-    top  = pt.chart(title="top",  data_height=24)
-    top.bar(["a","b","c"], [1, 2, 3])
-    main = pt.chart(title="main", data_height=240); main.bar(["a","b","c"], [3, 1, 2])
+    top  = pt.chart({"x":["a","b","c"], "y":[1,2,3]}, title="top",  data_height=24)
+    top.bar(x="x", y="y")
+    main = pt.chart({"x":["a","b","c"], "y":[3,1,2]}, title="main", data_height=240); main.bar(x="x", y="y")
     return (top / main).share_x()
 
 
