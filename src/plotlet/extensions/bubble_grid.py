@@ -45,6 +45,12 @@ def bubble_draw(a, ctx):
     c_lo = a["opts"].get("vmin", min(flat_c) if flat_c else 0.0)
     c_hi = a["opts"].get("vmax", max(flat_c) if flat_c else 1.0)
     cnorm = ContinuousNorm(c_lo, c_hi, "linear")
+    # Open-circle mode (fill="none"): stroke-only dots sized by value, the
+    # ring colored by `edgecolor` (or the colormap value if none given). Lets a
+    # sized mesh overlay a filled heatmap without hiding the cell underneath.
+    edgecolor = a["opts"].get("edgecolor")
+    linewidth = a["opts"].get("linewidth", 1)
+    open_circle = a["opts"].get("fill", None) == "none"
     out = []
     for i, y in enumerate(a["y_cats"]):
         for j, x in enumerate(a["x_cats"]):
@@ -57,7 +63,14 @@ def bubble_draw(a, ctx):
             rgb = cmap(cnorm.to_unit(cv))
             fill = f"rgb({rgb[0]},{rgb[1]},{rgb[2]})"
             cx = ctx.x_scale(x); cy = ctx.y_scale(y)
-            out.append(circle(cx, cy, r, fill=fill))
+            if open_circle:
+                out.append(circle(cx, cy, r, stroke=edgecolor or fill,
+                                  stroke_width=linewidth))
+            elif edgecolor:
+                out.append(circle(cx, cy, r, fill=fill, stroke=edgecolor,
+                                  stroke_width=linewidth))
+            else:
+                out.append(circle(cx, cy, r, fill=fill))
     return "".join(out)
 
 

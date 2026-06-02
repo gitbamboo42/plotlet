@@ -217,6 +217,8 @@ def _heatmap_draw_categorical(a, ctx):
 
     bw = ctx.x_scale.bandwidth
     bh = ctx.y_scale.bandwidth
+    lw = opts.get("linewidth", 0)
+    lc = resolve_color(opts.get("linecolor", "white")) if lw else None
     use_rects = nrows * ncols <= _D["imshow_max_rects"]
     out = []
 
@@ -229,7 +231,11 @@ def _heatmap_draw_categorical(a, ctx):
                 x0 = cx - bw / 2
                 v = matrix[r][c]
                 fill = palette.get(v, absent_fill) if v is not None else absent_fill
-                out.append(rect(x0, y0, bw, bh, fill=fill))
+                if lw:
+                    out.append(rect(x0, y0, bw, bh, fill=fill,
+                                    stroke=lc, stroke_width=lw))
+                else:
+                    out.append(rect(x0, y0, bw, bh, fill=fill))
     else:
         rgb_map = {k: _hex_to_rgb(v) for k, v in palette.items()}
         absent_rgb = _hex_to_rgb(absent_fill)
@@ -288,6 +294,8 @@ def _heatmap_draw(a, ctx):
 
     bw = ctx.x_scale.bandwidth
     bh = ctx.y_scale.bandwidth
+    lw = opts.get("linewidth", 0)
+    lc = resolve_color(opts.get("linecolor", "white")) if lw else None
     use_rects = nrows * ncols <= _D["imshow_max_rects"]
     out = []
 
@@ -304,7 +312,11 @@ def _heatmap_draw(a, ctx):
                 else:
                     i = int(norm.to_unit(v) * 255 + 0.5) * 3
                     fill = f"rgb({lut[i]},{lut[i+1]},{lut[i+2]})"
-                out.append(rect(x0, y0, bw, bh, fill=fill))
+                if lw:
+                    out.append(rect(x0, y0, bw, bh, fill=fill,
+                                    stroke=lc, stroke_width=lw))
+                else:
+                    out.append(rect(x0, y0, bw, bh, fill=fill))
     else:
         # Category-scale PNG fallback. `_png_for_blocks` covers the
         # no-split case as a single full-range block — one image flush
