@@ -25,6 +25,8 @@ Two levels of API:
   one object passed around. `from_kwargs` does length validation with a
   configurable error prefix so the same class works for dendrogram, etc.
 """
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 
 

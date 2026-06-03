@@ -21,7 +21,7 @@ Reference plot types beyond the standard vocabulary live in [`src/plotlet/extens
 
 ## Dependencies
 
-plotlet supports Python 3.10+.
+plotlet supports Python 3.8+.
 
 Required: `fonttools`, `scipy` (used by regression, qq, pointplot, dendrogram). numpy / pandas / polars inputs work transparently.
 

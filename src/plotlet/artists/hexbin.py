@@ -15,6 +15,8 @@ Styling kwargs:
   vmin=0         colormap domain lower bound
   vmax=None      colormap domain upper bound (defaults to max count)
 """
+from __future__ import annotations
+
 import math
 
 from ..registry import ArtistSpec, add_artist

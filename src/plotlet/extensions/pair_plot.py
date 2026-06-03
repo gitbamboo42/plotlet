@@ -16,6 +16,7 @@ API:
 `color` column (if given) is excluded from the pair grid and used for
 categorical coloring in scatter cells.
 """
+from __future__ import annotations
 
 SUMMARY = 'EDA pair-plot: n × n grid of scatter + histogram cells, built via plotlet `grid()` composition.'
 

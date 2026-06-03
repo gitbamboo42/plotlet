@@ -18,6 +18,8 @@ Example:
     c = pt.chart(penguins, x="bill_length_mm", y="bill_depth_mm", color="species")
     c.scatter()
 """
+from __future__ import annotations
+
 import csv
 import math
 from pathlib import Path

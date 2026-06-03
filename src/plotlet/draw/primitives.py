@@ -12,6 +12,8 @@ or vice versa); leave them `None` and `alpha=` applies to the whole element.
 For chart-recording counterparts in data coordinates, use `Chart` methods
 directly — `c.scatter(xs, ys)`, `c.text(x, y, s)`, etc.
 """
+from __future__ import annotations
+
 import math
 
 from .._spec import _D, _DASH
