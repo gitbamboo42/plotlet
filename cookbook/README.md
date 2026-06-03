@@ -6,9 +6,9 @@ that compose custom artists with plotlet's layout algebra.
 
 The cookbook is intentionally small. Each recipe earns its directory by
 needing ancillary material (sample data, baselines, helper logic) and
-demonstrating non-obvious composition or custom artists. Run
-`python cookbook/_gallery.py` to render `cookbook/index.html` with every
-recipe inline.
+demonstrating non-obvious composition or custom artists. Each recipe is
+self-contained — browse the subdirectories directly; there is no central
+index.
 
 ## How to use a recipe
 

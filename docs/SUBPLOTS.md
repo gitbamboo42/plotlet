@@ -24,7 +24,7 @@ fig = pt.grid([[a, b], [c, d]])
 # Annotated heatmap — attach trees + strips to a split heatmap.
 # `attach_*` auto-shares the relevant axis; `column_split=` /
 # `row_split=` propagate gaps + leaf order to every panel on the same
-# scale. See cookbook/annotated_heatmap/ for the worked example.
+# scale. See cookbook/heatmaps/ for the worked examples.
 hm.heatmap(matrix, column_split=cond, row_split=path, ...)
 hm.attach_above(top_strip, top_tree)   # strip closest to host, tree above
 hm.attach_left(left_strip, left_tree)

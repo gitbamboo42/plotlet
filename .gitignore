@@ -69,7 +69,15 @@ CLAUDE.local.md
 .claude/
 
 # Personal working notes
-TODO.md
+TODO*.md
 
 # Speculative drafts / aspirational docs — not part of the project yet
 future/
+
+marsilea*/
+comut*/
+complexheatmap/
+code_anatomy/
+density_heatmap/
+oncoprint/
+upset/
