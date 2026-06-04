@@ -50,15 +50,36 @@ def upset_record(args, kw):
 
 
 def upset_xdomain(a):
-    # Use column indices as x (categorical-numeric).
-    return [-0.5, max(0, len(a["_inter"]) - 0.5)]
+    # Use column indices as x; left pad reserves room for set-name labels
+    # so they don't get clipped by the data-area overflow:hidden.
+    return [-0.5 - _LABEL_PAD, max(0, len(a["_inter"]) - 0.5)]
+
+
+_LABEL_PAD = 2.5  # in data-unit columns; ~90 px for typical bar widths
+
+
+# Matrix region's share of vertical space. Fixed (not n_sets-dependent) so
+# row spacing stays scale-invariant: when bars are tall, the matrix doesn't
+# get squashed into a few pixels and dots stop overlapping.
+_MATRIX_FRACTION = 0.42
+
+
+def _matrix_data_height(a):
+    # Data-unit height of the dot-matrix region, sized so it occupies
+    # _MATRIX_FRACTION of the total y-domain.
+    max_size = max((s for _, s in a["_inter"]), default=1)
+    return max_size * 1.1 * _MATRIX_FRACTION / (1 - _MATRIX_FRACTION)
+
+
+def _row_y(a, j):
+    # Y-data position of dot row j (0-indexed), evenly spaced within matrix region.
+    return -_matrix_data_height(a) * (j + 1) / (len(a["_names"]) + 1)
 
 
 def upset_ydomain(a):
     # Bars sit at y > 0; dot matrix sits at y < 0.
     max_size = max((s for _, s in a["_inter"]), default=1)
-    n_sets = len(a["_names"])
-    return [-n_sets - 0.5, max_size * 1.1]
+    return [-_matrix_data_height(a), max_size * 1.1]
 
 
 def upset_draw(a, ctx):
@@ -81,10 +102,9 @@ def upset_draw(a, ctx):
     # Divider between bars and matrix.
     out.append(segment(ctx.x_scale(-0.5), y0, ctx.x_scale(n_inter - 0.5), y0,
                        color="#bbb", width=0.8))
-    # Dot matrix: rows at y = -1, -2, ... -n_sets.
+    # Dot matrix: rows evenly spaced within the matrix region.
     for j, name in enumerate(a["_names"]):
-        y_data = -(j + 1)
-        py = ctx.y_scale(y_data)
+        py = ctx.y_scale(_row_y(a, j))
         # Row label on the left.
         out.append(text_path(name, ctx.x_scale(-0.5) - 6, py + 3,
                               10, anchor="end"))
@@ -97,10 +117,17 @@ def upset_draw(a, ctx):
         rows_on = [j for j, name in enumerate(a["_names"]) if name in combo]
         if len(rows_on) > 1:
             cx = ctx.x_scale(i)
-            y_top = ctx.y_scale(-(min(rows_on) + 1))
-            y_bot = ctx.y_scale(-(max(rows_on) + 1))
+            y_top = ctx.y_scale(_row_y(a, min(rows_on)))
+            y_bot = ctx.y_scale(_row_y(a, max(rows_on)))
             out.append(segment(cx, y_top, cx, y_bot, color=on_color, width=1.4))
     return "".join(out)
+
+
+def upset_frame_defaults(args, kw):
+    # Bare frame matches canonical UpSet aesthetic: bars + dot matrix only.
+    return [("spines", [], {"top": False, "right": False,
+                            "bottom": False, "left": False}),
+            ("yticks", [[]], {})]
 
 
 def upset_legend_entries(a):
@@ -121,6 +148,7 @@ pt.add_artist(pt.ArtistSpec(
     draw=upset_draw,
     uses_color_cycle=False,
     legend_entries=upset_legend_entries,
+    frame_defaults=upset_frame_defaults,
 ))
 
 
@@ -141,7 +169,7 @@ def demo():
     }
     c = pt.chart(data_width=520, data_height=300)
     c.upset(list(sets), sets, n_top=12)
-    c.title("UpSet — hits per assay combination").ylabel("intersection size").legend(True)
+    c.legend(True)
     c.xticks([])
     return c
 
