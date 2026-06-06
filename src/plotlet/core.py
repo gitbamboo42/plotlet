@@ -55,6 +55,14 @@ _PLOTLET_VERSION = _pkg_version("plotlet")
 # so a chart's theme can be recorded and replayed like any other frame
 # attribute; `_render` reads it before drawing and wraps the rest of the
 # pipeline in an `active_theme(...)` context.
+# Inline legend position tokens that overlay the data area (vs reserve
+# margin space outside it). Used to drive both placement and the "draw a
+# readability background?" decision — outside positions skip the rect
+# (ggplot/vega-lite default); inside positions keep a translucent fill.
+_INSIDE_POSITIONS = frozenset({
+    "top-right", "top-left", "bottom-right", "bottom-left", "center",
+})
+
 _FRAME_METHODS = {
     "title", "xlabel", "ylabel", "xlim", "ylim",
     "xscale", "yscale", "grid", "legend",
@@ -332,10 +340,13 @@ def _replay(calls):
         "spine_top_linestyle": None, "spine_right_linestyle": None,
         "spine_bottom_linestyle": None, "spine_left_linestyle": None,
         "grid": _GRIDSPEC.get("default_on", False), "legend": False,
-        # Inline-legend placement. `"inside"` (default) paints inside the
-        # data area, top-right; `"right"/"left"/"top"/"bottom"` paint in
-        # reserved margin space outside the data region.
-        "legend_position": "inside",
+        # Inline-legend placement. Outside tokens: `"right"` (default),
+        # `"left"`, `"top"`, `"bottom"` — reserve margin space beside the
+        # data area. Inside tokens: `"top-right"`, `"top-left"`,
+        # `"bottom-right"`, `"bottom-left"`, `"center"` — overlay the data
+        # area. `"inside"` is a back-compat alias for `"top-right"`.
+        # Modeled on vega-lite's `legend.orient`.
+        "legend_position": "right",
         # Data-area clipping on by default — artists past xlim/ylim get
         # cropped at the data boundary. Set False (`c.clip(False)`) to
         # let lines and large markers bleed into the margin space.
@@ -1012,7 +1023,7 @@ def _inline_legend_layout(st):
     if not disc and not cont:
         return None
 
-    requested = st.get("legend_position", "inside")
+    requested = st.get("legend_position", "right")
     if cont and requested in ("top", "bottom"):
         raise ValueError(
             f"chart.legend(position={requested!r}) with a continuous color "
@@ -1021,9 +1032,9 @@ def _inline_legend_layout(st):
             f"horizontal gradient strip, compose with `pt.legend(c)` "
             f"instead and place it on top or bottom of your layout."
         )
-    # Auto-flip "inside" to "right" for gradient charts — an inside
-    # colorbar would float over the data area, which never reads right.
-    if cont and requested == "inside":
+    # Auto-flip inside-corner tokens to "right" for gradient charts — an
+    # overlay colorbar would float over the data area, which never reads right.
+    if cont and requested in _INSIDE_POSITIONS:
         pos = "right"
     else:
         pos = requested
@@ -1856,22 +1867,30 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
                 lx, ly = (iw - lw) / 2, -(inner_gap_top + lh)
             else:  # "bottom"
                 lx, ly = (iw - lw) / 2, ih + label_bands["bottom"] + gap
-            transform = f'translate({lx:.2f},{ly:.2f})'
-        else:  # "inside" — `ly` is the integer border_offset; preserve
-            # the historical `{ly}` formatting (no `.2f`) for byte-identical
-            # output. Inside-position is the default for all existing charts.
-            lx, ly = iw - lw - _LEGSPEC["border_offset"], _LEGSPEC["border_offset"]
-            transform = f'translate({lx:.2f},{ly})'
+        else:
+            # Inside-corner / center tokens — overlay the data area.
+            off = _LEGSPEC["border_offset"]
+            right_x = iw - lw - off
+            bottom_y = ih - lh - off
+            mid_x = (iw - lw) / 2
+            mid_y = (ih - lh) / 2
+            lx, ly = {
+                "top-right":    (right_x, off),
+                "top-left":     (off,     off),
+                "bottom-right": (right_x, bottom_y),
+                "bottom-left":  (off,     bottom_y),
+                "center":       (mid_x,   mid_y),
+            }[pos]
+        transform = f'translate({lx:.2f},{ly:.2f})'
         parts.append(f'<g transform="{transform}">')
         is_gradient_only = bool(cont) and not disc
-        if not is_gradient_only:
-            # Background rect wraps discrete-only / mixed blocks. Pure
-            # gradient blocks skip it — the strip's own border is enough,
-            # matching the layout-leaf `pt.legend(c)` aesthetic.
+        if not is_gradient_only and pos in _INSIDE_POSITIONS:
+            # Inside-position legends overlay the data area, so a
+            # translucent background keeps text/swatches readable on top
+            # of plot marks. No stroke — ggplot/vega-lite default look.
+            # Outside positions skip the rect entirely.
             parts.append(rect(0, 0, lw, lh,
                               fill=_LEGSPEC["background"],
-                              stroke=_FRAME["color"],
-                              stroke_width=_FRAME["width"],
                               alpha=_LEGSPEC["opacity"]))
         from .legend import _render_continuous_entry, _render_discrete_entry
         if horizontal:

@@ -135,7 +135,7 @@ def demo():
     c = pt.chart(data_width=440, data_height=300)
     c.mosaic(table, classes, outcomes, color_by="col")
     c.xticks([]); c.yticks([])
-    c.title("Titanic survival × class").legend(True, position="right")
+    c.title("Titanic survival × class").legend(True)
     return c
 
 

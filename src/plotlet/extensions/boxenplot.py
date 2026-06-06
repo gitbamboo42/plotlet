@@ -241,7 +241,7 @@ def demo():
             palette={"control": "#3F97C5", "dose": "#F99917"})
     c.title("Letter-value plot by group and treatment")
     c.xlabel("group").ylabel("value")
-    c.legend(True, position="right")
+    c.legend(True)
     return c
 
 

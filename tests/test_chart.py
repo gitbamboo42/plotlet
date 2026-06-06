@@ -147,9 +147,7 @@ def chart_imshow_diverging_center():
 def chart_imshow_log_norm():
     # Multi-decade dynamic range — without log, all but the brightest
     # cells render near-black; with log, structure across decades shows.
-    # Legend ticks are powers of 10. Default position="inside" auto-flips
-    # to "right" for gradient-bearing charts (an inside colorbar is
-    # incoherent), so this exercises the auto-flip path.
+    # Legend ticks are powers of 10.
     data = [[10 ** (0.05 * r + 0.05 * c) for c in range(20)] for r in range(15)]
     c = pt.chart(title="imshow norm='log'", xlabel="x", ylabel="y")
     c.imshow(data, cmap="magma", norm="log",
@@ -476,7 +474,7 @@ def chart_heatmap_categorical():
     c.heatmap(matrix, xticklabels=samples, yticklabels=genes,
               palette=palette, absent_fill="#dddddd")
     c.xticks(rotation=45)
-    c.legend(position="right")
+    c.legend()
     return c
 
 
@@ -1248,7 +1246,7 @@ def chart_boxplot():
     c.xscale("category", order=["ctrl", "low", "mid", "high"])
     c.boxplot(data=data, x="group", y="score", fill="trt",
               palette={"A": "#3F97C5", "B": "#F99917"})
-    c.legend(position="right")
+    c.legend()
     return c
 
 
@@ -1269,7 +1267,7 @@ def chart_violin():
     c.xscale("category", order=["wt", "+drug", "ko", "rescue"])
     c.violin(data=data, x="geno", y="expr", fill="trt",
              palette={"A": "#3F97C5", "B": "#F99917"}, inner="box")
-    c.legend(position="right")
+    c.legend()
     return c
 
 
@@ -1290,7 +1288,7 @@ def chart_swarm():
     c.xscale("category", order=["A", "B", "C", "D"])
     c.swarm(data=data, x="group", y="value", fill="trt",
             palette={"ctrl": "#3F97C5", "dose": "#F99917"})
-    c.legend(position="right")
+    c.legend()
     return c
 
 
@@ -1311,7 +1309,7 @@ def chart_strip():
     c.xscale("category", order=["A", "B", "C", "D"])
     c.strip(data=data, x="cond", y="value", fill="trt",
             palette={"ctrl": "#3F97C5", "dose": "#F99917"})
-    c.legend(position="right")
+    c.legend()
     return c
 
 
@@ -1336,7 +1334,7 @@ def chart_pointplot():
                 x="t", y="score", label="control")
     c.pointplot(data={"t": drug_t, "score": drug_score},
                 x="t", y="score", label="drug")
-    c.legend(position="right")
+    c.legend()
     return c
 
 
@@ -1349,7 +1347,7 @@ def chart_ecdf():
                  legend=True)
     c.ecdf(a, label="control")
     c.ecdf(b, label="treatment")
-    c.legend(position="right")
+    c.legend()
     return c
 
 
@@ -1372,7 +1370,7 @@ def chart_density_1d():
                  legend=True)
     c.density_1d(a, label="control", fill=True)
     c.density_1d(b, label="treatment", fill=True)
-    c.legend(position="right")
+    c.legend()
     return c
 
 
@@ -1385,7 +1383,7 @@ def chart_regression():
                  legend=True)
     c.scatter(xs, ys, label="data")
     c.regression(xs, ys, label="fit ± 95 % CI")
-    c.legend(position="right")
+    c.legend()
     return c
 
 
@@ -1423,7 +1421,7 @@ def chart_freqpoly():
                  legend=True)
     c.freqpoly(a, bins=25, label="control")
     c.freqpoly(b, bins=25, label="treatment")
-    c.legend(position="right")
+    c.legend()
     return c
 
 
@@ -1497,7 +1495,7 @@ def chart_bar_stack():
     c = pt.chart(data_width=300, data_height=200,
                  title="bar stack", ylabel="$M", legend=True)
     c.bar(data=df, x="quarter", y="value", fill="series", position="stack")
-    c.legend(position="right")
+    c.legend()
     return c
 
 
@@ -1506,7 +1504,7 @@ def chart_bar_dodge():
     c = pt.chart(data_width=320, data_height=200,
                  title="bar dodge", ylabel="$M", legend=True)
     c.bar(data=df, x="quarter", y="value", fill="series", position="dodge")
-    c.legend(position="right")
+    c.legend()
     return c
 
 
@@ -1515,7 +1513,7 @@ def chart_bar_fill():
     c = pt.chart(data_width=300, data_height=200,
                  title="bar fill (100%)", ylabel="share", legend=True)
     c.bar(data=df, x="quarter", y="value", fill="series", position="fill")
-    c.legend(position="right")
+    c.legend()
     return c
 
 
@@ -1534,7 +1532,7 @@ def chart_bar_long_fill():
                  ylabel="$M", legend=True)
     c.bar(x="quarter", y="value", fill="series", color="black",
           position="dodge")
-    c.legend(position="right")
+    c.legend()
     return c
 
 
@@ -1553,7 +1551,7 @@ def chart_scatter_long_color():
                  title="scatter (long-form, color)",
                  xlabel="x", ylabel="y", legend=True)
     c.scatter(data=df, x="x", y="y", color="group")
-    c.legend(position="right")
+    c.legend()
     return c
 
 
@@ -1569,7 +1567,7 @@ def chart_density_1d_long_color():
                  title="density (long-form, color)",
                  xlabel="value", ylabel="density", legend=True)
     c.density_1d(data=df, x="val", color="group", fill=True)
-    c.legend(position="right")
+    c.legend()
     return c
 
 
@@ -1592,7 +1590,7 @@ def chart_regression_color():
                  xlabel="x", ylabel="y", legend=True)
     c.scatter(s=14, alpha=0.5)
     c.regression()
-    c.legend(position="right")
+    c.legend()
     return c
 
 
@@ -1616,7 +1614,7 @@ def chart_line_group():
                  title="trajectories: color by cohort, group by subject",
                  xlabel="t", ylabel="value", legend=True)
     c.line(color="cohort", group="subject", alpha=0.7)
-    c.legend(position="right")
+    c.legend()
     return c
 
 
@@ -1638,7 +1636,7 @@ def chart_line_linetype():
                  title="redundant color + linetype",
                  xlabel="t", ylabel="v", legend=True)
     c.line(color="cohort", linetype="cohort", linewidth=1.6)
-    c.legend(position="right")
+    c.legend()
     return c
 
 
@@ -1660,7 +1658,7 @@ def chart_line_alpha():
                  title="color + alpha by cohort",
                  xlabel="t", ylabel="v", legend=True)
     c.line(color="cohort", alpha="cohort", linewidth=1.8)
-    c.legend(position="right")
+    c.legend()
     return c
 
 
@@ -1702,7 +1700,7 @@ def chart_area_stack():
                  legend=True)
     c.area(data={"year": rows_year, "source": rows_src, "twh": rows_val},
            x="year", y="twh", fill="source")
-    c.legend(position="right")
+    c.legend()
     return c
 
 

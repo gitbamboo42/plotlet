@@ -404,10 +404,16 @@ class Chart(_Renderable):
         """Toggle the in-frame overlay legend.
 
         `chart.legend()` or `chart.legend(True)` turns it on; `False` off.
-        `position=` places the block: `"inside"` (default) paints it
-        inside the data area at top-right; `"right"`, `"left"`, `"top"`,
-        `"bottom"` paint it outside the data region in reserved margin
-        space.
+        `position=` places the block (modeled on vega-lite's `orient`):
+
+        - **Outside tokens** reserve margin space beside the data area:
+          `"right"` (default), `"left"`, `"top"`, `"bottom"`.
+        - **Inside tokens** overlay the data area:
+          `"top-right"`, `"top-left"`, `"bottom-right"`, `"bottom-left"`,
+          `"center"`.
+
+        Outside legends draw with no frame; inside legends get a
+        translucent background for readability over plot marks.
 
         For a separate, layout-level legend leaf (the kind that lives in
         its own panel and harvests entries from sibling charts), use
@@ -428,11 +434,13 @@ class Chart(_Renderable):
                 f"chart.legend() (leaf in-frame overlay) takes an optional bool; "
                 f"got {type(args[0]).__name__}."
             )
-        if position is not None and position not in (
-                "inside", "right", "left", "top", "bottom"):
+        _VALID_POSITIONS = ("right", "left", "top", "bottom",
+                            "top-right", "top-left",
+                            "bottom-right", "bottom-left", "center")
+        if position is not None and position not in _VALID_POSITIONS:
             raise ValueError(
                 f"chart.legend(position={position!r}) — must be one of "
-                f"'inside', 'right', 'left', 'top', 'bottom'."
+                f"{_VALID_POSITIONS}."
             )
         # Record directly — `legend` is in _FRAME_METHODS but our specialized
         # method above shadows __getattr__, so we use `_record` explicitly.

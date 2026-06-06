@@ -299,7 +299,7 @@ def demo():
                 palette={"baseline": "#3F97C5", "followup": "#F99917"})
     c.title("Raincloud by condition and treatment")
     c.xlabel("group").ylabel("score")
-    c.legend(True, position="right")
+    c.legend(True)
     return c
 
 
