@@ -106,6 +106,22 @@ def _expand_with_aesthetics(data, x_col, y_col, color, group, alpha,
     s_arr  = _compute_size_array(data[size], sizes) if size is not None else None
     mk_arr = _compute_style_array(data[style])      if style is not None else None
 
+    # Capture size-aesthetic info for the legend (column name + source
+    # value range + pixel range). Stashed on the first returned record
+    # so a single size guide renders even when color also splits the
+    # data into multiple records.
+    size_legend = None
+    if size is not None:
+        src_vals = [v for v in to_list(data[size])
+                    if isinstance(v, (int, float)) and v == v]
+        if src_vals:
+            size_legend = {
+                "col_name": str(size),
+                "source_min": min(src_vals),
+                "source_max": max(src_vals),
+                "sizes_range": tuple(sizes),
+            }
+
     def slice_for(idxs):
         out = dict(base_opts)
         if s_arr  is not None: out["s"]      = [s_arr[i]  for i in idxs]
@@ -121,7 +137,10 @@ def _expand_with_aesthetics(data, x_col, y_col, color, group, alpha,
         opts = slice_for(range(n))
         if color_value is not None: opts["color"] = color_value
         if alpha_value is not None: opts["alpha"] = alpha_value
-        return [{"type": "scatter", "xs": xs_all, "ys": ys_all, "opts": opts}]
+        rec = {"type": "scatter", "xs": xs_all, "ys": ys_all, "opts": opts}
+        if size_legend is not None:
+            rec["_size_legend"] = size_legend
+        return [rec]
 
     color_vec = color_value if color_kind == "column" else [None] * n
     group_vec = group_value if group_kind == "column" else [None] * n
@@ -155,6 +174,8 @@ def _expand_with_aesthetics(data, x_col, y_col, color, group, alpha,
         elif alpha_value is not None:
             opts["alpha"] = alpha_value
         records.append({"type": "scatter", "xs": xs_g, "ys": ys_g, "opts": opts})
+    if size_legend is not None and records:
+        records[0]["_size_legend"] = size_legend
     return records
 
 
@@ -282,24 +303,86 @@ def _scatter_legend_gradient(a):
 
 def _scatter_legend_entries(a):
     opts = a["opts"]
-    label = opts.get("label")
-    if not label:
-        return []
     sw = _LEGSPEC["swatch_width"]
-    def paint(_a, _ctx, x0, y_mid):
-        raw_s = opts.get("s", _ctx.defaults["scatter_s"])
-        raw_mk = opts.get("marker", "o")
-        s_val = (sorted(raw_s)[len(raw_s) // 2]
-                 if isinstance(raw_s, (list, tuple)) and raw_s
-                 else (raw_s if not isinstance(raw_s, (list, tuple))
-                       else _ctx.defaults["scatter_s"]))
-        mk_val = (raw_mk[0]
-                  if isinstance(raw_mk, (list, tuple)) and raw_mk
-                  else (raw_mk if not isinstance(raw_mk, (list, tuple)) else "o"))
-        s_size = math.sqrt(s_val) / 2
-        return marker(mk_val, x0 + sw / 2, y_mid, s_size, _a["_color"],
-                      opts.get("alpha", _ctx.defaults["scatter_alpha"]))
-    return [{"label": label, "color": a.get("_color"), "paint": paint}]
+    entries = []
+    label = opts.get("label")
+    if label:
+        def paint(_a, _ctx, x0, y_mid):
+            raw_s = opts.get("s", _ctx.defaults["scatter_s"])
+            raw_mk = opts.get("marker", "o")
+            s_val = (sorted(raw_s)[len(raw_s) // 2]
+                     if isinstance(raw_s, (list, tuple)) and raw_s
+                     else (raw_s if not isinstance(raw_s, (list, tuple))
+                           else _ctx.defaults["scatter_s"]))
+            mk_val = (raw_mk[0]
+                      if isinstance(raw_mk, (list, tuple)) and raw_mk
+                      else (raw_mk if not isinstance(raw_mk, (list, tuple)) else "o"))
+            s_size = math.sqrt(s_val) / 2
+            return marker(mk_val, x0 + sw / 2, y_mid, s_size, _a["_color"],
+                          opts.get("alpha", _ctx.defaults["scatter_alpha"]))
+        entries.append({"label": label, "color": a.get("_color"), "paint": paint})
+    # Size aesthetic: emit a small grouped guide with representative
+    # dots — present only on the record that carries `_size_legend`
+    # (attached by `_expand_with_aesthetics`).
+    sl = a.get("_size_legend")
+    if sl is not None:
+        entries.extend(_scatter_size_entries(sl, opts))
+    return entries
+
+
+def _scatter_size_entries(sl, opts):
+    """Emit size-graded dot entries showing the size→value mapping.
+
+    Default break selection: ~4 "nice" round values across the source
+    range via `_nice_ticks` — mirrors ggplot's `scale_size_continuous`
+    using extended-breaks. Users override via
+    `size_legend={"breaks": [...], "labels": [...]}` on the scatter call.
+    Pixel sizes mirror `_compute_size_array`'s linear interpolation."""
+    src_lo, src_hi = sl["source_min"], sl["source_max"]
+    s_lo, s_hi = sl["sizes_range"]
+    group = sl["col_name"]
+    span = src_hi - src_lo
+
+    legend_opts = opts.get("size_legend") or {}
+    user_breaks = legend_opts.get("breaks")
+    if user_breaks is not None:
+        breaks = [float(b) for b in user_breaks]
+    else:
+        from ..scales import _nice_ticks
+        candidates = _nice_ticks(src_lo, src_hi, n=4)
+        # Drop ticks outside the source range — those dots wouldn't
+        # correspond to any data we'd plot.
+        breaks = [b for b in candidates if src_lo <= b <= src_hi]
+        if not breaks:
+            breaks = [src_lo, src_hi]
+
+    user_labels = legend_opts.get("labels")
+    if user_labels is not None:
+        if len(user_labels) != len(breaks):
+            raise ValueError(
+                f"scatter size_legend['labels'] length {len(user_labels)} "
+                f"doesn't match breaks length {len(breaks)}."
+            )
+        labels = [str(l) for l in user_labels]
+    else:
+        labels = [f"{b:g}" for b in breaks]
+
+    out = []
+    for v, label in zip(breaks, labels):
+        frac = (v - src_lo) / span if span else 0.5
+        px_area = s_lo + frac * (s_hi - s_lo)
+        radius = math.sqrt(px_area) / 2
+        marker_kind = opts.get("marker", "o")
+        if isinstance(marker_kind, (list, tuple)):
+            marker_kind = marker_kind[0] if marker_kind else "o"
+        def paint(_a, _ctx, x0, y_mid, _r=radius, _mk=marker_kind):
+            sw_ = _LEGSPEC["swatch_width"]
+            return marker(_mk, x0 + sw_ / 2, y_mid, _r,
+                          _a.get("_color") or _ctx.defaults["color"],
+                          opts.get("alpha", _ctx.defaults["scatter_alpha"]))
+        out.append({"label": label, "color": "#333", "group": group,
+                    "paint": paint})
+    return out
 
 
 add_artist(ArtistSpec(

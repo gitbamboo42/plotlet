@@ -15,6 +15,13 @@ Pass at construction or as chained setters:
 `yscale`, `grid=True/False`, `legend=True/False`, `clip=True/False`,
 `data_width`, `data_height`.
 
+`c.legend(True, position=...)` places the in-frame legend. Outside
+tokens (reserve margin space beside the data area): `"right"` (default),
+`"left"`, `"top"`, `"bottom"`. Inside tokens (overlay the data area):
+`"top-right"`, `"top-left"`, `"bottom-right"`, `"bottom-left"`,
+`"center"`. Outside positions emit no frame; inside positions get a
+translucent background for readability over plot marks.
+
 Sizes accept bare pixels (`400`) or unit-suffixed strings (`"4in"`,
 `"10cm"`, `"100mm"`, `"72pt"`). The **data region** is the user-facing
 primitive — the canvas grows to fit titles and tick labels. To target
@@ -90,7 +97,7 @@ universal and not repeated.
 | --- | --- |
 | `.line(x=, y=, color=, group=, linetype=, alpha=, **opts)` | `palette`, `alphas=(min, max)`, `label`, `linewidth`, `linestyle` (`"-"`, `"--"`, `":"`, `"-."`), `marker`, `markersize`, `curve` (`"linear"`, `"step-before"`, `"step-after"`, `"step-mid"`) |
 | `.step(x=, y=, where=, **opts)` | sugar over `line(curve=…)`; `where=` is `"pre"` / `"post"` (default) / `"mid"` |
-| `.scatter(x=, y=, color=, group=, alpha=, size=, style=, **opts)` | `palette`, `alphas=(min, max)`, `label`, `s`, `marker`, `sizes=(min, max)` |
+| `.scatter(x=, y=, color=, group=, alpha=, size=, style=, c=, **opts)` | `palette`, `alphas=(min, max)`, `label`, `s`, `marker`, `sizes=(min, max)`, `size_legend={"breaks": [...], "labels": [...]}`, `cmap`, `vmin`, `vmax`, `norm` |
 | `.regression(x=, y=, color=, **opts)` | `palette`, `level=0.95`, `alpha=0.2`, `linewidth=1.8` — OLS fit + Student-t band |
 | `.hist(x=, fill=, **opts)` | `color` (stroke), `palette`, `bins`, `density`, `histtype` (`"bar"` / `"step"` / `"stepfilled"`), `orientation` |
 | `.density_1d(x=, color=, **opts)` | `palette`, `bw`, `n_grid=200`, `fill=True/False`, `alpha` — Gaussian KDE |

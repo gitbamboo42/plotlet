@@ -152,6 +152,36 @@ def _build_groups(sources: list[Chart], states: dict[int, dict],
     return raw
 
 
+def _partition_by_group(entries, key):
+    """Partition a flat list into [(group_name, [items]), ...] runs by
+    each item's group key. Unlike a consecutive-only grouping, items
+    with the same key are collected together even when separated by
+    intervening items — so multi-aesthetic legends stack cleanly
+    (all color entries together, all size entries together, etc.)
+    regardless of which artist record contributed them.
+
+    None-keyed entries (the legacy un-grouped path) stay first in their
+    relative order. Named groups follow, ordered by first-appearance."""
+    none_items: list = []
+    named: dict = {}
+    order: list = []
+    for item in entries:
+        k = key(item)
+        if k is None:
+            none_items.append(item)
+        else:
+            if k not in named:
+                named[k] = []
+                order.append(k)
+            named[k].append(item)
+    out: list = []
+    if none_items:
+        out.append((None, none_items))
+    for k in order:
+        out.append((k, named[k]))
+    return out
+
+
 def _render_discrete_entry(entry: dict, a: dict, ctx_for,
                            x: float, y_mid: float) -> str:
     """One discrete legend row: swatch + label. Shared between the inline
@@ -333,10 +363,17 @@ def _legend_content_size(leaf: Chart, sources: list[Chart],
             total_h += _LEGSPEC["gradient_height"]
         if g["cont"] and g["disc"]:
             total_h += _LEGSPEC["section_gap"]
-        for entry in g["disc"]:
-            disc_w = sw + 6 + measure_text(entry["label"], tick_size)
-            max_w = max(max_w, disc_w)
-        total_h += len(g["disc"]) * row_h
+        sub_groups = _partition_by_group(g["disc"], lambda e: e.get("group"))
+        for si, (sub_name, sub_entries) in enumerate(sub_groups):
+            if sub_name:
+                max_w = max(max_w, measure_text(str(sub_name), label_size))
+                total_h += header_h
+            for entry in sub_entries:
+                disc_w = sw + 6 + measure_text(entry["label"], tick_size)
+                max_w = max(max_w, disc_w)
+            total_h += len(sub_entries) * row_h
+            if si < len(sub_groups) - 1:
+                total_h += _LEGSPEC["section_gap"]
         if gi < len(groups) - 1:
             total_h += _LEGSPEC["section_gap"]
 
@@ -403,11 +440,24 @@ def _render_legend(leaf: Chart, w: float, h: float,
             cy += entry_label_h + _LEGSPEC["gradient_height"]
         if g["cont"] and g["disc"]:
             cy += _LEGSPEC["section_gap"]
-        for i, entry in enumerate(g["disc"]):
-            ry = cy + i * row_h + row_h / 2
-            parts.append(_render_discrete_entry(entry, entry["_a"],
-                                                _swatch_ctx, pad_x, ry))
-        cy += len(g["disc"]) * row_h
+        # Partition entries by their `group` field so an artist
+        # contributing multiple aesthetics (color + size + shape) renders
+        # each aesthetic as its own labeled block — entries with the
+        # same group key cluster together even across artist records.
+        sub_groups = _partition_by_group(g["disc"], lambda e: e.get("group"))
+        for si, (sub_name, sub_entries) in enumerate(sub_groups):
+            if sub_name:
+                parts.append(text_path(str(sub_name), pad_x, cy + label_size,
+                                       label_size, anchor="start",
+                                       color=text_color))
+                cy += header_h
+            for i, entry in enumerate(sub_entries):
+                ry = cy + i * row_h + row_h / 2
+                parts.append(_render_discrete_entry(entry, entry["_a"],
+                                                    _swatch_ctx, pad_x, ry))
+            cy += len(sub_entries) * row_h
+            if si < len(sub_groups) - 1:
+                cy += _LEGSPEC["section_gap"]
         if gi < len(groups) - 1:
             cy += _LEGSPEC["section_gap"]
 

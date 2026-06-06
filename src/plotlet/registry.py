@@ -62,11 +62,26 @@ class ArtistSpec:
     layer: str = "data"  # "background" | "data" | "foreground"
     uses_color_cycle: bool = True
     default_color: str | None = None  # used when uses_color_cycle is False
-    # Each entry: {"label": str, "color": str, "paint"?: callable, "_a"?: dict}
-    # `paint(a, ctx, x0, y_mid) -> str` is optional; default is a colored rect
-    # swatch using entry["color"]. `_a` is auto-attached by the harvester so
-    # paint functions have the original recorded artist for context (linewidth,
-    # alpha, marker kind, etc.).
+    # Each entry: {
+    #   "label":  str           — text shown beside the swatch
+    #   "color":  str           — fill color for the default rect swatch
+    #   "alpha"?: float         — fill-opacity for the default swatch
+    #                             (ignored when `paint` is set; the paint
+    #                             function controls its own opacity)
+    #   "group"?: str           — sub-group key. Entries sharing a group
+    #                             cluster together with a small header
+    #                             above them; entries without `group`
+    #                             render flat. Used by multi-aesthetic
+    #                             artists (e.g. scatter with color +
+    #                             size) to stack one guide per aesthetic.
+    #   "paint"?: callable      — custom swatch renderer (signature below)
+    #   "_a"?:    dict          — auto-attached by the harvester
+    # }
+    # `paint(a, ctx, x0, y_mid) -> str` is optional; default is a colored
+    # rect swatch using entry["color"] (with entry["alpha"] if set).
+    # `_a` is auto-attached by the harvester so paint functions have the
+    # original recorded artist for context (linewidth, alpha, marker
+    # kind, etc.).
     legend_entries: Callable[[dict], list[dict]] | None = None
     legend_gradient: Callable[[dict], dict | None] | None = None
     data_attrs: Callable[[dict], dict | None] | None = None

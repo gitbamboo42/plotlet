@@ -1063,13 +1063,26 @@ def _inline_legend_layout(st):
         # Vertical mixed (cont + disc) or discrete-only. Stack continuous
         # strips on top, discrete rows below, with section_gap between.
         # Background rect wraps everything → outer padding.
-        from .legend import _inline_gradient_block_size
+        from .legend import _inline_gradient_block_size, _partition_by_group
         disc_max_text = (max(measure_text(e["label"], tick_size) for _, e in disc)
                           if disc else 0.0)
         disc_w = sw + 6 + disc_max_text if disc else 0.0
+        # Sub-group sizing: each named sub-group adds a small header row
+        # plus the existing section_gap separates adjacent sub-groups.
+        label_size = _FONTSPEC["label_size"]
+        sub_header_h = label_size + 4
+        sub_groups = _partition_by_group(disc, lambda ae: ae[1].get("group"))
+        for name, _items in sub_groups:
+            if name:
+                disc_w = max(disc_w, measure_text(str(name), label_size))
+        n_sub_headers = sum(1 for n, _ in sub_groups if n)
+        n_sub_gaps = max(0, len(sub_groups) - 1)
+        disc_h = (len(disc) * row_h
+                  + n_sub_headers * sub_header_h
+                  + n_sub_gaps * _LEGSPEC["section_gap"])
         cont_w, cont_h = _inline_gradient_block_size([d for _, d in cont])
         lw = max(disc_w, cont_w) + 2 * pad_x
-        lh = cont_h + len(disc) * row_h + 2 * pad_y
+        lh = cont_h + disc_h + 2 * pad_y
         if cont and disc:
             lh += _LEGSPEC["section_gap"]
     return {"disc": disc, "cont": cont, "lw": lw, "lh": lh,
@@ -1931,10 +1944,28 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
                     cur_y += _LEGSPEC["section_gap"]
             if cont and disc:
                 cur_y += _LEGSPEC["section_gap"]
-            for i, (a, entry) in enumerate(disc):
-                ry = cur_y + row_h / 2
-                parts.append(_render_discrete_entry(entry, a, _ctx_for, pad_x, ry))
-                cur_y += row_h
+            # Partition entries by their `group` field so a
+            # multi-aesthetic artist (color + size + shape) renders each
+            # aesthetic as its own block with a header — entries with
+            # the same key cluster together across artist records.
+            from .legend import _partition_by_group
+            sub_groups = _partition_by_group(
+                disc, lambda ae: ae[1].get("group"))
+            label_size = _FONTSPEC["label_size"]
+            sub_header_h = label_size + 4
+            for si, (sub_name, sub_items) in enumerate(sub_groups):
+                if sub_name:
+                    parts.append(text_path(str(sub_name), pad_x,
+                                           cur_y + label_size,
+                                           label_size, anchor="start",
+                                           color=text_color))
+                    cur_y += sub_header_h
+                for a, entry in sub_items:
+                    ry = cur_y + row_h / 2
+                    parts.append(_render_discrete_entry(entry, a, _ctx_for, pad_x, ry))
+                    cur_y += row_h
+                if si < len(sub_groups) - 1:
+                    cur_y += _LEGSPEC["section_gap"]
         parts.append('</g>')
 
     # Inset axes — render each as its own SVG fragment positioned by

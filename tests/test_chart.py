@@ -1171,6 +1171,7 @@ def chart_scatter_size():
     c = pt.chart(df, data_width=400, data_height=200,
                  title="bubble", xlabel="x", ylabel="y")
     c.scatter(x="x", y="y", size="mass", sizes=(15, 250))
+    c.legend()
     return c
 
 
