@@ -20,6 +20,7 @@ import html as _html
 import xml.etree.ElementTree as ET
 
 from .chart import Chart
+from .draw import rect
 
 
 _SVG_NS = "{http://www.w3.org/2000/svg}"
@@ -98,10 +99,9 @@ def _render_diagram_inner(src_svg: str, W: int, H: int) -> str:
 
     parts = [
         '<g font-family="sans-serif">',
-        f'<rect x="0" y="0" width="{W}" height="{H}" fill="#fafafa"/>',
+        rect(0, 0, W, H, fill="#fafafa"),
         _HATCH_DEF,
-        f'<rect x="0" y="0" width="{W}" height="{H}" fill="none" '
-        f'stroke="#bbb" stroke-width="0.5" stroke-dasharray="2,2"/>',
+        rect(0, 0, W, H, stroke="#bbb", stroke_width=0.5, dash="2,2"),
     ]
     for axis, gx, gy, gw, gh in gaps:
         parts.append(_render_gap(axis, gx, gy, gw, gh))
@@ -181,12 +181,10 @@ def _render_panel(p: dict, col: str) -> str:
     m = p["margin"]
     cx, cy = px + ml + iw / 2, py + mt + ih / 2
     parts = [
-        f'<rect x="{px}" y="{py}" width="{pw}" height="{ph}" '
-        f'fill="{col}" fill-opacity="0.12" stroke="{col}" '
-        f'stroke-width="1.2" stroke-dasharray="5,3"/>',
-        f'<rect x="{px+ml}" y="{py+mt}" width="{iw}" height="{ih}" '
-        f'fill="{col}" fill-opacity="0.38" stroke="{col}" '
-        f'stroke-width="0.6" stroke-opacity="0.6"/>',
+        rect(px, py, pw, ph, fill=col, stroke=col,
+             stroke_width=1.2, dash="5,3", fill_alpha=0.12),
+        rect(px + ml, py + mt, iw, ih, fill=col, stroke=col,
+             stroke_width=0.6, fill_alpha=0.38, stroke_alpha=0.6),
     ]
     if mt >= 12:
         parts.append(_txt(px + pw / 2, py + mt / 2 + 3, m["top"]))
@@ -210,18 +208,17 @@ def _render_panel(p: dict, col: str) -> str:
 
 
 def _render_gap(axis: str, gx: float, gy: float, gw: float, gh: float) -> str:
-    rect = (
-        f'<rect x="{gx}" y="{gy}" width="{gw}" height="{gh}" '
-        f'fill="url(#plotlet-gap-hatch)" stroke="#666" stroke-opacity="0.5" '
-        f'stroke-width="0.5" stroke-dasharray="2,2"/>'
-    )
+    body = rect(gx, gy, gw, gh,
+                fill="url(#plotlet-gap-hatch)",
+                stroke="#666", stroke_width=0.5,
+                stroke_alpha=0.5, dash="2,2")
     size = gw if axis == "h" else gh
     cx, cy = gx + gw / 2, gy + gh / 2
     if axis == "h":
         label = _txt(cx, cy, f"gap {int(size)}", size=9, fill="#333", rotate=-90)
     else:
         label = _txt(cx, cy + 3, f"gap {int(size)}", size=9, fill="#333")
-    return rect + label
+    return body + label
 
 
 def _txt(x: float, y: float, s, *, anchor: str = "middle", size: int = 10,

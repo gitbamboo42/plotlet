@@ -35,7 +35,7 @@ from .scales import (_LinearScale, _LogScale, _CategoryScale, _SymlogScale,
                       _PowerScale, _TimeScale, _nice_domain, _fmt_tick,
                       _to_epoch, _coerce_time_lim)
 from .draw import measure_text, cap_height, descender
-from .draw import text_path, segment, dash_attr
+from .draw import text_path, segment, rect
 from .utils import histogram, collect_categories
 from .registry import RenderContext, get_artist, all_artist_names
 from . import artists  # noqa: F401  — registers built-ins on import
@@ -1563,8 +1563,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     parts = []
 
     if st["facecolor"] is not None:
-        parts.append(f'<rect x="0" y="0" width="{iw}" height="{ih}" '
-                     f'fill="{resolve_color(st["facecolor"])}"/>')
+        parts.append(rect(0, 0, iw, ih, fill=resolve_color(st["facecolor"])))
 
     # grid
     if st["grid"]:
@@ -1572,12 +1571,12 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         if not x_is_cat:
             for t in x_ticks:
                 x = x_scale(t)
-                parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="0" y2="{ih}" '
-                             f'stroke="{_GRIDSPEC["color"]}" stroke-width="{gw}" stroke-dasharray="{gd}"/>')
+                parts.append(segment(x, 0, x, ih,
+                                     color=_GRIDSPEC["color"], width=gw, dash=gd))
         for t in y_ticks:
             y = y_scale(t)
-            parts.append(f'<line x1="0" x2="{iw}" y1="{y:.2f}" y2="{y:.2f}" '
-                         f'stroke="{_GRIDSPEC["color"]}" stroke-width="{gw}" stroke-dasharray="{gd}"/>')
+            parts.append(segment(0, y, iw, y,
+                                 color=_GRIDSPEC["color"], width=gw, dash=gd))
 
     # color assignment — only color-cycle artists consume the cycle
     color_idx = 0
@@ -1658,8 +1657,8 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         if not st[f"spine_{side}"]:
             continue
         col, w = _side_stroke(side)
-        parts.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" '
-                     f'stroke="{col}" stroke-width="{w}"{dash_attr(_side_dash(side))}/>')
+        parts.append(segment(x1, y1, x2, y2, color=col, width=w,
+                             dash=_side_dash(side)))
 
     tick_size = _FONTSPEC["tick_size"]
     label_size = _FONTSPEC["label_size"]
@@ -1704,13 +1703,11 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             if st["spine_bottom"] and not hide_b:
                 y1, y2 = x_bot_endpoints
                 col, sw = _side_stroke("bottom")
-                parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{y1}" y2="{y2}" '
-                             f'stroke="{col}" stroke-width="{sw}"/>')
+                parts.append(segment(x, y1, x, y2, color=col, width=sw))
             if st["spine_top"] and st["x_top"] and not hide_t:
                 y1, y2 = x_top_endpoints
                 col, sw = _side_stroke("top")
-                parts.append(f'<line x1="{x:.2f}" x2="{x:.2f}" y1="{y1}" y2="{y2}" '
-                             f'stroke="{col}" stroke-width="{sw}"/>')
+                parts.append(segment(x, y1, x, y2, color=col, width=sw))
         # Drop only labels redundant with a sharing sibling. A small label
         # overflow into a joined neighbor's collapsed margin is acceptable.
         if not suppress_xt:
@@ -1751,13 +1748,11 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             if st["spine_left"] and not hide_l:
                 x1, x2 = y_left_endpoints
                 col, sw = _side_stroke("left")
-                parts.append(f'<line x1="{x1}" x2="{x2}" y1="{y:.2f}" y2="{y:.2f}" '
-                             f'stroke="{col}" stroke-width="{sw}"/>')
+                parts.append(segment(x1, y, x2, y, color=col, width=sw))
             if st["spine_right"] and st["y_right"] and not hide_r:
                 x1, x2 = y_right_endpoints
                 col, sw = _side_stroke("right")
-                parts.append(f'<line x1="{x1}" x2="{x2}" y1="{y:.2f}" y2="{y:.2f}" '
-                             f'stroke="{col}" stroke-width="{sw}"/>')
+                parts.append(segment(x1, y, x2, y, color=col, width=sw))
         if not suppress_yt:
             # `y + cap_height/2` places the baseline so the cap is vertically
             # centered on the tick line (cap top at y - cap/2, cap bottom at y + cap/2).
@@ -1873,9 +1868,12 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             # Background rect wraps discrete-only / mixed blocks. Pure
             # gradient blocks skip it — the strip's own border is enough,
             # matching the layout-leaf `pt.legend(c)` aesthetic.
-            parts.append(f'<rect x="0" y="0" width="{lw:.2f}" height="{lh}" '
-                         f'fill="{_LEGSPEC["background"]}" stroke="{_FRAME["color"]}" '
-                         f'stroke-width="{_FRAME["width"]}" opacity="{_LEGSPEC["opacity"]}"/>')
+            parts.append(rect(0, 0, lw, lh,
+                              fill=_LEGSPEC["background"],
+                              stroke=_FRAME["color"],
+                              stroke_width=_FRAME["width"],
+                              alpha=_LEGSPEC["opacity"]))
+        from .legend import _render_continuous_entry, _render_discrete_entry
         if horizontal:
             # Discrete-only horizontal row (continuous + horizontal would
             # have raised in `_inline_legend_layout`). Entries left-to-right,
@@ -1884,16 +1882,8 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             cx = pad_x
             ry = pad_y + row_h / 2
             for a, entry in disc:
-                paint = entry.get("paint")
-                if paint is not None:
-                    parts.append(paint(a, _ctx_for(a), cx, ry))
-                else:
-                    parts.append(f'<rect x="{cx}" y="{ry - 5}" width="{sw}" '
-                                 f'height="10" fill="{entry["color"]}"/>')
-                tx = cx + sw + 6
-                parts.append(text_path(entry["label"], tx, ry + 4,
-                                        tick_size, anchor="start", color=text_color))
-                cx = tx + measure_text(entry["label"], tick_size) + spacer
+                parts.append(_render_discrete_entry(entry, a, _ctx_for, cx, ry))
+                cx += sw + 6 + measure_text(entry["label"], tick_size) + spacer
         else:
             # Vertical layout: gradient strips on top, discrete rows below.
             # Ticks face away from the data area — right-position gets
@@ -1901,7 +1891,6 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             # discrete) defaults to "right"; the rare left-position mixed
             # case ends up with ticks pointing toward the discrete entries,
             # which is acceptable for that uncommon combination.
-            from .legend import _render_continuous_entry
             if is_gradient_only and pos == "left":
                 tick_side = "left"
                 strip_x = lw - _LEGSPEC["gradient_width"]
@@ -1925,14 +1914,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
                 cur_y += _LEGSPEC["section_gap"]
             for i, (a, entry) in enumerate(disc):
                 ry = cur_y + row_h / 2
-                paint = entry.get("paint")
-                if paint is not None:
-                    parts.append(paint(a, _ctx_for(a), pad_x, ry))
-                else:
-                    parts.append(f'<rect x="{pad_x}" y="{ry - 5}" width="{sw}" '
-                                 f'height="10" fill="{entry["color"]}"/>')
-                parts.append(text_path(entry["label"], pad_x + sw + 6, ry + 4,
-                                        tick_size, anchor="start", color=text_color))
+                parts.append(_render_discrete_entry(entry, a, _ctx_for, pad_x, ry))
                 cur_y += row_h
         parts.append('</g>')
 
@@ -1944,8 +1926,8 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     insets = st.get("insets") or []
     if insets:
         parts.append(f'<svg x="0" y="0" width="{iw}" height="{ih}" overflow="hidden">')
-    for rect, inset_chart in insets:
-        x_frac, y_frac, w_frac, h_frac = rect
+    for inset_rect, inset_chart in insets:
+        x_frac, y_frac, w_frac, h_frac = inset_rect
         # Render the inset first; this populates `_last_M_eff` so we can
         # offset the translate to align the inset's data region (not its
         # canvas) with the requested axes-fraction rect.
@@ -1964,9 +1946,9 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         bg_h = inset_chart._data_height
         parts.append(f'<g transform="translate({tx:.2f},{ty:.2f})" '
                       f'data-plotlet-kind="inset">'
-                      f'<rect x="{bg_x}" y="{bg_y}" width="{bg_w}" height="{bg_h}" '
-                      f'fill="{SPEC["figure"]["background"]}"/>'
-                      f'{inset_svg}</g>')
+                      + rect(bg_x, bg_y, bg_w, bg_h,
+                             fill=SPEC["figure"]["background"])
+                      + f'{inset_svg}</g>')
     if insets:
         parts.append('</svg>')
 

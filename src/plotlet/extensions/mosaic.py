@@ -65,16 +65,17 @@ def mosaic_draw(a, ctx):
             col_idx = i if color_by == "row" else j
             fill = _PALETTE[col_idx % len(_PALETTE)]
             x0 = ctx.x_scale(x + pad / 2)
-            y0 = ctx.y_scale(1 - (y + rh) + pad / 2)
             x1 = ctx.x_scale(x + cw - pad / 2)
-            y1 = ctx.y_scale(1 - y - pad / 2)
-            out.append(rect(x0, y0, x1 - x0, y1 - y0,
+            # y-axis is screen-flipped: larger data -> smaller pixel.
+            y_top = ctx.y_scale(1 - y - pad / 2)
+            y_bot = ctx.y_scale(1 - (y + rh) + pad / 2)
+            out.append(rect(x0, y_top, x1 - x0, y_bot - y_top,
                             fill=fill, stroke="white", stroke_width=0.6,
                             fill_alpha=0.65, stroke_alpha=1))
             # Annotate cell with count if it's big enough to fit.
-            if (x1 - x0) > 30 and (y1 - y0) > 14:
+            if (x1 - x0) > 30 and (y_bot - y_top) > 14:
                 out.append(text_path(str(table[i][j]),
-                                       (x0 + x1) / 2, (y0 + y1) / 2 + 3,
+                                       (x0 + x1) / 2, (y_top + y_bot) / 2 + 3,
                                        10, anchor="middle", color="#222"))
             x += cw
         y += rh
@@ -101,7 +102,8 @@ def mosaic_draw(a, ctx):
 def mosaic_legend_entries(a):
     color_by = a["opts"].get("color_by", "row")
     names = a["row_names"] if color_by == "row" else a["col_names"]
-    return [{"label": str(name), "color": _PALETTE[i % len(_PALETTE)]}
+    return [{"label": str(name), "color": _PALETTE[i % len(_PALETTE)],
+             "alpha": 0.65}
             for i, name in enumerate(names)]
 
 
@@ -133,7 +135,7 @@ def demo():
     c = pt.chart(data_width=440, data_height=300)
     c.mosaic(table, classes, outcomes, color_by="col")
     c.xticks([]); c.yticks([])
-    c.title("Titanic survival × class").legend(True)
+    c.title("Titanic survival × class").legend(True, position="right")
     return c
 
 

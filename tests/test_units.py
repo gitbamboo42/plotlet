@@ -29,22 +29,23 @@ import plotlet as pt
 from plotlet.core import _to_px
 
 
-# Spines have all-integer-valued coords — `0` and `iw` / `ih`. Standalone
-# emits them as bare ints (`240`); the layout path emits floats (`240.0`)
-# because iw/ih come from float arithmetic. The regex accepts both.
+# Spines have all-integer-valued coords — `0` and `iw` / `ih`. The
+# `segment()` primitive emits `:.2f` everywhere, so even an integer
+# `iw` lands as `240.00`. The regex accepts integers or `.0+` decimals.
 # Tick endpoints carry the non-zero decimal from `frame.tick_length`, so
 # they can't masquerade as a spine even when their other coord happens to
 # be integer-valued (`0.00`, `80.00`). Grid lines use `_GRID` (not
 # `#000000`) so they're filtered by stroke. The spine width is read from
-# spec so the regex stays in sync with size retunes.
+# spec so the regex stays in sync with size retunes. Attribute order is
+# `x1 x2 y1 y2` — what `segment()` emits.
 _SPEC_FRAME = pt.SPEC["frame"]
 _SPINES_PER_PANEL = sum(
     1 for s in ("top", "right", "bottom", "left") if _SPEC_FRAME[f"spine_{s}"]
 )
 _INT_COORD = r'\d+(?:\.0+)?'
 _SPINE_LINE_RE = re.compile(
-    rf'<line x1="({_INT_COORD})" y1="({_INT_COORD})" '
-    rf'x2="({_INT_COORD})" y2="({_INT_COORD})" '
+    rf'<line x1="({_INT_COORD})" x2="({_INT_COORD})" '
+    rf'y1="({_INT_COORD})" y2="({_INT_COORD})" '
     rf'stroke="#000000" stroke-width="{re.escape(str(_SPEC_FRAME["width"]))}"/>'
 )
 
@@ -66,8 +67,8 @@ def _spine_rects(svg: str) -> list[tuple[int, int]]:
     rects: list[tuple[int, int]] = []
     for i in range(0, len(matches), n):
         group = [tuple(int(float(c)) for c in m) for m in matches[i : i + n]]
-        iw = max(max(x1, x2) for x1, _, x2, _ in group)
-        ih = max(max(y1, y2) for _, y1, _, y2 in group)
+        iw = max(max(x1, x2) for x1, x2, _, _ in group)
+        ih = max(max(y1, y2) for _, _, y1, y2 in group)
         rects.append((iw, ih))
     return rects
 

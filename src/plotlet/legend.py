@@ -23,7 +23,7 @@ from .chart import Chart
 from .draw import colormap, ContinuousNorm
 from .registry import RenderContext, get_artist
 from .draw import measure_text
-from .draw import text_path
+from .draw import text_path, rect, segment
 from .scales import _fmt_tick
 from ._spec import _D, _DASH, _FIGSPEC, _FONTSPEC, _FRAME, _LEGSPEC
 
@@ -152,6 +152,29 @@ def _build_groups(sources: list[Chart], states: dict[int, dict],
     return raw
 
 
+def _render_discrete_entry(entry: dict, a: dict, ctx_for,
+                           x: float, y_mid: float) -> str:
+    """One discrete legend row: swatch + label. Shared between the inline
+    legend (core._render_inner) and the standalone legend leaf
+    (_render_legend) so swatch behavior — paint callback, default color,
+    alpha aesthetic — stays in one place.
+
+    `a` is the source artist (needed by paint callbacks). `ctx_for(a)`
+    builds the RenderContext for that callback; standalone uses
+    `_swatch_ctx`, inline uses the panel's own draw context."""
+    sw = _LEGSPEC["swatch_width"]
+    paint = entry.get("paint")
+    if paint is not None:
+        swatch = paint(a, ctx_for(a), x, y_mid)
+    else:
+        swatch = rect(x, y_mid - 5, sw, 10,
+                      fill=entry["color"], alpha=entry.get("alpha", 1))
+    label = text_path(entry["label"], x + sw + 6, y_mid + 4,
+                      _FONTSPEC["tick_size"], anchor="start",
+                      color=_FONTSPEC["color"])
+    return swatch + label
+
+
 def _render_continuous_entry(entry: dict, x: float, y: float,
                               tick_side: str = "right") -> str:
     """One continuous entry: optional label above, then a gradient strip
@@ -191,12 +214,11 @@ def _render_continuous_entry(entry: dict, x: float, y: float,
         # diverging-center) move the *ticks*, not the band colors.
         r, g, b = cm(1.0 - i / _LEGSPEC["gradient_n_stops"])
         h = band_h + (1.0 if i < n_bands - 1 else 0.0)
-        parts.append(f'<rect x="{x:.2f}" y="{strip_y + i*band_h:.4f}" '
-                     f'width="{_LEGSPEC["gradient_width"]}" height="{h:.4f}" '
-                     f'fill="rgb({r},{g},{b})"/>')
-    parts.append(f'<rect x="{x:.2f}" y="{strip_y:.2f}" width="{_LEGSPEC["gradient_width"]}" '
-                 f'height="{strip_h:.2f}" fill="none" '
-                 f'stroke="{_FRAME["color"]}" stroke-width="{_FRAME["width"]}"/>')
+        parts.append(rect(x, strip_y + i * band_h,
+                          _LEGSPEC["gradient_width"], h,
+                          fill=f"rgb({r},{g},{b})"))
+    parts.append(rect(x, strip_y, _LEGSPEC["gradient_width"], strip_h,
+                      stroke=_FRAME["color"], stroke_width=_FRAME["width"]))
 
     norm = ContinuousNorm(entry["vmin"], entry["vmax"],
                            kind=entry.get("norm", "linear"),
@@ -222,9 +244,8 @@ def _render_continuous_entry(entry: dict, x: float, y: float,
     strip_mid = strip_y + strip_h / 2
     for t in ticks:
         ty = strip_y + (1.0 - norm.to_unit(t)) * strip_h
-        parts.append(f'<line x1="{tx0}" x2="{tx1}" '
-                     f'y1="{ty:.2f}" y2="{ty:.2f}" '
-                     f'stroke="{_FRAME["color"]}" stroke-width="{_FRAME["width"]}"/>')
+        parts.append(segment(tx0, ty, tx1, ty,
+                             color=_FRAME["color"], width=_FRAME["width"]))
         bias = 4 * (strip_mid - ty) / (strip_h / 2) if strip_h > 0 else 0
         parts.append(text_path(_fmt_tick(t), label_x, ty + 4 + bias,
                                 tick_size, anchor=label_anchor, color=text_color))
@@ -364,7 +385,6 @@ def _render_legend(leaf: Chart, w: float, h: float,
     pad_x = _LEGSPEC["pad_x"]
     pad_y = _LEGSPEC["pad_y"]
     row_h = _LEGSPEC["row_height"]
-    sw    = _LEGSPEC["swatch_width"]
     tick_size = _FONTSPEC["tick_size"]
     label_size = _FONTSPEC["label_size"]
     text_color = _FONTSPEC["color"]
@@ -385,15 +405,8 @@ def _render_legend(leaf: Chart, w: float, h: float,
             cy += _LEGSPEC["section_gap"]
         for i, entry in enumerate(g["disc"]):
             ry = cy + i * row_h + row_h / 2
-            paint = entry.get("paint")
-            if paint is not None:
-                a = entry["_a"]
-                parts.append(paint(a, _swatch_ctx(a), pad_x, ry))
-            else:
-                parts.append(f'<rect x="{pad_x}" y="{ry - 5}" width="{sw}" height="10" '
-                             f'fill="{entry["color"]}"/>')
-            parts.append(text_path(entry["label"], pad_x + sw + 6, ry + 4,
-                                    tick_size, anchor="start", color=text_color))
+            parts.append(_render_discrete_entry(entry, entry["_a"],
+                                                _swatch_ctx, pad_x, ry))
         cy += len(g["disc"]) * row_h
         if gi < len(groups) - 1:
             cy += _LEGSPEC["section_gap"]
@@ -407,8 +420,8 @@ def _render_standalone_legend(leaf: Chart) -> str:
     + color-assigning those sources, which lands when grouping does
     (commit 5). For now this draws an empty placeholder rect."""
     w, h = leaf._canvas_width, leaf._canvas_height
-    inner = (f'<rect x="0.5" y="0.5" width="{w-1:.2f}" height="{h-1:.2f}" '
-             f'fill="none" stroke="#bbb" stroke-dasharray="4,3"/>')
+    inner = rect(0.5, 0.5, w - 1, h - 1,
+                 stroke="#bbb", dash="4,3")
     return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '
             f'viewBox="0 0 {w} {h}" font-family="{_FONTSPEC["family"]}" font-size="11" '
             f'style="background:{_FIGSPEC["background"]}">{inner}</svg>')
