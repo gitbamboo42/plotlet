@@ -36,6 +36,7 @@ def _adaptive_n_ticks(strip_h: float) -> int:
 
 def legend(*sources: Chart, names: dict | None = None,
            group_by_chart: bool = True,
+           valign: str = "middle",
            canvas_width: int | float | str | None = None,
            canvas_height: int | float | str | None = None,
            legend_gap: int | float | None = None,
@@ -52,6 +53,11 @@ def legend(*sources: Chart, names: dict | None = None,
     entries into a single unsectioned list (useful when small-multiples
     genuinely share a series).
 
+    `valign=` controls where the content sits vertically when the
+    legend leaf gets more space than its content needs (siblings taller,
+    or explicit `canvas_height=`). `"middle"` (default) centers it;
+    `"top"` pins it to the top edge.
+
     Legend leaves have no data axes, so the dimensional surface is
     canvas-only: pass `canvas_width=` / `canvas_height=` to override the
     content-driven auto-size. `legend_gap=N` overrides the default 6 px
@@ -66,6 +72,10 @@ def legend(*sources: Chart, names: dict | None = None,
         )
     if kwargs:
         raise TypeError(f"pt.legend() got unexpected keyword arguments: {list(kwargs)!r}")
+    if valign not in ("top", "middle"):
+        raise ValueError(
+            f"pt.legend(valign={valign!r}) — must be 'top' or 'middle'."
+        )
     for src in sources:
         if not isinstance(src, Chart):
             raise TypeError(
@@ -87,6 +97,7 @@ def legend(*sources: Chart, names: dict | None = None,
     leaf._legend_sources = list(sources)
     leaf._legend_names = dict(names) if names else {}
     leaf._legend_group_by_chart = group_by_chart
+    leaf._legend_valign = valign
     leaf._legend_user_width = canvas_width
     leaf._legend_user_height = canvas_height
     leaf._legend_gap = float(legend_gap) if legend_gap is not None else None
@@ -414,6 +425,7 @@ def _render_legend(leaf: Chart, w: float, h: float,
     sources = leaf._legend_sources or data_leaves
     names = getattr(leaf, "_legend_names", {}) or {}
     group_by_chart = getattr(leaf, "_legend_group_by_chart", True)
+    valign = getattr(leaf, "_legend_valign", "middle")
 
     groups = _build_groups(sources, states, names, group_by_chart)
     if not groups:
@@ -461,7 +473,16 @@ def _render_legend(leaf: Chart, w: float, h: float,
         if gi < len(groups) - 1:
             cy += _LEGSPEC["section_gap"]
 
-    return ''.join(parts)
+    body = ''.join(parts)
+    if valign == "middle":
+        # Content total height = cy (we incremented as we drew) + pad_y.
+        # If the leaf was allocated more space than that, slide it down
+        # by half the surplus so the block reads centered.
+        content_h = cy + pad_y
+        dy = max(0, (h - content_h) / 2)
+        if dy > 0:
+            body = f'<g transform="translate(0,{dy:.2f})">{body}</g>'
+    return body
 
 
 def _render_standalone_legend(leaf: Chart) -> str:
