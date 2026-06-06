@@ -99,6 +99,7 @@ def chart_imshow_rect():
             for r in range(15)]
     c = pt.chart(title="imshow (rect path)", xlabel="col", ylabel="row")
     c.imshow(data, cmap="viridis")
+    c.legend()
     return c
 
 
@@ -107,6 +108,7 @@ def chart_imshow_png():
             for r in range(120)]
     c = pt.chart(title="imshow (PNG path, magma)", xlabel="col", ylabel="row")
     c.imshow(data, cmap="magma")
+    c.legend()
     return c
 
 
@@ -116,6 +118,7 @@ def chart_imshow_diverging():
                  xlabel="x", ylabel="y")
     c.imshow(data, cmap="bwr", extent=(-1.5, 1.5, -1.5, 1.5),
              vmin=-49, vmax=49)
+    c.legend()
     return c
 
 
@@ -128,6 +131,7 @@ def chart_imshow_origin_upper():
     c = pt.chart(title="imshow origin='upper'", xlabel="x", ylabel="y")
     c.imshow(data, cmap="viridis", origin="upper",
              extent=(0, 20, 0, 15))
+    c.legend()
     return c
 
 
@@ -410,6 +414,7 @@ def chart_heatmap_labeled():
     c = pt.chart(title="heatmap (labeled rows/cols)",
                  xlabel="condition", ylabel="sample")
     c.heatmap(data, xticklabels=cols, yticklabels=rows, cmap="viridis")
+    c.legend()
     return c
 
 
@@ -432,6 +437,7 @@ def chart_heatmap_dataframe():
     c = pt.chart(title="heatmap (DataFrame branch, diverging cmap)")
     c.heatmap(df, cmap="bwr", center=0)
     c.xticks(rotation=45)
+    c.legend()
     return c
 
 
@@ -490,6 +496,7 @@ def chart_heatmap_nan():
     c = pt.chart(title="heatmap (NaN/None → absent_fill)")
     c.heatmap(matrix, xticklabels=cols, yticklabels=rows,
               cmap="viridis", absent_fill="#ff9999")
+    c.legend()
     return c
 
 
@@ -509,6 +516,7 @@ def chart_heatmap_split():
               column_split=["X", "Y", "Z", "X", "Y", "Z", "Y", "Z",
                             "X", "Y", "Z", "Y"],
               annot=True)
+    c.legend()
     return c
 
 
@@ -790,6 +798,7 @@ def chart_imshow_annot_custom():
     c = pt.chart(title="imshow (custom annot, fixed color)")
     c.imshow(data, cmap="viridis", origin="upper",
              annot=annot, fmt=".1f", annot_color="#222222", annot_fontsize=12)
+    c.legend()
     return c
 
 
@@ -1398,6 +1407,7 @@ def chart_kde_2d():
                  title="2-D KDE", xlabel="x", ylabel="y")
     c.scatter(xs, ys, s=5, alpha=0.25, color="#444444")
     c.kde_2d(xs, ys, n_grid=40, cmap="viridis")
+    c.legend()
     return c
 
 
@@ -1442,6 +1452,7 @@ def chart_contour():
                  title="contour", xlabel="x", ylabel="y")
     c.contour(grid, extent=(-3, 3, -3, 3), cmap="viridis",
               levels=[0.05, 0.1, 0.2, 0.4, 0.6, 0.8])
+    c.legend()
     return c
 
 

@@ -69,20 +69,41 @@ def _edge_pt(edge, r, c, vtl, vtr, vbr, vbl, lvl):
 
 
 
+def _resolve_levels(grid, opts):
+    """Resolve `levels` once at record time so draw and legend_gradient
+    share a single source of truth. Mirrors the historical lazy fallback
+    (5 fixed quantile-style fractions of grid max)."""
+    levels = opts.get("levels")
+    if levels is not None:
+        return list(levels)
+    flat = [v for row in grid for v in row]
+    if not flat:
+        return []
+    vmax = max(flat)
+    return [vmax * f for f in (0.1, 0.25, 0.5, 0.75, 0.9)]
+
+
 def _kde_2d_record(args, kw):
     xs = to_list(args[0])
     ys = to_list(args[1])
     n_grid = kw.get("n_grid", 60)
     if not xs:
-        return {"type": "kde_2d", "_xs": xs, "_ys": ys, "_grid": [], "opts": kw}
+        return {"type": "kde_2d", "_xs": xs, "_ys": ys, "_grid": [],
+                "_levels": [], "opts": kw}
     bw = kw.get("bw")
     bw_x = bw if bw else silverman_bw(xs)
     bw_y = bw if bw else silverman_bw(ys)
     x_lo = min(xs) - 3 * bw_x; x_hi = max(xs) + 3 * bw_x
     y_lo = min(ys) - 3 * bw_y; y_hi = max(ys) + 3 * bw_y
     grid = _kde2d_grid(xs, ys, n_grid, bw_x, bw_y, x_lo, x_hi, y_lo, y_hi)
-    return {"type": "kde_2d", "_xs": xs, "_ys": ys, "_grid": grid,
-            "_extent": (x_lo, x_hi, y_lo, y_hi), "opts": kw}
+    levels = _resolve_levels(grid, kw)
+    record = {"type": "kde_2d", "_xs": xs, "_ys": ys, "_grid": grid,
+              "_extent": (x_lo, x_hi, y_lo, y_hi),
+              "_levels": levels, "opts": kw}
+    if levels:
+        record["_vmin"] = min(levels)
+        record["_vmax"] = max(levels)
+    return record
 
 
 def _kde_2d_xdomain(a): return a["_xs"]
@@ -94,17 +115,15 @@ def _kde_2d_draw(a, ctx):
     if not g:
         return ""
     n = len(g)
-    levels = a["opts"].get("levels")
-    flat = [v for row in g for v in row]
-    if levels is None:
-        vmax = max(flat)
-        levels = [vmax * f for f in (0.1, 0.25, 0.5, 0.75, 0.9)]
+    levels = a["_levels"]
+    if not levels:
+        return ""
     cmap_name = a["opts"].get("cmap")
     color_opt = a["opts"].get("color")
     lw = a["opts"].get("linewidth", 1.2)
     if cmap_name:
         cm = colormap(cmap_name)
-        norm = ContinuousNorm(min(levels), max(levels), "linear")
+        norm = ContinuousNorm(a["_vmin"], a["_vmax"], "linear")
     x0, x1, y0, y1 = a["_extent"]
     dxd = (x1 - x0) / (n - 1)
     dyd = (y1 - y0) / (n - 1)
@@ -134,12 +153,32 @@ def _kde_2d_draw(a, ctx):
     return "".join(out)
 
 
+def _kde_2d_legend_gradient(a):
+    """Describe kde_2d's continuous level→color mapping when `cmap=` is
+    set — None otherwise so a non-cmap kde_2d (single fallback color)
+    contributes nothing to the legend."""
+    if not a["opts"].get("cmap") or not a.get("_levels"):
+        return None
+    legend_opts = a["opts"].get("legend") or {}
+    return {
+        "kind": "continuous",
+        "cmap": a["opts"]["cmap"],
+        "vmin": a["_vmin"],
+        "vmax": a["_vmax"],
+        "norm": "linear",
+        "center": None,
+        "label": legend_opts.get("label"),
+        "ticks": legend_opts.get("ticks", a["_levels"]),
+    }
+
+
 add_artist(ArtistSpec(
     name="kde_2d",
     record=_kde_2d_record,
     xdomain=_kde_2d_xdomain,
     ydomain=_kde_2d_ydomain,
     draw=_kde_2d_draw,
+    legend_gradient=_kde_2d_legend_gradient,
     uses_color_cycle=False,
     default_color="#1f77b4",
 ))

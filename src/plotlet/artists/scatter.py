@@ -43,12 +43,8 @@ def _artist_scatter(a, xs_, ys_, col, xs, ys):
     if c_vals is not None:
         cmap_name = opts.get("cmap", _D["default_cmap"])
         lut = colormap_lut(cmap_name)
-        numeric = [v for v in c_vals if isinstance(v, (int, float)) and v == v]
-        vmin = opts.get("vmin")
-        vmax = opts.get("vmax")
-        if vmin is None: vmin = min(numeric) if numeric else 0.0
-        if vmax is None: vmax = max(numeric) if numeric else 1.0
-        normalizer = ContinuousNorm(vmin, vmax, kind=opts.get("norm", "linear"))
+        normalizer = ContinuousNorm(a["_vmin"], a["_vmax"],
+                                    kind=opts.get("norm", "linear"))
         point_colors = []
         for v in c_vals:
             if not (isinstance(v, (int, float)) and v == v):
@@ -162,6 +158,18 @@ def _expand_with_aesthetics(data, x_col, y_col, color, group, alpha,
     return records
 
 
+def _resolve_c_range(c_vals, opts):
+    """Return (vmin, vmax) for the cmap normalizer. User overrides win;
+    otherwise fall back to the data range. Recorded once so draw and
+    legend_gradient share a single source of truth."""
+    numeric = [v for v in c_vals if isinstance(v, (int, float)) and v == v]
+    vmin = opts.get("vmin")
+    vmax = opts.get("vmax")
+    if vmin is None: vmin = min(numeric) if numeric else 0.0
+    if vmax is None: vmax = max(numeric) if numeric else 1.0
+    return vmin, vmax
+
+
 def _scatter_record(args, kw):
     kw = dict(kw)
     if "data" in kw or "x" in kw or "y" in kw:
@@ -203,9 +211,11 @@ def _scatter_record(args, kw):
             else:
                 c = to_list(c)
             kw["c"] = c
+            vmin, vmax = _resolve_c_range(c, kw)
             return {"type": "scatter",
                     "xs": to_list(data[x_col]),
                     "ys": to_list(data[y_col]),
+                    "_vmin": vmin, "_vmax": vmax,
                     "opts": kw}
 
         if size is not None or style is not None:
@@ -224,9 +234,14 @@ def _scatter_record(args, kw):
     kw.pop("group", None)
     kw.pop("linetype", None)
     kw.pop("palette", None)
-    return {"type": "scatter",
-            "xs": to_list(args[0]), "ys": to_list(args[1]),
-            "opts": kw}
+    record = {"type": "scatter",
+              "xs": to_list(args[0]), "ys": to_list(args[1]),
+              "opts": kw}
+    if kw.get("c") is not None:
+        c_vals = to_list(kw["c"])
+        kw["c"] = c_vals
+        record["_vmin"], record["_vmax"] = _resolve_c_range(c_vals, kw)
+    return record
 
 
 def _scatter_xdomain(a): return a["xs"]
@@ -244,6 +259,25 @@ def _scatter_data_attrs(a):
 def _scatter_draw(a, ctx):
     return _artist_scatter(a, ctx.x_scale, ctx.y_scale, ctx.color,
                            a["xs"], a["ys"])
+
+
+def _scatter_legend_gradient(a):
+    """Describe scatter's continuous color mapping when `c=` is used —
+    None otherwise so the legend renderer skips the gradient strip and
+    falls through to discrete entries from the categorical color= path."""
+    if a["opts"].get("c") is None:
+        return None
+    legend_opts = a["opts"].get("legend") or {}
+    return {
+        "kind": "continuous",
+        "cmap": a["opts"].get("cmap", _D["default_cmap"]),
+        "vmin": a["_vmin"],
+        "vmax": a["_vmax"],
+        "norm": a["opts"].get("norm", "linear"),
+        "center": a["opts"].get("center"),
+        "label": legend_opts.get("label"),
+        "ticks": legend_opts.get("ticks"),
+    }
 
 
 def _scatter_legend_entries(a):
@@ -275,5 +309,6 @@ add_artist(ArtistSpec(
     ydomain=_scatter_ydomain,
     draw=_scatter_draw,
     legend_entries=_scatter_legend_entries,
+    legend_gradient=_scatter_legend_gradient,
     data_attrs=_scatter_data_attrs,
 ))

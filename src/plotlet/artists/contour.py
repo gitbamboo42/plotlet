@@ -48,11 +48,31 @@ def _edge_pt(edge, r, c, vtl, vtr, vbr, vbl, lvl):
     return (c, r + t)
 
 
+def _resolve_levels(grid, opts):
+    """Resolve `levels` once at record time so draw and legend_gradient
+    share a single source of truth. Mirrors the historical lazy fallback
+    (5 evenly-spaced between grid min/max)."""
+    levels = opts.get("levels")
+    if levels is not None:
+        return list(levels)
+    flat = [v for row in grid for v in row if v == v]
+    if not flat:
+        return []
+    lo, hi = min(flat), max(flat)
+    return [lo + (hi - lo) * i / 6 for i in range(1, 6)]
+
+
 def _contour_record(args, kw):
     grid = to_list_2d(args[0])
     nrows = len(grid); ncols = len(grid[0]) if grid else 0
-    return {"type": "contour", "grid": grid, "_nrows": nrows, "_ncols": ncols,
-            "opts": kw}
+    levels = _resolve_levels(grid, kw)
+    record = {"type": "contour", "grid": grid,
+              "_nrows": nrows, "_ncols": ncols,
+              "_levels": levels, "opts": kw}
+    if levels:
+        record["_vmin"] = min(levels)
+        record["_vmax"] = max(levels)
+    return record
 
 
 def _contour_xdomain(a):
@@ -70,13 +90,9 @@ def _contour_ydomain(a):
 def _contour_draw(a, ctx):
     grid = a["grid"]
     nr = a["_nrows"]; nc = a["_ncols"]
-    flat = [v for row in grid for v in row if v == v]
-    levels = a["opts"].get("levels")
-    if levels is None:
-        if not flat:
-            return ""
-        lo, hi = min(flat), max(flat)
-        levels = [lo + (hi - lo) * i / 6 for i in range(1, 6)]
+    levels = a["_levels"]
+    if not levels:
+        return ""
     color_opt = a["opts"].get("color")
     cmap_name = a["opts"].get("cmap")
     lw = a["opts"].get("linewidth", 1.2)
@@ -89,7 +105,7 @@ def _contour_draw(a, ctx):
         x0d, y0d = 0, 0; dxd, dyd = 1, 1
     if cmap_name:
         cm = colormap(cmap_name)
-        norm = ContinuousNorm(min(levels), max(levels), "linear")
+        norm = ContinuousNorm(a["_vmin"], a["_vmax"], "linear")
     out = []
     for lvl in levels:
         if cmap_name:
@@ -118,12 +134,32 @@ def _contour_draw(a, ctx):
     return "".join(out)
 
 
+def _contour_legend_gradient(a):
+    """Describe contour's continuous level→color mapping when `cmap=` is
+    set — None otherwise so a non-cmap contour (single fallback color)
+    contributes nothing to the legend."""
+    if not a["opts"].get("cmap") or not a.get("_levels"):
+        return None
+    legend_opts = a["opts"].get("legend") or {}
+    return {
+        "kind": "continuous",
+        "cmap": a["opts"]["cmap"],
+        "vmin": a["_vmin"],
+        "vmax": a["_vmax"],
+        "norm": "linear",
+        "center": None,
+        "label": legend_opts.get("label"),
+        "ticks": legend_opts.get("ticks", a["_levels"]),
+    }
+
+
 add_artist(ArtistSpec(
     name="contour",
     record=_contour_record,
     xdomain=_contour_xdomain,
     ydomain=_contour_ydomain,
     draw=_contour_draw,
+    legend_gradient=_contour_legend_gradient,
     uses_color_cycle=False,
     default_color="#1f77b4",
 ))
