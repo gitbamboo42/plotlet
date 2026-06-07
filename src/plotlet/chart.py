@@ -555,8 +555,10 @@ class Chart(_Renderable):
         """Append one (name, args, kwargs) tuple to the recording. Used by
         the tabular methods below and by `legend()`'s leaf branch — both
         cases shadow `__getattr__`'s recorder closure with a real method,
-        so they need to record explicitly."""
+        so they need to record explicitly. Returns `self` for chaining,
+        matching the `__getattr__` recorder."""
         self._calls.append((name, list(args), dict(kwargs)))
+        return self
 
     # Reflines, imshow, and any user-registered artist forward through
     # __getattr__ above — long-form (`data=`, `x=`, etc.) and aes

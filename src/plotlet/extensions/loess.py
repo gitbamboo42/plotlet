@@ -22,7 +22,6 @@ from pathlib import Path
 import plotlet as pt
 from plotlet.draw import polyline, segment
 from plotlet.utils import to_list
-from statsmodels.nonparametric.smoothers_lowess import lowess
 
 
 def loess_record(args, kw):
@@ -42,6 +41,13 @@ def loess_record(args, kw):
     it = kw.get("it", 3)
     if not xs:
         return {"type": "loess", "_grid": [], "_fit": [], "opts": kw}
+    try:
+        from statsmodels.nonparametric.smoothers_lowess import lowess
+    except ImportError as e:
+        raise ImportError(
+            "c.loess requires statsmodels, which is not a hard dependency "
+            "of plotlet. Install it with `pip install statsmodels`."
+        ) from e
     smoothed = lowess(ys, xs, frac=frac, it=it, return_sorted=True)
     grid = smoothed[:, 0].tolist()
     fit = smoothed[:, 1].tolist()

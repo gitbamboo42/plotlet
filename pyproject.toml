@@ -48,6 +48,9 @@ dev = [
 test = [
   "pytest>=7",
 ]
+loess = [
+  "statsmodels>=0.13",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

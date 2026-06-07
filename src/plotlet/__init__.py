@@ -5,10 +5,11 @@
     c.line(x="time", y="value", color="series")
     c                         # auto-renders in Jupyter
 
-For non-tabular use, the chained form works directly on the same Chart:
+Chart methods chain for incremental composition:
 
+    df = {"x": [1, 2, 3], "y": [1, 4, 9]}
     c = pt.chart()
-    c.plot([1, 2, 3], [1, 4, 9], label="squares")
+    c.line(df, x="x", y="y", label="squares")
     c.title("Hello").legend().grid(True)
     c
 """
