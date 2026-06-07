@@ -43,10 +43,11 @@ _SPINES_PER_PANEL = sum(
     1 for s in ("top", "right", "bottom", "left") if _SPEC_FRAME[f"spine_{s}"]
 )
 _INT_COORD = r'\d+(?:\.0+)?'
+_SPINE_WIDTH_STR = re.escape(f"{_SPEC_FRAME['width']:.2f}")
 _SPINE_LINE_RE = re.compile(
     rf'<line x1="({_INT_COORD})" x2="({_INT_COORD})" '
     rf'y1="({_INT_COORD})" y2="({_INT_COORD})" '
-    rf'stroke="#000000" stroke-width="{re.escape(str(_SPEC_FRAME["width"]))}"/>'
+    rf'stroke="#000000" stroke-width="{_SPINE_WIDTH_STR}"/>'
 )
 
 

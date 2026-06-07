@@ -124,8 +124,12 @@ def text_path(s: str, x: float, y: float, size: float,
 
 
 def op(alpha) -> str:
-    """SVG opacity attribute, omitted when fully opaque to keep output lean."""
-    return "" if alpha == 1 else f' opacity="{alpha}"'
+    """SVG opacity attribute, omitted when fully opaque to keep output lean.
+
+    Quantized to 2 decimals (1%) so float-noise from upstream compute (e.g.
+    1 - tiny → 0.9999999999999998) doesn't make SVG byte-different across
+    numpy/scipy builds. Anything finer than 1% opacity is invisible."""
+    return "" if alpha == 1 else f' opacity="{alpha:.2f}"'
 
 
 def _shape_opacity(alpha, fill_alpha, stroke_alpha,
@@ -139,8 +143,8 @@ def _shape_opacity(alpha, fill_alpha, stroke_alpha,
         return op(alpha)
     fa = fill_alpha if fill_alpha is not None else alpha
     sa = stroke_alpha if stroke_alpha is not None else alpha
-    fop = f' fill-opacity="{fa}"' if has_fill and fa != 1 else ""
-    sop = f' stroke-opacity="{sa}"' if has_stroke and sa != 1 else ""
+    fop = f' fill-opacity="{fa:.2f}"' if has_fill and fa != 1 else ""
+    sop = f' stroke-opacity="{sa:.2f}"' if has_stroke and sa != 1 else ""
     return fop + sop
 
 
@@ -157,16 +161,16 @@ def marker(kind: str, x: float, y: float, size: float, color: str, alpha,
     `_D["marker_stroke_width"]`."""
     msw = edgewidth if edgewidth is not None else _D["marker_stroke_width"]
     _op = op(alpha)
-    edge = f' stroke="{edgecolor}" stroke-width="{msw}"' if edgecolor else ""
+    edge = f' stroke="{edgecolor}" stroke-width="{msw:.2f}"' if edgecolor else ""
     if tag is not None:
         # All marker glyphs fit in a (2*size)² box centered on (x, y).
         _record_region("marker", (x - size, y - size, 2 * size, 2 * size),
                         name=tag, marker=kind, size=size)
     if kind == "o":
-        return f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{size}" fill="{color}"{edge}{_op}/>'
+        return f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{size:.2f}" fill="{color}"{edge}{_op}/>'
     if kind == "s":
-        return (f'<rect x="{x - size:.2f}" y="{y - size:.2f}" width="{2 * size}" '
-                f'height="{2 * size}" fill="{color}"{edge}{_op}/>')
+        return (f'<rect x="{x - size:.2f}" y="{y - size:.2f}" width="{2 * size:.2f}" '
+                f'height="{2 * size:.2f}" fill="{color}"{edge}{_op}/>')
     if kind == "^":
         return (f'<path d="M{x:.2f},{y - size:.2f}L{x + size:.2f},{y + size:.2f}'
                 f'L{x - size:.2f},{y + size:.2f}Z" fill="{color}"{edge}{_op}/>')
@@ -176,11 +180,11 @@ def marker(kind: str, x: float, y: float, size: float, color: str, alpha,
     if kind == "x":
         return (f'<path d="M{x - size:.2f},{y - size:.2f}L{x + size:.2f},{y + size:.2f}'
                 f'M{x - size:.2f},{y + size:.2f}L{x + size:.2f},{y - size:.2f}" '
-                f'stroke="{color}" stroke-width="{msw}"{_op}/>')
+                f'stroke="{color}" stroke-width="{msw:.2f}"{_op}/>')
     if kind == "+":
         return (f'<path d="M{x - size:.2f},{y:.2f}L{x + size:.2f},{y:.2f}'
                 f'M{x:.2f},{y - size:.2f}L{x:.2f},{y + size:.2f}" '
-                f'stroke="{color}" stroke-width="{msw}"{_op}/>')
+                f'stroke="{color}" stroke-width="{msw:.2f}"{_op}/>')
     if kind == "*":
         d = "M" + " L".join(f"{x + size*dx:.2f},{y + size*dy:.2f}"
                             for dx, dy in _STAR5_VERTICES) + "Z"
@@ -238,7 +242,7 @@ def segment(x1: float, y1: float, x2: float, y2: float, *,
             rw = width
         _record_region("segment", (rx, ry, rw, rh), name=tag, width=width)
     return (f'<line x1="{x1:.2f}" x2="{x2:.2f}" y1="{y1:.2f}" y2="{y2:.2f}" '
-            f'stroke="{color}" stroke-width="{width}"{op(alpha)}{dash_attr(dash)}/>')
+            f'stroke="{color}" stroke-width="{width:.2f}"{op(alpha)}{dash_attr(dash)}/>')
 
 
 def rect(x: float, y: float, w: float, h: float, *,
@@ -258,7 +262,7 @@ def rect(x: float, y: float, w: float, h: float, *,
     borders, useful for contiguous-band heatmap-style rects.
     """
     fa = f' fill="{fill}"' if fill else ' fill="none"'
-    sa = (f' stroke="{stroke}" stroke-width="{stroke_width}"{dash_attr(dash)}'
+    sa = (f' stroke="{stroke}" stroke-width="{stroke_width:.2f}"{dash_attr(dash)}'
           if stroke else "")
     oa = _shape_opacity(alpha, fill_alpha, stroke_alpha,
                         has_fill=bool(fill), has_stroke=bool(stroke))
@@ -282,7 +286,7 @@ def circle(cx: float, cy: float, r: float, *,
     `fill_alpha` / `stroke_alpha` override `alpha` per channel.
     """
     fa = f' fill="{fill}"' if fill else ' fill="none"'
-    sa = f' stroke="{stroke}" stroke-width="{stroke_width}"' if stroke else ""
+    sa = f' stroke="{stroke}" stroke-width="{stroke_width:.2f}"' if stroke else ""
     oa = _shape_opacity(alpha, fill_alpha, stroke_alpha,
                         has_fill=bool(fill), has_stroke=bool(stroke))
     if tag is not None:
@@ -303,7 +307,7 @@ def path(d: str, *,
     override `alpha` per channel.
     """
     fa = f' fill="{fill}"' if fill else ' fill="none"'
-    sa = f' stroke="{stroke}" stroke-width="{stroke_width}"{dash_attr(dash)}' if stroke else ""
+    sa = f' stroke="{stroke}" stroke-width="{stroke_width:.2f}"{dash_attr(dash)}' if stroke else ""
     oa = _shape_opacity(alpha, fill_alpha, stroke_alpha,
                         has_fill=bool(fill), has_stroke=bool(stroke))
     return f'<path d="{d}"{fa}{sa}{oa}/>'
