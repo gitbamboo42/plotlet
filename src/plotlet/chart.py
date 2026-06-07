@@ -36,6 +36,7 @@ Invariants:
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from ._spec import _SIZESPEC, _MARGIN_FLOOR, _LAYOUTSPEC, active_theme
@@ -45,6 +46,31 @@ from .core import (
 )
 from .utils import to_list_2d
 from .registry import get_artist, all_artist_names
+
+
+# Strip every `data-plotlet-*="..."` attribute. The leading space is part of
+# the match so we don't leave a double space behind — every attr is emitted
+# with a leading separator (see `_attrs_str` in core.py and the inline
+# `f'data-plotlet-...'` writes in `_layout_engine.py`, which sit after another
+# attr or end up with their own trailing space).
+_CLEAN_ATTR_RE = re.compile(r' data-plotlet-[\w-]+="[^"]*"')
+# Strip `<metadata data-plotlet-payload="...">...</metadata>` blocks. CDATA
+# content can include `<` `>` `&` but `json.dumps` won't emit `]]>` (see
+# `_metadata_block` in core.py), so the non-greedy match is safe.
+_CLEAN_METADATA_RE = re.compile(
+    r'<metadata data-plotlet-payload="[^"]*">.*?</metadata>', re.DOTALL
+)
+
+
+def _strip_plotlet_attrs(svg: str) -> str:
+    """Remove every `data-plotlet-*` attribute and `<metadata
+    data-plotlet-payload=...>` block from a rendered SVG. Used by
+    `to_svg(clean=True)` for users who want a plain SVG with no AI/schema
+    metadata. Class names like `plotlet-artist` stay — they're structural,
+    not metadata."""
+    svg = _CLEAN_METADATA_RE.sub("", svg)
+    svg = _CLEAN_ATTR_RE.sub("", svg)
+    return svg
 
 
 def _extract_theme(calls) -> str | None:
@@ -88,9 +114,16 @@ class _Renderable:
 
     # ---------- render ----------
 
-    def to_svg(self) -> str:
+    def to_svg(self, *, clean: bool = False) -> str:
+        """Render to an SVG string. `clean=True` strips every
+        `data-plotlet-*` attribute and metadata block — use it when you
+        want a plain SVG for embedding or sharing and don't need the
+        AI/schema surface documented in `docs/AI_ATTRS.md`."""
         self._require_render_root()
-        return self._to_svg_unchecked()
+        svg = self._to_svg_unchecked()
+        if clean:
+            svg = _strip_plotlet_attrs(svg)
+        return svg
 
     def regions(self) -> list[dict]:
         """Return the chrome regions emitted during a render of this
@@ -147,8 +180,8 @@ class _Renderable:
             return
         display(HTML(svg))
 
-    def save_svg(self, path):
-        Path(path).write_text(self.to_svg())
+    def save_svg(self, path, *, clean: bool = False):
+        Path(path).write_text(self.to_svg(clean=clean))
         return self
 
     def save_png(self, path, *, scale: float = 1.0, dpi: int | None = None):
