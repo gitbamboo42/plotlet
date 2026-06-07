@@ -36,6 +36,7 @@ from .scales import (_LinearScale, _LogScale, _CategoryScale, _SymlogScale,
                       _to_epoch, _coerce_time_lim)
 from .draw import measure_text, cap_height, descender
 from .draw import text_path, segment, rect
+from . import _regions
 from .utils import histogram, collect_categories
 from .registry import RenderContext, get_artist, all_artist_names
 from . import artists  # noqa: F401  — registers built-ins on import
@@ -139,7 +140,7 @@ class _PanelOpts:
 
 
 def _tick_label(s, x, y, size, angle, axis,
-                fontstyle="normal", decoration="none"):
+                fontstyle="normal", decoration="none", tag=None):
     """Render a single tick label as text-as-paths.
 
     Called for every tick label on every render — rotation is opt-in via
@@ -163,14 +164,19 @@ def _tick_label(s, x, y, size, angle, axis,
     if not angle:
         anchor = "middle" if axis == "x" else "end"
         return text_path(s, x, y, size, anchor=anchor, color=color,
-                         fontstyle=fontstyle, decoration=decoration)
+                         fontstyle=fontstyle, decoration=decoration,
+                         tag=tag)
     if axis == "x":
         anchor = "end" if angle > 0 else "start"
     else:
         anchor = "end"
-    text = text_path(s, 0, 0, size, anchor=anchor, color=color,
-                     fontstyle=fontstyle, decoration=decoration)
-    return f'<g transform="translate({x:.2f},{y:.2f}) rotate({-angle})">{text}</g>'
+    # Rotate via `text_path(..., rotate=angle)` so its bbox recording
+    # captures the post-rotation hull. SVG-wise, rotating around the
+    # anchor point (x, y) is equivalent to translating + rotating
+    # around the origin; one transform attribute does both.
+    return text_path(s, x, y, size, anchor=anchor, color=color,
+                     fontstyle=fontstyle, decoration=decoration,
+                     rotate=angle, tag=tag)
 
 
 def _record_scale(st, axis, args, kw, *, from_default=False):
@@ -1525,15 +1531,101 @@ def _render(st, W, H, M):
     iw = W - M["left"] - M["right"]
     ih = H - M["top"] - M["bottom"]
     transform = f'translate({M["left"]},{M["top"]})'
+    # Track the panel translate on the region sink so chrome bboxes land
+    # in outer-SVG coords. No-op when no sink is active (normal render).
+    with _regions.translate(M["left"], M["top"]):
+        inner = _render_inner(st, iw, ih, M)
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
         f'viewBox="0 0 {W} {H}" font-family="{_FONTSPEC["family"]}" font-size="11" '
         f'style="background:{SPEC["figure"]["background"]}"'
         f'{_figure_root_attrs("figure")}>'
         + _panel_open(st, None, transform, M, iw, ih, (0, 0, W, H))
-        + _render_inner(st, iw, ih, M)
+        + inner
         + '</g></svg>'
     )
+
+
+def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal,
+                              pad_x, pad_y, row_h, sw, tick_size,
+                              text_color, ctx_for) -> str:
+    """Render the inline legend body — the part *inside* the
+    `<g transform="translate(lx, ly)">` wrapper. Lives in its own
+    function so the translate ctxmgr in `_render_inner` stays a
+    2-liner instead of forcing 70 lines of indentation. No behavior
+    change vs the previous inline form."""
+    from .legend import _render_continuous_entry, _render_discrete_entry
+    parts = []
+    is_gradient_only = bool(cont) and not disc
+    if not is_gradient_only and pos in _INSIDE_POSITIONS:
+        # Inside-position legends overlay the data area, so a
+        # translucent background keeps text/swatches readable on top
+        # of plot marks. No stroke — ggplot/vega-lite default look.
+        # Outside positions skip the rect entirely.
+        parts.append(rect(0, 0, lw, lh,
+                          fill=_LEGSPEC["background"],
+                          alpha=_LEGSPEC["opacity"]))
+    if horizontal:
+        # Discrete-only horizontal row (continuous + horizontal would
+        # have raised in `_inline_legend_layout`). Entries left-to-right,
+        # vertically centered. Spacer matches `_inline_legend_layout`.
+        spacer = 2 * pad_x
+        cx = pad_x
+        ry = pad_y + row_h / 2
+        for a, entry in disc:
+            parts.append(_render_discrete_entry(entry, a, ctx_for, cx, ry))
+            cx += sw + 6 + measure_text(entry["label"], tick_size) + spacer
+        return ''.join(parts)
+    # Vertical layout: gradient strips on top, discrete rows below.
+    # Ticks face away from the data area — right-position gets
+    # tick_side="right", left-position "left". Mixed (gradient +
+    # discrete) defaults to "right"; the rare left-position mixed
+    # case ends up with ticks pointing toward the discrete entries,
+    # which is acceptable for that uncommon combination.
+    if is_gradient_only and pos == "left":
+        tick_side = "left"
+        strip_x = lw - _LEGSPEC["gradient_width"]
+        cur_y = 0.0
+    elif is_gradient_only:
+        tick_side = "right"
+        strip_x = 0.0
+        cur_y = 0.0
+    else:
+        tick_side = "right"
+        strip_x = pad_x
+        cur_y = float(pad_y)
+    for i, (_, desc) in enumerate(cont):
+        entry_h = (tick_size + 4 if desc.get("label") else 0) \
+                  + _LEGSPEC["gradient_height"]
+        parts.append(_render_continuous_entry(desc, strip_x, cur_y, tick_side))
+        cur_y += entry_h
+        if i < len(cont) - 1:
+            cur_y += _LEGSPEC["section_gap"]
+    if cont and disc:
+        cur_y += _LEGSPEC["section_gap"]
+    # Partition entries by their `group` field so a multi-aesthetic
+    # artist (color + size + shape) renders each aesthetic as its own
+    # block with a header — entries with the same key cluster together
+    # across artist records.
+    from .legend import _partition_by_group
+    sub_groups = _partition_by_group(disc, lambda ae: ae[1].get("group"))
+    label_size = _FONTSPEC["label_size"]
+    sub_header_h = label_size + 4
+    for si, (sub_name, sub_items) in enumerate(sub_groups):
+        if sub_name:
+            parts.append(text_path(str(sub_name), pad_x,
+                                   cur_y + label_size,
+                                   label_size, anchor="start",
+                                   color=text_color,
+                                   tag="legend-header"))
+            cur_y += sub_header_h
+        for a, entry in sub_items:
+            ry = cur_y + row_h / 2
+            parts.append(_render_discrete_entry(entry, a, ctx_for, pad_x, ry))
+            cur_y += row_h
+        if si < len(sub_groups) - 1:
+            cur_y += _LEGSPEC["section_gap"]
+    return ''.join(parts)
 
 
 def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
@@ -1672,6 +1764,12 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     def _side_dash(side):
         return st[f"spine_{side}_linestyle"]
 
+    # Panel region — recorded in the sink so layout-debug consumers
+    # (`chart.regions()`, layout_diagram detail mode) can ask "did
+    # anything overflow this panel?". Panel-local coords: (0, 0)
+    # is the inner-margin corner; (iw, ih) is the data-area extent.
+    _regions.record("rect", (0, 0, iw, ih), name="panel")
+
     for side, (x1, y1, x2, y2) in (
         ("top",    (0, 0, iw, 0)),
         ("bottom", (0, ih, iw, ih)),
@@ -1682,7 +1780,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             continue
         col, w = _side_stroke(side)
         parts.append(segment(x1, y1, x2, y2, color=col, width=w,
-                             dash=_side_dash(side)))
+                             dash=_side_dash(side), tag="spine"))
 
     tick_size = _FONTSPEC["tick_size"]
     label_size = _FONTSPEC["label_size"]
@@ -1740,7 +1838,8 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             parts.append(_tick_label(str(lbl), x,
                                      ih + _FRAME["tick_length"] + _FRAME["tick_pad"] + cap_height(x_size),
                                      x_size, x_rot, axis="x",
-                                     fontstyle=x_style, decoration=x_decor))
+                                     fontstyle=x_style, decoration=x_decor,
+                                     tag="tick-x"))
 
     # Minor ticks — shorter than majors (frame.minor_tick_ratio), no
     # labels. Emit only when the user opted in via xticks(minor=True) or
@@ -1782,7 +1881,8 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             # centered on the tick line (cap top at y - cap/2, cap bottom at y + cap/2).
             parts.append(_tick_label(str(lbl), y_label_x, y + cap_height(y_size) / 2,
                                      y_size, y_rot, axis="y",
-                                     fontstyle=y_style, decoration=y_decor))
+                                     fontstyle=y_style, decoration=y_decor,
+                                     tag="tick-y"))
 
     y_minor = _resolve_minor_ticks(st["y_minor"], y_scale, y_ticks)
     if y_minor and y_marks:
@@ -1828,16 +1928,18 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         # is exactly `pad.xlabel` above the axis band's outer edge.
         parts.append(text_path(st["xlabel"], iw / 2,
                                 ih + M["bottom"] - bottom_inflation - _PADSPEC["xlabel"] - descender(label_size),
-                                label_size, anchor="middle", color=text_color))
+                                label_size, anchor="middle", color=text_color,
+                                tag="xlabel"))
     if st["ylabel"] and not hide_l:
         # Center sits at -(M["left"] - inflation - pad.ylabel - label_size/2)
         # so the rotated text's left visible edge lands exactly `pad.ylabel`
-        # inside the axis band's outer edge.
-        ylabel_path = text_path(st["ylabel"], 0, 0, label_size,
-                                anchor="middle", color=text_color)
+        # inside the axis band's outer edge.  `text_path(rotate=90)` does
+        # both the rotation transform and the post-rotation bbox so the
+        # sink sees the standing-up bbox without a manual override.
         ylabel_cx = -(M["left"] - left_inflation - _PADSPEC["ylabel"] - label_size / 2)
-        parts.append(f'<g transform="translate({ylabel_cx},{ih/2}) rotate(-90)">'
-                     f'{ylabel_path}</g>')
+        parts.append(text_path(st["ylabel"], ylabel_cx, ih / 2,
+                                label_size, anchor="middle",
+                                color=text_color, rotate=90, tag="ylabel"))
     if st["title"] and not hide_t:
         # Top-position legend sits between title and data, pushing the
         # title's baseline up by (legend block + outer gap to legend).
@@ -1846,7 +1948,8 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         else:
             title_y = -_PADSPEC["title"]
         parts.append(text_path(st["title"], iw / 2, title_y, title_size,
-                                anchor="middle", color=text_color))
+                                anchor="middle", color=text_color,
+                                tag="title"))
 
     # legend — gather entries from every artist's legend_entries(a) and
     # gradient descriptors from legend_gradient(a). Multi-entry artists
@@ -1896,76 +1999,14 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             }[pos]
         transform = f'translate({lx:.2f},{ly:.2f})'
         parts.append(f'<g transform="{transform}">')
-        is_gradient_only = bool(cont) and not disc
-        if not is_gradient_only and pos in _INSIDE_POSITIONS:
-            # Inside-position legends overlay the data area, so a
-            # translucent background keeps text/swatches readable on top
-            # of plot marks. No stroke — ggplot/vega-lite default look.
-            # Outside positions skip the rect entirely.
-            parts.append(rect(0, 0, lw, lh,
-                              fill=_LEGSPEC["background"],
-                              alpha=_LEGSPEC["opacity"]))
-        from .legend import _render_continuous_entry, _render_discrete_entry
-        if horizontal:
-            # Discrete-only horizontal row (continuous + horizontal would
-            # have raised in `_inline_legend_layout`). Entries left-to-right,
-            # vertically centered. Spacer matches `_inline_legend_layout`.
-            spacer = 2 * pad_x
-            cx = pad_x
-            ry = pad_y + row_h / 2
-            for a, entry in disc:
-                parts.append(_render_discrete_entry(entry, a, _ctx_for, cx, ry))
-                cx += sw + 6 + measure_text(entry["label"], tick_size) + spacer
-        else:
-            # Vertical layout: gradient strips on top, discrete rows below.
-            # Ticks face away from the data area — right-position gets
-            # tick_side="right", left-position "left". Mixed (gradient +
-            # discrete) defaults to "right"; the rare left-position mixed
-            # case ends up with ticks pointing toward the discrete entries,
-            # which is acceptable for that uncommon combination.
-            if is_gradient_only and pos == "left":
-                tick_side = "left"
-                strip_x = lw - _LEGSPEC["gradient_width"]
-                cur_y = 0.0
-            elif is_gradient_only:
-                tick_side = "right"
-                strip_x = 0.0
-                cur_y = 0.0
-            else:
-                tick_side = "right"
-                strip_x = pad_x
-                cur_y = float(pad_y)
-            for i, (_, desc) in enumerate(cont):
-                entry_h = (tick_size + 4 if desc.get("label") else 0) \
-                          + _LEGSPEC["gradient_height"]
-                parts.append(_render_continuous_entry(desc, strip_x, cur_y, tick_side))
-                cur_y += entry_h
-                if i < len(cont) - 1:
-                    cur_y += _LEGSPEC["section_gap"]
-            if cont and disc:
-                cur_y += _LEGSPEC["section_gap"]
-            # Partition entries by their `group` field so a
-            # multi-aesthetic artist (color + size + shape) renders each
-            # aesthetic as its own block with a header — entries with
-            # the same key cluster together across artist records.
-            from .legend import _partition_by_group
-            sub_groups = _partition_by_group(
-                disc, lambda ae: ae[1].get("group"))
-            label_size = _FONTSPEC["label_size"]
-            sub_header_h = label_size + 4
-            for si, (sub_name, sub_items) in enumerate(sub_groups):
-                if sub_name:
-                    parts.append(text_path(str(sub_name), pad_x,
-                                           cur_y + label_size,
-                                           label_size, anchor="start",
-                                           color=text_color))
-                    cur_y += sub_header_h
-                for a, entry in sub_items:
-                    ry = cur_y + row_h / 2
-                    parts.append(_render_discrete_entry(entry, a, _ctx_for, pad_x, ry))
-                    cur_y += row_h
-                if si < len(sub_groups) - 1:
-                    cur_y += _LEGSPEC["section_gap"]
+        # The translate puts the body's panel-local coords onto the
+        # sink so chrome bboxes tagged inside `_render_discrete_entry`
+        # / `_render_continuous_entry` (and the sub-header text_path
+        # in the body) land at outer-SVG positions.
+        with _regions.translate(lx, ly):
+            parts.append(_emit_inline_legend_body(
+                lw, lh, pos, cont, disc, horizontal,
+                pad_x, pad_y, row_h, sw, tick_size, text_color, _ctx_for))
         parts.append('</g>')
 
     # Inset axes — render each as its own SVG fragment positioned by

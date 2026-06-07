@@ -24,6 +24,7 @@ from .draw import colormap, ContinuousNorm
 from .registry import RenderContext, get_artist
 from .draw import measure_text
 from .draw import text_path, rect, segment
+from . import _regions
 from .scales import _fmt_tick
 from ._spec import _D, _DASH, _FIGSPEC, _FONTSPEC, _FRAME, _LEGSPEC
 
@@ -204,6 +205,16 @@ def _render_discrete_entry(entry: dict, a: dict, ctx_for,
     builds the RenderContext for that callback; standalone uses
     `_swatch_ctx`, inline uses the panel's own draw context."""
     sw = _LEGSPEC["swatch_width"]
+    # One canonical swatch bbox per entry, regardless of what `paint`
+    # actually draws — a line, a 4-px scatter dot, a 14-px scatter dot,
+    # and a default rect should all show the same diagram footprint.
+    # Sized to the legend row so the biggest possible swatch (large
+    # size-graded marker) still fits inside; we record the rect manually
+    # and call `paint` outside any tag context so its primitives don't
+    # add their own size-varying bboxes.
+    row_h = _LEGSPEC["row_height"]
+    _regions.record("rect", (x, y_mid - row_h / 2, sw, row_h),
+                    name="legend-mark")
     paint = entry.get("paint")
     if paint is not None:
         swatch = paint(a, ctx_for(a), x, y_mid)
@@ -212,7 +223,7 @@ def _render_discrete_entry(entry: dict, a: dict, ctx_for,
                       fill=entry["color"], alpha=entry.get("alpha", 1))
     label = text_path(entry["label"], x + sw + 6, y_mid + 4,
                       _FONTSPEC["tick_size"], anchor="start",
-                      color=_FONTSPEC["color"])
+                      color=_FONTSPEC["color"], tag="legend-text")
     return swatch + label
 
 
@@ -240,7 +251,8 @@ def _render_continuous_entry(entry: dict, x: float, y: float,
     label_h = tick_size + 4 if label_text else 0
     if label_text:
         parts.append(text_path(label_text, x, y + tick_size,
-                                tick_size, anchor="start", color=text_color))
+                                tick_size, anchor="start", color=text_color,
+                                tag="legend-header"))
 
     strip_y = y + label_h
     strip_h = float(_LEGSPEC["gradient_height"])
@@ -258,8 +270,13 @@ def _render_continuous_entry(entry: dict, x: float, y: float,
         parts.append(rect(x, strip_y + i * band_h,
                           _LEGSPEC["gradient_width"], h,
                           fill=f"rgb({r},{g},{b})"))
+    # The gradient itself is many sub-pixel bands above; the bordering
+    # rect captures the strip as one chrome region so the diagram /
+    # overlap-check sees "the colorbar" as a single bbox instead of 33
+    # tiny band rects.
     parts.append(rect(x, strip_y, _LEGSPEC["gradient_width"], strip_h,
-                      stroke=_FRAME["color"], stroke_width=_FRAME["width"]))
+                      stroke=_FRAME["color"], stroke_width=_FRAME["width"],
+                      tag="legend-mark"))
 
     norm = ContinuousNorm(entry["vmin"], entry["vmax"],
                            kind=entry.get("norm", "linear"),
@@ -289,7 +306,8 @@ def _render_continuous_entry(entry: dict, x: float, y: float,
                              color=_FRAME["color"], width=_FRAME["width"]))
         bias = 4 * (strip_mid - ty) / (strip_h / 2) if strip_h > 0 else 0
         parts.append(text_path(_fmt_tick(t), label_x, ty + 4 + bias,
-                                tick_size, anchor=label_anchor, color=text_color))
+                                tick_size, anchor=label_anchor, color=text_color,
+                                tag="legend-text"))
     return "".join(parts)
 
 
@@ -444,7 +462,8 @@ def _render_legend(leaf: Chart, w: float, h: float,
     for gi, g in enumerate(groups):
         if g["header"]:
             parts.append(text_path(g["header"], pad_x, cy + label_size,
-                                    label_size, anchor="start", color=text_color))
+                                    label_size, anchor="start", color=text_color,
+                                    tag="legend-header"))
             cy += header_h
         for entry in g["cont"]:
             entry_label_h = (tick_size + 4) if entry.get("label") else 0
@@ -461,7 +480,8 @@ def _render_legend(leaf: Chart, w: float, h: float,
             if sub_name:
                 parts.append(text_path(str(sub_name), pad_x, cy + label_size,
                                        label_size, anchor="start",
-                                       color=text_color))
+                                       color=text_color,
+                                       tag="legend-header"))
                 cy += header_h
             for i, entry in enumerate(sub_entries):
                 ry = cy + i * row_h + row_h / 2

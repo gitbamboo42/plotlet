@@ -35,6 +35,25 @@ _HATCH_DEF = (
     ' stroke-opacity="0.45" stroke-width="1"/></pattern></defs>'
 )
 
+# Per-name stroke colors for the chrome-regions overlay mode. Greys and
+# muted hues — outlines should help the eye trace each chrome element
+# without competing with the underlying chart's own data colors.
+_REGIONS_PALETTE = {
+    "panel":         "#d00",
+    "spine":         "#999",
+    "title":         "#070",
+    "xlabel":        "#070",
+    "ylabel":        "#070",
+    "tick-x":        "#06c",
+    "tick-y":        "#06c",
+    # Legend sub-tags echo their chrome counterparts: marks
+    # (swatch + colorbar) are the data identifier, text (entry labels +
+    # colorbar ticks) is text on data, headers are sub-titles.
+    "legend-mark":   "#d00",  # swatch / colorbar — same as panel
+    "legend-text":   "#06c",  # entry labels + colorbar ticks — same as tick labels
+    "legend-header": "#070",  # group title — same as chart title
+}
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -42,14 +61,20 @@ _HATCH_DEF = (
 
 def layout_diagram(chart: Chart) -> Chart:
     """Visualize plotlet's layout decisions for `chart` as a Chart leaf
-    that composes with the original via `|`, `/`, `pt.grid`, etc. The
-    diagram visualizes panel bboxes (dashed), data areas (solid, sized
-    to scale so the colored ring between them encodes margin
-    proportions), and gaps between adjacent panels (hatched slabs
-    labeled with pixel size).
+    that composes with the original via `|`, `/`, `pt.grid`, etc.
 
-    Built by re-parsing `chart.to_svg()` and reading the panel `<g>`'s
-    public `data-plotlet-*` attrs — nothing private is touched.
+    Shows: panel bboxes (dashed), data areas (solid, sized to scale so
+    the colored ring between them encodes margin proportions), gaps
+    between adjacent panels (hatched slabs labeled with pixel size),
+    standalone-legend leaves (dashed border, no data-area fill), and
+    each chrome bbox (panel, spines, title, axis labels, ticks, legend
+    sub-elements) overlaid as a translucent shape — rotated tick labels
+    render as their precise rotated rectangle, not the loose AABB hull.
+
+    Built by re-parsing `chart.to_svg()` for the abstract layout
+    (panel + data-area + legend-leaf bboxes from `data-plotlet-*`
+    attrs) and `chart.regions()` for the chrome overlay layer; both
+    are public surfaces.
 
     Caveat: the diagram is a *snapshot* of `chart`'s layout at call time.
     For body-first leaves (the 0.2.0+ default) and the no-margin diagram
@@ -60,7 +85,8 @@ def layout_diagram(chart: Chart) -> Chart:
     ends up rendered."""
     src_svg = chart.to_svg()
     W, H = _figure_size(src_svg)
-    inner = _render_diagram_inner(src_svg, W, H)
+    regions_data = chart.regions()
+    inner = _render_diagram_inner(src_svg, W, H, regions_data)
 
     leaf = Chart._new_sized_leaf(
         canvas_width=W, canvas_height=H,
@@ -87,15 +113,26 @@ def _render_standalone_diagram(leaf: Chart) -> str:
 # SVG construction
 # ---------------------------------------------------------------------------
 
-def _render_diagram_inner(src_svg: str, W: int, H: int) -> str:
+def _render_diagram_inner(src_svg: str, W: int, H: int,
+                          regions_data: list[dict] | None = None) -> str:
     """Build the diagram body — everything that goes between the outer
     `<svg>` tags. Wrapped in a `<g font-family="sans-serif">` so the
     debug font carries through whether the inner is embedded inside a
     layout's outer plotlet `<svg>` (which sets DejaVu Sans on its root)
-    or wrapped in a fresh standalone `<svg>`."""
+    or wrapped in a fresh standalone `<svg>`.
+
+    `regions_data`, when supplied, overlays each chrome bbox as a
+    translucent shape (`polygon` for rotated text, `rect` otherwise).
+    Bboxes arrive in outer-SVG coords from `chart.regions()`, so
+    single- and multi-panel layouts both work without per-panel
+    bookkeeping here."""
     root = ET.fromstring(src_svg)
     panels = _parse_panels(root)
-    gaps = _find_gaps([p["bbox"] for p in panels])
+    legend_leaves = _parse_legend_leaves(root)
+    # Legend leaves participate in gap detection alongside data panels —
+    # the space between a data panel and a sibling legend leaf is a real
+    # layout gap worth showing in the diagram.
+    gaps = _find_gaps([p["bbox"] for p in panels] + list(legend_leaves))
 
     parts = [
         '<g font-family="sans-serif">',
@@ -105,8 +142,44 @@ def _render_diagram_inner(src_svg: str, W: int, H: int) -> str:
     ]
     for axis, gx, gy, gw, gh in gaps:
         parts.append(_render_gap(axis, gx, gy, gw, gh))
+    show_overlays = bool(regions_data)
     for i, p in enumerate(panels):
-        parts.append(_render_panel(p, _PALETTE[i % len(_PALETTE)]))
+        parts.append(_render_panel(p, _PALETTE[i % len(_PALETTE)],
+                                   hide_margin_numbers=show_overlays))
+    # Legend leaves render as a panel-without-data-region: same dashed
+    # colored border as data panels (cycled palette color picks up where
+    # the panel loop left off), no inner data-area fill since a legend
+    # has no data axis to anchor.
+    for j, (lx, ly, lw, lh) in enumerate(legend_leaves):
+        col = _PALETTE[(len(panels) + j) % len(_PALETTE)]
+        parts.append(rect(lx, ly, lw, lh, stroke=col,
+                          stroke_width=1.2, dash="5,3"))
+
+    if show_overlays:
+        # Region bboxes are already in outer-SVG coords thanks to the
+        # `_regions.translate(...)` wrappers in the rendering pipeline,
+        # so single- and multi-panel layouts both work without per-panel
+        # bookkeeping here. Translucent fills (not strokes) so overlapping
+        # chrome reads as a darker blend rather than a tangle of outlines.
+        # When a region ships a `polygon` (rotated text), render the
+        # actual rotated rectangle rather than its axis-aligned hull —
+        # the hull overcounts area badly for 45° labels.
+        for r in regions_data:
+            col = _REGIONS_PALETTE.get(r["name"], "#888")
+            poly = r["meta"].get("polygon")
+            if poly:
+                pts = " ".join(f"{px:.1f},{py:.1f}" for px, py in poly)
+                parts.append(
+                    f'<polygon points="{pts}" '
+                    f'fill="{col}" fill-opacity="0.3"/>'
+                )
+            else:
+                x, y, w, h = r["bbox"]
+                parts.append(
+                    f'<rect x="{x:.1f}" y="{y:.1f}" '
+                    f'width="{w:.1f}" height="{h:.1f}" '
+                    f'fill="{col}" fill-opacity="0.3"/>'
+                )
     parts.append('</g>')
     return "".join(parts)
 
@@ -139,6 +212,21 @@ def _parse_panels(root: ET.Element) -> list[dict]:
             "xlim":   g.get("data-plotlet-xlim", "(category)"),
             "ylim":   g.get("data-plotlet-ylim", "(category)"),
         })
+    return out
+
+
+def _parse_legend_leaves(root: ET.Element) -> list[tuple]:
+    """Return each standalone legend leaf's bbox `(x, y, w, h)`. The
+    layout engine annotates the leaf's wrapper `<g>` with
+    `data-plotlet-kind="legend"` + `data-plotlet-legend-bbox`."""
+    out = []
+    for g in root.iter(f"{_SVG_NS}g"):
+        if g.get("data-plotlet-kind") != "legend":
+            continue
+        bbox = g.get("data-plotlet-legend-bbox")
+        if bbox is None:
+            continue
+        out.append(tuple(int(v) for v in bbox.split(",")))
     return out
 
 
@@ -175,7 +263,7 @@ def _blocked(i: int, j: int,
     )
 
 
-def _render_panel(p: dict, col: str) -> str:
+def _render_panel(p: dict, col: str, *, hide_margin_numbers: bool = False) -> str:
     px, py, pw, ph = p["bbox"]
     ml, mt, iw, ih = p["area"]
     m = p["margin"]
@@ -186,14 +274,20 @@ def _render_panel(p: dict, col: str) -> str:
         rect(px + ml, py + mt, iw, ih, fill=col, stroke=col,
              stroke_width=0.6, fill_alpha=0.38, stroke_alpha=0.6),
     ]
-    if mt >= 12:
-        parts.append(_txt(px + pw / 2, py + mt / 2 + 3, m["top"]))
-    if m["bottom"] >= 12:
-        parts.append(_txt(px + pw / 2, py + ph - m["bottom"] / 2 + 3, m["bottom"]))
-    if ml >= 12:
-        parts.append(_txt(px + ml / 2, cy, m["left"], rotate=-90))
-    if m["right"] >= 12:
-        parts.append(_txt(px + pw - m["right"] / 2, cy, m["right"], rotate=-90))
+    # The four margin-size labels live outside the data region and
+    # collide with the chrome-region overlays when those are present;
+    # skip them in that case. When no chrome data is available (no
+    # regions to overlay), keep them — they're useful context for the
+    # abstract layout view.
+    if not hide_margin_numbers:
+        if mt >= 12:
+            parts.append(_txt(px + pw / 2, py + mt / 2 + 3, m["top"]))
+        if m["bottom"] >= 12:
+            parts.append(_txt(px + pw / 2, py + ph - m["bottom"] / 2 + 3, m["bottom"]))
+        if ml >= 12:
+            parts.append(_txt(px + ml / 2, cy, m["left"], rotate=-90))
+        if m["right"] >= 12:
+            parts.append(_txt(px + pw - m["right"] / 2, cy, m["right"], rotate=-90))
     if iw >= 50 and ih >= 30:
         parts.append(_txt(cx, cy - 4, f"{iw} × {ih}",
                           size=12, fill="#222", weight="bold"))

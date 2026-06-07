@@ -92,6 +92,27 @@ class _Renderable:
         self._require_render_root()
         return self._to_svg_unchecked()
 
+    def regions(self) -> list[dict]:
+        """Return the chrome regions emitted during a render of this
+        chart — title, axis labels, ticks, spines, panel, legend and
+        its sub-elements. Each entry is `{"kind", "bbox", "name",
+        "meta"}` where `bbox` is in outer-SVG coords and `meta` may
+        carry `polygon` (precise rotated corners), `text`, etc. Filter
+        with list comprehensions, e.g. `[r for r in c.regions() if
+        r["name"] == "title"]`.
+
+        Data marks (scatter dots, bar rects, heatmap cells) are
+        deliberately excluded — this surface is for layout debugging
+        (overlap, clipping), not data inspection. Re-renders under a
+        region-collecting sink and discards the SVG: cheap,
+        deterministic, no chart state change."""
+        from . import _regions
+        self._require_render_root()
+        with _regions.collecting() as sink:
+            self._to_svg_unchecked()
+        return [{"kind": r.kind, "bbox": r.bbox, "name": r.name, "meta": r.meta}
+                for r in sink.regions]
+
     def _to_svg_unchecked(self) -> str:
         raise NotImplementedError
 

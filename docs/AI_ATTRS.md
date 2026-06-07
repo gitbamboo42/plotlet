@@ -40,6 +40,19 @@ see "Categorical lists" below.
 and no panel/axis attrs (it's not a chart). Consumers can identify and
 skip these when scanning for data panels.
 
+### Legend `<g>` (standalone legend leaves)
+
+`pt.legend(...)` produces a leaf with `data-plotlet-kind="legend"` and:
+
+| Attribute                    | Example         | Notes |
+|------------------------------|-----------------|-------|
+| `data-plotlet-legend-bbox`   | `"640,32,80,256"` | `"x,y,w,h"` of the legend's allocated rect in figure-SVG coords |
+
+Inline legends (rendered inside a panel via `chart(legend=True,
+legend_position=...)`) live inside the panel `<g>` and don't carry
+these attrs — their geometry is part of the panel's chrome rather than
+a sibling leaf. Filter by `data-plotlet-kind` to distinguish.
+
 ### Artist `<g class="plotlet-artist">` (one per recorded artist)
 
 Common attrs (always emitted):

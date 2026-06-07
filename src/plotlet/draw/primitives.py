@@ -34,15 +34,17 @@ _HEX_VERTICES = [
      math.sin(-math.pi / 2 + i * math.pi / 3))
     for i in range(6)
 ]
-from .font import measure_text, _glyph_path_d, _decoration_y_offset
+from .font import measure_text, _glyph_path_d, _decoration_y_offset, cap_height, descender
 from .linestyles import resolve_linestyle
+from .._regions import record as _record_region
 
 
 def text_path(s: str, x: float, y: float, size: float,
               anchor: str = "start", color: str = "#000",
               fontstyle: str = "normal",
               decoration: str = "none",
-              rotate: float = 0) -> str:
+              rotate: float = 0,
+              tag: str | None = None) -> str:
     """Render `s` as a single SVG <path> with its baseline at pixel (x, y).
 
     `anchor` matches SVG's text-anchor: 'start' | 'middle' | 'end'. Use this
@@ -64,19 +66,57 @@ def text_path(s: str, x: float, y: float, size: float,
     d = _glyph_path_d(s, x, y, size, anchor=anchor, fontstyle=fontstyle)
     if not d:
         return ""
+    # Compute the unrotated text rect once when either bbox recording
+    # or decoration drawing needs it — the anchor mapping is the same
+    # for both, so duplicating it would be a foot-gun the moment one
+    # path changed.
+    needs_text_rect = tag is not None or decoration != "none"
+    if needs_text_rect:
+        w = measure_text(s, size)
+        if anchor == "middle":
+            rx = x - w / 2
+        elif anchor == "end":
+            rx = x - w
+        else:
+            rx = x
+    if tag is not None:
+        # Region capture. Baseline at y maps to cap_height above and
+        # descender below. When `rotate` is set, the SVG transform
+        # rotates the glyph around (x, y), so the recorded bbox is the
+        # axis-aligned hull of the four rotated corners — and the
+        # precise rotated rectangle's 4 corners go in meta as `polygon`
+        # so overlap detection can use SAT (axis-aligned hulls of
+        # 45°-rotated rectangles overlap even when the rectangles
+        # themselves don't, so AABB alone is a false-positive trap).
+        ry = y - cap_height(size)
+        rh = cap_height(size) + descender(size)
+        if rotate:
+            # SVG transform uses `-rotate` (CCW in user space); same sign
+            # here so the corner math matches the visible rendering.
+            theta = math.radians(-rotate)
+            cos_t, sin_t = math.cos(theta), math.sin(theta)
+            corners = [(rx, ry), (rx + w, ry), (rx + w, ry + rh), (rx, ry + rh)]
+            rotated_pts = []
+            for cx, cy in corners:
+                dx_, dy_ = cx - x, cy - y
+                rotated_pts.append((x + dx_ * cos_t - dy_ * sin_t,
+                                    y + dx_ * sin_t + dy_ * cos_t))
+            xs = [p[0] for p in rotated_pts]
+            ys = [p[1] for p in rotated_pts]
+            rx_r, ry_r = min(xs), min(ys)
+            _record_region("text",
+                            (rx_r, ry_r, max(xs) - rx_r, max(ys) - ry_r),
+                            name=tag, text=s, size=size, anchor=anchor,
+                            rotate=rotate, polygon=rotated_pts)
+        else:
+            _record_region("text", (rx, ry, w, rh), name=tag,
+                            text=s, size=size, anchor=anchor, rotate=0)
     out = f'<path d="{d}" fill="{color}"/>'
     if decoration != "none":
-        width = measure_text(s, size)
-        if anchor == "middle":
-            x0 = x - width / 2
-        elif anchor == "end":
-            x0 = x - width
-        else:
-            x0 = x
         dy = _decoration_y_offset(decoration, size)
         line_w = max(0.6, size * 0.06)
-        out += (f'<line x1="{x0:.2f}" y1="{y + dy:.2f}" '
-                f'x2="{x0 + width:.2f}" y2="{y + dy:.2f}" '
+        out += (f'<line x1="{rx:.2f}" y1="{y + dy:.2f}" '
+                f'x2="{rx + w:.2f}" y2="{y + dy:.2f}" '
                 f'stroke="{color}" stroke-width="{line_w:.2f}"/>')
     if rotate:
         out = f'<g transform="rotate({-rotate:.2f} {x:.2f} {y:.2f})">{out}</g>'
@@ -105,7 +145,8 @@ def _shape_opacity(alpha, fill_alpha, stroke_alpha,
 
 
 def marker(kind: str, x: float, y: float, size: float, color: str, alpha,
-           edgecolor: str | None = None, edgewidth: float | None = None) -> str:
+           edgecolor: str | None = None, edgewidth: float | None = None,
+           tag: str | None = None) -> str:
     """Emit a single marker glyph (one of
     `"o" "s" "^" "v" "<" ">" "x" "+" "*" "D" "h"`) at pixel `(x, y)`.
     Raises `ValueError` for unknown marker codes.
@@ -117,6 +158,10 @@ def marker(kind: str, x: float, y: float, size: float, color: str, alpha,
     msw = edgewidth if edgewidth is not None else _D["marker_stroke_width"]
     _op = op(alpha)
     edge = f' stroke="{edgecolor}" stroke-width="{msw}"' if edgecolor else ""
+    if tag is not None:
+        # All marker glyphs fit in a (2*size)² box centered on (x, y).
+        _record_region("marker", (x - size, y - size, 2 * size, 2 * size),
+                        name=tag, marker=kind, size=size)
     if kind == "o":
         return f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{size}" fill="{color}"{edge}{_op}/>'
     if kind == "s":
@@ -170,12 +215,28 @@ def dash_attr(dash) -> str:
 
 
 def segment(x1: float, y1: float, x2: float, y2: float, *,
-            color: str = "#000", width: float = 1, dash=None, alpha=1) -> str:
+            color: str = "#000", width: float = 1, dash=None, alpha=1,
+            tag: str | None = None) -> str:
     """Emit a single SVG `<line>` segment from pixel (x1, y1) to (x2, y2).
 
     `dash` accepts a short code (`"--"`, `":"`, `"-."`) or a raw SVG
     dasharray string (`"6,3"`); `None` (default) is solid.
     """
+    if tag is not None:
+        # Region bbox represents the segment's visible footprint, so a
+        # horizontal/vertical 1-D line picks up its stroke-width
+        # thickness. Otherwise a zero-thickness bbox would be invisible
+        # to layout overlays and treated as "no extent" by overlap
+        # checks.
+        rx, ry = min(x1, x2), min(y1, y2)
+        rw, rh = abs(x2 - x1), abs(y2 - y1)
+        if rh < width:
+            ry -= (width - rh) / 2
+            rh = width
+        if rw < width:
+            rx -= (width - rw) / 2
+            rw = width
+        _record_region("segment", (rx, ry, rw, rh), name=tag, width=width)
     return (f'<line x1="{x1:.2f}" x2="{x2:.2f}" y1="{y1:.2f}" y2="{y2:.2f}" '
             f'stroke="{color}" stroke-width="{width}"{op(alpha)}{dash_attr(dash)}/>')
 
@@ -184,7 +245,8 @@ def rect(x: float, y: float, w: float, h: float, *,
          fill: str = None, stroke: str = None,
          stroke_width: float = 1, alpha=1,
          fill_alpha=None, stroke_alpha=None,
-         dash=None, shape_rendering: str | None = None) -> str:
+         dash=None, shape_rendering: str | None = None,
+         tag: str | None = None) -> str:
     """Emit a single SVG `<rect>` at pixel (x, y) with size (w, h).
 
     `fill=None` (default) draws an outline only — pass `stroke=` to add a
@@ -201,6 +263,9 @@ def rect(x: float, y: float, w: float, h: float, *,
     oa = _shape_opacity(alpha, fill_alpha, stroke_alpha,
                         has_fill=bool(fill), has_stroke=bool(stroke))
     sr = f' shape-rendering="{shape_rendering}"' if shape_rendering else ""
+    if tag is not None:
+        _record_region("rect", (x, y, w, h), name=tag,
+                        fill=fill, stroke=stroke)
     return (f'<rect x="{x:.2f}" y="{y:.2f}" width="{w:.2f}" height="{h:.2f}"'
             f'{fa}{sa}{oa}{sr}/>')
 
@@ -208,7 +273,8 @@ def rect(x: float, y: float, w: float, h: float, *,
 def circle(cx: float, cy: float, r: float, *,
            fill: str = None, stroke: str = None,
            stroke_width: float = 1, alpha=1,
-           fill_alpha=None, stroke_alpha=None) -> str:
+           fill_alpha=None, stroke_alpha=None,
+           tag: str | None = None) -> str:
     """Emit a single SVG `<circle>` at pixel (cx, cy) with radius r.
 
     Pass `fill=` for a filled disc, `stroke=` for an outline, or both.
@@ -219,6 +285,9 @@ def circle(cx: float, cy: float, r: float, *,
     sa = f' stroke="{stroke}" stroke-width="{stroke_width}"' if stroke else ""
     oa = _shape_opacity(alpha, fill_alpha, stroke_alpha,
                         has_fill=bool(fill), has_stroke=bool(stroke))
+    if tag is not None:
+        _record_region("circle", (cx - r, cy - r, 2 * r, 2 * r),
+                        name=tag, fill=fill, stroke=stroke)
     return f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="{r:.2f}"{fa}{sa}{oa}/>'
 
 

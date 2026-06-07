@@ -233,11 +233,32 @@ def _scatter_record(args, kw):
                 c = to_list(c)
             kw["c"] = c
             vmin, vmax = _resolve_c_range(c, kw)
-            return {"type": "scatter",
-                    "xs": to_list(data[x_col]),
-                    "ys": to_list(data[y_col]),
-                    "_vmin": vmin, "_vmax": vmax,
-                    "opts": kw}
+            # `size=` and `style=` are per-point aesthetics that compose
+            # with `c=` (color comes from cmap, size and marker from the
+            # data). _expand_with_aesthetics handles the no-`c=` cases;
+            # here we duplicate just the per-point payload + size-legend
+            # bookkeeping since the `c=` path is single-record-only (no
+            # color/group/alpha splitting to thread through).
+            if size is not None:
+                kw["s"] = _compute_size_array(data[size], sizes)
+            if style is not None:
+                kw["marker"] = _compute_style_array(data[style])
+            rec = {"type": "scatter",
+                   "xs": to_list(data[x_col]),
+                   "ys": to_list(data[y_col]),
+                   "_vmin": vmin, "_vmax": vmax,
+                   "opts": kw}
+            if size is not None:
+                src_vals = [v for v in to_list(data[size])
+                            if isinstance(v, (int, float)) and v == v]
+                if src_vals:
+                    rec["_size_legend"] = {
+                        "col_name": str(size),
+                        "source_min": min(src_vals),
+                        "source_max": max(src_vals),
+                        "sizes_range": tuple(sizes),
+                    }
+            return rec
 
         if size is not None or style is not None:
             return _expand_with_aesthetics(data, x_col, y_col, color, group, alpha,

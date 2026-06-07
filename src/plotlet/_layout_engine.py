@@ -47,6 +47,7 @@ from .core import (
 )
 from .chart import Chart, _extract_theme
 from . import _attachments
+from . import _regions
 
 # Layout gaps stay captured — they're parent-level positional, not
 # per-leaf-themable. Font family and background read live from the spec
@@ -893,17 +894,29 @@ def _render_layout(root: Chart) -> str:
         transform = f'translate({x + M_eff["left"]:.2f},{y + M_eff["top"]:.2f})'
         # Per-leaf theme wraps both panel-opening attrs and inner render,
         # so frame draws (spines, ticks, text) read the leaf's theme.
+        # `_regions.translate(...)` tracks this leaf's outer offset on
+        # the sink so chrome bboxes land in outer-SVG coords; multi-panel
+        # layouts get correct per-panel positions without extra work.
         with active_theme(_extract_theme(leaf._calls)):
             parts.append(_panel_open(st, po, transform, M_eff, iw, ih, (x, y, w, h)))
-            parts.append(_render_inner(st, iw, ih, M_eff, po))
+            with _regions.translate(x + M_eff["left"], y + M_eff["top"]):
+                parts.append(_render_inner(st, iw, ih, M_eff, po))
             parts.append('</g>')
         data_leaves.append(leaf)
     for leaf, (x, y, w, h) in placements:
         if leaf._leaf_kind != "legend":
             continue
         from .legend import _render_legend
-        parts.append(f'<g transform="translate({x:.2f},{y:.2f})">')
-        parts.append(_render_legend(leaf, w, h, states, data_leaves))
+        # Same `data-plotlet-kind` + bbox attrs the data-panel wrapper
+        # carries, so `layout_diagram` can render an outline for the
+        # legend leaf the way it does for charts (minus the data area).
+        parts.append(
+            f'<g transform="translate({x:.2f},{y:.2f})" '
+            f'data-plotlet-kind="legend" '
+            f'data-plotlet-legend-bbox="{x:.0f},{y:.0f},{w:.0f},{h:.0f}">'
+        )
+        with _regions.translate(x, y):
+            parts.append(_render_legend(leaf, w, h, states, data_leaves))
         parts.append('</g>')
     parts.append('</svg>')
     return "".join(parts)
