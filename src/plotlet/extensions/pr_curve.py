@@ -6,9 +6,9 @@ mediocre classifier look great on ROC. AUPR (area under PR) is
 trapezoidal-integrated inline and appended to the legend label.
 
 API:
-    c.pr(y_true, y_score, label=...)
+    c.pr(data=df, true="col", score="col", label=...)
 
-`y_true` is 0/1; `y_score` is a numeric score (higher = predict 1).
+`true=` is 0/1; `score=` is a numeric score (higher = predict 1).
 The label string is auto-augmented with "(AUPR = 0.42)" so the legend
 reads like a model-comparison table.
 """
@@ -23,8 +23,19 @@ from plotlet.draw import polyline, segment
 
 
 def pr_record(args, kw):
-    y_true = to_list(args[0])
-    y_score = to_list(args[1])
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "pr requires long-form input: "
+            "c.pr(data=df, true='col', score='col')."
+        )
+    data = kw.pop("data", None)
+    true_col = kw.pop("true", None)
+    score_col = kw.pop("score", None)
+    if data is None or true_col is None or score_col is None:
+        raise TypeError("pr requires data=, true=, score=.")
+    y_true = to_list(data[true_col])
+    y_score = to_list(data[score_col])
     paired = sorted(zip(y_score, y_true), key=lambda p: -p[0])
     n_pos = sum(1 for _, t in paired if t == 1)
     if n_pos == 0:
@@ -114,8 +125,10 @@ def demo():
     weak = [s + random.gauss(0, 1.0) for s in good]
     c = pt.chart(data_width=320, data_height=320)
     prevalence = n_pos / (n_pos + n_neg)
-    c.pr(y_true, good, label="strong model", prevalence=prevalence)
-    c.pr(y_true, weak, label="weak model", _first=False)
+    c.pr({"y": y_true, "s": good}, true="y", score="s",
+         label="strong model", prevalence=prevalence)
+    c.pr({"y": y_true, "s": weak}, true="y", score="s",
+         label="weak model", _first=False)
     c.title("Precision-Recall").xlabel("recall").ylabel("precision").legend(True)
     return c
 

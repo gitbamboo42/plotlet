@@ -5,7 +5,7 @@ and "not significant" segments and optional labels for the top hits. The
 RNA-seq / proteomics / phospho-proteomics workhorse.
 
 API:
-    c.volcano(log2fc, pvalues, gene_labels,
+    c.volcano(data=df, x="log2fc_col", y="pvalue_col", label="gene_col",
               fc_threshold=1.0, p_threshold=0.05,
               up_color="#d62728", down_color="#1f77b4", ns_color="#999999",
               n_label=10)
@@ -24,9 +24,21 @@ from plotlet.draw import text_path, circle, segment
 
 
 def volcano_record(args, kw):
-    fc = to_list(args[0])
-    pvals = to_list(args[1])
-    labels = to_list(args[2]) if len(args) > 2 else [""] * len(fc)
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "volcano requires long-form input: "
+            "c.volcano(data=df, x='log2fc_col', y='pvalue_col', label='gene_col')."
+        )
+    data = kw.pop("data", None)
+    x_col = kw.pop("x", None)
+    y_col = kw.pop("y", None)
+    label_col = kw.pop("label", None)
+    if data is None or x_col is None or y_col is None:
+        raise TypeError("volcano requires data=, x= (log2fc), y= (pvalue).")
+    fc = to_list(data[x_col])
+    pvals = to_list(data[y_col])
+    labels = to_list(data[label_col]) if label_col is not None else [""] * len(fc)
     return {"type": "volcano", "fc": fc, "pvals": pvals, "labels": labels,
             "opts": kw}
 
@@ -121,8 +133,10 @@ def demo():
             fc.append(random.gauss(0, 0.6))
             pvals.append(10 ** -random.uniform(0, 3))
     labels = [f"g{i:04d}" for i in range(n)]
+    df = {"fc": fc, "p": pvals, "gene": labels}
     c = pt.chart()
-    c.volcano(fc, pvals, labels, fc_threshold=1.0, p_threshold=0.01, n_label=8)
+    c.volcano(df, x="fc", y="p", label="gene",
+              fc_threshold=1.0, p_threshold=0.01, n_label=8)
     c.title("Differential expression").xlabel("log₂ fold change").ylabel("−log₁₀(p)").legend(True)
     return c
 

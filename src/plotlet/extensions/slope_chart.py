@@ -5,7 +5,7 @@ drawn as a single line connecting `(0, before)` and `(1, after)`, with a
 dot at each endpoint and an optional label near the right endpoint.
 Tufte's preferred chart for highlighting rank shuffles or per-item deltas.
 
-API: c.slope_chart(labels, before_vals, after_vals,
+API: c.slope_chart(data=df, label="col", a="col", b="col",
                    left_label="before", right_label="after").
 Each labeled series gets its own color via the normal cycle by calling
 slope_chart per-row, but the common case is a single call with all rows
@@ -22,9 +22,21 @@ from plotlet.draw import text_path, segment, circle
 
 
 def slope_record(args, kw):
-    labels = to_list(args[0])
-    a = to_list(args[1])
-    b = to_list(args[2])
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "slope_chart requires long-form input: "
+            "c.slope_chart(data=df, label='col', a='col', b='col')."
+        )
+    data = kw.pop("data", None)
+    label_col = kw.pop("label", None)
+    a_col = kw.pop("a", None)
+    b_col = kw.pop("b", None)
+    if data is None or label_col is None or a_col is None or b_col is None:
+        raise TypeError("slope_chart requires data=, label=, a=, b=.")
+    labels = to_list(data[label_col])
+    a = to_list(data[a_col])
+    b = to_list(data[b_col])
     return {"type": "slope_chart", "labels": labels, "a": a, "b": b, "opts": kw}
 
 
@@ -73,10 +85,14 @@ def demo():
     labels = ["alpha", "beta", "gamma", "delta", "epsilon"]
     before = [62, 71, 55, 80, 48]
     after  = [70, 65, 73, 78, 60]
+    df = {"label": labels, "before": before, "after": after}
     c = pt.chart()
     # Background lines in gray, highlight one in C0.
-    c.slope_chart(labels, before, after, color="#999999", show_labels=True)
-    c.slope_chart(["gamma"], [55], [73], color="C0", linewidth=2.4, show_labels=False)
+    c.slope_chart(df, label="label", a="before", b="after",
+                  color="#999999", show_labels=True)
+    c.slope_chart({"label": ["gamma"], "before": [55], "after": [73]},
+                  label="label", a="before", b="after",
+                  color="C0", linewidth=2.4, show_labels=False)
     c.xticks([0, 1], ["before", "after"])
     c.title("Score before/after").ylabel("score")
     return c

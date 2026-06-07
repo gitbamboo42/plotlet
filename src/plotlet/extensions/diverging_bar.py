@@ -6,11 +6,11 @@ right, neutral straddling zero) and for any "score relative to baseline"
 comparison.
 
 API:
-    c.diverging_bar(labels, values,
+    c.diverging_bar(data=df, x="value_col", y="category_col",
                     pos_color="#1f77b4", neg_color="#d62728",
                     height=0.7)
 
-Pair with `c.yscale("category", order=labels)` so rows stay in submission
+Pair with `c.yscale("category", order=...)` so rows stay in submission
 order (plotlet puts the first category at the *top* of the y axis).
 """
 
@@ -24,9 +24,20 @@ from plotlet.utils import to_list
 
 
 def diverging_bar_record(args, kw):
-    labels = to_list(args[0])
-    values = to_list(args[1])
-    return {"type": "diverging_bar", "labels": labels, "values": values,
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "diverging_bar requires long-form input: "
+            "c.diverging_bar(data=df, x='value_col', y='category_col')."
+        )
+    data = kw.pop("data", None)
+    x_col = kw.pop("x", None)
+    y_col = kw.pop("y", None)
+    if data is None or x_col is None or y_col is None:
+        raise TypeError("diverging_bar requires data=, x= (values), y= (categories).")
+    return {"type": "diverging_bar",
+            "labels": to_list(data[y_col]),
+            "values": to_list(data[x_col]),
             "opts": kw}
 
 
@@ -88,7 +99,7 @@ def demo():
     nps = [40, 25, 10, -5, -20, 15, 35, -30]  # net promoter per category
     c = pt.chart(data_width=420)
     c.yscale("category", order=items)
-    c.diverging_bar(items, nps)
+    c.diverging_bar({"item": items, "nps": nps}, x="nps", y="item")
     c.title("Net promoter by area").xlabel("NPS").legend(True)
     return c
 

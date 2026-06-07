@@ -81,7 +81,6 @@ def _fill_between_record(args, kw):
 
 add_artist(ArtistSpec(
     name="fill_between",
-    accepts_data_positional=True,
     record=_fill_between_record,
     xdomain=lambda a: a["xs"],
     ydomain=lambda a: list(a["y1"]) + list(a["y2"]),
@@ -227,7 +226,6 @@ def _area_legend_entries(a):
 
 add_artist(ArtistSpec(
     name="area",
-    accepts_data_positional=True,
     record=_area_record,
     xdomain=lambda a: a["xs"],
     ydomain=_area_ydomain,

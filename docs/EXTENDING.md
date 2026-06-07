@@ -18,12 +18,27 @@ from plotlet.draw import segment, circle
 
 
 # 1. record(args, kwargs) -> dict
-#    Turn c.<name>(...) args into the artist dict stored in Chart._calls.
-#    Pure data — no scales yet.
+#    Turn c.<name>(...) kwargs into the artist dict stored in Chart._calls.
+#    Pure data — no scales yet. Long-form is plotlet's standard: pull
+#    `data=` and column names out of kw and refuse positional arrays.
+#    The dispatch layer hoists a single positional arg into `data=` (the
+#    `c.lollipop(df, x="x", y="y")` sugar), so `if args` here just guards
+#    against accidental wide-form calls.
 def my_record(args, kw):
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "lollipop requires long-form input: "
+            "c.lollipop(data=df, x='col', y='col')."
+        )
+    data = kw.pop("data", None)
+    x_col = kw.pop("x", None)
+    y_col = kw.pop("y", None)
+    if data is None or x_col is None or y_col is None:
+        raise TypeError("lollipop requires data=, x=, y=.")
     return {"type": "lollipop",
-            "xs": to_list(args[0]),
-            "ys": to_list(args[1]),
+            "xs": to_list(data[x_col]),
+            "ys": to_list(data[y_col]),
             "opts": kw}
 
 
@@ -52,7 +67,8 @@ pt.add_artist(pt.ArtistSpec(
 ))
 
 c = pt.chart()
-c.lollipop([1, 2, 3, 4, 5], [3, 7, 2, 9, 4], label="A")
+c.lollipop({"x": [1, 2, 3, 4, 5], "y": [3, 7, 2, 9, 4]},
+           x="x", y="y", label="A")
 c.title("Lollipop chart").grid(True).legend(True).save_svg("out.svg")
 ```
 
@@ -99,6 +115,7 @@ ArtistSpec(
     draw: (artist_dict, ctx) -> str,          # required, returns SVG fragment
     xdomain: (artist_dict) -> Iterable | None = lambda a: None,
     ydomain: (artist_dict) -> Iterable | None = lambda a: None,
+    accepts_data_positional: bool = True,
     layer: "background" | "data" | "foreground" = "data",
     uses_color_cycle: bool = True,
     default_color: str | None = None,
@@ -112,6 +129,7 @@ ArtistSpec(
 
 | Field | When you need it |
 |---|---|
+| `accepts_data_positional` | Default `True` — enables the `c.<artist>(df, x=, y=)` sugar that hoists a single positional arg into `kw["data"]`. Set `False` for matrix-input or single-primary-input artists (`heatmap`, `imshow`, `axhline`, `annotate`) so their `args[0]` doesn't get swallowed. Multi-positional artists (rect, polygon, …) are unaffected either way because the sugar only triggers on `len(args) == 1`. |
 | `xdomain` / `ydomain` | Your artist's data should drive axis limits. Return `None` for decorative artists (axhline, axvline). |
 | `layer` | `"background"` for fills (drawn first), `"foreground"` for reference lines (drawn last). Default `"data"`. |
 | `uses_color_cycle` | Set `False` for artists that pick their own color (reflines, image artists). Set `default_color` for the fallback. |

@@ -67,14 +67,17 @@ if __name__ == "__main__":
     top_tree.dendrogram(tree=col_tree, orient="top", parent=True)
 
     top_strip = pt.chart(data_height=14)
-    top_strip.annotation_strip(samples, conditions, palette=cond_palette)
+    top_strip.annotation_strip({"sample": samples, "condition": conditions},
+                               position="sample", value="condition",
+                               palette=cond_palette)
 
     left_tree = pt.chart(data_width=110)
     left_tree.dendrogram(tree=row_tree, orient="left", parent=True)
 
     left_strip = pt.chart(data_width=14)
-    left_strip.annotation_strip(genes, pathways, palette=path_palette,
-                                orient="y")
+    left_strip.annotation_strip({"gene": genes, "pathway": pathways},
+                                position="gene", value="pathway",
+                                palette=path_palette, orient="y")
 
     hm = pt.chart(title="Gene expression: treatment effect by pathway",
                   data_width=440, data_height=320)

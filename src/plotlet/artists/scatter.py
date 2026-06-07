@@ -396,7 +396,6 @@ def _scatter_size_entries(sl, opts):
 
 add_artist(ArtistSpec(
     name="scatter",
-    accepts_data_positional=True,
     record=_scatter_record,
     xdomain=_scatter_xdomain,
     ydomain=_scatter_ydomain,

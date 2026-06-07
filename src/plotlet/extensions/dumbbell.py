@@ -7,16 +7,16 @@ method B" comparisons. Easier to read than a paired bar chart for many
 categories.
 
 API:
-    c.dumbbell(labels, a_vals, b_vals,
+    c.dumbbell(data=df, y="category_col", a="col", b="col",
                a_color="#1f77b4", b_color="#ff7f0e",
                up_color="#2ca02c", down_color="#d62728",
                size=4)
 
-`labels` go on the y axis (categorical); `a_vals` and `b_vals` are
-numeric. The connector picks `up_color` if `b > a`, `down_color` if
-`b < a`. Set `c.yscale("category", order=labels)` to keep the rows in
-your supplied order (alphabetical default is rarely what you want here);
-plotlet places the first category at the *top* of the y axis.
+The `y=` column is categorical; `a=` and `b=` are numeric. The connector
+picks `up_color` if `b > a`, `down_color` if `b < a`. Set
+`c.yscale("category", order=...)` to keep the rows in your supplied order
+(alphabetical default is rarely what you want here); plotlet places the
+first category at the *top* of the y axis.
 """
 
 SUMMARY = 'Categorical before/after: two dots connected by a line per row, color-coded by direction.'
@@ -29,9 +29,21 @@ from plotlet.draw import segment, circle
 
 
 def dumbbell_record(args, kw):
-    labels = to_list(args[0])
-    a = to_list(args[1])
-    b = to_list(args[2])
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "dumbbell requires long-form input: "
+            "c.dumbbell(data=df, y='category_col', a='col', b='col')."
+        )
+    data = kw.pop("data", None)
+    y_col = kw.pop("y", None)
+    a_col = kw.pop("a", None)
+    b_col = kw.pop("b", None)
+    if data is None or y_col is None or a_col is None or b_col is None:
+        raise TypeError("dumbbell requires data=, y=, a=, b=.")
+    labels = to_list(data[y_col])
+    a = to_list(data[a_col])
+    b = to_list(data[b_col])
     return {"type": "dumbbell", "labels": labels, "a": a, "b": b, "opts": kw}
 
 
@@ -77,9 +89,10 @@ def demo():
                  "India", "China", "Mexico", "Indonesia"]
     year_a = [70, 68, 72, 71, 78, 65, 60, 67, 69, 62]
     year_b = [78, 75, 81, 80, 83, 72, 72, 79, 75, 70]
+    df = {"country": countries, "y1980": year_a, "y2020": year_b}
     c = pt.chart()
     c.yscale("category", order=countries)
-    c.dumbbell(countries, year_a, year_b)
+    c.dumbbell(df, y="country", a="y1980", b="y2020")
     c.title("Life expectancy: 1980 → 2020").xlabel("years")
     return c
 

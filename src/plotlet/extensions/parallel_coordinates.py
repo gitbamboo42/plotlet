@@ -8,12 +8,12 @@ different scales coexist.
 Used everywhere EDA touches more than three numeric columns.
 
 API:
-    c.parallel_coords(rows, var_names, group=None, alpha=0.6)
+    c.parallel_coords(data=df, vars=["col1", "col2", ...],
+                       group="category_col", alpha=0.6)
 
-`rows`     -> list of rows, each a list of values aligned with `var_names`.
-`var_names` -> ordered list of column names.
-`group`    -> optional per-row category vector; same length as `rows`.
-              Each unique value gets its own color via the cycle.
+`vars=`  -> ordered list of column names; each becomes one vertical axis.
+`group=` -> optional column of per-row category. Each unique value
+            gets its own color via the cycle.
 
 Pass `group` to highlight class membership (the most common use case).
 """
@@ -28,8 +28,23 @@ from plotlet.draw import polyline, segment, text_path
 
 
 def parallel_coords_record(args, kw):
-    rows = [list(to_list(r)) for r in args[0]]
-    var_names = list(args[1])
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "parallel_coords requires long-form input: "
+            "c.parallel_coords(data=df, vars=['col1','col2',...], group='col')."
+        )
+    data = kw.pop("data", None)
+    var_names = kw.pop("vars", None)
+    if data is None or not var_names:
+        raise TypeError("parallel_coords requires data=, vars=[...].")
+    var_names = list(var_names)
+    cols = [to_list(data[v]) for v in var_names]
+    n_rows = len(cols[0]) if cols else 0
+    rows = [[cols[c][r] for c in range(len(var_names))] for r in range(n_rows)]
+    group_col = kw.pop("group", None)
+    if group_col is not None:
+        kw["group"] = to_list(data[group_col])
     return {"type": "parallel_coords", "rows": rows, "var_names": var_names,
             "opts": kw}
 
@@ -103,18 +118,19 @@ def demo():
     import random
     random.seed(0)
     var_names = ["sepal_len", "sepal_wid", "petal_len", "petal_wid"]
-    rows = []; groups = []
+    rows = []
     for cls, base, base_w in [("A", 5.0, 1.4), ("B", 6.0, 4.0), ("C", 6.8, 5.5)]:
         for _ in range(35):
-            rows.append([
-                base + random.gauss(0, 0.4),
-                random.gauss(3, 0.4),
-                base_w + random.gauss(0, 0.5),
-                base_w * 0.4 + random.gauss(0, 0.2),
-            ])
-            groups.append(cls)
+            rows.append({
+                "sepal_len": base + random.gauss(0, 0.4),
+                "sepal_wid": random.gauss(3, 0.4),
+                "petal_len": base_w + random.gauss(0, 0.5),
+                "petal_wid": base_w * 0.4 + random.gauss(0, 0.2),
+                "class": cls,
+            })
+    df = {k: [r[k] for r in rows] for k in rows[0]}
     c = pt.chart(data_width=520, data_height=260)
-    c.parallel_coords(rows, var_names, group=groups)
+    c.parallel_coords(df, vars=var_names, group="class")
     c.xticks([]); c.yticks([])  # labels are drawn inside the artist
     c.title("Parallel coordinates")
     return c

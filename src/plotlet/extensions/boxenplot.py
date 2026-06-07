@@ -7,12 +7,11 @@ boxes at successively further-out quantile pairs ([Q1, Q3], [Q1/2, Q3·2],
 picture. Each outer box is shaded lighter than the inner one so you can
 read the levels at a glance.
 
-Two input shapes, picked by which kwargs are present:
-  - Wide-form (positional):  c.boxen(cats, values_per_cat)
-  - Long-form (table):       c.boxen(data=df, x="cat", y="value",
-                                      fill="group", palette={...})
+Input shape (long-form table):
 
-Long-form with `fill="col"` dodges sub-boxen side-by-side within each cat
+    c.boxen(data=df, x="cat", y="value", fill="group", palette={...})
+
+`fill="col"` dodges sub-boxen side-by-side within each cat
 and emits one legend entry per group level. `palette=` accepts a dict
 (level → color) or a sequence; missing entries fall through to TAB10.
 
@@ -75,27 +74,21 @@ def _resolve_fill_kwarg(data, kw):
 
 
 def boxen_record(args, kw):
-    if "data" in kw or "x" in kw or "y" in kw:
-        data = kw.pop("data", None)
-        x = kw.pop("x", None)
-        y = kw.pop("y", None)
-        if data is None or x is None or y is None:
-            raise TypeError(
-                "boxen long-form requires data=, x=, y= (fill= optional)."
-            )
-        do_fill, fill_literal, group_col = _resolve_fill_kwarg(data, kw)
-        cats, groups, vals = categorical_groups(data, x, y, group_col)
-    elif len(args) >= 2:
-        cats = to_list(args[0])
-        vals_1d = [list(to_list(g)) for g in args[1]]
-        groups = [None]
-        vals = [[g] for g in vals_1d]
-        do_fill, fill_literal, _ = _resolve_fill_kwarg(None, kw)
-    else:
+    kw = dict(kw)
+    if args:
         raise TypeError(
-            "boxen requires either positional (cats, values_per_cat) "
-            "or keyword (data=, x=, y=)."
+            "boxen requires long-form input: "
+            "c.boxen(data=df, x='cat_col', y='value_col')."
         )
+    data = kw.pop("data", None)
+    x = kw.pop("x", None)
+    y = kw.pop("y", None)
+    if data is None or x is None or y is None:
+        raise TypeError(
+            "boxen requires data=, x=, y= (fill= optional)."
+        )
+    do_fill, fill_literal, group_col = _resolve_fill_kwarg(data, kw)
+    cats, groups, vals = categorical_groups(data, x, y, group_col)
     kw["_do_fill"] = do_fill
     if fill_literal is not None:
         kw["_fill_literal"] = fill_literal

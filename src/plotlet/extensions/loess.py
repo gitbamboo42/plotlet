@@ -8,7 +8,7 @@ noisy `(x, y)` data without assuming a parametric form. Uses
   - configurable `frac` (the "span" — fraction of points used per fit)
 
 API:
-    c.loess(xs, ys, frac=0.5, it=3)
+    c.loess(data=df, x="col", y="col", frac=0.5, it=3)
 
 Earlier versions of this recipe inlined a degree-1, no-robustness
 LOESS in pure Python (no scipy dep). The statsmodels version is
@@ -26,7 +26,18 @@ from statsmodels.nonparametric.smoothers_lowess import lowess
 
 
 def loess_record(args, kw):
-    xs = to_list(args[0]); ys = to_list(args[1])
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "loess requires long-form input: "
+            "c.loess(data=df, x='col', y='col')."
+        )
+    data = kw.pop("data", None)
+    x_col = kw.pop("x", None)
+    y_col = kw.pop("y", None)
+    if data is None or x_col is None or y_col is None:
+        raise TypeError("loess requires data=, x=, y=.")
+    xs = to_list(data[x_col]); ys = to_list(data[y_col])
     frac = kw.get("frac", kw.get("span", 0.5))
     it = kw.get("it", 3)
     if not xs:
@@ -83,8 +94,9 @@ def demo():
     ys[20] += 4; ys[150] -= 5
     c = pt.chart()
     c.scatter(data={"x": xs, "y": ys}, x="x", y="y", s=8, alpha=0.5, label="data")
-    c.loess(xs, ys, frac=0.3, label="LOESS (frac=0.3)")
-    c.loess(xs, ys, frac=0.7, label="LOESS (frac=0.7)")
+    df = {"x": xs, "y": ys}
+    c.loess(df, x="x", y="y", frac=0.3, label="LOESS (frac=0.3)")
+    c.loess(df, x="x", y="y", frac=0.7, label="LOESS (frac=0.7)")
     c.title("LOESS smoother").xlabel("x").ylabel("y").legend(True)
     return c
 

@@ -101,7 +101,6 @@ def _rug_draw(a, ctx):
 
 add_artist(ArtistSpec(
     name="rug",
-    accepts_data_positional=True,
     record=_rug_record,
     xdomain=_rug_xdomain,
     ydomain=_rug_ydomain,

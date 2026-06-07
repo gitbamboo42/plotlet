@@ -5,14 +5,14 @@ by chromosome, with a horizontal threshold for genome-wide significance
 (5e-8 by convention). The defining figure of every GWAS paper.
 
 API:
-    c.manhattan(chroms, positions, pvalues,
+    c.manhattan(data=df, chrom="col", pos="col", pvalue="col",
                 colors=("#3a86ff", "#9bb6e8"),
                 sig=5e-8, suggestive=1e-5)
 
-`chroms` is per-SNP chromosome label (int or str). `positions` is bp
-position within chromosome. `pvalues` is the raw p value; the artist
-plots -log₁₀(p). Chromosome boundaries are computed from each chrom's
-max position so x is continuous left-to-right.
+`chrom` is per-SNP chromosome label (int or str). `pos` is bp position
+within chromosome. `pvalue` is the raw p value; the artist plots
+-log₁₀(p). Chromosome boundaries are computed from each chrom's max
+position so x is continuous left-to-right.
 """
 
 SUMMARY = 'GWAS scatter of −log₁₀(p) vs cumulative genomic position, chromosomes alternated by color.'
@@ -25,9 +25,21 @@ from plotlet.draw import text_path, circle, segment
 
 
 def manhattan_record(args, kw):
-    chroms = to_list(args[0])
-    pos = to_list(args[1])
-    pvals = to_list(args[2])
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "manhattan requires long-form input: "
+            "c.manhattan(data=df, chrom='col', pos='col', pvalue='col')."
+        )
+    data = kw.pop("data", None)
+    chrom_col = kw.pop("chrom", None)
+    pos_col = kw.pop("pos", None)
+    pvalue_col = kw.pop("pvalue", None)
+    if data is None or chrom_col is None or pos_col is None or pvalue_col is None:
+        raise TypeError("manhattan requires data=, chrom=, pos=, pvalue=.")
+    chroms = to_list(data[chrom_col])
+    pos = to_list(data[pos_col])
+    pvals = to_list(data[pvalue_col])
     # Group by chrom keeping order of first appearance.
     seen = []
     by_chrom = {}
@@ -120,8 +132,10 @@ def demo():
                 pvals.append(10 ** -random.uniform(7, 15))
             else:
                 pvals.append(10 ** -random.uniform(0, 5))
+    df = {"chrom": chroms, "pos": positions, "pvalue": pvals}
     c = pt.chart(data_width=720, data_height=260)
-    c.manhattan(chroms, positions, pvals, sig=5e-8, suggestive=1e-5)
+    c.manhattan(df, chrom="chrom", pos="pos", pvalue="pvalue",
+                sig=5e-8, suggestive=1e-5)
     c.title("GWAS Manhattan plot").ylabel("−log₁₀(p)")
     c.xticks([])  # chromosome labels drawn inside the artist
     return c

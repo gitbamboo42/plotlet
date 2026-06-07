@@ -82,12 +82,17 @@ class ArtistSpec:
     # `_a` is auto-attached by the harvester so paint functions have the
     # original recorded artist for context (linewidth, alpha, marker
     # kind, etc.).
-    # When True, `c.<artist>(df, x="col", y="col")` is sugar for
+    # When True (default), `c.<artist>(df, x="col", y="col")` is sugar for
     # `c.<artist>(data=df, x="col", y="col")` — dispatch hoists the single
-    # positional arg into `data=` before calling `record`. Matches ggplot's
-    # `ggplot(data, aes(...))` ergonomic without re-enabling wide-form
-    # positional arrays. Set True on every long-form artist.
-    accepts_data_positional: bool = False
+    # positional arg into `data=` before calling `record`. Long-form is
+    # plotlet's standard, so the sugar is on by default.
+    #
+    # Set False on positional-only artists that take exactly one positional
+    # arg (matrix or single primary input). Without the opt-out, that
+    # single arg gets hoisted into `kw["data"]` and the record's `args[0]`
+    # raises IndexError. Multi-positional artists (rect, polygon, hlines,
+    # ...) are unaffected — the sugar only triggers when `len(args) == 1`.
+    accepts_data_positional: bool = True
     legend_entries: Callable[[dict], list[dict]] | None = None
     legend_gradient: Callable[[dict], dict | None] | None = None
     data_attrs: Callable[[dict], dict | None] | None = None

@@ -10,10 +10,11 @@ Stacks neatly: each call adds one bracket layer above the previous, so
 multiple `significance_brackets(...)` calls produce a tidy "ladder".
 
 API:
-    c.significance_brackets(comparisons, y_top=None, y_step=0.06,
-                            offset=0.0)
+    c.significance_brackets(data=df, a="col", b="col", label="col",
+                            y_top=None, y_step=0.06, offset=0.0)
 
-`comparisons` is a list of `(cat_a, cat_b, annotation)` triples.
+`a=` and `b=` are columns of paired category names; `label=` is the
+annotation text drawn above each bracket (`"ns"`, `"*"`, `"**"`, …).
 - `y_top`  — data y at which to draw the lowest bracket (defaults to
   just above the current ymax of the chart, but we can't introspect it
   cleanly from inside an artist; pass an explicit value if you care).
@@ -31,7 +32,24 @@ from plotlet.draw import path, text_path
 
 
 def sig_record(args, kw):
-    comparisons = list(args[0])
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "significance_brackets requires long-form input: "
+            "c.significance_brackets(data=df, a='col', b='col', label='col')."
+        )
+    data = kw.pop("data", None)
+    a_col = kw.pop("a", None)
+    b_col = kw.pop("b", None)
+    label_col = kw.pop("label", None)
+    if data is None or a_col is None or b_col is None or label_col is None:
+        raise TypeError(
+            "significance_brackets requires data=, a=, b=, label=."
+        )
+    a_vals = list(data[a_col])
+    b_vals = list(data[b_col])
+    labels = list(data[label_col])
+    comparisons = list(zip(a_vals, b_vals, labels))
     return {"type": "significance_brackets",
             "comparisons": comparisons, "opts": kw}
 
@@ -115,13 +133,13 @@ def demo():
     c.xscale("category", order=cats)
     c.bar(data=df, x="cat", y="mean")
     # Brackets above bars: comparisons + annotations.
-    c.significance_brackets(
-        [("control", "drug A", "**"),
-         ("control", "drug C", "***"),
-         ("drug B",  "drug C", "*")],
-        y_top=max(means) + 0.5,
-        y_step=0.7,
-    )
+    sig = {
+        "a":     ["control", "control", "drug B"],
+        "b":     ["drug A",  "drug C",  "drug C"],
+        "label": ["**",      "***",     "*"],
+    }
+    c.significance_brackets(sig, a="a", b="b", label="label",
+                            y_top=max(means) + 0.5, y_step=0.7)
     c.title("Mean response with significance").ylabel("score")
     return c
 

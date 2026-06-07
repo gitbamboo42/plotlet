@@ -174,7 +174,6 @@ def _errorbar_legend_entries(a):
 
 add_artist(ArtistSpec(
     name="errorbar",
-    accepts_data_positional=True,
     record=_errorbar_record,
     xdomain=_errorbar_xdomain,
     ydomain=_errorbar_ydomain,

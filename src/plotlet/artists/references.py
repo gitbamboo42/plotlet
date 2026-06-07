@@ -105,6 +105,7 @@ def _axhline_data_attrs(a):  return {"y": a["y"]}
 
 add_artist(ArtistSpec(
     name="axhline",
+    accepts_data_positional=False,
     record=lambda args, kw: {"type": "axhline", "y": args[0], "opts": kw},
     xdomain=lambda a: None, ydomain=lambda a: None,
     draw=lambda a, ctx: _artist_axhline(a, ctx.x_scale, ctx.y_scale, ctx.iw, ctx.ih, ctx.color),
@@ -123,6 +124,7 @@ def _axvline_data_attrs(a):  return {"x": a["x"]}
 
 add_artist(ArtistSpec(
     name="axvline",
+    accepts_data_positional=False,
     record=lambda args, kw: {"type": "axvline", "x": args[0], "opts": kw},
     xdomain=lambda a: None, ydomain=lambda a: None,
     draw=lambda a, ctx: _artist_axvline(a, ctx.x_scale, ctx.y_scale, ctx.iw, ctx.ih, ctx.color),

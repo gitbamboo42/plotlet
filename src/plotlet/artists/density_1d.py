@@ -131,7 +131,6 @@ def _density_1d_legend_entries(a):
 
 add_artist(ArtistSpec(
     name="density_1d",
-    accepts_data_positional=True,
     record=_density_1d_record,
     xdomain=_density_1d_xdomain,
     ydomain=_density_1d_ydomain,

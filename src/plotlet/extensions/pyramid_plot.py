@@ -7,12 +7,12 @@ categorical (age band). The demography classic — also useful for any
 deserve symmetric visual emphasis.
 
 API:
-    c.pyramid(labels, left_vals, right_vals,
+    c.pyramid(data=df, y="cat_col", left="col", right="col",
               left_color="#1f77b4", right_color="#e377c2",
               left_label="left", right_label="right",
               height=0.8)
 
-Both `left_vals` and `right_vals` should be *positive*; the artist
+Both `left` and `right` columns should be *positive*; the artist
 flips the left side to the negative x half internally and labels the
 x-axis ticks with absolute values via the `xticks_labels` helper
 returned alongside.
@@ -28,9 +28,21 @@ from plotlet.draw import rect, text_path
 
 
 def pyramid_record(args, kw):
-    labels = to_list(args[0])
-    left = to_list(args[1])
-    right = to_list(args[2])
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "pyramid requires long-form input: "
+            "c.pyramid(data=df, y='cat_col', left='col', right='col')."
+        )
+    data = kw.pop("data", None)
+    y_col = kw.pop("y", None)
+    left_col = kw.pop("left", None)
+    right_col = kw.pop("right", None)
+    if data is None or y_col is None or left_col is None or right_col is None:
+        raise TypeError("pyramid requires data=, y=, left=, right=.")
+    labels = to_list(data[y_col])
+    left = to_list(data[left_col])
+    right = to_list(data[right_col])
     return {"type": "pyramid", "labels": labels, "left": left, "right": right,
             "opts": kw}
 
@@ -84,9 +96,11 @@ def demo():
              "50–59", "60–69", "70–79", "80+"]
     male   = [110, 125, 130, 128, 120, 105,  85,  60, 30]
     female = [105, 120, 128, 130, 125, 112,  95,  78, 55]
+    df = {"band": bands, "male": male, "female": female}
     c = pt.chart(data_width=480, data_height=320)
     c.yscale("category", order=bands)
-    c.pyramid(bands, male, female, left_label="male", right_label="female")
+    c.pyramid(df, y="band", left="male", right="female",
+              left_label="male", right_label="female")
     c.title("Population pyramid").xlabel("count (thousands)")
     return c
 

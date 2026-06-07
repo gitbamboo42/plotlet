@@ -52,8 +52,9 @@ if __name__ == "__main__":
     left_tree = pt.chart(data_width=80)
     left_tree.dendrogram(tree=row_tree, orient="left", parent=True)
     left_strip = pt.chart(data_width=14)
-    left_strip.annotation_strip(genes, pathways, palette=path_palette,
-                                orient="y")
+    left_strip.annotation_strip({"gene": genes, "pathway": pathways},
+                                position="gene", value="pathway",
+                                palette=path_palette, orient="y")
 
     # Only the anchor declares row_split; share_y delivers it to the follower.
     left = pt.chart(title="Control", data_width=180, data_height=320)
@@ -75,7 +76,8 @@ if __name__ == "__main__":
     # labels_strip draws glyphs, so share_y's tick-label suppression
     # doesn't eat gene names on the seam.
     right_labels = pt.chart(data_width=70)
-    right_labels.labels_strip(genes, genes, orient="y", side="left")
+    right_labels.labels_strip({"gene": genes}, position="gene", label="gene",
+                              orient="y", side="left")
     right.attach_right(right_labels)
 
     fig = (left | right | pt.legend(

@@ -246,7 +246,6 @@ def _boxplot_legend_entries(a):
 
 add_artist(ArtistSpec(
     name="boxplot",
-    accepts_data_positional=True,
     record=_boxplot_record,
     xdomain=_boxplot_xdomain,
     ydomain=_boxplot_ydomain,

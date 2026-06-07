@@ -435,6 +435,7 @@ def _heatmap_data_attrs(a):
 
 add_artist(ArtistSpec(
     name="heatmap",
+    accepts_data_positional=False,
     record=_heatmap_record,
     xdomain=_heatmap_xdomain,
     ydomain=_heatmap_ydomain,

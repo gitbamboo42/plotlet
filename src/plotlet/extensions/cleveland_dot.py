@@ -6,11 +6,11 @@ chart-perception found dot plots more accurately read than horizontal
 bars — same data, less ink, often clearer rank ordering.
 
 API:
-    c.cleveland_dot(labels, values, size=5,
+    c.cleveland_dot(data=df, x="value_col", y="category_col", size=5,
                     line=True, line_color="#bbbbbb")
 
-Pair with `c.yscale("category", order=labels)`. Labels appear on the
-y-axis as normal category tick labels.
+Categories live on the y-axis (matches the chart's horizontal orientation).
+Pair with `c.yscale("category", order=...)` to fix the row order.
 """
 
 SUMMARY = "Horizontal dot at each category — Cleveland's perception-tested alternative to barh."
@@ -23,9 +23,20 @@ from plotlet.draw import segment, circle
 
 
 def cdot_record(args, kw):
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "cleveland_dot requires long-form input: "
+            "c.cleveland_dot(data=df, x='value_col', y='category_col')."
+        )
+    data = kw.pop("data", None)
+    x_col = kw.pop("x", None)
+    y_col = kw.pop("y", None)
+    if data is None or x_col is None or y_col is None:
+        raise TypeError("cleveland_dot requires data=, x=, y=.")
     return {"type": "cleveland_dot",
-            "labels": to_list(args[0]),
-            "values": to_list(args[1]),
+            "labels": to_list(data[y_col]),
+            "values": to_list(data[x_col]),
             "opts": kw}
 
 
@@ -85,7 +96,7 @@ def demo():
     vals = [42, 38, 27, 18, 14, 11, 22, 7]
     c = pt.chart()
     c.yscale("category", order=cats)
-    c.cleveland_dot(cats, vals)
+    c.cleveland_dot({"cat": cats, "val": vals}, x="val", y="cat")
     c.title("Stack share").xlabel("% respondents")
     return c
 

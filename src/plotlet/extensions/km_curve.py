@@ -10,9 +10,9 @@ For two-group comparisons, an optional companion helper
 chi-squared statistic and its p-value using `scipy.stats.chi2`.
 
 API:
-    c.km(times, events, ci=True, level=0.95)
-- `times`  -> follow-up duration (>= 0) per subject.
-- `events` -> 1 if event observed, 0 if censored.
+    c.km(data=df, time="col", event="col", ci=True, level=0.95)
+- `time=`  -> column of follow-up duration (>= 0) per subject.
+- `event=` -> column of 1 if event observed, 0 if censored.
 - `ci`     -> draw a Greenwood CI band (default True).
 - `level`  -> confidence level for the band.
 """
@@ -57,8 +57,19 @@ def _km_path(times, events):
 
 
 def km_record(args, kw):
-    times = to_list(args[0])
-    events = to_list(args[1])
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "km requires long-form input: "
+            "c.km(data=df, time='col', event='col')."
+        )
+    data = kw.pop("data", None)
+    time_col = kw.pop("time", None)
+    event_col = kw.pop("event", None)
+    if data is None or time_col is None or event_col is None:
+        raise TypeError("km requires data=, time=, event=.")
+    times = to_list(data[time_col])
+    events = to_list(data[event_col])
     t, s, var, cens = _km_path(times, events)
     return {"type": "km", "_t": t, "_s": s, "_var": var, "_cens": cens,
             "opts": kw}
@@ -193,8 +204,8 @@ def demo():
     t2, e2 = simulate(rate=0.08)
     chi_sq, p_val = logrank_pvalue(t1, e1, t2, e2)
     c = pt.chart()
-    c.km(t1, e1, label="treatment")
-    c.km(t2, e2, label="control")
+    c.km({"t": t1, "e": e1}, time="t", event="e", label="treatment")
+    c.km({"t": t2, "e": e2}, time="t", event="e", label="control")
     c.title(f"Kaplan-Meier survival (log-rank χ²={chi_sq:.2f}, p={p_val:.4f})")
     c.xlabel("months").ylabel("S(t)").legend(True)
     return c

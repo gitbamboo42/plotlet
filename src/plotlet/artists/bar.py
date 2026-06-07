@@ -232,7 +232,6 @@ def _bar_legend_entries(a):
 
 add_artist(ArtistSpec(
     name="bar",
-    accepts_data_positional=True,
     record=_bar_record,
     xdomain=_bar_xdomain,
     ydomain=_bar_ydomain,

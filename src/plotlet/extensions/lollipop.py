@@ -4,10 +4,10 @@ A lollipop is a stem from y=0 to y=value with a circle at the top — useful
 for sparse comparisons (rankings, deltas, GWAS-style hits).
 
 The whole recipe is below: no edits to plotlet's source. After registration,
-`c.lollipop(xs, ys, ...)` Just Works on any `Chart` — autoscaling, gridlines,
-color cycling, and the legend integrate for free. The optional
-`legend_entries` hook lets the legend entry actually look like a tiny
-lollipop instead of the default colored line.
+`c.lollipop(data=df, x="col", y="col")` Just Works on any `Chart` —
+autoscaling, gridlines, color cycling, and the legend integrate for free.
+The optional `legend_entries` hook lets the legend entry actually look
+like a tiny lollipop instead of the default colored line.
 """
 
 SUMMARY = 'Stem-and-circle chart for sparse comparisons; optional mini-lollipop legend entry.'
@@ -20,10 +20,21 @@ from plotlet.draw import segment, circle
 
 # 1. record(): turn args/kwargs into the artist dict stored in Chart._calls.
 def lollipop_record(args, kw):
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "lollipop requires long-form input: "
+            "c.lollipop(data=df, x='col', y='col')."
+        )
+    data = kw.pop("data", None)
+    x_col = kw.pop("x", None)
+    y_col = kw.pop("y", None)
+    if data is None or x_col is None or y_col is None:
+        raise TypeError("lollipop requires data=, x=, y=.")
     return {
         "type": "lollipop",
-        "xs": to_list(args[0]),
-        "ys": to_list(args[1]),
+        "xs": to_list(data[x_col]),
+        "ys": to_list(data[y_col]),
         "opts": kw,
     }
 
@@ -81,9 +92,10 @@ def demo():
 
     Returns a `pt.Chart` ready for `.save_svg()` or further composition."""
     c = pt.chart()
-    c.lollipop([1, 2, 3, 4, 5, 6, 7], [3, 7, 2, 9, 4, 8, 5], label="A")
-    c.lollipop([1.3, 2.3, 3.3, 4.3, 5.3, 6.3, 7.3], [5, 3, 8, 2, 6, 4, 7],
-               label="B", size=4)
+    a = {"x": [1, 2, 3, 4, 5, 6, 7], "y": [3, 7, 2, 9, 4, 8, 5]}
+    b = {"x": [1.3, 2.3, 3.3, 4.3, 5.3, 6.3, 7.3], "y": [5, 3, 8, 2, 6, 4, 7]}
+    c.lollipop(a, x="x", y="y", label="A")
+    c.lollipop(b, x="x", y="y", label="B", size=4)
     c.title("Lollipop chart").xlabel("position").ylabel("score")
     c.grid(True).legend(True)
     return c

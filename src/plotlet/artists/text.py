@@ -199,7 +199,6 @@ def _text_data_attrs(a):
 
 add_artist(ArtistSpec(
     name="text",
-    accepts_data_positional=True,
     record=_text_record,
     xdomain=lambda a: a["xs"],
     ydomain=lambda a: a["ys"],
@@ -244,6 +243,7 @@ def _annotate_data_attrs(a):
 
 add_artist(ArtistSpec(
     name="annotate",
+    accepts_data_positional=False,
     record=_annotate_record,
     xdomain=_annotate_xdomain,
     ydomain=_annotate_ydomain,

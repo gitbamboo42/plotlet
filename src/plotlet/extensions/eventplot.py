@@ -5,9 +5,12 @@ time. Used for spike trains, sequence motif hits, log timelines. Each
 call adds one *row* of ticks at a given y; call multiple times for
 multiple rows.
 
-API: c.eventplot(positions, y=0, length=0.6, orientation="vertical").
-- `positions`  -> 1-D iterable of event times along the data axis.
-- `y`          -> data-coord position of the row baseline.
+API: c.eventplot(data=df, x="position_col", at=0, length=0.6,
+                  orientation="vertical").
+- `x=`         -> column of event times along the data axis.
+- `at=`        -> scalar data-coord position of the row baseline
+                  (default 0). The perpendicular row placement, not a
+                  data column — eventplot is intrinsically 1-D.
 - `length`     -> tick length in data units along the orthogonal axis.
 - `orientation -> "vertical" (default; tick is vertical, row stacks on y)
                   or "horizontal" (tick is horizontal, row stacks on x).
@@ -22,27 +25,37 @@ from plotlet.draw import segment
 
 
 def eventplot_record(args, kw):
-    return {"type": "eventplot", "pos": to_list(args[0]), "opts": kw}
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "eventplot requires long-form input: "
+            "c.eventplot(data=df, x='position_col', at=row_y)."
+        )
+    data = kw.pop("data", None)
+    x_col = kw.pop("x", None)
+    if data is None or x_col is None:
+        raise TypeError("eventplot requires data=, x= (positions column).")
+    return {"type": "eventplot", "pos": to_list(data[x_col]), "opts": kw}
 
 
 def eventplot_xdomain(a):
     if a["opts"].get("orientation", "vertical") == "vertical":
         return a["pos"]
-    y = a["opts"].get("y", 0); ln = a["opts"].get("length", 0.6)
+    y = a["opts"].get("at", 0); ln = a["opts"].get("length", 0.6)
     return [y - ln / 2, y + ln / 2]
 
 
 def eventplot_ydomain(a):
     if a["opts"].get("orientation", "vertical") == "horizontal":
         return a["pos"]
-    y = a["opts"].get("y", 0); ln = a["opts"].get("length", 0.6)
+    y = a["opts"].get("at", 0); ln = a["opts"].get("length", 0.6)
     return [y - ln / 2, y + ln / 2]
 
 
 def eventplot_draw(a, ctx):
     col = ctx.color
     lw = a["opts"].get("linewidth", 1.2)
-    y = a["opts"].get("y", 0)
+    y = a["opts"].get("at", 0)
     ln = a["opts"].get("length", 0.6)
     orient = a["opts"].get("orientation", "vertical")
     out = []
@@ -102,7 +115,7 @@ def demo():
             t += random.expovariate(1.0)
             if t < 30:
                 events.append(t)
-        c.eventplot(events, y=i, length=0.7, color="C0",
+        c.eventplot({"t": events}, x="t", at=i, length=0.7, color="C0",
                     label="trial 0" if i == 0 else None)
     c.title("Spike raster").xlabel("time (s)").ylabel("trial")
     return c

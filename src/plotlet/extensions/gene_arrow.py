@@ -5,13 +5,16 @@ head pointing in the strand direction. Useful for genomics-style "where
 on the genome / chromosome is each gene" tracks; also fine for any
 directional interval data.
 
-API: c.gene_arrow(starts, ends, strands, y=0, height=0.6, head_frac=0.25).
-- `starts`, `ends` — interval bounds in data x units.
-- `strands`        — +1 / -1 per feature; +1 points right, -1 points left.
-- `y`              — data y baseline of the track.
+API: c.gene_arrow(data=df, start="col", end="col", strand="col",
+                  label="col", at=0, height=0.6, head_frac=0.25).
+- `start=`, `end=` — interval bound columns in data x units.
+- `strand=`        — column of +1 / -1 per feature (+1 points right).
+- `label=`         — optional column of per-feature labels drawn above
+                     the body.
+- `at`             — scalar data-y baseline of the track (default 0;
+                     intrinsically 1-D so this is placement, not a col).
 - `height`         — feature thickness in data y units.
 - `head_frac`      — fraction of feature length taken by the arrowhead.
-- optional `labels` -> per-feature labels drawn above the body.
 """
 
 SUMMARY = 'Directional rectangles with arrowheads, per strand — for genomics tracks.'
@@ -23,11 +26,26 @@ from plotlet.draw import path, text_path
 
 
 def gene_arrow_record(args, kw):
-    starts = to_list(args[0])
-    ends   = to_list(args[1])
-    strands = to_list(args[2])
-    return {"type": "gene_arrow", "starts": starts, "ends": ends,
-            "strands": strands, "opts": kw}
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "gene_arrow requires long-form input: "
+            "c.gene_arrow(data=df, start='col', end='col', strand='col')."
+        )
+    data = kw.pop("data", None)
+    start_col = kw.pop("start", None)
+    end_col = kw.pop("end", None)
+    strand_col = kw.pop("strand", None)
+    if data is None or start_col is None or end_col is None or strand_col is None:
+        raise TypeError("gene_arrow requires data=, start=, end=, strand=.")
+    label_col = kw.pop("label", None)
+    if label_col is not None:
+        kw["labels"] = [str(v) for v in to_list(data[label_col])]
+    return {"type": "gene_arrow",
+            "starts": to_list(data[start_col]),
+            "ends": to_list(data[end_col]),
+            "strands": to_list(data[strand_col]),
+            "opts": kw}
 
 
 def gene_arrow_xdomain(a):
@@ -35,14 +53,14 @@ def gene_arrow_xdomain(a):
 
 
 def gene_arrow_ydomain(a):
-    y = a["opts"].get("y", 0)
+    y = a["opts"].get("at", 0)
     h = a["opts"].get("height", 0.6)
     return [y - h / 2, y + h / 2]
 
 
 def gene_arrow_draw(a, ctx):
     col = ctx.color
-    y = a["opts"].get("y", 0)
+    y = a["opts"].get("at", 0)
     h = a["opts"].get("height", 0.6)
     head_frac = a["opts"].get("head_frac", 0.25)
     labels = a["opts"].get("labels")
@@ -92,12 +110,15 @@ def demo():
     """Build the demonstration chart with synthetic data.
 
     Returns a `pt.Chart` ready for `.save_svg()` or further composition."""
-    starts  = [100,  450,  900, 1300, 1800]
-    ends    = [380,  820, 1280, 1700, 2300]
-    strands = [  1,    1,   -1,    1,   -1]
-    labels  = ["geneA", "geneB", "geneC", "geneD", "geneE"]
+    df = {
+        "start":  [100,  450,  900, 1300, 1800],
+        "end":    [380,  820, 1280, 1700, 2300],
+        "strand": [  1,    1,   -1,    1,   -1],
+        "name":   ["geneA", "geneB", "geneC", "geneD", "geneE"],
+    }
     c = pt.chart(data_height=120)
-    c.gene_arrow(starts, ends, strands, y=0, height=0.7, labels=labels)
+    c.gene_arrow(df, start="start", end="end", strand="strand", label="name",
+                 at=0, height=0.7)
     c.ylim(-0.7, 0.9).yticks([])
     c.title("Gene track").xlabel("position (bp)")
     return c

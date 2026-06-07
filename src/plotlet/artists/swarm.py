@@ -166,7 +166,6 @@ def _swarm_legend_entries(a):
 
 add_artist(ArtistSpec(
     name="swarm",
-    accepts_data_positional=True,
     record=_swarm_record,
     xdomain=_swarm_xdomain,
     ydomain=_swarm_ydomain,

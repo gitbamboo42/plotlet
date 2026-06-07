@@ -7,7 +7,7 @@ neural net validation, weather forecasting, and any "we output 0.7 — is
 that *actually* 70 % positive?" check.
 
 API:
-    c.calibration(y_true, y_score, n_bins=10, strategy="quantile")
+    c.calibration(data=df, true="col", score="col", n_bins=10, strategy="quantile")
 
 - `strategy="quantile"` → equal-count bins (sklearn default; robust to
   imbalance).
@@ -24,8 +24,19 @@ from plotlet.draw import segment, polyline, circle
 
 
 def calibration_record(args, kw):
-    y_true = to_list(args[0])
-    y_score = to_list(args[1])
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "calibration requires long-form input: "
+            "c.calibration(data=df, true='col', score='col')."
+        )
+    data = kw.pop("data", None)
+    true_col = kw.pop("true", None)
+    score_col = kw.pop("score", None)
+    if data is None or true_col is None or score_col is None:
+        raise TypeError("calibration requires data=, true=, score=.")
+    y_true = to_list(data[true_col])
+    y_score = to_list(data[score_col])
     n_bins = kw.get("n_bins", 10)
     strategy = kw.get("strategy", "quantile")
     paired = sorted(zip(y_score, y_true), key=lambda p: p[0])
@@ -121,10 +132,11 @@ def demo():
     # A miscalibrated model: pushes scores toward extremes (overconfident).
     overconfident = [(y, min(1, max(0, 0.5 + (p - 0.5) * 1.7))) for y, p in well]
     c = pt.chart(data_width=320, data_height=320)
-    c.calibration([y for y, _ in well], [p for _, p in well],
-                  label="well-calibrated")
-    c.calibration([y for y, _ in overconfident], [p for _, p in overconfident],
-                  label="overconfident", _first=False)
+    c.calibration({"y": [y for y, _ in well], "p": [p for _, p in well]},
+                  true="y", score="p", label="well-calibrated")
+    c.calibration({"y": [y for y, _ in overconfident],
+                   "p": [p for _, p in overconfident]},
+                  true="y", score="p", label="overconfident", _first=False)
     c.title("Calibration").xlabel("mean predicted").ylabel("observed fraction").legend(True)
     return c
 

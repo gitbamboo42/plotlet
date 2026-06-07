@@ -12,8 +12,11 @@ the `_percentiles_from_grid` helper at the top — its output is just
 data and can be fed straight to built-in `fill_between` / `line` if
 you'd rather skip the artist registration.
 
-API: c.percentile_band(xs, samples, qs=(0.25, 0.75)).
-`samples` is a list of rows, each a list of repetitions at xs[i].
+API:
+    c.percentile_band(data=df, x="x_col", y="value_col", qs=(0.25, 0.75)).
+
+Tidy input: one row per (x, value) observation. The artist groups by x
+and computes percentiles within each group.
 """
 
 SUMMARY = "Median line plus filled percentile ribbon for repeated-measure data."
@@ -33,8 +36,27 @@ def _percentiles_from_grid(samples, qs):
 
 
 def pband_record(args, kw):
-    xs = to_list(args[0])
-    samples = [list(to_list(row)) for row in args[1]]
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "percentile_band requires long-form input: "
+            "c.percentile_band(data=df, x='x_col', y='value_col')."
+        )
+    data = kw.pop("data", None)
+    x_col = kw.pop("x", None)
+    y_col = kw.pop("y", None)
+    if data is None or x_col is None or y_col is None:
+        raise TypeError("percentile_band requires data=, x=, y=.")
+    xs_all = to_list(data[x_col])
+    ys_all = to_list(data[y_col])
+    # Discover x positions in first-appearance order and bucket samples.
+    xs: list = []
+    by_x: dict = {}
+    for x, y in zip(xs_all, ys_all):
+        if x not in by_x:
+            xs.append(x); by_x[x] = []
+        by_x[x].append(y)
+    samples = [by_x[x] for x in xs]
     qs = kw.get("qs", (0.25, 0.75))
     med, lo, hi = _percentiles_from_grid(samples, qs)
     return {"type": "percentile_band", "xs": xs, "_med": med,
@@ -91,13 +113,15 @@ def demo():
     import random, math
     random.seed(3)
     xs = [i * 0.5 for i in range(20)]
-    # Build samples: noisy sinusoid, 30 reps per x.
-    samples = []
+    # Tidy: 30 samples per x, one row each.
+    rows = []
     for x in xs:
         mu = math.sin(x) + 0.05 * x
-        samples.append([mu + random.gauss(0, 0.3 + 0.05 * x) for _ in range(30)])
+        for _ in range(30):
+            rows.append({"x": x, "y": mu + random.gauss(0, 0.3 + 0.05 * x)})
+    df = {k: [r[k] for r in rows] for k in rows[0]}
     c = pt.chart()
-    c.percentile_band(xs, samples, qs=(0.1, 0.9), label="10–90%")
+    c.percentile_band(df, x="x", y="y", qs=(0.1, 0.9), label="10–90%")
     c.title("Median ± 10/90 percentile").xlabel("x").ylabel("y").legend(True)
     return c
 

@@ -5,12 +5,11 @@ jittered strip (the rain), stacked side-by-side per category. Makes the
 distribution shape, summary statistics, and individual observations all
 readable at once — modern biology paper standard.
 
-Two input shapes, picked by which kwargs are present:
-  - Wide-form (positional):  c.raincloud(cats, values_per_cat)
-  - Long-form (table):       c.raincloud(data=df, x="cat", y="value",
-                                          fill="group", palette={...})
+Input shape (long-form table):
 
-Long-form with `fill="col"` dodges sub-rainclouds side-by-side within
+    c.raincloud(data=df, x="cat", y="value", fill="group", palette={...})
+
+`fill="col"` dodges sub-rainclouds side-by-side within
 each cat and emits one legend entry per group level. `palette=` accepts
 a dict (level → color) or a sequence; missing entries fall through to
 TAB10.
@@ -85,27 +84,21 @@ def _resolve_fill_kwarg(data, kw):
 
 
 def raincloud_record(args, kw):
-    if "data" in kw or "x" in kw or "y" in kw:
-        data = kw.pop("data", None)
-        x = kw.pop("x", None)
-        y = kw.pop("y", None)
-        if data is None or x is None or y is None:
-            raise TypeError(
-                "raincloud long-form requires data=, x=, y= (fill= optional)."
-            )
-        fill_literal, group_col = _resolve_fill_kwarg(data, kw)
-        cats, groups, vals = categorical_groups(data, x, y, group_col)
-    elif len(args) >= 2:
-        cats = to_list(args[0])
-        vals_1d = [list(to_list(g)) for g in args[1]]
-        groups = [None]
-        vals = [[g] for g in vals_1d]
-        fill_literal, _ = _resolve_fill_kwarg(None, kw)
-    else:
+    kw = dict(kw)
+    if args:
         raise TypeError(
-            "raincloud requires either positional (cats, values_per_cat) "
-            "or keyword (data=, x=, y=)."
+            "raincloud requires long-form input: "
+            "c.raincloud(data=df, x='cat_col', y='value_col')."
         )
+    data = kw.pop("data", None)
+    x = kw.pop("x", None)
+    y = kw.pop("y", None)
+    if data is None or x is None or y is None:
+        raise TypeError(
+            "raincloud requires data=, x=, y= (fill= optional)."
+        )
+    fill_literal, group_col = _resolve_fill_kwarg(data, kw)
+    cats, groups, vals = categorical_groups(data, x, y, group_col)
     if fill_literal is not None:
         kw["_fill_literal"] = fill_literal
     return {"type": "raincloud", "cats": cats, "groups": groups,

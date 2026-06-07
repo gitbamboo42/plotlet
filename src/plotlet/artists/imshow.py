@@ -227,6 +227,7 @@ def _imshow_legend_gradient(a):
 
 add_artist(ArtistSpec(
     name="imshow",
+    accepts_data_positional=False,
     record=_imshow_record,
     xdomain=_imshow_xdomain,
     ydomain=_imshow_ydomain,

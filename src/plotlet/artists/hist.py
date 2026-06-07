@@ -180,7 +180,6 @@ def _hist_legend_entries(a):
 
 add_artist(ArtistSpec(
     name="hist",
-    accepts_data_positional=True,
     record=_hist_record,
     xdomain=_hist_xdomain,
     ydomain=_hist_ydomain,

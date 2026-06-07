@@ -12,9 +12,9 @@ the two share a one-word name in everyday usage but solve totally
 different problems.
 
 API:
-    c.funnel_plot(estimates, ses, pooled=None, z=1.96)
-- `estimates` — per-study effect estimate.
-- `ses`       — per-study standard error.
+    c.funnel_plot(data=df, est="col", se="col", pooled=None, z=1.96)
+- `est=`      — column of per-study effect estimates.
+- `se=`       — column of per-study standard errors.
 - `pooled`    — the meta-analytic mean (drawn as a vertical line). If
                 None, uses the inverse-variance-weighted mean.
 """
@@ -29,8 +29,19 @@ from plotlet.draw import text_path, segment, circle
 
 
 def funnel_plot_record(args, kw):
-    est = to_list(args[0])
-    ses = to_list(args[1])
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "funnel_plot requires long-form input: "
+            "c.funnel_plot(data=df, est='col', se='col')."
+        )
+    data = kw.pop("data", None)
+    est_col = kw.pop("est", None)
+    se_col = kw.pop("se", None)
+    if data is None or est_col is None or se_col is None:
+        raise TypeError("funnel_plot requires data=, est=, se=.")
+    est = to_list(data[est_col])
+    ses = to_list(data[se_col])
     pooled = kw.get("pooled")
     if pooled is None and est:
         # Inverse-variance-weighted mean.
@@ -114,7 +125,7 @@ def demo():
             continue
         estimates.append(e); ses.append(se)
     c = pt.chart(data_width=420, data_height=320)
-    c.funnel_plot(estimates, ses)
+    c.funnel_plot({"est": estimates, "se": ses}, est="est", se="se")
     c.title("Funnel plot (publication-bias check)")
     c.xlabel("effect estimate").ylabel("standard error")
     return c

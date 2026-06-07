@@ -5,7 +5,7 @@ running total, with the final bar showing the cumulative result. Bars are
 colored differently for positive / negative contributions, with an
 optional total bar in a third color.
 
-API: c.waterfall(labels, deltas, total_label="Total",
+API: c.waterfall(data=df, label="col", delta="col", total_label="Total",
                  pos_color="#2ca02c", neg_color="#d62728", total_color="#7f7f7f").
 The chart is categorical: each `label` becomes an x category.
 """
@@ -19,8 +19,19 @@ from plotlet.draw import text_path, rect, segment
 
 
 def waterfall_record(args, kw):
-    labels = to_list(args[0])
-    deltas = to_list(args[1])
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "waterfall requires long-form input: "
+            "c.waterfall(data=df, label='col', delta='col')."
+        )
+    data = kw.pop("data", None)
+    label_col = kw.pop("label", None)
+    delta_col = kw.pop("delta", None)
+    if data is None or label_col is None or delta_col is None:
+        raise TypeError("waterfall requires data=, label=, delta=.")
+    labels = to_list(data[label_col])
+    deltas = to_list(data[delta_col])
     return {"type": "waterfall", "labels": labels, "deltas": deltas, "opts": kw}
 
 
@@ -120,7 +131,7 @@ def demo():
     deltas = [120, -45, -25, -12, 8]
     c = pt.chart()
     c.xscale("category", order=labels + ["Total"])
-    c.waterfall(labels, deltas)
+    c.waterfall({"label": labels, "delta": deltas}, label="label", delta="delta")
     c.title("Net income breakdown").ylabel("$M").legend(True)
     return c
 

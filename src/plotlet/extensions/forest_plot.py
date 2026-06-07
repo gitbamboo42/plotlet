@@ -7,8 +7,8 @@ interpretation. The bottom row is the pooled estimate as a diamond
 spanning its CI.
 
 API:
-    c.forest(labels, estimates, lowers, uppers,
-             weights=None, ref=1, pooled=None, log_x=False)
+    c.forest(data=df, label="col", est="col", lo="col", hi="col",
+             weights="col", ref=1, pooled=None, log_x=False)
 
 `pooled` is a `(estimate, lower, upper, label)` tuple, drawn as a
 diamond on its own row. `log_x=True` does the on-screen log mapping
@@ -25,12 +25,31 @@ from plotlet.draw import text_path, segment, rect, errorbar_h, polygon
 
 
 def forest_record(args, kw):
-    labels = to_list(args[0])
-    est = to_list(args[1])
-    lo = to_list(args[2])
-    hi = to_list(args[3])
-    return {"type": "forest", "labels": labels, "est": est, "lo": lo,
-            "hi": hi, "opts": kw}
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "forest requires long-form input: "
+            "c.forest(data=df, label='col', est='col', lo='col', hi='col')."
+        )
+    data = kw.pop("data", None)
+    label_col = kw.pop("label", None)
+    est_col = kw.pop("est", None)
+    lo_col = kw.pop("lo", None)
+    hi_col = kw.pop("hi", None)
+    if (data is None or label_col is None or est_col is None
+            or lo_col is None or hi_col is None):
+        raise TypeError("forest requires data=, label=, est=, lo=, hi=.")
+    weights_col = kw.pop("weights", None)
+    if isinstance(weights_col, str):
+        kw["weights"] = to_list(data[weights_col])
+    elif weights_col is not None:
+        kw["weights"] = list(weights_col)
+    return {"type": "forest",
+            "labels": to_list(data[label_col]),
+            "est": to_list(data[est_col]),
+            "lo": to_list(data[lo_col]),
+            "hi": to_list(data[hi_col]),
+            "opts": kw}
 
 
 def forest_xdomain(a):
@@ -114,8 +133,10 @@ def demo():
     hi      = [1.17,  1.51,  0.94,  1.27,  1.02,  1.04]
     weights = [0.10,  0.18,  0.14,  0.16,  0.22,  0.20]
     pooled  = (0.82, 0.72, 0.93, "Pooled (random)")
+    df = {"study": labels, "or": est, "lo": lo, "hi": hi, "w": weights}
     c = pt.chart(data_width=420, data_height=240)
-    c.forest(labels, est, lo, hi, weights=weights, ref=1, pooled=pooled)
+    c.forest(df, label="study", est="or", lo="lo", hi="hi",
+             weights="w", ref=1, pooled=pooled)
     c.title("Effect of intervention").xlabel("Odds ratio (95 % CI)")
     c.yticks([])
     return c

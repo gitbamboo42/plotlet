@@ -4,16 +4,14 @@ A bump chart tracks each series' *rank* over a sequence of periods.
 Y is inverted-rank (1 at the top), x is the period. Each entry's line
 connects its rank from period to period, with a dot at each step.
 
-API: c.bump(periods, values_per_period_per_series, label=...).
-- `periods` -> list of period labels (strings or numbers); used directly
-  for the x ticks.
-- `values_per_period_per_series` -> list aligned with `periods`; each
-  element is itself a list of values for all series at that period.
-  Series are identified by index; the highest value gets rank 1.
+API:
+    c.bump(data=df, x="period_col", y="value_col", group="series_col")
 
-You typically call bump once per series with the same `periods` —
-plotlet's color cycle gives each series its own color and the legend
-ties them together.
+Tidy input: one row per (period, series) observation. The artist groups
+by series, computes ranks across series within each period (highest
+value at each period gets rank 1), and emits one line per series.
+Plotlet's color cycle assigns each series its own color and the
+auto-labels populate the legend.
 """
 
 SUMMARY = 'Ranked categorical lines over a sequence of periods (rank 1 at the top).'
@@ -34,20 +32,52 @@ def _ranks_descending(values):
 
 
 def bump_record(args, kw):
-    periods = to_list(args[0])
-    series_index = kw.pop("series", None)
-    matrix = [list(to_list(row)) for row in args[1]]
-    if series_index is None:
-        raise TypeError("bump requires series=<index> to identify which row to draw")
-    # Compute ranks per period, pull out this series' rank trajectory.
-    n_series = len(matrix[0]) if matrix else 0
-    if not (0 <= series_index < n_series):
-        raise IndexError(f"series={series_index} out of range (0..{n_series - 1})")
-    trace = []
-    for row in matrix:
-        trace.append(_ranks_descending(row)[series_index])
-    return {"type": "bump", "periods": periods, "ranks": trace,
-            "n_series": n_series, "opts": kw}
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "bump requires long-form input: "
+            "c.bump(data=df, x='period_col', y='value_col', group='series_col')."
+        )
+    data = kw.pop("data", None)
+    x_col = kw.pop("x", None)
+    y_col = kw.pop("y", None)
+    group_col = kw.pop("group", None)
+    if data is None or x_col is None or y_col is None or group_col is None:
+        raise TypeError("bump requires data=, x=, y=, group=.")
+    xs_all = to_list(data[x_col])
+    ys_all = to_list(data[y_col])
+    gs_all = to_list(data[group_col])
+
+    periods: list = []
+    for p in xs_all:
+        if p not in periods:
+            periods.append(p)
+    series_list: list = []
+    for s in gs_all:
+        if s not in series_list:
+            series_list.append(s)
+    n_series = len(series_list)
+    series_idx = {s: i for i, s in enumerate(series_list)}
+
+    # Pivot: by_period[i] holds values for each series at periods[i].
+    by_period: dict = {p: [None] * n_series for p in periods}
+    for p, y, s in zip(xs_all, ys_all, gs_all):
+        by_period[p][series_idx[s]] = y
+
+    # Ranks per period, then per-series trajectory.
+    ranks_at = {}
+    for p in periods:
+        ranks_at[p] = _ranks_descending(by_period[p])
+
+    kw.pop("label", None)  # auto-labels per series; ignore call-level label
+    records = []
+    for s_name in series_list:
+        i = series_idx[s_name]
+        trace = [ranks_at[p][i] for p in periods]
+        records.append({"type": "bump", "periods": periods, "ranks": trace,
+                        "n_series": n_series,
+                        "opts": dict(kw, label=str(s_name))})
+    return records
 
 
 def bump_xdomain(a): return a["periods"]
@@ -91,7 +121,6 @@ def demo():
 
     Returns a `pt.Chart` ready for `.save_svg()` or further composition."""
     periods = ["Q1", "Q2", "Q3", "Q4"]
-    # Rows = periods, cols = series. 4 series.
     matrix = [
         [10, 20, 15, 18],   # Q1
         [22, 18, 14, 19],   # Q2
@@ -99,11 +128,15 @@ def demo():
         [20, 12, 28, 22],   # Q4
     ]
     series_names = ["alpha", "beta", "gamma", "delta"]
+    # Tidy: one row per (period, series).
+    rows = []
+    for p_i, period in enumerate(periods):
+        for s_i, name in enumerate(series_names):
+            rows.append({"period": period, "series": name,
+                         "value": matrix[p_i][s_i]})
+    df = {k: [r[k] for r in rows] for k in rows[0]}
     c = pt.chart()
-    for i, name in enumerate(series_names):
-        c.bump(periods, matrix, series=i, label=name)
-    # Y-axis: data values are inverted-rank, so we relabel them so rank 1
-    # reads as "1" at the top, "4" at the bottom.
+    c.bump(df, x="period", y="value", group="series")
     n = len(series_names)
     c.yticks(list(range(1, n + 1)), [str(n + 1 - r) for r in range(1, n + 1)])
     c.title("Quarterly rank").ylabel("rank").legend(True)

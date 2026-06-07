@@ -90,7 +90,6 @@ def _ridge_draw(a, ctx):
 
 add_artist(ArtistSpec(
     name="ridge",
-    accepts_data_positional=True,
     record=_ridge_record,
     xdomain=_ridge_xdomain,
     ydomain=_ridge_ydomain,

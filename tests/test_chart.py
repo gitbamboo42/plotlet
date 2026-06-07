@@ -637,8 +637,9 @@ def chart_heatmap_split_attached():
     bar.bar(x="col", y="sum", fill="#555")
 
     strip = pt.chart(data_height=14)
-    strip.annotation_strip(col_labels, col_groups, palette=palette,
-                           name="group")
+    strip.annotation_strip({"col": col_labels, "group": col_groups},
+                           position="col", value="group",
+                           palette=palette, name="group")
 
     hm = pt.chart(title="heatmap (split + attached)",
                   data_width=420, data_height=240)

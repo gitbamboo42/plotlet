@@ -5,7 +5,7 @@ difference (bias) and the 95 % limits of agreement (bias ± 1.96 σ). The
 canonical "do two measurement methods agree?" plot in clinical and
 analytical-chem literature.
 
-API: c.bland_altman(method_a, method_b).
+API: c.bland_altman(data=df, a="col", b="col").
 """
 
 SUMMARY = 'Agreement plot: (a + b) / 2 vs (a − b) with bias and ±1.96 SD limits.'
@@ -18,8 +18,19 @@ from plotlet.draw import circle, segment, text_path
 
 
 def ba_record(args, kw):
-    a = to_list(args[0])
-    b = to_list(args[1])
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "bland_altman requires long-form input: "
+            "c.bland_altman(data=df, a='col', b='col')."
+        )
+    data = kw.pop("data", None)
+    a_col = kw.pop("a", None)
+    b_col = kw.pop("b", None)
+    if data is None or a_col is None or b_col is None:
+        raise TypeError("bland_altman requires data=, a=, b=.")
+    a = to_list(data[a_col])
+    b = to_list(data[b_col])
     means = [(x + y) / 2 for x, y in zip(a, b)]
     diffs = [(x - y) for x, y in zip(a, b)]
     n = len(diffs)
@@ -82,7 +93,7 @@ def demo():
     a = [random.uniform(20, 100) for _ in range(80)]
     b = [v + random.gauss(2, 0.05 * v) for v in a]
     c = pt.chart()
-    c.bland_altman(a, b)
+    c.bland_altman({"a": a, "b": b}, a="a", b="b")
     c.title("Bland–Altman agreement").xlabel("mean of methods").ylabel("difference (A − B)")
     return c
 

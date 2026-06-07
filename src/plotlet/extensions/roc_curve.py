@@ -6,9 +6,9 @@ computes AUC via trapezoidal integration. Overlay multiple classifiers
 to compare (each `c.roc(...)` call gets its own color and legend entry).
 
 API:
-    c.roc(y_true, y_score, label=...)
+    c.roc(data=df, true="col", score="col", label=...)
 
-`y_true` is 0/1; `y_score` is a numeric score (higher = predict 1).
+`true=` is 0/1; `score=` is a numeric score (higher = predict 1).
 AUC is appended to the label if it's set, so the legend reads like
 "my-model (AUC = 0.87)".
 """
@@ -22,8 +22,19 @@ from plotlet.draw import polyline, segment
 
 
 def roc_record(args, kw):
-    y_true = to_list(args[0])
-    y_score = to_list(args[1])
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "roc requires long-form input: "
+            "c.roc(data=df, true='col', score='col')."
+        )
+    data = kw.pop("data", None)
+    true_col = kw.pop("true", None)
+    score_col = kw.pop("score", None)
+    if data is None or true_col is None or score_col is None:
+        raise TypeError("roc requires data=, true=, score=.")
+    y_true = to_list(data[true_col])
+    y_score = to_list(data[score_col])
     # Sort by score descending, sweep threshold from high to low.
     paired = sorted(zip(y_score, y_true), key=lambda p: -p[0])
     n_pos = sum(1 for _, t in paired if t == 1)
@@ -111,8 +122,10 @@ def demo():
     # A weaker model: add noise.
     y_score_weak = [s + random.gauss(0, 0.7) for s in y_score_good]
     c = pt.chart(data_width=320, data_height=320)
-    c.roc(y_true, y_score_good, label="strong model")
-    c.roc(y_true, y_score_weak, label="weak model", _first=False)
+    c.roc({"y": y_true, "s": y_score_good}, true="y", score="s",
+          label="strong model")
+    c.roc({"y": y_true, "s": y_score_weak}, true="y", score="s",
+          label="weak model", _first=False)
     c.title("ROC curves").xlabel("FPR").ylabel("TPR").legend(True)
     return c
 

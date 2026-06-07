@@ -82,7 +82,9 @@ if __name__ == "__main__":
     # Palette = matplotlib's tab10 via the "C0".."C9" shortcuts.
     group_colors = {"ctrl": "C0", "treat": "C1", "resist": "C2"}
     top = pt.chart(title="Treatment", data_width=420, data_height=14)
-    top.annotation_strip(col_labels, col_groups, palette=group_colors)
+    top.annotation_strip({"sample": col_labels, "group": col_groups},
+                         position="sample", value="group",
+                         palette=group_colors)
 
     # Left dendrogram. Pass the same linkage used to reorder rows so the
     # tree matches the reordered heatmap exactly, and `labels=` so the

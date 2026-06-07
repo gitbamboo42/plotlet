@@ -185,7 +185,6 @@ def _kde_2d_legend_gradient(a):
 
 add_artist(ArtistSpec(
     name="kde_2d",
-    accepts_data_positional=True,
     record=_kde_2d_record,
     xdomain=_kde_2d_xdomain,
     ydomain=_kde_2d_ydomain,

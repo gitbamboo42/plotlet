@@ -26,9 +26,12 @@ Two scale kinds on the position axis:
 
 API:
 
-    c.annotation_strip(positions, values, palette={...}, name="Group")
-    c.annotation_strip(positions, values, cmap="viridis", name="Score")
-    c.annotation_strip(positions, values, orient="y", ...)  # vertical
+    c.annotation_strip(data=df, position="col", value="col",
+                       palette={...}, name="Group")
+    c.annotation_strip(data=df, position="col", value="col",
+                       cmap="viridis", name="Score")
+    c.annotation_strip(data=df, position="col", value="col",
+                       orient="y", ...)  # vertical
 
 `None` / `""` (or NaN in cmap mode) means missing data — drawn as
 `absent_fill` if set, otherwise transparent.
@@ -44,13 +47,19 @@ from plotlet.utils import to_list
 
 
 def annotation_strip_record(args, kw):
-    if len(args) < 2:
+    kw = dict(kw)
+    if args:
         raise TypeError(
-            "annotation_strip requires (positions, values); "
-            "got %d positional arg(s)." % len(args)
+            "annotation_strip requires long-form input: "
+            "c.annotation_strip(data=df, position='col', value='col')."
         )
-    positions = to_list(args[0])
-    values = to_list(args[1])
+    data = kw.pop("data", None)
+    position_col = kw.pop("position", None)
+    value_col = kw.pop("value", None)
+    if data is None or position_col is None or value_col is None:
+        raise TypeError("annotation_strip requires data=, position=, value=.")
+    positions = to_list(data[position_col])
+    values = to_list(data[value_col])
     if len(positions) != len(values):
         raise ValueError(
             f"annotation_strip: positions ({len(positions)}) and "
@@ -287,13 +296,15 @@ def demo():
     palette = {"ctrl": pt.TAB10[0], "treat": pt.TAB10[1], "resist": pt.TAB10[2]}
     scores = [math.sin(i * 0.6) for i in range(12)]
 
+    df = {"sample": samples, "group": groups, "score": scores}
     cat = pt.chart(data_width=420, data_height=24)
-    cat.annotation_strip(samples, groups, palette=palette, name="Treatment")
+    cat.annotation_strip(df, position="sample", value="group",
+                         palette=palette, name="Treatment")
     cat.xticks([])
 
     cont = pt.chart(data_width=420, data_height=24)
-    cont.annotation_strip(samples, scores, cmap="RdBu_r",
-                          vmin=-1, vmax=1, name="Score")
+    cont.annotation_strip(df, position="sample", value="score",
+                          cmap="RdBu_r", vmin=-1, vmax=1, name="Score")
     cont.xticks(rotation=45)
 
     return pt.grid([[cat], [cont]]).share_x(True) | pt.legend()

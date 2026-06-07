@@ -6,7 +6,7 @@ common case, but sometimes you want bars anchored at *numeric* positions
 (e.g. genome coordinates, time-series with explicit numeric x), where the
 bar width is a fixed data-unit distance you control directly.
 
-This recipe gives `c.numeric_bar(xs, heights, width=0.8, ...)` — bars
+This recipe gives `c.numeric_bar(data=df, x='col', y='col', width=0.8, ...)` — bars
 on a numeric x scale, living in your project rather than core.
 """
 
@@ -20,10 +20,21 @@ from plotlet._spec import _D
 
 
 def numeric_bar_record(args, kw):
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "numeric_bar requires long-form input: "
+            "c.numeric_bar(data=df, x='col', y='col')."
+        )
+    data = kw.pop("data", None)
+    x_col = kw.pop("x", None)
+    y_col = kw.pop("y", None)
+    if data is None or x_col is None or y_col is None:
+        raise TypeError("numeric_bar requires data=, x=, y= (heights).")
     return {
         "type": "numeric_bar",
-        "xs":      to_list(args[0]),
-        "heights": to_list(args[1]),
+        "xs":      to_list(data[x_col]),
+        "heights": to_list(data[y_col]),
         "opts": kw,
     }
 
@@ -85,8 +96,8 @@ def demo():
 
     Returns a `pt.Chart` ready for `.save_svg()` or further composition."""
     c = pt.chart()
-    c.numeric_bar([1.0, 2.5, 4.0, 5.5, 7.0], [3, 7, 2, 9, 5],
-                  width=0.6, label="counts")
+    c.numeric_bar({"x": [1.0, 2.5, 4.0, 5.5, 7.0], "y": [3, 7, 2, 9, 5]},
+                  x="x", y="y", width=0.6, label="counts")
     c.title("Numeric-x bars").xlabel("position").ylabel("count")
     c.legend(True)
     return c

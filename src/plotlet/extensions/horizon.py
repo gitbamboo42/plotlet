@@ -6,7 +6,7 @@ darker colors. Negative values mirror upward (or use a separate color
 ramp). Widely used in dashboards for visualizing many series in
 limited vertical space.
 
-API: c.horizon(xs, ys, bands=3, base=0,
+API: c.horizon(data=df, x="col", y="col", bands=3, base=0,
                pos_color="#1f77b4", neg_color="#d62728").
 The chart's y-domain is [0, band_height], regardless of the data — the
 folding compresses all y info into shaded layers.
@@ -36,8 +36,21 @@ def _mix(rgb, white, t):
 
 
 def horizon_record(args, kw):
-    return {"type": "horizon", "xs": to_list(args[0]),
-            "ys": to_list(args[1]), "opts": kw}
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "horizon requires long-form input: "
+            "c.horizon(data=df, x='col', y='col')."
+        )
+    data = kw.pop("data", None)
+    x_col = kw.pop("x", None)
+    y_col = kw.pop("y", None)
+    if data is None or x_col is None or y_col is None:
+        raise TypeError("horizon requires data=, x=, y=.")
+    return {"type": "horizon",
+            "xs": to_list(data[x_col]),
+            "ys": to_list(data[y_col]),
+            "opts": kw}
 
 
 def horizon_xdomain(a): return a["xs"]
@@ -120,7 +133,7 @@ def demo():
     ys = [math.sin(x * 0.1) * (1 + 0.4 * math.sin(x * 0.03)) + random.gauss(0, 0.15)
           for x in xs]
     c = pt.chart(data_height=80, data_width=560)
-    c.horizon(xs, ys, bands=3, base=0)
+    c.horizon({"x": xs, "y": ys}, x="x", y="y", bands=3, base=0)
     c.title("Horizon chart").xlabel("t").legend(True)
     c.yticks([])
     return c

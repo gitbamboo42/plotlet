@@ -3,7 +3,7 @@
 Categorical y, numeric x. Useful when the category names are long —
 horizontal labels read more easily than rotated vertical ones.
 
-API: c.barh(cats, vals, width=0.8).
+API: c.barh(data=df, x="value_col", y="category_col", width=0.8).
 """
 
 SUMMARY = '`barh` for long category labels.'
@@ -16,8 +16,19 @@ from plotlet._spec import _D
 
 
 def barh_record(args, kw):
-    return {"type": "barh", "cats": to_list(args[0]),
-            "vals": to_list(args[1]), "opts": kw}
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "barh requires long-form input: "
+            "c.barh(data=df, x='value_col', y='category_col')."
+        )
+    data = kw.pop("data", None)
+    x_col = kw.pop("x", None)
+    y_col = kw.pop("y", None)
+    if data is None or x_col is None or y_col is None:
+        raise TypeError("barh requires data=, x= (values), y= (categories).")
+    return {"type": "barh", "cats": to_list(data[y_col]),
+            "vals": to_list(data[x_col]), "opts": kw}
 
 
 def barh_xdomain(a): return list(a["vals"]) + [0]
@@ -69,7 +80,7 @@ def demo():
     # Plotlet places the first category at the *top* of the y axis, so
     # passing `cats` directly puts the largest bar at the top.
     c.yscale("category", order=cats)
-    c.barh(cats, vals)
+    c.barh({"cat": cats, "val": vals}, x="val", y="cat")
     c.title("Stack share").xlabel("% respondents")
     return c
 

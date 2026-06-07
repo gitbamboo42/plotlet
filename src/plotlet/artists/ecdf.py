@@ -111,7 +111,6 @@ def _ecdf_legend_entries(a):
 
 add_artist(ArtistSpec(
     name="ecdf",
-    accepts_data_positional=True,
     record=_ecdf_record,
     xdomain=_ecdf_xdomain,
     ydomain=_ecdf_ydomain,

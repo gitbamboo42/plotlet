@@ -8,7 +8,7 @@ Renamed from `funnel` to free that name up for the meta-analysis funnel
 plot (see `cookbook/funnel_plot/`). The two are entirely different
 charts that happen to share a one-word name.
 
-API: c.sales_funnel(labels, values, color="C0", show_values=True).
+API: c.sales_funnel(data=df, label="col", value="col", color="C0", show_values=True).
 The bars are categorical on y; the x-axis is purely visual (no ticks).
 """
 
@@ -22,9 +22,21 @@ from plotlet.draw import rect, text_path
 
 
 def sales_funnel_record(args, kw):
-    labels = to_list(args[0])
-    values = to_list(args[1])
-    return {"type": "sales_funnel", "labels": labels, "values": values, "opts": kw}
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "sales_funnel requires long-form input: "
+            "c.sales_funnel(data=df, label='col', value='col')."
+        )
+    data = kw.pop("data", None)
+    label_col = kw.pop("label", None)
+    value_col = kw.pop("value", None)
+    if data is None or label_col is None or value_col is None:
+        raise TypeError("sales_funnel requires data=, label=, value=.")
+    return {"type": "sales_funnel",
+            "labels": to_list(data[label_col]),
+            "values": to_list(data[value_col]),
+            "opts": kw}
 
 
 def sales_funnel_xdomain(a): return [-1, 1]
@@ -74,7 +86,7 @@ def demo():
     # the y axis, so passing `labels` directly puts the top-of-funnel
     # stage at the visual top.
     c.yscale("category", order=labels)
-    c.sales_funnel(labels, values)
+    c.sales_funnel({"stage": labels, "n": values}, label="stage", value="n")
     c.title("Onboarding funnel")
     c.xticks([])
     return c

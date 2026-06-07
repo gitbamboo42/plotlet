@@ -26,11 +26,21 @@ from plotlet.draw import circle, segment
 
 
 def ma_record(args, kw):
-    mean_expr = to_list(args[0])
-    log2_fc = to_list(args[1])
-    padj = kw.get("padj")
-    if padj is not None:
-        padj = to_list(padj)
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "ma requires long-form input: "
+            "c.ma(data=df, x='mean_expr_col', y='log2fc_col', padj='col')."
+        )
+    data = kw.pop("data", None)
+    x_col = kw.pop("x", None)
+    y_col = kw.pop("y", None)
+    if data is None or x_col is None or y_col is None:
+        raise TypeError("ma requires data=, x= (mean expression), y= (log2 fold change).")
+    mean_expr = to_list(data[x_col])
+    log2_fc = to_list(data[y_col])
+    padj_col = kw.pop("padj", None)
+    padj = to_list(data[padj_col]) if padj_col is not None else None
     return {"type": "ma", "_a": mean_expr, "_m": log2_fc, "_padj": padj,
             "opts": kw}
 
@@ -101,8 +111,9 @@ def demo():
         else:
             p = 10 ** -random.uniform(0, 2)
         A.append(a); M.append(m); P.append(p)
+    df = {"A": A, "M": M, "P": P}
     c = pt.chart()
-    c.ma(A, M, padj=P, fc_threshold=1.0, padj_threshold=0.01)
+    c.ma(df, x="A", y="M", padj="P", fc_threshold=1.0, padj_threshold=0.01)
     c.title("MA plot").xlabel("mean log₂ expression").ylabel("log₂ fold change")
     return c
 

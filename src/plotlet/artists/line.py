@@ -109,7 +109,6 @@ def _line_draw(a, ctx):
 
 add_artist(ArtistSpec(
     name="line",
-    accepts_data_positional=True,
     record=_line_record,
     xdomain=_line_xdomain,
     ydomain=_line_ydomain,
@@ -135,7 +134,6 @@ def _step_record(args, kw):
 
 add_artist(ArtistSpec(
     name="step",
-    accepts_data_positional=True,
     record=_step_record,
     xdomain=_line_xdomain,
     ydomain=_line_ydomain,

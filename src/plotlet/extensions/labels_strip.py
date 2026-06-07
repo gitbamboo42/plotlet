@@ -23,11 +23,13 @@ pointing toward the host panel they describe. Pick `side=` accordingly:
 
 API:
 
-    c.labels_strip(positions, labels, side="bottom", rotation=0,
+    c.labels_strip(data=df, position="col", label="col",
+                   side="bottom", rotation=0,
                    fontsize=11, color="#222", pad=3)
-    c.labels_strip(positions, labels, orient="y", side="right", ...)
+    c.labels_strip(data=df, position="col", label="col",
+                   orient="y", side="right", ...)
 
-Empty / None entries in `labels` are skipped (no glyph drawn).
+Empty / None entries in the label column are skipped (no glyph drawn).
 """
 
 SUMMARY = "Per-category text labels as artist glyphs — bypasses share_x/share_y label hiding."
@@ -43,13 +45,19 @@ _DEFAULT_SIDE = {"x": "bottom", "y": "right"}
 
 
 def labels_strip_record(args, kw):
-    if len(args) < 2:
+    kw = dict(kw)
+    if args:
         raise TypeError(
-            "labels_strip requires (positions, labels); "
-            "got %d positional arg(s)." % len(args)
+            "labels_strip requires long-form input: "
+            "c.labels_strip(data=df, position='col', label='col')."
         )
-    positions = to_list(args[0])
-    labels = list(args[1])
+    data = kw.pop("data", None)
+    position_col = kw.pop("position", None)
+    label_col = kw.pop("label", None)
+    if data is None or position_col is None or label_col is None:
+        raise TypeError("labels_strip requires data=, position=, label=.")
+    positions = to_list(data[position_col])
+    labels = list(to_list(data[label_col]))
     if len(positions) != len(labels):
         raise ValueError(
             f"labels_strip: positions ({len(positions)}) and "
@@ -155,7 +163,15 @@ def labels_strip_frame_defaults(args, kw):
     """Auto-set the category scale on the position axis (matches `heatmap`),
     hide ticks and spines so only the artist glyphs remain. User overrides
     after the artist call still win — replay is in order."""
-    positions = to_list(args[0])
+    # Long-form: dispatch sugar may hoist the first positional into data=,
+    # but frame_defaults runs before that. Pull positions from data[position]
+    # or fall back to args[0] (positional-data sugar) / kw["data"][...].
+    if "data" in kw and "position" in kw:
+        positions = to_list(kw["data"][kw["position"]])
+    elif args and "position" in kw:
+        positions = to_list(args[0][kw["position"]])
+    else:
+        positions = []
     orient = kw.get("orient", "x")
     out = [
         ("spines", [], {"top": False, "right": False,
@@ -221,15 +237,18 @@ def demo():
     # rotation=90 — column labels read vertically so narrow columns can
     # carry long labels without horizontal crowding. The artist itself
     # defaults to rotation=0; the caller picks per use case.
+    cols_df = {"name": cols_clustered}
+    rows_df = {"name": row_names}
     top_labels = pt.chart(data_height="0.5in")
-    top_labels.labels_strip(cols_clustered, cols_clustered, side="bottom",
-                            rotation=90)
+    top_labels.labels_strip(cols_df, position="name", label="name",
+                            side="bottom", rotation=90)
 
     tree = pt.chart(data_height="0.7in")
     tree.dendrogram(linkage=Z, orient="top", labels=col_names)
 
     left_labels = pt.chart(data_width="0.6in")
-    left_labels.labels_strip(row_names, row_names, orient="y", side="right")
+    left_labels.labels_strip(rows_df, position="name", label="name",
+                             orient="y", side="right")
 
     # Attachment order: index 0 is innermost. Labels strip sits directly
     # above the heatmap; dendrogram stacks above the labels strip.
