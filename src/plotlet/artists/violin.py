@@ -218,6 +218,7 @@ def _violin_legend_entries(a):
 
 add_artist(ArtistSpec(
     name="violin",
+    accepts_data_positional=True,
     record=_violin_record,
     xdomain=_violin_xdomain,
     ydomain=_violin_ydomain,

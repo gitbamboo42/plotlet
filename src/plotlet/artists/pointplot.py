@@ -142,6 +142,7 @@ def _pointplot_legend_entries(a):
 
 add_artist(ArtistSpec(
     name="pointplot",
+    accepts_data_positional=True,
     record=_pointplot_record,
     xdomain=_pointplot_xdomain,
     ydomain=_pointplot_ydomain,

@@ -139,6 +139,7 @@ def _freqpoly_legend_entries(a):
 
 add_artist(ArtistSpec(
     name="freqpoly",
+    accepts_data_positional=True,
     record=_freqpoly_record,
     xdomain=_freqpoly_xdomain,
     ydomain=_freqpoly_ydomain,

@@ -118,6 +118,7 @@ def _hexbin_legend_gradient(a):
 
 add_artist(ArtistSpec(
     name="hexbin",
+    accepts_data_positional=True,
     record=_hexbin_record,
     xdomain=_hexbin_xdomain,
     ydomain=_hexbin_ydomain,

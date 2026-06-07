@@ -86,6 +86,7 @@ def _qq_draw(a, ctx):
 
 add_artist(ArtistSpec(
     name="qq",
+    accepts_data_positional=True,
     record=_qq_record,
     xdomain=_qq_xdomain,
     ydomain=_qq_ydomain,

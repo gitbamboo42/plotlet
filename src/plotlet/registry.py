@@ -82,6 +82,12 @@ class ArtistSpec:
     # `_a` is auto-attached by the harvester so paint functions have the
     # original recorded artist for context (linewidth, alpha, marker
     # kind, etc.).
+    # When True, `c.<artist>(df, x="col", y="col")` is sugar for
+    # `c.<artist>(data=df, x="col", y="col")` — dispatch hoists the single
+    # positional arg into `data=` before calling `record`. Matches ggplot's
+    # `ggplot(data, aes(...))` ergonomic without re-enabling wide-form
+    # positional arrays. Set True on every long-form artist.
+    accepts_data_positional: bool = False
     legend_entries: Callable[[dict], list[dict]] | None = None
     legend_gradient: Callable[[dict], dict | None] | None = None
     data_attrs: Callable[[dict], dict | None] | None = None

@@ -160,6 +160,7 @@ def _strip_legend_entries(a):
 
 add_artist(ArtistSpec(
     name="strip",
+    accepts_data_positional=True,
     record=_strip_record,
     xdomain=_strip_xdomain,
     ydomain=_strip_ydomain,

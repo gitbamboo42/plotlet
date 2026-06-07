@@ -67,13 +67,23 @@ the actual values).
 
 ## Mark methods
 
-Every method accepts long-form `(data=df, x="col", y="col", …)` when
-the chart was constructed with `pt.chart(data, …)`, and wide-form
-positional `(xs, ys)` arrays otherwise. The primary grouping aes is
-`color=` for stroke-defaulted artists (line, scatter, regression,
-density_1d, ecdf, freqpoly, rug) and `fill=` for fill-defaulted ones
-(bar, hist, area, boxplot, violin, strip, swarm). Each accepts a literal
-color string or a column name; column → one series per unique level.
+Every data mark is long-form: a `data` source plus column-name
+aesthetics. Three equivalent call shapes — pick whichever reads
+cleanest at the call site:
+
+```python
+c = pt.chart(df)                            # df on the chart
+c.line(x="t", y="v")                        # inherits df
+
+c.line(df, x="t", y="v")                    # df positional (sugar)
+c.line(data=df, x="t", y="v")               # df as kwarg
+```
+
+The primary grouping aes is `color=` for stroke-defaulted artists
+(line, scatter, regression, density_1d, ecdf, freqpoly, rug) and
+`fill=` for fill-defaulted ones (bar, hist, area, boxplot, violin,
+strip, swarm). Each accepts a literal color string or a column name;
+column → one series per unique level.
 
 `line` and `scatter` accept additional column-driven aes:
 `group=` (invisible split — no color/legend burn; e.g. one polyline per

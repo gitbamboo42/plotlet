@@ -377,7 +377,17 @@ def _replay(calls):
             # `record()` returns a single dict for one-series artists or a
             # list of dicts for long-form expansions (line, scatter split
             # by color/group/linetype levels).
-            result = spec.record(list(args), dict(kw))
+            call_args = list(args)
+            call_kw = dict(kw)
+            # First-positional-is-data sugar: `c.line(df, x=, y=)` is the
+            # same as `c.line(data=df, x=, y=)`. Opt-in via
+            # `ArtistSpec.accepts_data_positional=True`. Keeps the long-form
+            # call shape from carrying a `data=` keyword on every site
+            # while keeping the wide-form `(xs, ys)` shape deprecated.
+            if (spec.accepts_data_positional and len(call_args) == 1
+                    and "data" not in call_kw):
+                call_kw["data"] = call_args.pop(0)
+            result = spec.record(call_args, call_kw)
             if isinstance(result, list):
                 st["artists"].extend(result)
             else:

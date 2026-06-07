@@ -172,6 +172,7 @@ def _regression_legend_entries(a):
 
 add_artist(ArtistSpec(
     name="regression",
+    accepts_data_positional=True,
     record=_regression_record,
     xdomain=_regression_xdomain,
     ydomain=_regression_ydomain,
