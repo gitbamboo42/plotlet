@@ -4,6 +4,7 @@ Owns the full text → SVG-path pipeline: glyph lookup, width measurement,
 italic synthesis. `text_path` in `plotlet.draw` is a thin wrapper that
 adds the SVG `<path fill=...>` element around the path data produced here.
 """
+import re
 from pathlib import Path
 
 from fontTools.ttLib import TTFont
@@ -63,6 +64,19 @@ def descender(size: float) -> float:
     return size * _DESCENDER_RATIO
 
 
+_GLYPH_FLOAT_RE = re.compile(r"-?\d+\.\d+")
+
+
+def _round_glyph_floats(d: str) -> str:
+    """Round every float in a glyph-path d-string to 2 decimals.
+
+    fontTools sub-bit rounding inside `SVGPathPen.getCommands()` shifts
+    between releases (e.g. 4.62 → 4.63 turns `10.9921875` into
+    `10.992187499999993`). Pinning to `:.2f` matches the pixel quantization
+    used everywhere else and collapses both representations identically."""
+    return _GLYPH_FLOAT_RE.sub(lambda m: f"{float(m.group()):.2f}", d)
+
+
 def _glyph_path_d(s: str, x: float, y: float, size: float,
                   anchor: str = "start", fontstyle: str = "normal") -> str:
     """Build the SVG `d` attribute for `s` rendered at baseline (x, y).
@@ -93,7 +107,7 @@ def _glyph_path_d(s: str, x: float, y: float, size: float,
         tpen = TransformPen(pen, t)
         g.draw(tpen)
         cx += g.width * scale
-    return pen.getCommands()
+    return _round_glyph_floats(pen.getCommands())
 
 
 _DECORATION_KINDS = ("underline", "overline", "line-through")
