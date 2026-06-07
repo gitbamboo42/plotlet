@@ -1406,13 +1406,15 @@ def _build_xy_scales(st, iw, ih, panel_opts: _PanelOpts):
 # via `data-plotlet-schema` on the root.
 
 def _attr_str(v) -> str:
-    """Stringify a value for a data-plotlet-* attribute. floats use repr()
-    to round-trip exactly; ints, strings stringify naturally; bools are
-    "true"/"false". Lists are not supported here — they go in <metadata>."""
+    """Stringify a value for a data-plotlet-* attribute. Floats use 10 sig
+    figs — plenty for AI consumption and round-trip within 1e-10, while
+    truncating float noise that drifts across numpy/scipy builds. Ints
+    and strings stringify naturally; bools are "true"/"false". Lists
+    are not supported here — they go in <metadata>."""
     if isinstance(v, bool):
         return "true" if v else "false"
     if isinstance(v, float):
-        return repr(v)
+        return f"{v:.10g}"
     return str(v)
 
 
@@ -1461,9 +1463,9 @@ def _panel_attrs_and_meta(st, M, iw, ih, x_axis, y_axis,
     attrs["yscale"] = y_axis.kind
 
     if x_axis.kind != "category":
-        attrs["xlim"] = f"{x_axis.lo:.12g},{x_axis.hi:.12g}"
+        attrs["xlim"] = f"{x_axis.lo:.10g},{x_axis.hi:.10g}"
     if y_axis.kind != "category":
-        attrs["ylim"] = f"{y_axis.lo:.12g},{y_axis.hi:.12g}"
+        attrs["ylim"] = f"{y_axis.lo:.10g},{y_axis.hi:.10g}"
     if y_axis.flip:
         attrs["yflip"] = "true"
 
