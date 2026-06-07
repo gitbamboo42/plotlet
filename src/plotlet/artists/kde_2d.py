@@ -84,8 +84,19 @@ def _resolve_levels(grid, opts):
 
 
 def _kde_2d_record(args, kw):
-    xs = to_list(args[0])
-    ys = to_list(args[1])
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "kde_2d requires long-form input: "
+            "c.kde_2d(data=df, x='col', y='col')."
+        )
+    data = kw.pop("data", None)
+    x_col = kw.pop("x", None)
+    y_col = kw.pop("y", None)
+    if data is None or x_col is None or y_col is None:
+        raise TypeError("kde_2d requires data=, x=, y=.")
+    xs = to_list(data[x_col])
+    ys = to_list(data[y_col])
     n_grid = kw.get("n_grid", 60)
     if not xs:
         return {"type": "kde_2d", "_xs": xs, "_ys": ys, "_grid": [],

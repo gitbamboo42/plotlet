@@ -27,22 +27,23 @@ from .._spec import _LEGSPEC
 
 def _ecdf_record(args, kw):
     kw = dict(kw)
-    if "data" in kw or "x" in kw or "y" in kw:
-        data_df = kw.pop("data", None)
-        x_col = kw.pop("x", None)
-        if data_df is None or x_col is None:
-            raise TypeError(
-                "ecdf long-form requires data=, x= (color= optional)."
-            )
-        color = kw.pop("color", None)
-        color_kind, color_value = resolve_aes(data_df, color)
-        group_col = color if color_kind == "column" else None
-        groups, vals = long_form_1d(data_df, x_col, group_col)
-        if color_kind == "literal" and color_value is not None:
-            kw["_color_literal"] = color_value
-    else:
-        groups = [None]
-        vals = [to_list(args[0])]
+    if args:
+        raise TypeError(
+            "ecdf requires long-form input: "
+            "c.ecdf(data=df, x='col')."
+        )
+    data_df = kw.pop("data", None)
+    x_col = kw.pop("x", None)
+    if data_df is None or x_col is None:
+        raise TypeError(
+            "ecdf requires data=, x= (color= optional)."
+        )
+    color = kw.pop("color", None)
+    color_kind, color_value = resolve_aes(data_df, color)
+    group_col = color if color_kind == "column" else None
+    groups, vals = long_form_1d(data_df, x_col, group_col)
+    if color_kind == "literal" and color_value is not None:
+        kw["_color_literal"] = color_value
     vals = [sorted(g) for g in vals]
     return {"type": "ecdf", "groups": groups, "vals": vals, "opts": kw}
 

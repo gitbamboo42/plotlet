@@ -17,14 +17,14 @@ import plotlet as pt
 
 c = pt.chart(theme="dark", title="hits per minute",
              xlabel="t", ylabel="hits", legend=True)
-c.line(xs, ys, label="A")
-c.line(xs, ys2, label="B")
+c.line(data=df, x="t", y="A", label="A")
+c.line(data=df, x="t", y="B", label="B")
 ```
 
 Or chained — `theme` is just a frame method like `title` / `xlabel`:
 
 ```python
-c = pt.chart().theme("minimal").title("residuals").line(xs, resid)
+c = pt.chart().theme("minimal").title("residuals").line(data=df, x="x", y="resid")
 ```
 
 The theme only affects the chart it's set on. Multi-panel layouts may

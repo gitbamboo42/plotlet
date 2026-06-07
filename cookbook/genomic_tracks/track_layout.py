@@ -304,7 +304,8 @@ def _build_sv_row(sv, gs, panel_widths, *, theme, chrom_column, style):
                 ys = [B / 2, 0, (L - B) / 2]
                 if not inside(xs):
                     continue
-                c.line([x - Bi0 for x in xs], ys,
+                c.line(data={"x": [x - Bi0 for x in xs], "y": ys},
+                       x="x", y="y",
                        color=_SPINE_COLOR, linestyle=_SPINE_LINESTYLE,
                        linewidth=0.5)
 
@@ -330,18 +331,19 @@ def _build_sv_row(sv, gs, panel_widths, *, theme, chrom_column, style):
                               edgecolor="none")
 
         # --- Triangle border (lines clipped by slice rectangle) ---
-        c.line([0, length], [0, 0], color="black", linewidth=1.0)  # bottom
-        c.line([-Bi0,    L / 2 - Bi0],  [0, L / 2],
+        c.line(data={"x": [0, length], "y": [0, 0]}, x="x", y="y", color="black", linewidth=1.0)  # bottom
+        c.line(data={"x": [-Bi0, L / 2 - Bi0], "y": [0, L / 2]}, x="x", y="y",
                color="black", linewidth=1.0)                       # left edge
-        c.line([L - Bi0, L / 2 - Bi0],  [0, L / 2],
+        c.line(data={"x": [L - Bi0, L / 2 - Bi0], "y": [0, L / 2]}, x="x", y="y",
                color="black", linewidth=1.0)                       # right edge
 
         # --- Scatter (only points whose midpoint falls in this slice) ---
         if len(dx_lin):
             mask = (dx_lin >= Bi0) & (dx_lin < Bi1)
             if mask.any():
-                c.scatter((dx_lin[mask] - Bi0).tolist(),
-                          dy_lin[mask].tolist(),
+                c.scatter(data={"x": (dx_lin[mask] - Bi0).tolist(),
+                                "y": dy_lin[mask].tolist()},
+                          x="x", y="y",
                           color=sv.color, alpha=sv.alpha, s=sv.s)
 
         # --- Boundary tick: small notch at every inner right edge ---
@@ -362,9 +364,10 @@ def _build_sv_row(sv, gs, panel_widths, *, theme, chrom_column, style):
         # so pixel positions stay continuous across slices.
         t_mid = Bi0 + length / 2
         offs  = 6 / math.sqrt(2)        # 6 px perpendicular to the edge
-        c.text(t_mid / 2 - Bi0, t_mid / 2, cname.replace("chr", ""),
-               ha="center", va="center", rotation=45,
-               dx=-offs, dy=-offs)
+        c.annotate(cname.replace("chr", ""),
+                   xy=(t_mid / 2 - Bi0, t_mid / 2),
+                   ha="center", va="center", rotation=45,
+                   dx=-offs, dy=-offs)
 
         cells.append(c)
 

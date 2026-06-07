@@ -38,7 +38,7 @@ def jointplot(xs, ys, kind: str = "scatter", bins: int = 30,
     xs = to_list(xs); ys = to_list(ys)
     # Top marginal: histogram of x.
     top = pt.chart(data_width=panel_size, data_height=marg_size)
-    top.hist(xs, bins=bins)
+    top.hist(data={"x": xs}, x="x", bins=bins)
     top.xticks([])
     top.yticks([])
     # Right marginal: histogram of y, drawn rotated by swapping x/y.
@@ -63,9 +63,9 @@ def jointplot(xs, ys, kind: str = "scatter", bins: int = 30,
     # Main: scatter (or hex) of (x, y).
     main = pt.chart(data_width=panel_size, data_height=panel_size)
     if kind == "hex":
-        main.hexbin(xs, ys, gridsize=30)
+        main.hexbin(data={"x": xs, "y": ys}, x="x", y="y", gridsize=30)
     else:
-        main.scatter(xs, ys, s=10, alpha=0.6)
+        main.scatter(data={"x": xs, "y": ys}, x="x", y="y", s=10, alpha=0.6)
     # Spacer (top-right, blank).
     spacer = pt.chart(data_width=marg_size, data_height=marg_size)
     spacer.xticks([]); spacer.yticks([])

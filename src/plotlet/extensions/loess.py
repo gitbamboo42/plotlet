@@ -82,7 +82,7 @@ def demo():
     # Throw in a couple of outliers to demonstrate the robust pass.
     ys[20] += 4; ys[150] -= 5
     c = pt.chart()
-    c.scatter(xs, ys, s=8, alpha=0.5, label="data")
+    c.scatter(data={"x": xs, "y": ys}, x="x", y="y", s=8, alpha=0.5, label="data")
     c.loess(xs, ys, frac=0.3, label="LOESS (frac=0.3)")
     c.loess(xs, ys, frac=0.7, label="LOESS (frac=0.7)")
     c.title("LOESS smoother").xlabel("x").ylabel("y").legend(True)

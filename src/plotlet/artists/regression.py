@@ -62,23 +62,24 @@ def _fit_ols(xs, ys):
 
 def _regression_record(args, kw):
     kw = dict(kw)
-    if "data" in kw or "x" in kw or "y" in kw:
-        data = kw.pop("data", None)
-        x_col = kw.pop("x", None)
-        y_col = kw.pop("y", None)
-        if data is None or x_col is None or y_col is None:
-            raise TypeError(
-                "regression long-form requires data=, x=, y= (color= optional)."
-            )
-        color = kw.pop("color", None)
-        color_kind, color_value = resolve_aes(data, color)
-        group_col = color if color_kind == "column" else None
-        groups, xy = long_form_xy(data, x_col, y_col, group_col)
-        if color_kind == "literal" and color_value is not None:
-            kw["_color_literal"] = color_value
-    else:
-        groups = [None]
-        xy = [(to_list(args[0]), to_list(args[1]))]
+    if args:
+        raise TypeError(
+            "regression requires long-form input: "
+            "c.regression(data=df, x='col', y='col')."
+        )
+    data = kw.pop("data", None)
+    x_col = kw.pop("x", None)
+    y_col = kw.pop("y", None)
+    if data is None or x_col is None or y_col is None:
+        raise TypeError(
+            "regression requires data=, x=, y= (color= optional)."
+        )
+    color = kw.pop("color", None)
+    color_kind, color_value = resolve_aes(data, color)
+    group_col = color if color_kind == "column" else None
+    groups, xy = long_form_xy(data, x_col, y_col, group_col)
+    if color_kind == "literal" and color_value is not None:
+        kw["_color_literal"] = color_value
     cleaned = [_drop_nan_xy(xs, ys) for xs, ys in xy]
     fits = [_fit_ols(xs, ys) for xs, ys in cleaned]
     return {"type": "regression", "groups": groups, "xy": cleaned,

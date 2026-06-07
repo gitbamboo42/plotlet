@@ -27,8 +27,19 @@ from .._spec import _D
 
 
 def _hexbin_record(args, kw):
-    xs = to_list(args[0])
-    ys = to_list(args[1])
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "hexbin requires long-form input: "
+            "c.hexbin(data=df, x='col', y='col')."
+        )
+    data = kw.pop("data", None)
+    x_col = kw.pop("x", None)
+    y_col = kw.pop("y", None)
+    if data is None or x_col is None or y_col is None:
+        raise TypeError("hexbin requires data=, x=, y=.")
+    xs = to_list(data[x_col])
+    ys = to_list(data[y_col])
     # Rough max-count estimate for the legend gradient (4× avg per cell).
     gridsize = kw.get("gridsize", 30)
     n = len(xs)

@@ -56,9 +56,9 @@ def _matrix():
 def legend_auto_grouped():
     xs = _xs()
     a = pt.chart(title="alpha", data_width=180, data_height=140)
-    a.line(xs, [math.sin(x) for x in xs], label="sin")
+    a.line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y", label="sin")
     b = pt.chart(title="beta", data_width=180, data_height=140)
-    b.line(xs, [math.cos(x) for x in xs], label="cos")
+    b.line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y", label="cos")
     return (a | b) | pt.legend()
 
 
@@ -74,19 +74,19 @@ def legend_mixed():
     im = pt.chart(title="heat", data_width=180, data_height=140)
     im.imshow(_matrix(), cmap="plasma")
     lines = pt.chart(title="trace", data_width=180, data_height=140)
-    lines.line(xs, [math.sin(x) for x in xs], label="sin")
-    lines.line(xs, [math.cos(x) for x in xs], label="cos")
+    lines.line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y", label="sin")
+    lines.line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y", label="cos")
     return im | lines | pt.legend()
 
 
 def legend_overrides():
     xs = _xs()
     a = pt.chart(title="alpha", data_width=100, data_height=140)
-    a.line(xs, [math.sin(x) for x in xs], label="sin")
+    a.line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y", label="sin")
     b = pt.chart(title="beta", data_width=100, data_height=140)
-    b.line(xs, [math.cos(x) for x in xs], label="cos")
+    b.line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y", label="cos")
     c = pt.chart(title="gamma", data_width=100, data_height=140)
-    c.line(xs, [math.sin(x) + 0.5 for x in xs], label="sin+0.5")
+    c.line(data={"x": xs, "y": [math.sin(x) + 0.5 for x in xs]}, x="x", y="y", label="sin+0.5")
     return a | b | c | pt.legend(a, b, c, names={a: "Custom", b: None})
 
 
@@ -96,9 +96,9 @@ def legend_flat_fixed():
     # the dimensional primitive). Overrides the content-driven auto-size.
     xs = _xs()
     a = pt.chart(title="alpha", data_width=160, data_height=140)
-    a.line(xs, [math.sin(x) for x in xs], label="sin")
+    a.line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y", label="sin")
     b = pt.chart(title="beta", data_width=160, data_height=140)
-    b.line(xs, [math.cos(x) for x in xs], label="cos")
+    b.line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y", label="cos")
     return a | b | pt.legend(a, b, group_by_chart=False,
                              canvas_width=140, canvas_height=160)
 
@@ -111,10 +111,10 @@ def legend_joined_grid():
     main = pt.chart(title="main", data_width=320, data_height=180)
     main.imshow(_matrix(), cmap="viridis", legend={"label": "value"})
     top  = pt.chart(title="top",  data_width=320, data_height=24)
-    top.line([0, 1, 2, 3, 4, 5, 6, 7],
-             [3, 1, 2, 4, 1, 2, 3, 1], label="counts")
+    top.line(data={"x": [0, 1, 2, 3, 4, 5, 6, 7], "y": [3, 1, 2, 4, 1, 2, 3, 1]},
+             x="x", y="y", label="counts")
     tree = pt.chart(title="tree", data_width=60,  data_height=180)
-    tree.line([0, 1, 2], [2, 3, 4])
+    tree.line(data={"x": [0, 1, 2], "y": [2, 3, 4]}, x="x", y="y")
     return pt.grid([
         [None, top,  None        ],
         [tree, main, pt.legend() ],

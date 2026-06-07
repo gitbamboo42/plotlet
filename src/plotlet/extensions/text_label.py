@@ -66,7 +66,7 @@ def demo():
     ys = [3, 7, 4, 9, 5]
     labels = ["A", "B", "C", "D", "E"]
     c = pt.chart()
-    c.scatter(xs, ys)
+    c.scatter(data={"x": xs, "y": ys}, x="x", y="y")
     c.text_label(xs, ys, labels, dy=-10, fontsize=11)
     c.title("Scatter with point labels").xlabel("x").ylabel("y")
     return c

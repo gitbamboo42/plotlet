@@ -38,13 +38,13 @@ def attach_four_sides_chained():
     def row_line(values):
         c = pt.chart(data_width=44)
         c.yscale("category", order=rows, padding=0)
-        c.line(values, rows)
+        c.line(data={"x": values, "y": rows}, x="x", y="y")
         return c
 
     def col_line(values):
         c = pt.chart(data_height=34)
         c.xscale("category", order=cols, padding=0)
-        c.line(cols, values)
+        c.line(data={"x": cols, "y": values}, x="x", y="y")
         return c
 
     host.attach_left(row_line([2, 4, 1, 3]), row_line([3, 1, 4, 2]))
@@ -58,10 +58,10 @@ def attach_with_peer_legend():
     # Attachment composed with a layout-level legend as a peer — the
     # host-with-attachments is a single block from the outside.
     host = pt.chart(data_width=180, data_height=120)
-    host.line([1, 2, 3, 4, 5], [2, 4, 1, 3, 5], label="series A")
-    host.line([1, 2, 3, 4, 5], [1, 2, 3, 4, 5], label="series B")
+    host.line(data={"x": [1, 2, 3, 4, 5], "y": [2, 4, 1, 3, 5]}, x="x", y="y", label="series A")
+    host.line(data={"x": [1, 2, 3, 4, 5], "y": [1, 2, 3, 4, 5]}, x="x", y="y", label="series B")
     top_track = pt.chart(data_height=28)
-    top_track.line([1, 2, 3, 4, 5], [0.2, 0.7, 0.4, 0.6, 0.3])
+    top_track.line(data={"x": [1, 2, 3, 4, 5], "y": [0.2, 0.7, 0.4, 0.6, 0.3]}, x="x", y="y")
     host.attach_above(top_track)
     return host | pt.legend()
 
@@ -83,9 +83,9 @@ def _run_invariants() -> int:
 
     # Size lock: attached chart's perpendicular dim matches host; parallel preserved.
     host = pt.chart(data_width=200, data_height=150)
-    host.line([1, 2, 3], [1, 2, 3])
+    host.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
     left = pt.chart(data_width=40, data_height=999)
-    left.text(0.5, 1.0, "L")
+    left.annotate("L", xy=(0.5, 1.0))
     host.attach_left(left)
     host.to_svg()
     _check(left._data_height == 150 and left._data_width == 40,
@@ -93,16 +93,16 @@ def _run_invariants() -> int:
 
     top = pt.chart(data_width=999, data_height=40)
     host2 = pt.chart(data_width=200, data_height=150)
-    host2.line([1, 2, 3], [1, 2, 3])
-    top.line([0, 1, 2], [1, 2, 1])
+    host2.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
+    top.line(data={"x": [0, 1, 2], "y": [1, 2, 1]}, x="x", y="y")
     host2.attach_above(top)
     host2.to_svg()
     _check(top._data_width == 200 and top._data_height == 40,
            "above attachment width locks to host; height preserved")
 
     # Validation: double-attach the same chart, attach already-parented chart.
-    h3 = pt.chart(); h3.line([1, 2, 3], [1, 2, 3])
-    label = pt.chart(); label.text(0.5, 1.0, "x")
+    h3 = pt.chart(); h3.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
+    label = pt.chart(); label.annotate("x", xy=(0.5, 1.0))
     h3.attach_left(label)
     try:
         h3.attach_left(label)
@@ -110,8 +110,8 @@ def _run_invariants() -> int:
     except ValueError:
         _check(True, "re-attaching same chart raises")
 
-    a = pt.chart(); a.line([1, 2, 3], [1, 2, 3])
-    b = pt.chart(); b.line([1, 2, 3], [3, 2, 1])
+    a = pt.chart(); a.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
+    b = pt.chart(); b.line(data={"x": [1, 2, 3], "y": [3, 2, 1]}, x="x", y="y")
     _ = a | b
     c = pt.chart()
     try:
@@ -121,9 +121,9 @@ def _run_invariants() -> int:
         _check(True, "attaching parented chart raises")
 
     # Warning on existing share, but host wins.
-    h4 = pt.chart(); h4.line([1, 2, 3], [1, 2, 3])
-    other = pt.chart(); other.line([1, 2, 3], [1, 2, 3])
-    side = pt.chart(); side.text(0.5, 1.0, "s")
+    h4 = pt.chart(); h4.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
+    other = pt.chart(); other.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
+    side = pt.chart(); side.annotate("s", xy=(0.5, 1.0))
     side._share_y = other
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -133,8 +133,8 @@ def _run_invariants() -> int:
            "existing share warns and host overrides")
 
     # Peer composition still works: host's _parent stays None until composed.
-    h5 = pt.chart(); h5.line([1, 2, 3], [1, 2, 3])
-    side2 = pt.chart(); side2.text(0.5, 1.0, "s")
+    h5 = pt.chart(); h5.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
+    side2 = pt.chart(); side2.annotate("s", xy=(0.5, 1.0))
     h5.attach_left(side2)
     _check(h5._parent is None, "host's _parent stays None until composed as peer")
     fig = h5 | pt.legend()
@@ -145,9 +145,9 @@ def _run_invariants() -> int:
     # canvas is offset so its data area starts at the same y as the
     # host's data area.
     h6 = pt.chart(data_width=200, data_height=150, title="TITLE")
-    h6.line([1, 2, 3], [1, 2, 3])
+    h6.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
     left2 = pt.chart(data_width=40)
-    left2.text(0.5, 2.0, "L")
+    left2.annotate("L", xy=(0.5, 2.0))
     h6.attach_left(left2)
     from plotlet._layout_engine import _build_panel_opts, _measure, _allocate
     po, _ = _build_panel_opts(h6)

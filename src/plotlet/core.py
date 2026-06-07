@@ -1703,6 +1703,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         # user-set primary color — both should skip the cycle and supply
         # `_color` for the legend.
         user_color = resolve_color(a["opts"].get("color")
+                                    or a["opts"].get("_color_literal")
                                     or a["opts"].get("_fill_literal"))
         if user_color is not None:
             a["_color"] = user_color

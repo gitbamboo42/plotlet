@@ -55,28 +55,28 @@ def _fill_between_data_attrs(a):
 
 def _fill_between_record(args, kw):
     kw = dict(kw)
+    if args:
+        raise TypeError(
+            "fill_between requires long-form input: "
+            "c.fill_between(data=df, x='col', y1='col', y2='col')."
+        )
     if "color" in kw:
         raise TypeError(
             "fill_between: use `fill=` for the interior color, not `color=`."
         )
     if "fill" in kw:
         kw["_fill_literal"] = kw.pop("fill")
-    if "data" in kw or "x" in kw or "y1" in kw or "y2" in kw:
-        data = kw.pop("data", None)
-        x = kw.pop("x", None)
-        y1 = kw.pop("y1", None)
-        y2 = kw.pop("y2", None)
-        if data is None or x is None or y1 is None or y2 is None:
-            raise TypeError(
-                "fill_between long-form requires data=, x=, y1=, y2= "
-                "(or pass positional xs, y1s, y2s)."
-            )
-        return {"type": "fill_between",
-                "xs": to_list(data[x]), "y1": to_list(data[y1]),
-                "y2": to_list(data[y2]), "opts": kw}
+    data = kw.pop("data", None)
+    x = kw.pop("x", None)
+    y1 = kw.pop("y1", None)
+    y2 = kw.pop("y2", None)
+    if data is None or x is None or y1 is None or y2 is None:
+        raise TypeError(
+            "fill_between requires data=, x=, y1=, y2=."
+        )
     return {"type": "fill_between",
-            "xs": to_list(args[0]), "y1": to_list(args[1]),
-            "y2": to_list(args[2]), "opts": kw}
+            "xs": to_list(data[x]), "y1": to_list(data[y1]),
+            "y2": to_list(data[y2]), "opts": kw}
 
 
 add_artist(ArtistSpec(

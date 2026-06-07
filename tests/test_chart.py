@@ -300,7 +300,7 @@ def chart_long_title():
     c = pt.chart(data_width=180, data_height=140,
                  title="A very wide title that exceeds the data region width",
                  xlabel="x", ylabel="y")
-    c.line([1, 2, 3, 4, 5], [1, 2, 4, 8, 16])
+    c.line(data={"x": [1, 2, 3, 4, 5], "y": [1, 2, 4, 8, 16]}, x="x", y="y")
     return c
 
 
@@ -314,7 +314,7 @@ def chart_long_ylabel():
                  title="long ylabel + title",
                  ylabel="Gene expression (log10 normalized counts per million)",
                  xlabel="time")
-    c.line([0, 1, 2, 3], [3.2, 4.1, 4.9, 5.5])
+    c.line(data={"x": [0, 1, 2, 3], "y": [3.2, 4.1, 4.9, 5.5]}, x="x", y="y")
     return c
 
 
@@ -358,9 +358,9 @@ def chart_text():
     xs = [1, 2, 3, 4, 5]
     ys = [3, 7, 4, 9, 5]
     c = pt.chart(title="text annotations", xlabel="x", ylabel="y")
-    c.scatter(xs, ys)
-    c.text(xs, ys, ["A", "B", "C", "D", "E"], dy=-10, ha="center")
-    c.text(3, 9.5, "peak", color="C3", ha="center")
+    c.scatter(data={"x": xs, "y": ys}, x="x", y="y")
+    c.text(data={"x": xs, "y": ys, "label": ["A", "B", "C", "D", "E"]}, x="x", y="y", label="label", dy=-10, ha="center")
+    c.annotate("peak", xy=(3, 9.5), color="C3", ha="center")
     return c
 
 
@@ -811,10 +811,10 @@ def chart_curve_steps():
     ys = [1, 3, 2, 5, 4, 6]
     c = pt.chart(title="curve= modes", xlabel="x", ylabel="y",
                  legend=True, grid=True)
-    c.line(xs, ys, curve="linear",      marker="o", label="linear")
-    c.line(xs, [v + 2 for v in ys],  curve="step-after",  marker="o", label="step-after")
-    c.line(xs, [v + 4 for v in ys],  curve="step-before", marker="o", label="step-before")
-    c.line(xs, [v + 6 for v in ys],  curve="step-mid",    marker="o", label="step-mid")
+    c.line(data={"x": xs, "y": ys}, x="x", y="y", curve="linear", marker="o", label="linear")
+    c.line(data={"x": xs, "y": [v + 2 for v in ys]}, x="x", y="y", curve="step-after", marker="o", label="step-after")
+    c.line(data={"x": xs, "y": [v + 4 for v in ys]}, x="x", y="y", curve="step-before", marker="o", label="step-before")
+    c.line(data={"x": xs, "y": [v + 6 for v in ys]}, x="x", y="y", curve="step-mid", marker="o", label="step-mid")
     return c
 
 
@@ -827,8 +827,8 @@ def chart_curve_fills():
     hi = [1.5, 1.8, 2.2, 2.5, 2.1, 1.9]
     c = pt.chart(title="curve= on fill_between / area",
                  xlabel="t", ylabel="value", legend=True)
-    c.fill_between(xs, lo, hi, curve="step-after", fill="C0",
-                   alpha=0.3, label="step band")
+    c.fill_between(data={"x": xs, "y1": lo, "y2": hi}, x="x", y1="y1", y2="y2",
+                   curve="step-after", fill="C0", alpha=0.3, label="step band")
     df_area = {"x": xs, "y": [1.0, 1.3, 1.7, 2.0, 1.6, 1.4]}
     c.area(data=df_area, x="x", y="y", curve="step-after",
            color="C1", alpha=0.5, label="step area")
@@ -989,7 +989,7 @@ def chart_clip_data_area():
                  title="clip=False",
                  xlabel="x", ylabel="y",
                  xlim=(0, 10), ylim=(0, 10))
-    c.scatter(xs, ys, s=sizes, color="C0", alpha=0.6)
+    c.scatter(data={"x": xs, "y": ys}, x="x", y="y", s=sizes, color="C0", alpha=0.6)
     return c
 
 
@@ -1016,10 +1016,10 @@ def chart_step():
     xs = list(range(8))
     c = pt.chart(data_width=400, data_height=180,
                  title="step modes", xlabel="x", ylabel="y", legend=True)
-    c.step(xs, [1, 3, 2, 5, 4, 3, 6, 5], where="post", label="post")
-    c.step(xs, [1.5, 3.5, 2.5, 5.5, 4.5, 3.5, 6.5, 5.5], where="pre",
-           label="pre", color="C1")
-    c.step(xs, [2, 4, 3, 6, 5, 4, 7, 6], where="mid", label="mid", color="C2")
+    c.step(data={"x": xs, "y": [1, 3, 2, 5, 4, 3, 6, 5]}, x="x", y="y", where="post", label="post")
+    c.step(data={"x": xs, "y": [1.5, 3.5, 2.5, 5.5, 4.5, 3.5, 6.5, 5.5]},
+           x="x", y="y", where="pre", label="pre", color="C1")
+    c.step(data={"x": xs, "y": [2, 4, 3, 6, 5, 4, 7, 6]}, x="x", y="y", where="mid", label="mid", color="C2")
     return c
 
 
@@ -1029,11 +1029,11 @@ def chart_text_bbox():
     ys = [math.sin(x * 3) * math.exp(-x * 0.1) for x in xs]
     c = pt.chart(data_width=420, data_height=200, title="text bbox",
                  xlabel="t", ylabel="y")
-    c.line(xs, ys)
-    c.text(2.0, 0.5, "plain", fontsize=12)
-    c.text(4.0, 0.5, "on white", fontsize=12, bbox=True)
-    c.text(6.0, 0.5, "tinted", fontsize=12,
-           bbox={"facecolor": "#ffe", "edgecolor": "#888", "pad": 4, "alpha": 0.95})
+    c.line(data={"x": xs, "y": ys}, x="x", y="y")
+    c.annotate("plain", xy=(2.0, 0.5), fontsize=12)
+    c.annotate("on white", xy=(4.0, 0.5), fontsize=12, bbox=True)
+    c.annotate("tinted", xy=(6.0, 0.5), fontsize=12,
+               bbox={"facecolor": "#ffe", "edgecolor": "#888", "pad": 4, "alpha": 0.95})
     c.annotate("peak", xy=(xs[3], ys[3]), xytext=(0.6, 0.85),
                bbox={"facecolor": "#fff", "edgecolor": "#555", "pad": 3})
     return c
@@ -1045,7 +1045,7 @@ def chart_annotate():
     ys = [math.sin(x) + math.sin(2 * x) * 0.4 for x in xs]
     c = pt.chart(data_width=400, data_height=200,
                  title="annotate", xlabel="x", ylabel="y")
-    c.line(xs, ys)
+    c.line(data={"x": xs, "y": ys}, x="x", y="y")
     max_i = ys.index(max(ys))
     c.annotate("global max",
                xy=(xs[max_i], ys[max_i]),
@@ -1059,7 +1059,7 @@ def chart_annotate():
 def chart_ticks_step():
     c = pt.chart(data_width=400, data_height=170,
                  title="step=0.25", xlabel="x", ylabel="y", grid=True)
-    c.line([0, 0.5, 1.0, 1.5, 2.0], [0, 1, 4, 9, 16], marker="o")
+    c.line(data={"x": [0, 0.5, 1.0, 1.5, 2.0], "y": [0, 1, 4, 9, 16]}, x="x", y="y", marker="o")
     c.xticks(step=0.25)
     return c
 
@@ -1067,7 +1067,7 @@ def chart_ticks_step():
 def chart_ticks_count():
     c = pt.chart(data_width=400, data_height=170,
                  title="count=4", xlabel="x", ylabel="y", grid=True)
-    c.line(list(range(11)), [i * i for i in range(11)], marker="o")
+    c.line(data={"x": list(range(11)), "y": [i * i for i in range(11)]}, x="x", y="y", marker="o")
     c.xticks(count=4)
     return c
 
@@ -1075,7 +1075,7 @@ def chart_ticks_count():
 def chart_minor_ticks_linear():
     c = pt.chart(data_width=400, data_height=180,
                  title="minor ticks", xlabel="x", ylabel="y", grid=True)
-    c.line([0, 1, 2, 3, 4, 5], [0, 1, 4, 9, 16, 25], marker="o")
+    c.line(data={"x": [0, 1, 2, 3, 4, 5], "y": [0, 1, 4, 9, 16, 25]}, x="x", y="y", marker="o")
     c.xticks(minor=True)
     c.yticks(minor=True)
     return c
@@ -1084,7 +1084,7 @@ def chart_minor_ticks_linear():
 def chart_minor_ticks_log():
     c = pt.chart(data_width=400, data_height=180,
                  title="minor ticks log", xlabel="freq", ylabel="amp")
-    c.line([1, 10, 100, 1000, 10000], [1, 5, 12, 25, 60], marker="o")
+    c.line(data={"x": [1, 10, 100, 1000, 10000], "y": [1, 5, 12, 25, 60]}, x="x", y="y", marker="o")
     c.xscale("log")
     c.xticks(minor=True)
     return c
@@ -1096,7 +1096,7 @@ def chart_reverse_y():
     depths = [10, 28, 65, 130, 220, 360, 480, 620]
     c = pt.chart(data_width=320, data_height=180,
                  title="depth profile", xlabel="time", ylabel="depth (m)")
-    c.line(times, depths, marker="o")
+    c.line(data={"x": times, "y": depths}, x="x", y="y", marker="o")
     c.yscale("linear", reverse=True)
     return c
 
@@ -1119,7 +1119,7 @@ def chart_symlog_x():
     ys = [abs(x) ** 0.5 for x in xs]
     c = pt.chart(data_width=400, data_height=180,
                  title="symlog axis", xlabel="signed magnitude", ylabel="sqrt(|x|)")
-    c.scatter(xs, ys, s=24)
+    c.scatter(data={"x": xs, "y": ys}, x="x", y="y", s=24)
     c.xscale("symlog", linthresh=1.0)
     return c
 
@@ -1197,7 +1197,7 @@ def chart_tick_format_string():
     # Format string: '{:.0%}' renders y-ticks as percentages.
     c = pt.chart(data_width=320, data_height=180,
                  title="completion rate", xlabel="week", ylabel="rate")
-    c.line(list(range(8)), [0.05, 0.12, 0.18, 0.27, 0.42, 0.55, 0.71, 0.88])
+    c.line(data={"x": list(range(8)), "y": [0.05, 0.12, 0.18, 0.27, 0.42, 0.55, 0.71, 0.88]}, x="x", y="y")
     c.yticks(format="{:.0%}")
     return c
 
@@ -1210,7 +1210,7 @@ def chart_tick_format_callable():
         return f"${v:.0f}"
     c = pt.chart(data_width=320, data_height=180,
                  title="revenue", xlabel="month", ylabel="revenue")
-    c.line(list(range(8)), [1200, 4500, 8300, 18000, 45000, 92000, 410000, 1_250_000])
+    c.line(data={"x": list(range(8)), "y": [1200, 4500, 8300, 18000, 45000, 92000, 410000, 1_250_000]}, x="x", y="y")
     c.yticks(format=_money)
     return c
 
@@ -1221,7 +1221,7 @@ def chart_time_axis_dates():
     vals  = [10, 12, 9, 15, 18, 22, 25, 21, 17, 14, 12, 11]
     c = pt.chart(data_width=400, data_height=180,
                  title="2024 monthly units", ylabel="units", grid=True)
-    c.line(dates, vals, marker="o")
+    c.line(data={"x": dates, "y": vals}, x="x", y="y", marker="o")
     return c
 
 
@@ -1233,7 +1233,7 @@ def chart_time_axis_hours():
     vals  = [math.sin(i / 4) * 5 + 10 for i in range(len(times))]
     c = pt.chart(data_width=220, data_height=320,
                  title="signal over a day", xlabel="value", ylabel="time (UTC)")
-    c.line(vals, times)
+    c.line(data={"x": vals, "y": times}, x="x", y="y")
     return c
 
 
@@ -1355,8 +1355,8 @@ def chart_ecdf():
     c = pt.chart(data_width=300, data_height=200,
                  title="ECDF", xlabel="value", ylabel="F̂(x)",
                  legend=True)
-    c.ecdf(a, label="control")
-    c.ecdf(b, label="treatment")
+    c.ecdf(data={"x": a}, x="x", label="control")
+    c.ecdf(data={"x": b}, x="x", label="treatment")
     c.legend()
     return c
 
@@ -1366,8 +1366,8 @@ def chart_rug():
     vals = [rng.gauss(0, 1) for _ in range(150)]
     c = pt.chart(data_width=300, data_height=200,
                  title="density + rug", xlabel="value", ylabel="density")
-    c.density_1d(vals, fill=True)
-    c.rug(vals, color="#444444")
+    c.density_1d(data={"x": vals}, x="x", fill=True)
+    c.rug(data={"x": vals}, x="x", color="#444444")
     return c
 
 
@@ -1378,8 +1378,8 @@ def chart_density_1d():
     c = pt.chart(data_width=300, data_height=200,
                  title="density", xlabel="value", ylabel="density",
                  legend=True)
-    c.density_1d(a, label="control", fill=True)
-    c.density_1d(b, label="treatment", fill=True)
+    c.density_1d(data={"x": a}, x="x", label="control", fill=True)
+    c.density_1d(data={"x": b}, x="x", label="treatment", fill=True)
     c.legend()
     return c
 
@@ -1391,8 +1391,8 @@ def chart_regression():
     c = pt.chart(data_width=300, data_height=220,
                  title="linear regression", xlabel="x", ylabel="y",
                  legend=True)
-    c.scatter(xs, ys, label="data")
-    c.regression(xs, ys, label="fit ± 95 % CI")
+    c.scatter(data={"x": xs, "y": ys}, x="x", y="y", label="data")
+    c.regression(data={"x": xs, "y": ys}, x="x", y="y", label="fit ± 95 % CI")
     c.legend()
     return c
 
@@ -1406,8 +1406,8 @@ def chart_kde_2d():
           + [rng.gauss(2, 0.8) for _ in range(n)])
     c = pt.chart(data_width=300, data_height=260,
                  title="2-D KDE", xlabel="x", ylabel="y")
-    c.scatter(xs, ys, s=5, alpha=0.25, color="#444444")
-    c.kde_2d(xs, ys, n_grid=40, cmap="viridis")
+    c.scatter(data={"x": xs, "y": ys}, x="x", y="y", s=5, alpha=0.25, color="#444444")
+    c.kde_2d(data={"x": xs, "y": ys}, x="x", y="y", n_grid=40, cmap="viridis")
     c.legend()
     return c
 
@@ -1419,7 +1419,7 @@ def chart_hexbin():
     ys = [x + rng.gauss(0, 1) for x in xs]
     c = pt.chart(data_width=300, data_height=260,
                  title="hexbin", xlabel="x", ylabel="y")
-    c.hexbin(xs, ys, gridsize=22)
+    c.hexbin(data={"x": xs, "y": ys}, x="x", y="y", gridsize=22)
     return c | pt.legend(c)
 
 
@@ -1430,8 +1430,8 @@ def chart_freqpoly():
     c = pt.chart(data_width=300, data_height=200,
                  title="frequency polygon", xlabel="value", ylabel="count",
                  legend=True)
-    c.freqpoly(a, bins=25, label="control")
-    c.freqpoly(b, bins=25, label="treatment")
+    c.freqpoly(data={"x": a}, x="x", bins=25, label="control")
+    c.freqpoly(data={"x": b}, x="x", bins=25, label="treatment")
     c.legend()
     return c
 
@@ -1481,7 +1481,7 @@ def chart_qq():
                  title="Q-Q vs N(0, 1)",
                  xlabel="theoretical quantile",
                  ylabel="sample quantile")
-    c.qq(sample, dist="normal")
+    c.qq(data={"s": sample}, sample="s", dist="normal")
     return c
 
 
@@ -1725,8 +1725,8 @@ def _legend_position_chart(position):
     c = pt.chart(title=f"legend {position}",
                  xlabel="t", ylabel="value", grid=True,
                  data_width=300, data_height=180)
-    c.line(xs, [math.sin(x) for x in xs], label="sin(t)")
-    c.line(xs, [math.cos(x) for x in xs], label="cos(t)", linestyle="--")
+    c.line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y", label="sin(t)")
+    c.line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y", label="cos(t)", linestyle="--")
     c.legend(position=position)
     return c
 

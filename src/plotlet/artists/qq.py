@@ -25,7 +25,17 @@ from ..utils import to_list
 
 
 def _qq_record(args, kw):
-    sample = sorted(to_list(args[0]))
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "qq requires long-form input: "
+            "c.qq(data=df, sample='col')."
+        )
+    data = kw.pop("data", None)
+    sample_col = kw.pop("sample", None)
+    if data is None or sample_col is None:
+        raise TypeError("qq requires data=, sample= (dist= optional).")
+    sample = sorted(to_list(data[sample_col]))
     dist = kw.get("dist", "normal")
     n = len(sample)
     pp = [(i + 1) / (n + 1) for i in range(n)]

@@ -193,97 +193,85 @@ def _resolve_c_range(c_vals, opts):
 
 def _scatter_record(args, kw):
     kw = dict(kw)
-    if "data" in kw or "x" in kw or "y" in kw:
-        data  = kw.pop("data", None)
-        x_col = kw.pop("x", None)
-        y_col = kw.pop("y", None)
-        if data is None or x_col is None or y_col is None:
-            raise TypeError(
-                "scatter long-form requires data=, x=, y= "
-                "(color/group/alpha/c/size/style optional)."
-            )
-        color   = kw.pop("color", None)
-        group   = kw.pop("group", None)
-        alpha   = kw.pop("alpha", None)
-        palette = kw.pop("palette", None)
-        c       = kw.pop("c", None)
-        size    = kw.pop("size", None)
-        style   = kw.pop("style", None)
-        sizes   = kw.pop("sizes", (20, 200))
-        alphas  = kw.pop("alphas", DEFAULT_ALPHA_RANGE)
-        # scatter has no line to dash; ignore inherited linetype/fill.
-        kw.pop("linetype", None)
-        kw.pop("fill", None)
-
-        color_kind, _ = resolve_aes(data, color)
-        if c is not None and color_kind == "column":
-            raise ValueError(
-                "scatter accepts either color=<col> (categorical) or "
-                "c= (numeric), not both — they're alternative color sources."
-            )
-
-        if c is not None:
-            # Numeric color via cmap. `c=` is per-point — no splitting; the
-            # categorical color= and alpha= (if any) are dropped, matching
-            # the previous Chart.scatter behavior. cmap/vmin/vmax/norm
-            # flow through unchanged in kw.
-            if isinstance(c, str):
-                c = to_list(data[c])
-            else:
-                c = to_list(c)
-            kw["c"] = c
-            vmin, vmax = _resolve_c_range(c, kw)
-            # `size=` and `style=` are per-point aesthetics that compose
-            # with `c=` (color comes from cmap, size and marker from the
-            # data). _expand_with_aesthetics handles the no-`c=` cases;
-            # here we duplicate just the per-point payload + size-legend
-            # bookkeeping since the `c=` path is single-record-only (no
-            # color/group/alpha splitting to thread through).
-            if size is not None:
-                kw["s"] = _compute_size_array(data[size], sizes)
-            if style is not None:
-                kw["marker"] = _compute_style_array(data[style])
-            rec = {"type": "scatter",
-                   "xs": to_list(data[x_col]),
-                   "ys": to_list(data[y_col]),
-                   "_vmin": vmin, "_vmax": vmax,
-                   "opts": kw}
-            if size is not None:
-                src_vals = [v for v in to_list(data[size])
-                            if isinstance(v, (int, float)) and v == v]
-                if src_vals:
-                    rec["_size_legend"] = {
-                        "col_name": str(size),
-                        "source_min": min(src_vals),
-                        "source_max": max(src_vals),
-                        "sizes_range": tuple(sizes),
-                    }
-            return rec
-
-        if size is not None or style is not None:
-            return _expand_with_aesthetics(data, x_col, y_col, color, group, alpha,
-                                            palette, size, style, sizes, alphas, kw)
-
-        # Default long-form: split by (color, group, alpha). scatter has no
-        # linetype splits (no line to dash).
-        return expand_xy_long_form("scatter", data, x_col, y_col,
-                                    color, group, None, alpha,
-                                    palette, alphas, kw)
-    # Wide-form. Strip inherited-but-inapplicable aes that __getattr__
-    # may have injected (palette only matters for column-driven splits;
-    # fill/group/linetype don't apply to a single-series scatter).
-    kw.pop("fill", None)
-    kw.pop("group", None)
+    if args:
+        raise TypeError(
+            "scatter requires long-form input: "
+            "c.scatter(data=df, x='col', y='col')."
+        )
+    data  = kw.pop("data", None)
+    x_col = kw.pop("x", None)
+    y_col = kw.pop("y", None)
+    if data is None or x_col is None or y_col is None:
+        raise TypeError(
+            "scatter requires data=, x=, y= (color/group/alpha/c/size/style optional)."
+        )
+    color   = kw.pop("color", None)
+    group   = kw.pop("group", None)
+    alpha   = kw.pop("alpha", None)
+    palette = kw.pop("palette", None)
+    c       = kw.pop("c", None)
+    size    = kw.pop("size", None)
+    style   = kw.pop("style", None)
+    sizes   = kw.pop("sizes", (20, 200))
+    alphas  = kw.pop("alphas", DEFAULT_ALPHA_RANGE)
+    # scatter has no line to dash; ignore inherited linetype/fill.
     kw.pop("linetype", None)
-    kw.pop("palette", None)
-    record = {"type": "scatter",
-              "xs": to_list(args[0]), "ys": to_list(args[1]),
-              "opts": kw}
-    if kw.get("c") is not None:
-        c_vals = to_list(kw["c"])
-        kw["c"] = c_vals
-        record["_vmin"], record["_vmax"] = _resolve_c_range(c_vals, kw)
-    return record
+    kw.pop("fill", None)
+
+    color_kind, _ = resolve_aes(data, color)
+    if c is not None and color_kind == "column":
+        raise ValueError(
+            "scatter accepts either color=<col> (categorical) or "
+            "c= (numeric), not both — they're alternative color sources."
+        )
+
+    if c is not None:
+        # Numeric color via cmap. `c=` is per-point — no splitting; the
+        # categorical color= and alpha= (if any) are dropped, matching
+        # the previous Chart.scatter behavior. cmap/vmin/vmax/norm
+        # flow through unchanged in kw.
+        if isinstance(c, str):
+            c = to_list(data[c])
+        else:
+            c = to_list(c)
+        kw["c"] = c
+        vmin, vmax = _resolve_c_range(c, kw)
+        # `size=` and `style=` are per-point aesthetics that compose
+        # with `c=` (color comes from cmap, size and marker from the
+        # data). _expand_with_aesthetics handles the no-`c=` cases;
+        # here we duplicate just the per-point payload + size-legend
+        # bookkeeping since the `c=` path is single-record-only (no
+        # color/group/alpha splitting to thread through).
+        if size is not None:
+            kw["s"] = _compute_size_array(data[size], sizes)
+        if style is not None:
+            kw["marker"] = _compute_style_array(data[style])
+        rec = {"type": "scatter",
+               "xs": to_list(data[x_col]),
+               "ys": to_list(data[y_col]),
+               "_vmin": vmin, "_vmax": vmax,
+               "opts": kw}
+        if size is not None:
+            src_vals = [v for v in to_list(data[size])
+                        if isinstance(v, (int, float)) and v == v]
+            if src_vals:
+                rec["_size_legend"] = {
+                    "col_name": str(size),
+                    "source_min": min(src_vals),
+                    "source_max": max(src_vals),
+                    "sizes_range": tuple(sizes),
+                }
+        return rec
+
+    if size is not None or style is not None:
+        return _expand_with_aesthetics(data, x_col, y_col, color, group, alpha,
+                                        palette, size, style, sizes, alphas, kw)
+
+    # Default long-form: split by (color, group, alpha). scatter has no
+    # linetype splits (no line to dash).
+    return expand_xy_long_form("scatter", data, x_col, y_col,
+                                color, group, None, alpha,
+                                palette, alphas, kw)
 
 
 def _scatter_xdomain(a): return a["xs"]

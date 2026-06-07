@@ -121,7 +121,8 @@ add_artist(ArtistSpec(
 import plotlet as pt
 c = pt.chart()
 c.title("Daily revenue").xlabel("day").ylabel("USD")
-c.line([1, 2, 3, 4], [10.5, 12.3, 11.0, 14.7], label="actual")
+c.line(data={"day": [1, 2, 3, 4], "usd": [10.5, 12.3, 11.0, 14.7]},
+       x="day", y="usd", label="actual")
 print(c.to_svg())
 ```
 

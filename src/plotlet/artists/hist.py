@@ -82,25 +82,23 @@ def _artist_hist(a, xs_, ys_, col, bins):
 
 def _hist_record(args, kw):
     kw = dict(kw)
-    if "data" in kw or "x" in kw or "y" in kw:
-        data_df = kw.pop("data", None)
-        x_col = kw.pop("x", None)
-        if data_df is None or x_col is None:
-            raise TypeError(
-                "hist long-form requires data=, x= (fill= optional)."
-            )
-        fill = kw.pop("fill", None)
-        fill_kind, fill_value = resolve_aes(data_df, fill)
-        group_col = fill if fill_kind == "column" else None
-        groups, vals = long_form_1d(data_df, x_col, group_col)
-        if fill_kind == "literal" and fill_value is not None:
-            kw["_fill_literal"] = fill_value
-    else:
-        groups = [None]
-        vals = [to_list(args[0])]
-        fill = kw.pop("fill", None)
-        if fill is not None:
-            kw["_fill_literal"] = fill
+    if args:
+        raise TypeError(
+            "hist requires long-form input: "
+            "c.hist(data=df, x='col')."
+        )
+    data_df = kw.pop("data", None)
+    x_col = kw.pop("x", None)
+    if data_df is None or x_col is None:
+        raise TypeError(
+            "hist requires data=, x= (fill= optional)."
+        )
+    fill = kw.pop("fill", None)
+    fill_kind, fill_value = resolve_aes(data_df, fill)
+    group_col = fill if fill_kind == "column" else None
+    groups, vals = long_form_1d(data_df, x_col, group_col)
+    if fill_kind == "literal" and fill_value is not None:
+        kw["_fill_literal"] = fill_value
     return {"type": "hist", "groups": groups, "vals": vals, "opts": kw}
 
 

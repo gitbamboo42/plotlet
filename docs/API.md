@@ -179,9 +179,9 @@ Deeper layout helpers — `pt.cluster.layout_tree(tree)`, `pt.cluster.layout_par
 ## Inset axes
 
 ```python
-c.line(xs, ys)
+c.line(data=df, x="x", y="y")
 inset = c.inset(rect=(0.55, 0.55, 0.42, 0.4), xlim=(0, 1), ylim=(0.8, 1))
-inset.line(xs, ys)
+inset.line(data=df, x="x", y="y")
 ```
 
 `c.inset(rect=(x, y, w, h))` returns a fresh `Chart` sized as a fraction

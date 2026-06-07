@@ -48,9 +48,10 @@ def step_paint(start_col, end_col, y_col, *, fill=False,
         xs = df[start_col].tolist() + [df[end_col].iloc[-1]]
         ys = df[y_col].tolist()    + [df[y_col].iloc[-1]]
         if fill:
-            c.fill_between(xs, [0] * len(xs), ys,
+            c.fill_between(data={"x": xs, "y1": [0] * len(xs), "y2": ys},
+                           x="x", y1="y1", y2="y2",
                            curve="step-after", alpha=fill_alpha)
-        c.step(xs, ys, where="post", alpha=alpha)
+        c.step(data={"x": xs, "y": ys}, x="x", y="y", where="post", alpha=alpha)
     return paint
 
 
@@ -60,7 +61,8 @@ def bar_paint(start_col, end_col, y_col, *, alpha=0.75):
     def paint(c, df):
         xs = df[start_col].tolist() + [df[end_col].iloc[-1]]
         ys = df[y_col].tolist()    + [df[y_col].iloc[-1]]
-        c.fill_between(xs, [0] * len(xs), ys,
+        c.fill_between(data={"x": xs, "y1": [0] * len(xs), "y2": ys},
+                       x="x", y1="y1", y2="y2",
                        curve="step-after", alpha=alpha)
     return paint
 
@@ -186,9 +188,9 @@ if __name__ == "__main__":
 
     tracks = [
         Track(points_df,
-              paint=lambda c, df: c.scatter(df.start.tolist(),
-                                            df.value.tolist(),
-                                            s=4, alpha=0.4),
+              paint=lambda c, df: c.scatter(data={"x": df.start.tolist(),
+                                                  "y": df.value.tolist()},
+                                            x="x", y="y", s=4, alpha=0.4),
               ylabel="logR", ylim=(-1.5, 2.0),
               highlight_df=highlight_df),
 
