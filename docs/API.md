@@ -143,8 +143,8 @@ universal and not repeated.
 | `.dendrogram(data, **opts)` | `orient="top"\|"left"\|"right"\|"bottom"`, `labels`, `method="single"\|"complete"\|"average"\|"ward"\|...` (scipy), `metric`, `linkage=<Z>` (skip scipy.linkage), `tree=<SplitTree>` (skip clustering entirely), `column_split=[...]` / `row_split=[...]` (two-level cluster), `parent=True\|<frac>` (render centroid tree above per-block trees), `split_gap` |
 | `.axhline(y, **opts)` / `.axvline(x, **opts)` | `color`, `linewidth`, `linestyle`, `alpha`, axes-fraction `xmin`/`xmax` |
 | `.axhspan(ymin, ymax, **opts)` / `.axvspan(xmin, xmax, **opts)` | `color`, `alpha`, `label` |
-| `.rect(x, y, w, h, **opts)` / `.polygon(pts, **opts)` | data-coord shapes, `fill`, `stroke` |
-| `.text(x, y, s, **opts)` / `.text(data=df, x=, y=, label=, **opts)` / `.annotate(text, xy=, xytext=, **opts)` | `ha`, `va`, `fontsize`, `arrow=True/False` |
+| `.rect(x, y, w, h, **opts)` / `.polygon(xs, ys, **opts)` / `.polyline(xs, ys, **opts)` | data-coord shapes — `polygon` is closed-and-fillable, `polyline` is open stroke-only |
+| `.text(data=df, x=, y=, label=, **opts)` / `.annotate(text, xy=, xytext=, **opts)` | `ha`, `va`, `fontsize`, `arrow=True/False` |
 
 ### Notes
 

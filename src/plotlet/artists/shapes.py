@@ -1,14 +1,18 @@
-"""User-supplied geometry primitives — rect and polygon.
+"""User-supplied geometry primitives — rect, polygon, polyline.
 
 `rect` is scale-aware and broadcasts hlines/vlines-style. `polygon` takes
-a single closed contour from parallel `xs` / `ys` vertices.
+a single closed contour from parallel `xs` / `ys` vertices. `polyline` is
+the open-path counterpart to `polygon` — same `(xs, ys)` shape, stroke-only,
+never closes. Use it for diagonal reference segments and decorative
+multi-point paths in data coords (the gap between `hlines`/`vlines` and
+the data-shaped `c.line(data=...)`).
 """
 import math
 
 from ..registry import ArtistSpec, add_artist
 from ..utils import broadcast, to_list
 from .._spec import _D
-from ..draw import rect as draw_rect, polygon as draw_polygon
+from ..draw import rect as draw_rect, polygon as draw_polygon, polyline as draw_polyline
 from ..draw import resolve_color
 from ._shared import _xy_minmax, _bar_legend_entries
 
@@ -122,5 +126,32 @@ add_artist(ArtistSpec(
     ydomain=lambda a: a["ys"],
     draw=lambda a, ctx: _artist_polygon(a, ctx.x_scale, ctx.y_scale, ctx.color),
     legend_entries=_bar_legend_entries,
+    data_attrs=_polygon_data_attrs,
+))
+
+
+# --- polyline ---
+
+def _artist_polyline(a, xs_, ys_, col):
+    opts = a["opts"]
+    pts = [(xs_(x), ys_(y)) for x, y in zip(a["xs"], a["ys"])]
+    pts = [(px, py) for px, py in pts if math.isfinite(px) and math.isfinite(py)]
+    color = opts.get("color", col)
+    width = opts.get("linewidth", _D["linewidth"])
+    dash = opts.get("linestyle")
+    alpha = opts.get("alpha", 1)
+    return draw_polyline(pts, color=resolve_color(color), width=width,
+                          dash=dash, alpha=alpha)
+
+
+add_artist(ArtistSpec(
+    name="polyline",
+    record=lambda args, kw: {"type": "polyline",
+                              "xs": to_list(args[0]),
+                              "ys": to_list(args[1]),
+                              "opts": kw},
+    xdomain=lambda a: a["xs"],
+    ydomain=lambda a: a["ys"],
+    draw=lambda a, ctx: _artist_polyline(a, ctx.x_scale, ctx.y_scale, ctx.color),
     data_attrs=_polygon_data_attrs,
 ))
