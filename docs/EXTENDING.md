@@ -122,6 +122,10 @@ ArtistSpec(
     legend_entries: (a) -> list[dict] | None = None,
     legend_gradient: (a) -> dict | None = None,
     data_attrs: (a) -> dict | None = None,
+    flips_y_axis: (a) -> bool | None = None,
+    tight_domain: bool = False,
+    force_zero_x: bool | (a) -> bool = False,
+    force_zero_y: bool | (a) -> bool = False,
     axis_order: (a) -> dict | None = None,
     frame_defaults: (args, kwargs) -> list[tuple] | None = None,
 )
@@ -136,6 +140,9 @@ ArtistSpec(
 | `legend_entries` | Return the legend entries this artist contributes (zero or more). Each entry is a `{"label": str, "color": str, "paint": callable}` dict where `paint(a, ctx, x0, y_mid) -> svg_fragment` draws the swatch. Most one-series-per-call artists return zero or one entry depending on whether `label=` was set. |
 | `legend_gradient` | For artists with a continuous color mapping. Returns `{"kind": "continuous", "cmap": ..., "vmin": ..., "vmax": ...}`. |
 | `data_attrs` | AI-readable type-specific attrs. Keys land on the artist's `<g>` as `data-plotlet-<key>`. Common attrs (type, index, label, color) are automatic — see [`AI_ATTRS.md`](AI_ATTRS.md). |
+| `flips_y_axis` | Return `True` when this artist needs the y-axis inverted (top → bottom). Used by `imshow` / `heatmap` so row 0 sits at the top. |
+| `tight_domain` | When `True`, the artist's `xdomain` / `ydomain` are used as-is — no `expand` padding added. For artists whose extents are exact (image bounds, raster cell edges). |
+| `force_zero_x` / `force_zero_y` | Anchor that axis to zero: if the artist contributes to autoscaling and data lo > 0, push lo down to 0 (and suppress that side's expand). Built-in `bar` and `hist` set `force_zero_y=True`. May be a callable `(a) -> bool` so e.g. a bar with `orientation='h'` forces zero on x instead. |
 | `axis_order` | Contribute a canonical order for a categorical axis. Returns `{"x": [...]}` / `{"y": [...]}`. Use when ordering is load-bearing (dendrogram leaves). User's explicit `xscale("category", order=...)` still wins. |
 | `frame_defaults` | Return a list of `(call_name, args, kwargs)` recorded *before* your artist. Use for strong defaults (e.g. dendrogram hides all spines). User calls *after* `c.<your_artist>()` still win. |
 
@@ -170,7 +177,7 @@ and is passed to `xdomain` / `ydomain` / `draw` as `a`. Two conventions:
 
 Keys starting with `_` (e.g. `_bins`, `_data`, `_color`) are conventionally
 "computed during render, used during draw" — see how `imshow` and `hist`
-stash pre-processed data in [`builtin_artists.py`](../src/plotlet/builtin_artists.py).
+stash pre-processed data in [`artists/`](../src/plotlet/artists/).
 
 Respect deferred rendering: `record` runs early, `draw` runs at `to_svg()`
 time. Don't compute scales or colors in `record` — they don't exist yet.
@@ -181,22 +188,28 @@ time. Don't compute scales or colors in `record` — they don't exist yet.
 
 If you're writing a dendrogram variant (radial, icicle, curved branches,
 sunburst, …), don't reach for `scipy.cluster.hierarchy` directly — the
-`pt.cluster` module exposes the full layout pipeline so a third-party
+`plotlet.cluster` module exposes the full layout pipeline so a third-party
 tree artist is purely a *renderer*. Canonical example:
 [`extensions/curved_tree.py`](../src/plotlet/extensions/curved_tree.py).
+
+The helpers below live in `plotlet.cluster`; import them with
+`from plotlet.cluster import layout_tree, fit_parent, ...`. The top-level
+`pt.cluster` / `pt.cluster_split` names are the two driver functions
+themselves, not the module — the import-from form is what you want for
+everything else.
 
 | Public helper | Use |
 |---|---|
 | `pt.cluster(data, labels=, method=, metric=)` | One scipy.linkage → `SplitTree` (one block). |
 | `pt.cluster_split(data, split=, labels=, …)` | Two-level cluster (within-block + centroid between-block) → multi-block `SplitTree`. |
-| `pt.cluster.build_tree(args, kw, split)` | Standard input dispatch: pops `tree=` / `linkage=` / `data=` from `kw` and returns `(SplitTree, had_labels)`. Drop into your artist's `record`. |
-| `pt.cluster.layout_tree(tree)` | `SplitTree` → `(blocks, offsets, final_labels)` ready for drawing. Per-block scipy.dendrogram + pooled height normalize. |
-| `pt.cluster.layout_parent(tree)` | The optional centroid tree's `(icoord, dcoord, leaves)`, or `None` for single-block trees. |
-| `pt.cluster.fit_parent(blocks, parent_layout, frac, gap_frac=)` | Shrinks per-block dcoords + drops parent leaves to each block's apex so both fit in one panel. |
-| `pt.cluster.leaf_position(scale, labels, disp)` | Float leaf-position → pixel; gap-aware on split scales. |
-| `pt.cluster.block_apex_centers(scale, labels, offsets, blocks)` | x-center of each block's topmost merge bar — where parent leaves should land. |
-| `pt.cluster.parent_leaf_px(midpoints, x)` | Interpolate between block midpoints for fractional parent-tree x values. |
-| `pt.cluster.tree_frame_defaults(kw, *, split_gap_default)` | Standard `frame_defaults` boilerplate for tree artists: spines off, hide height-axis ticks, inject `groups=` on the leaf scale when `column_split=` / `row_split=` is set, root-side expand. |
+| `build_tree(args, kw, split)` | Standard input dispatch: pops `tree=` / `linkage=` / `data=` from `kw` and returns `(SplitTree, had_labels)`. Drop into your artist's `record`. |
+| `layout_tree(tree)` | `SplitTree` → `(blocks, offsets, final_labels)` ready for drawing. Per-block scipy.dendrogram + pooled height normalize. |
+| `layout_parent(tree)` | The optional centroid tree's `(icoord, dcoord, leaves)`, or `None` for single-block trees. |
+| `fit_parent(blocks, parent_layout, frac, gap_frac=)` | Shrinks per-block dcoords + drops parent leaves to each block's apex so both fit in one panel. |
+| `leaf_position(scale, labels, disp)` | Float leaf-position → pixel; gap-aware on split scales. |
+| `block_apex_centers(scale, labels, offsets, blocks)` | x-center of each block's topmost merge bar — where parent leaves should land. |
+| `parent_leaf_px(midpoints, x)` | Interpolate between block midpoints for fractional parent-tree x values. |
+| `tree_frame_defaults(kw, *, split_gap_default)` | Standard `frame_defaults` boilerplate for tree artists: spines off, hide height-axis ticks, inject `groups=` on the leaf scale when `column_split=` / `row_split=` is set, root-side expand. |
 
 A new tree variant is then ~3 callbacks (record / draw / axis_order),
 each a thin wrapper around these helpers — the clustering and layout

@@ -177,7 +177,7 @@ Independent of any artist; the dendrogram and `curved_tree` extension both build
 | `pt.cluster_split(data, split=, labels=, method=, metric=)` | `SplitTree` | Two-level cluster: scipy.linkage per group (within-block) plus scipy.linkage on the per-group centroids (between-block order). |
 | `pt.SplitTree(blocks=, between_order=, between_Z=)` | dataclass | `blocks: [(Z, labels), ...]` + display order + the centroid linkage. Pass as `dendrogram(tree=...)` / `curved_tree(tree=...)` to skip redundant scipy work when the same cluster drives multiple charts. |
 
-Deeper layout helpers — `pt.cluster.layout_tree(tree)`, `pt.cluster.layout_parent(tree)`, `pt.cluster.fit_parent(...)`, `pt.cluster.leaf_position(...)`, `pt.cluster.block_apex_centers(...)`, `pt.cluster.parent_leaf_px(...)`, `pt.cluster.build_tree(...)`, `pt.cluster.tree_frame_defaults(...)` — exist for writing new tree-shaped artists; see [`EXTENDING.md`](EXTENDING.md).
+Deeper layout helpers — `layout_tree(tree)`, `layout_parent(tree)`, `fit_parent(...)`, `leaf_position(...)`, `block_apex_centers(...)`, `parent_leaf_px(...)`, `build_tree(...)`, `tree_frame_defaults(...)` — exist for writing new tree-shaped artists; import via `from plotlet.cluster import <helper>`. See [`EXTENDING.md`](EXTENDING.md).
 
 ## Color shortcuts
 
