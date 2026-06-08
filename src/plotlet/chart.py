@@ -172,13 +172,12 @@ class _Renderable:
 
     def show(self):
         self._require_render_root()
-        svg = self.to_svg()
         try:
             from IPython.display import HTML, display
         except ImportError:
             print(self.to_html(full_page=True))
             return
-        display(HTML(svg))
+        display(HTML(self._repr_html_()))
 
     def save_svg(self, path, *, clean: bool = False):
         Path(path).write_text(self.to_svg(clean=clean))
