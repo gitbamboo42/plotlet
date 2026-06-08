@@ -39,7 +39,7 @@ Other styling kwargs (all optional):
   - `linewidth=1`            — box outline / whisker stroke width.
   - `median_linewidth=1.6`   — median tick stroke width.
   - `whis=1.5`               — IQR multiplier for the whisker fences.
-  - `dot_size=2.5`           — strip dot radius in pixels.
+  - `size=2.5`               — strip dot radius in pixels.
   - `dot_alpha=0.55`         — strip dot opacity.
   - `jitter=0.5`             — strip jitter spread as a sub-band fraction
                                (points land in ±jitter/2 * third).
@@ -144,7 +144,7 @@ def raincloud_draw(a, ctx):
     lw         = opts.get("linewidth", 1)
     median_lw  = opts.get("median_linewidth", 1.6)
     whis       = opts.get("whis", 1.5)
-    r          = opts.get("dot_size", 2.5)
+    r          = opts.get("size", 2.5)
     dot_alpha  = opts.get("dot_alpha", 0.55)
     jitter     = opts.get("jitter", 0.5)
     line       = resolve_color(opts.get("color")) or _FRAME["color"]

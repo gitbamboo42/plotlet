@@ -1,15 +1,19 @@
 """Line — connected xy points, single-series per record.
 
-  c.line(xs, ys)                                       # wide-form
   c.line(data=df, x="col_x", y="col_y")                # long-form
   c.line(data=df, x="col_x", y="col_y", color="g")     # one line per color level
   c.line(data=df, x="col_x", y="col_y",                # invisible split — one
           color="cohort", group="subject")              #   line per subject,
                                                         #   colors only by cohort
-  c.line(data=df, ..., linetype="cohort")              # dash pattern per level
+  c.line(data=df, ..., linestyle="--")                 # literal dash
+  c.line(data=df, ..., linestyle="cohort")             # dash cycle per level
   c.line(data=df, ..., alpha="cohort", alphas=(.3, 1)) # opacity per level
 
-Column-driven splitting (any of `color`/`group`/`linetype`/`alpha`) is
+`linestyle=` dispatches on the value:
+  * not-a-column string (`"--"`, `":"`, `"6,3,1,3"`) → literal dash
+  * column name → cycle through dash patterns per level
+
+Column-driven splitting (any of `color`/`group`/`linestyle`/`alpha`) is
 handled at the Chart layer — the artist itself always sees one series
 per record.
 """
@@ -52,7 +56,7 @@ def _artist_line(a, xs_, ys_, col, xs, ys):
                              stroke_width=opts.get("linewidth", _D["linewidth"]),
                              dash=ls, alpha=alpha))
     if opts.get("marker"):
-        sz = opts.get("markersize", _D["markersize"])
+        sz = opts.get("size", _D["markersize"])
         for x, y in zip(xs, ys):
             px, py = xs_(x), ys_(y)
             if not (math.isfinite(px) and math.isfinite(py)):
@@ -73,16 +77,26 @@ def _line_record(args, kw):
     y_col = kw.pop("y", None)
     if data is None or x_col is None or y_col is None:
         raise TypeError(
-            "line requires data=, x=, y= (color/group/linetype/alpha optional)."
+            "line requires data=, x=, y= (color/group/linestyle/alpha optional)."
+        )
+    if "linetype" in kw:
+        raise TypeError(
+            "line takes `linestyle=` for dash style "
+            "(literal `\"--\"`, `\":\"`, `\"-.\"`, … → fixed; column name → "
+            "cycle dashes per level)."
+        )
+    if "markersize" in kw:
+        raise TypeError(
+            "line takes `size=` for marker radius (px)."
         )
     color   = kw.pop("color", None)
     group   = kw.pop("group", None)
-    ltype   = kw.pop("linetype", None)
+    ls      = kw.pop("linestyle", None)
     alpha   = kw.pop("alpha", None)
     palette = kw.pop("palette", None)
     alphas  = kw.pop("alphas", DEFAULT_ALPHA_RANGE)
     return expand_xy_long_form("line", data, x_col, y_col,
-                                color, group, ltype, alpha,
+                                color, group, ls, alpha,
                                 palette, alphas, kw)
 
 

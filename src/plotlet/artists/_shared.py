@@ -10,8 +10,8 @@ from ..draw import TAB10
 from ..utils import to_list, resolve_aes, palette_color
 
 
-# Used by long-form expansion for `linetype=` and `alpha=` column splits.
-LINETYPE_CYCLE = (None, "--", ":", "-.")
+# Used by long-form expansion for `linestyle=` and `alpha=` column splits.
+LINESTYLE_CYCLE = (None, "--", ":", "-.")
 DEFAULT_ALPHA_RANGE = (0.3, 1.0)
 
 
@@ -25,10 +25,10 @@ def _alpha_for_level(idx, n_levels, alphas):
 
 
 def expand_xy_long_form(kind, data, x_col, y_col,
-                        color, group, linetype, alpha,
+                        color, group, linestyle, alpha,
                         palette, alphas, base_opts):
     """Long-form xy table → list of artist record dicts split by
-    `(color, group, linetype, alpha)` tuples. One record per unique tuple,
+    `(color, group, linestyle, alpha)` tuples. One record per unique tuple,
     each carrying its own `color`/`linestyle`/`alpha`/`label`. Shared by
     artists that draw one series per record (line, scatter).
 
@@ -38,28 +38,28 @@ def expand_xy_long_form(kind, data, x_col, y_col,
     the long-form aesthetic keys."""
     color_kind, color_value = resolve_aes(data, color)
     group_kind, group_value = resolve_aes(data, group)
-    ltype_kind, ltype_value = resolve_aes(data, linetype)
+    ls_kind,    ls_value    = resolve_aes(data, linestyle)
     alpha_kind, alpha_value = resolve_aes(data, alpha)
     xs_all = to_list(data[x_col])
     ys_all = to_list(data[y_col])
     n = len(xs_all)
 
     if (color_kind == "literal" and group_kind == "literal"
-            and ltype_kind == "literal" and alpha_kind == "literal"):
+            and ls_kind == "literal" and alpha_kind == "literal"):
         opts = dict(base_opts)
         if color_value is not None: opts["color"] = color_value
-        if ltype_value is not None: opts["linestyle"] = ltype_value
+        if ls_value is not None: opts["linestyle"] = ls_value
         if alpha_value is not None: opts["alpha"] = alpha_value
         return [{"type": kind, "xs": xs_all, "ys": ys_all, "opts": opts}]
 
     color_vec = color_value if color_kind == "column" else [None] * n
     group_vec = group_value if group_kind == "column" else [None] * n
-    ltype_vec = ltype_value if ltype_kind == "column" else [None] * n
+    ls_vec    = ls_value    if ls_kind    == "column" else [None] * n
     alpha_vec = alpha_value if alpha_kind == "column" else [None] * n
     color_levels = list(dict.fromkeys(color_vec))
-    ltype_levels = list(dict.fromkeys(ltype_vec))
+    ls_levels    = list(dict.fromkeys(ls_vec))
     alpha_levels = list(dict.fromkeys(alpha_vec))
-    quads = list(dict.fromkeys(zip(color_vec, group_vec, ltype_vec, alpha_vec)))
+    quads = list(dict.fromkeys(zip(color_vec, group_vec, ls_vec, alpha_vec)))
 
     base_opts.pop("label", None)  # column-driven grouping overrides any user label
     records = []
@@ -67,7 +67,7 @@ def expand_xy_long_form(kind, data, x_col, y_col,
     for ck, gk, lk, ak in quads:
         idxs = [j for j in range(n)
                 if color_vec[j] == ck and group_vec[j] == gk
-                and ltype_vec[j] == lk and alpha_vec[j] == ak]
+                and ls_vec[j] == lk and alpha_vec[j] == ak]
         xs_g = [xs_all[j] for j in idxs]
         ys_g = [ys_all[j] for j in idxs]
         opts = dict(base_opts)
@@ -79,12 +79,12 @@ def expand_xy_long_form(kind, data, x_col, y_col,
                 labeled.add(ck)
         elif color_value is not None:
             opts["color"] = color_value
-        if ltype_kind == "column":
-            ls = LINETYPE_CYCLE[ltype_levels.index(lk) % len(LINETYPE_CYCLE)]
+        if ls_kind == "column":
+            ls = LINESTYLE_CYCLE[ls_levels.index(lk) % len(LINESTYLE_CYCLE)]
             if ls is not None:
                 opts["linestyle"] = ls
-        elif ltype_value is not None:
-            opts["linestyle"] = ltype_value
+        elif ls_value is not None:
+            opts["linestyle"] = ls_value
         if alpha_kind == "column":
             opts["alpha"] = _alpha_for_level(alpha_levels.index(ak),
                                               len(alpha_levels), alphas)

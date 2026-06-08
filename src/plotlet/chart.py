@@ -280,7 +280,7 @@ class Chart(_Renderable):
                  fill: str | None = None,
                  color: str | None = None,
                  group: str | None = None,
-                 linetype: str | None = None,
+                 linestyle: str | None = None,
                  palette=None,
                  **kwargs):
         # Migration errors — surface the rename loudly rather than silently
@@ -341,7 +341,7 @@ class Chart(_Renderable):
         # once at chart construction, overridden by per-artist kwargs.
         self._aes = {"x": x, "y": y,
                      "fill": fill, "color": color, "group": group,
-                     "linetype": linetype,
+                     "linestyle": linestyle,
                      "palette": palette}
         self._parent: "Layout | None" = None
         # Share-class membership. Set by parent-level .share_x() / .share_y();
@@ -519,7 +519,7 @@ class Chart(_Renderable):
                     # Data injection — column-referencing kwargs need a table.
                     if (self._data is not None and "data" not in kwargs
                             and any(k in kwargs for k in
-                                    ("x", "y", "fill", "color", "group", "linetype"))):
+                                    ("x", "y", "fill", "color", "group", "linestyle"))):
                         kwargs["data"] = self._data
                 if spec is not None and spec.frame_defaults is not None:
                     for call in spec.frame_defaults(list(args), dict(kwargs)) or ():

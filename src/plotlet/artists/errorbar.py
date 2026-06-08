@@ -73,6 +73,10 @@ def _errorbar_record(args, kw):
             "errorbar requires data=, x=, y= "
             "(yerr/xerr/ymin/ymax/xmin/xmax optional)."
         )
+    if "markersize" in kw:
+        raise TypeError(
+            "errorbar takes `size=` for marker radius (px)."
+        )
     xs = to_list(data[x_col])
     ys = to_list(data[y_col])
     n = len(xs)
@@ -115,7 +119,7 @@ def _artist_errorbar(a, xs_, ys_, col):
     capsize = opts.get("capsize", _D["errorbar_capsize"])
     lw = opts.get("linewidth", _D["errorbar_linewidth"])
     mk = opts.get("marker", "o")
-    msize = opts.get("markersize", _D["markersize"])
+    msize = opts.get("size", _D["markersize"])
     alpha = opts.get("alpha", 1)
     out = []
     for x, y, dxl, dxh, dyl, dyh in zip(xs, ys, xlo, xhi, ylo, yhi):
@@ -162,7 +166,7 @@ def _errorbar_legend_entries(a):
         return []
     def paint(a, ctx, x0, y_mid):
         col = a["_color"]
-        msize = a["opts"].get("markersize", ctx.defaults["markersize"])
+        msize = a["opts"].get("size", ctx.defaults["markersize"])
         cx = x0 + _LEGSPEC["swatch_width"] / 2
         return (
             segment(cx, y_mid - 5, cx, y_mid + 5,

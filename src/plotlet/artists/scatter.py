@@ -250,8 +250,8 @@ def _scatter_record(args, kw):
     style   = kw.pop("style", None)
     sizes   = kw.pop("sizes", (2, 7))
     alphas  = kw.pop("alphas", DEFAULT_ALPHA_RANGE)
-    # scatter has no line to dash; ignore inherited linetype/fill.
-    kw.pop("linetype", None)
+    # scatter has no line to dash; ignore inherited linestyle/fill.
+    kw.pop("linestyle", None)
     kw.pop("fill", None)
 
     # Resolve `size=`: number/list → literal pixel radius into opts["size"];
@@ -306,7 +306,7 @@ def _scatter_record(args, kw):
                                         palette, size, style, sizes, alphas, kw)
 
     # Default long-form: split by (color, group, alpha). scatter has no
-    # linetype splits (no line to dash).
+    # linestyle splits (no line to dash).
     return expand_xy_long_form("scatter", data, x_col, y_col,
                                 color, group, None, alpha,
                                 palette, alphas, kw)

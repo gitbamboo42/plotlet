@@ -1632,7 +1632,7 @@ def chart_line_group():
 
 
 def chart_line_linetype():
-    # `linetype=col` cycles dash patterns per level. When `linetype`
+    # `linestyle=col` cycles dash patterns per level. When `linestyle`
     # maps the same column as `color`, the legend swatches inherit the
     # dash pattern — the canonical B&W-safe / colorblind-redundant
     # encoding pattern.
@@ -1646,9 +1646,9 @@ def chart_line_linetype():
     df = pd.DataFrame(rows)
     c = pt.chart(df, x="t", y="v",
                  data_width=320, data_height=200,
-                 title="redundant color + linetype",
+                 title="redundant color + linestyle",
                  xlabel="t", ylabel="v", legend=True)
-    c.line(color="cohort", linetype="cohort", linewidth=1.6)
+    c.line(color="cohort", linestyle="cohort", linewidth=1.6)
     c.legend()
     return c
 

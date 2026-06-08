@@ -376,7 +376,7 @@ def _replay(calls):
             # corrupt the stored call dict — re-renders walk the same list.
             # `record()` returns a single dict for one-series artists or a
             # list of dicts for long-form expansions (line, scatter split
-            # by color/group/linetype levels).
+            # by color/group/linestyle levels).
             call_args = list(args)
             call_kw = dict(kw)
             # First-positional-is-data sugar: `c.line(df, x=, y=)` is the
