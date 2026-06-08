@@ -75,6 +75,8 @@ def _bar_record(args, kw):
     cats, groups, series = _aggregate_long(data, x_col, y_col, group_col)
     if fill_kind == "literal":
         kw["_fill_literal"] = fill_value
+    if group_col is not None and group_col == x_col:
+        kw["_redundant_grouping"] = True
     bottom = kw.get("bottom", 0)
     if hasattr(bottom, "__iter__") and not isinstance(bottom, str):
         raise TypeError(
@@ -182,10 +184,13 @@ def _bar_draw(a, ctx):
     elif multi and position == "dodge":
         width = opts.get("width", 0.8)
         gap = opts.get("gap", 0.1)
+        redundant = opts.get("_redundant_grouping", False)
         for j, s in enumerate(series):
             col = _group_fill(groups, palette, j, fill_fallback)
             for i, (cat, v) in enumerate(zip(cats, s)):
-                cp, slot_w = dodge_positions(cat_scale, cat, len(groups), j,
+                cp, slot_w = dodge_positions(cat_scale, cat,
+                                             1 if redundant else len(groups),
+                                             0 if redundant else j,
                                              band_frac=width, gap=gap)
                 vp = val_scale(v)
                 if horizontal:

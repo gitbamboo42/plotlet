@@ -56,6 +56,8 @@ def _swarm_record(args, kw):
     cats, groups, vals = categorical_groups(data, x, y, group_col)
     if fill_literal is not None:
         kw["_fill_literal"] = fill_literal
+    if group_col is not None and group_col == x:
+        kw["_redundant_grouping"] = True
     return {"type": "swarm", "cats": cats, "groups": groups,
             "vals": vals, "opts": kw}
 
@@ -124,6 +126,7 @@ def _swarm_draw(a, ctx):
     fill_fallback = fill_literal if fill_literal is not None else ctx.color
     horizontal = _swarm_horizontal(a)
     cat_scale, val_scale = (ctx.y_scale, ctx.x_scale) if horizontal else (ctx.x_scale, ctx.y_scale)
+    redundant = opts.get("_redundant_grouping", False)
     out = []
     for i, cat in enumerate(cats):
         for j in range(n_groups):
@@ -131,7 +134,9 @@ def _swarm_draw(a, ctx):
             if not vs:
                 continue
             col = _group_fill(groups, palette, j, fill_fallback)
-            cp, _ = dodge_positions(cat_scale, cat, n_groups, j,
+            cp, _ = dodge_positions(cat_scale, cat,
+                                    1 if redundant else n_groups,
+                                    0 if redundant else j,
                                     band_frac=w_frac, gap=gap)
             val_px = [val_scale(v) for v in vs]
             offsets = _place_swarm(val_px, r)

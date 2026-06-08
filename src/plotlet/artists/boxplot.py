@@ -78,6 +78,11 @@ def _boxplot_record(args, kw):
     kw["_do_fill"] = do_fill
     if fill_literal is not None:
         kw["_fill_literal"] = fill_literal
+    # `fill=<x_col>` is redundant grouping — each cat has exactly one
+    # nonempty group, so dodging would just shrink the box uselessly.
+    # Suppress dodge but keep the per-cat palette coloring.
+    if group_col is not None and group_col == x:
+        kw["_redundant_grouping"] = True
     return {"type": "boxplot", "cats": cats, "groups": groups,
             "vals": vals, "opts": kw}
 
@@ -127,6 +132,7 @@ def _boxplot_draw(a, ctx):
     horizontal = _boxplot_horizontal(a)
     cat_scale, val_scale = (ctx.y_scale, ctx.x_scale) if horizontal else (ctx.x_scale, ctx.y_scale)
     eb_along_val = errorbar_h if horizontal else errorbar_v
+    redundant = opts.get("_redundant_grouping", False)
     out = []
     for i, cat in enumerate(cats):
         for j in range(n_groups):
@@ -134,7 +140,9 @@ def _boxplot_draw(a, ctx):
             if not vs:
                 continue
             fill = _group_fill(groups, palette, j, fill_fallback) if do_fill else None
-            cp, box_w = dodge_positions(cat_scale, cat, n_groups, j,
+            cp, box_w = dodge_positions(cat_scale, cat,
+                                        1 if redundant else n_groups,
+                                        0 if redundant else j,
                                         band_frac=bw_frac, gap=gap)
             cp_lo = cp - box_w / 2
             cp_hi = cp + box_w / 2

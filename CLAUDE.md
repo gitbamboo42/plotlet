@@ -40,6 +40,10 @@ and why-not-X live in [README.md](README.md) and [docs/PHILOSOPHY.md](docs/PHILO
 
 `pip install -e ".[test]"` then `pytest tests/` (add `--update` after intentional visual changes to regenerate baselines). For per-set gallery HTML: `python tests/gen_gallery.py <set>` or `python tests/gen_gallery.py all`. Machine-specific Python paths in `CLAUDE.local.md` (gitignored).
 
+## Debugging rendered output
+
+For layout/chrome questions (title, panel, spines, ticks, legend bboxes, overlap, clipping) use `c.regions()` — returns structured `{"kind","bbox","name","meta"}` dicts.
+
 ## Style
 
 Plain Python. Top-to-bottom readable. No metaclasses, no clever decorators. Match what's there.

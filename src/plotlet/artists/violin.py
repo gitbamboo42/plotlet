@@ -69,6 +69,8 @@ def _violin_record(args, kw):
     kw["_do_fill"] = do_fill
     if fill_literal is not None:
         kw["_fill_literal"] = fill_literal
+    if group_col is not None and group_col == x:
+        kw["_redundant_grouping"] = True
     return {"type": "violin", "cats": cats, "groups": groups,
             "vals": vals, "opts": kw}
 
@@ -112,6 +114,7 @@ def _violin_draw(a, ctx):
     fill_fallback = fill_literal if fill_literal is not None else ctx.color
     horizontal = _violin_horizontal(a)
     cat_scale, val_scale = (ctx.y_scale, ctx.x_scale) if horizontal else (ctx.x_scale, ctx.y_scale)
+    redundant = opts.get("_redundant_grouping", False)
     out = []
     for i, cat in enumerate(cats):
         for j in range(n_groups):
@@ -119,7 +122,9 @@ def _violin_draw(a, ctx):
             if not vs:
                 continue
             fill = _group_fill(groups, palette, j, fill_fallback) if do_fill else None
-            cp, slot_w = dodge_positions(cat_scale, cat, n_groups, j,
+            cp, slot_w = dodge_positions(cat_scale, cat,
+                                          1 if redundant else n_groups,
+                                          0 if redundant else j,
                                           band_frac=w_frac, gap=gap)
             half_w_px = slot_w / 2
 
