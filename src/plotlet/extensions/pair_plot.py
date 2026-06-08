@@ -26,7 +26,7 @@ import plotlet as pt
 
 
 def pair_plot(data, color: str | None = None, palette=None,
-              scatter_size: int = 8, panel_size: int = 140,
+              scatter_size: float = 1.5, panel_size: int = 140,
               hist_bins: int = 20) -> "pt.Chart":
     """Build a pair-plot for the numeric columns of `data`.
 
@@ -44,10 +44,10 @@ def pair_plot(data, color: str | None = None, palette=None,
             if i == j:
                 c.hist(x=ni, data=data, bins=hist_bins)
             elif color is None:
-                c.scatter(x=nj, y=ni, data=data, s=scatter_size)
+                c.scatter(x=nj, y=ni, data=data, size=scatter_size)
             else:
                 c.scatter(x=nj, y=ni, color=color, palette=palette,
-                          data=data, s=scatter_size)
+                          data=data, size=scatter_size)
             # Only the outer cells get axis labels — interior is busy enough.
             if i == n - 1:
                 c.xlabel(nj)

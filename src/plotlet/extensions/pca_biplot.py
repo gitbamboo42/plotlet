@@ -71,11 +71,11 @@ def pca_biplot(matrix, var_names, sample_labels=None, color=None, palette=None,
     loadings_pc2 = Vt[1]
     c = pt.chart(data_width=400, data_height=400)
     if color is None:
-        c.scatter(data={"x": pc1, "y": pc2}, x="x", y="y", s=20, alpha=0.7)
+        c.scatter(data={"x": pc1, "y": pc2}, x="x", y="y", size=2.5, alpha=0.7)
     else:
         df = {"pc1": pc1, "pc2": pc2, "group": list(color)}
         c.scatter(x="pc1", y="pc2", color="group", palette=palette,
-                  data=df, s=20, alpha=0.7)
+                  data=df, size=2.5, alpha=0.7)
         c.legend(True)
     for j, name in enumerate(var_names):
         dx = float(loadings_pc1[j]) * scale_loadings

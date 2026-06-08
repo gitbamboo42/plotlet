@@ -48,7 +48,7 @@ def residual_diagnostics(xs, ys, panel: int = 200):
 
     # --- panel 1: residuals vs fitted ---
     p1 = pt.chart(data_width=panel, data_height=panel)
-    p1.scatter(data={"x": fitted, "y": resid}, x="x", y="y", s=10, alpha=0.7)
+    p1.scatter(data={"x": fitted, "y": resid}, x="x", y="y", size=1.5, alpha=0.7)
     p1.axhline(0, color="#888", linestyle="--")
     p1.title("Residuals vs Fitted").xlabel("fitted").ylabel("residual")
 
@@ -57,7 +57,7 @@ def residual_diagnostics(xs, ys, panel: int = 200):
     pp = [(i + 0.5) / n for i in range(n)]
     theo = list(norm.ppf(pp))
     p2 = pt.chart(data_width=panel, data_height=panel)
-    p2.scatter(data={"x": theo, "y": sr_sorted}, x="x", y="y", s=10, alpha=0.7)
+    p2.scatter(data={"x": theo, "y": sr_sorted}, x="x", y="y", size=1.5, alpha=0.7)
     i25 = int(0.25 * (n - 1)); i75 = int(0.75 * (n - 1))
     x1, y1 = theo[i25], sr_sorted[i25]
     x2, y2 = theo[i75], sr_sorted[i75]
@@ -74,13 +74,13 @@ def residual_diagnostics(xs, ys, panel: int = 200):
     # --- panel 3: scale-location: sqrt(|std resid|) vs fitted ---
     sl = [math.sqrt(abs(r)) for r in std_resid]
     p3 = pt.chart(data_width=panel, data_height=panel)
-    p3.scatter(data={"x": fitted, "y": sl}, x="x", y="y", s=10, alpha=0.7)
+    p3.scatter(data={"x": fitted, "y": sl}, x="x", y="y", size=1.5, alpha=0.7)
     p3.title("Scale-Location").xlabel("fitted").ylabel("√|std. residual|")
 
     # --- panel 4: residuals vs leverage with Cook's-distance contours ---
     # Cook's D = (std_resid^2 / p) * (h / (1 - h)), where p = 2 (slope + intercept).
     p4 = pt.chart(data_width=panel, data_height=panel)
-    p4.scatter(data={"x": leverage, "y": std_resid}, x="x", y="y", s=10, alpha=0.7)
+    p4.scatter(data={"x": leverage, "y": std_resid}, x="x", y="y", size=1.5, alpha=0.7)
     p4.axhline(0, color="#888", linestyle="--")
     # Cook's-distance contour at D = c, solving std_resid as a function of h.
     # std_resid = ± sqrt(c * p * (1 - h) / h).

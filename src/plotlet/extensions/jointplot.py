@@ -65,7 +65,7 @@ def jointplot(xs, ys, kind: str = "scatter", bins: int = 30,
     if kind == "hex":
         main.hexbin(data={"x": xs, "y": ys}, x="x", y="y", gridsize=30)
     else:
-        main.scatter(data={"x": xs, "y": ys}, x="x", y="y", s=10, alpha=0.6)
+        main.scatter(data={"x": xs, "y": ys}, x="x", y="y", size=1.5, alpha=0.6)
     # Spacer (top-right, blank).
     spacer = pt.chart(data_width=marg_size, data_height=marg_size)
     spacer.xticks([]); spacer.yticks([])

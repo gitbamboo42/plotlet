@@ -1,20 +1,28 @@
 """Scatter — single-series xy.
 
-  c.scatter(xs, ys)                                       # wide-form
   c.scatter(data=df, x="col_x", y="col_y")                # long-form
-  c.scatter(data=df, x="col_x", y="col_y", color="g")     # one color per level
+  c.scatter(data=df, x="col_x", y="col_y", color="red")   # literal color
+  c.scatter(data=df, ..., color="group")                  # categorical → palette
+  c.scatter(data=df, ..., color="weight")                 # numeric col → cmap
   c.scatter(data=df, ..., color="g", group="subject")     # invisible finer split
   c.scatter(data=df, ..., alpha="cohort",                 # opacity per level
             alphas=(0.3, 1.0))
-  c.scatter(data=df, ..., size="mass", sizes=(10, 200))   # per-point area
+  c.scatter(data=df, ..., size=3)                         # fixed marker radius (px)
+  c.scatter(data=df, ..., size="mass", sizes=(2, 8))      # graded per-point radius
   c.scatter(data=df, ..., style="group")                  # per-level marker glyph
 
-Column-driven splitting (any of `color`/`group`/`alpha`) is handled at
-the Chart layer — the artist itself always sees one series per record.
-`size`/`style` are computed per-point and stay inside a single record.
+`color=` dispatches on the value:
+  * not-a-column string → literal color
+  * column with all-numeric values → continuous cmap (cmap/vmin/vmax/norm)
+  * column with any non-numeric value → categorical palette
+To force a numeric column to be treated as categorical, cast to strings
+first: `df["clusters"] = df["clusters"].astype(str)`.
 
-The per-point `c=` (numeric → colormap) is wide-form-only — it conflicts
-with column-driven `color=`.
+Column-driven categorical splitting (`color`/`group`/`alpha`) is handled
+at the Chart layer — the artist itself always sees one series per record.
+`size`/`style` are computed per-point and stay inside a single record.
+Continuous color is single-record-only — `group`/`alpha` column splits
+are dropped on that path.
 """
 import math
 
@@ -30,15 +38,15 @@ from ._shared import (_xy_minmax, expand_xy_long_form,
 
 def _artist_scatter(a, xs_, ys_, col, xs, ys):
     opts = a["opts"]
-    raw_s = opts.get("s", _D["scatter_s"])
+    raw_size = opts.get("size", _D["scatter_size"])
     raw_mk = opts.get("marker", "o")
     alpha = opts.get("alpha", _D["scatter_alpha"])
     edgecolor = opts.get("edgecolor")
     linewidth = opts.get("linewidth")
     c_vals = opts.get("c")
     n = len(xs)
-    sizes   = list(raw_s)  if isinstance(raw_s,  (list, tuple)) else [raw_s]  * n
-    markers = list(raw_mk) if isinstance(raw_mk, (list, tuple)) else [raw_mk] * n
+    radii   = list(raw_size) if isinstance(raw_size, (list, tuple)) else [raw_size] * n
+    markers = list(raw_mk)   if isinstance(raw_mk,   (list, tuple)) else [raw_mk]   * n
 
     if c_vals is not None:
         cmap_name = opts.get("cmap", _D["default_cmap"])
@@ -60,8 +68,8 @@ def _artist_scatter(a, xs_, ys_, col, xs, ys):
         px, py = xs_(x), ys_(y)
         if not (math.isfinite(px) and math.isfinite(py)):
             continue
-        sz = math.sqrt(sizes[i]) / 2
-        out.append(marker(markers[i], px, py, sz, point_colors[i], alpha,
+        out.append(marker(markers[i], px, py, float(radii[i]),
+                          point_colors[i], alpha,
                           edgecolor=edgecolor, edgewidth=linewidth))
     return "".join(out)
 
@@ -124,7 +132,7 @@ def _expand_with_aesthetics(data, x_col, y_col, color, group, alpha,
 
     def slice_for(idxs):
         out = dict(base_opts)
-        if s_arr  is not None: out["s"]      = [s_arr[i]  for i in idxs]
+        if s_arr  is not None: out["size"]   = [s_arr[i]  for i in idxs]
         if mk_arr is not None: out["marker"] = [mk_arr[i] for i in idxs]
         return out
 
@@ -191,6 +199,25 @@ def _resolve_c_range(c_vals, opts):
     return vmin, vmax
 
 
+def _is_continuous(values):
+    """Dispatch rule for `color=<col>`: True iff every non-missing value
+    is a real number (not bool). NaN tolerated; all-NaN or empty falls
+    back to categorical (safer — avoids degenerate cmap)."""
+    saw_num = False
+    for v in values:
+        if v is None:
+            continue
+        if isinstance(v, float) and v != v:
+            continue
+        if isinstance(v, bool):
+            return False
+        if isinstance(v, (int, float)):
+            saw_num = True
+            continue
+        return False
+    return saw_num
+
+
 def _scatter_record(args, kw):
     kw = dict(kw)
     if args:
@@ -203,47 +230,58 @@ def _scatter_record(args, kw):
     y_col = kw.pop("y", None)
     if data is None or x_col is None or y_col is None:
         raise TypeError(
-            "scatter requires data=, x=, y= (color/group/alpha/c/size/style optional)."
+            "scatter requires data=, x=, y= (color/group/alpha/size/style optional)."
+        )
+    if "c" in kw:
+        raise TypeError(
+            "scatter takes `color=<numeric column>` for cmap-based coloring "
+            "(numeric column → cmap, categorical → palette, literal → fixed)."
+        )
+    if "s" in kw:
+        raise TypeError(
+            "scatter takes `size=` for marker radius (px) "
+            "(number → fixed, list → per-point, column → graded via sizes=(lo, hi))."
         )
     color   = kw.pop("color", None)
     group   = kw.pop("group", None)
     alpha   = kw.pop("alpha", None)
     palette = kw.pop("palette", None)
-    c       = kw.pop("c", None)
     size    = kw.pop("size", None)
     style   = kw.pop("style", None)
-    sizes   = kw.pop("sizes", (20, 200))
+    sizes   = kw.pop("sizes", (2, 7))
     alphas  = kw.pop("alphas", DEFAULT_ALPHA_RANGE)
     # scatter has no line to dash; ignore inherited linetype/fill.
     kw.pop("linetype", None)
     kw.pop("fill", None)
 
-    color_kind, _ = resolve_aes(data, color)
-    if c is not None and color_kind == "column":
-        raise ValueError(
-            "scatter accepts either color=<col> (categorical) or "
-            "c= (numeric), not both — they're alternative color sources."
-        )
-
-    if c is not None:
-        # Numeric color via cmap. `c=` is per-point — no splitting; the
-        # categorical color= and alpha= (if any) are dropped, matching
-        # the previous Chart.scatter behavior. cmap/vmin/vmax/norm
-        # flow through unchanged in kw.
-        if isinstance(c, str):
-            c = to_list(data[c])
+    # Resolve `size=`: number/list → literal pixel radius into opts["size"];
+    # column name → keep as `size` for the column-mapping path below.
+    if size is not None:
+        size_kind, size_value = resolve_aes(data, size)
+        if size_kind == "column":
+            pass  # handled by _expand_with_aesthetics / cmap branch
+        elif isinstance(size_value, str):
+            raise TypeError(
+                f"size={size_value!r} — string must match a column in data; "
+                f"pass a number or list for a literal size."
+            )
         else:
-            c = to_list(c)
-        kw["c"] = c
-        vmin, vmax = _resolve_c_range(c, kw)
-        # `size=` and `style=` are per-point aesthetics that compose
-        # with `c=` (color comes from cmap, size and marker from the
-        # data). _expand_with_aesthetics handles the no-`c=` cases;
-        # here we duplicate just the per-point payload + size-legend
-        # bookkeeping since the `c=` path is single-record-only (no
-        # color/group/alpha splitting to thread through).
+            kw["size"] = (to_list(size_value)
+                          if isinstance(size_value, (list, tuple))
+                             or hasattr(size_value, "tolist")
+                          else size_value)
+            size = None
+
+    color_kind, color_value = resolve_aes(data, color)
+
+    if color_kind == "column" and _is_continuous(color_value):
+        # Continuous color: numeric column → cmap. Single record (no
+        # group/alpha splitting); size/style compose per-point.
+        c_vals = list(color_value)
+        kw["c"] = c_vals
+        vmin, vmax = _resolve_c_range(c_vals, kw)
         if size is not None:
-            kw["s"] = _compute_size_array(data[size], sizes)
+            kw["size"] = _compute_size_array(data[size], sizes)
         if style is not None:
             kw["marker"] = _compute_style_array(data[style])
         rec = {"type": "scatter",
@@ -317,17 +355,16 @@ def _scatter_legend_entries(a):
     label = opts.get("label")
     if label:
         def paint(_a, _ctx, x0, y_mid):
-            raw_s = opts.get("s", _ctx.defaults["scatter_s"])
+            raw_size = opts.get("size", _ctx.defaults["scatter_size"])
             raw_mk = opts.get("marker", "o")
-            s_val = (sorted(raw_s)[len(raw_s) // 2]
-                     if isinstance(raw_s, (list, tuple)) and raw_s
-                     else (raw_s if not isinstance(raw_s, (list, tuple))
-                           else _ctx.defaults["scatter_s"]))
+            size_val = (sorted(raw_size)[len(raw_size) // 2]
+                        if isinstance(raw_size, (list, tuple)) and raw_size
+                        else (raw_size if not isinstance(raw_size, (list, tuple))
+                              else _ctx.defaults["scatter_size"]))
             mk_val = (raw_mk[0]
                       if isinstance(raw_mk, (list, tuple)) and raw_mk
                       else (raw_mk if not isinstance(raw_mk, (list, tuple)) else "o"))
-            s_size = math.sqrt(s_val) / 2
-            return marker(mk_val, x0 + sw / 2, y_mid, s_size, _a["_color"],
+            return marker(mk_val, x0 + sw / 2, y_mid, float(size_val), _a["_color"],
                           opts.get("alpha", _ctx.defaults["scatter_alpha"]))
         entries.append({"label": label, "color": a.get("_color"), "paint": paint})
     # Size aesthetic: emit a small grouped guide with representative
@@ -379,8 +416,7 @@ def _scatter_size_entries(sl, opts):
     out = []
     for v, label in zip(breaks, labels):
         frac = (v - src_lo) / span if span else 0.5
-        px_area = s_lo + frac * (s_hi - s_lo)
-        radius = math.sqrt(px_area) / 2
+        radius = s_lo + frac * (s_hi - s_lo)
         marker_kind = opts.get("marker", "o")
         if isinstance(marker_kind, (list, tuple)):
             marker_kind = marker_kind[0] if marker_kind else "o"

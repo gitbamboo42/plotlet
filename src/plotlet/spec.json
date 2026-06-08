@@ -51,7 +51,7 @@
     "linewidth": 2.0,
     "markersize": 5,
     "marker_stroke_width": 1.4,
-    "scatter_s": 45,
+    "scatter_size": 3.5,
     "scatter_alpha": 0.85,
     "fill_alpha": 0.3,
     "bar_alpha": 1,

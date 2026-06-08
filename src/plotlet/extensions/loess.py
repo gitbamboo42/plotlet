@@ -99,7 +99,7 @@ def demo():
     # Throw in a couple of outliers to demonstrate the robust pass.
     ys[20] += 4; ys[150] -= 5
     c = pt.chart()
-    c.scatter(data={"x": xs, "y": ys}, x="x", y="y", s=8, alpha=0.5, label="data")
+    c.scatter(data={"x": xs, "y": ys}, x="x", y="y", size=1.5, alpha=0.5, label="data")
     df = {"x": xs, "y": ys}
     c.loess(df, x="x", y="y", frac=0.3, label="LOESS (frac=0.3)")
     c.loess(df, x="x", y="y", frac=0.7, label="LOESS (frac=0.7)")

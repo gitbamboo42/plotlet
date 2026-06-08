@@ -59,7 +59,7 @@ def chart_scatter_color():
     }
     c = pt.chart(df, title="scatter color",
                  xlabel="x", ylabel="y", legend=True, grid=True)
-    c.scatter(x="x", y="y", color="group", s=30, alpha=0.6)
+    c.scatter(x="x", y="y", color="group", size=3, alpha=0.6)
     return c
 
 
@@ -981,16 +981,16 @@ def chart_clip_data_area():
     n = 24
     xs = [random.uniform(0.5, 9.5) for _ in range(n)]
     ys = [random.uniform(0.5, 9.5) for _ in range(n)]
-    sizes = [random.uniform(200, 400) for _ in range(n)]
+    sizes = [random.uniform(7, 10) for _ in range(n)]
     # Deliberate bleeders along the upper-right edges.
     xs    += [9.7, 9.5, 9.8, 8.6, 7.4]
     ys    += [9.5, 9.8, 7.4, 9.7, 9.5]
-    sizes += [700, 800, 650, 750, 650]
+    sizes += [13, 14, 13, 14, 13]
     c = pt.chart(data_width=320, data_height=240, clip=False,
                  title="clip=False",
                  xlabel="x", ylabel="y",
                  xlim=(0, 10), ylim=(0, 10))
-    c.scatter(data={"x": xs, "y": ys}, x="x", y="y", s=sizes, color="C0", alpha=0.6)
+    c.scatter(data={"x": xs, "y": ys}, x="x", y="y", size=sizes, color="C0", alpha=0.6)
     return c
 
 
@@ -1120,7 +1120,7 @@ def chart_symlog_x():
     ys = [abs(x) ** 0.5 for x in xs]
     c = pt.chart(data_width=400, data_height=180,
                  title="symlog axis", xlabel="signed magnitude", ylabel="sqrt(|x|)")
-    c.scatter(data={"x": xs, "y": ys}, x="x", y="y", s=24)
+    c.scatter(data={"x": xs, "y": ys}, x="x", y="y", size=2.5)
     c.xscale("symlog", linthresh=1.0)
     return c
 
@@ -1139,7 +1139,7 @@ def chart_facet_scatter():
     g = pt.facet(df, by="species", col_wrap=3,
                  data_width=180, data_height=140,
                  xlabel="bill_length", ylabel="bill_depth")
-    g.scatter(x="bill_length", y="bill_depth", s=18)
+    g.scatter(x="bill_length", y="bill_depth", size=2)
     return g
 
 
@@ -1171,7 +1171,7 @@ def chart_scatter_size():
     }
     c = pt.chart(df, data_width=400, data_height=200,
                  title="bubble", xlabel="x", ylabel="y")
-    c.scatter(x="x", y="y", size="mass", sizes=(15, 250))
+    c.scatter(x="x", y="y", size="mass", sizes=(2, 8))
     c.legend()
     return c
 
@@ -1407,7 +1407,7 @@ def chart_kde_2d():
           + [rng.gauss(2, 0.8) for _ in range(n)])
     c = pt.chart(data_width=300, data_height=260,
                  title="2-D KDE", xlabel="x", ylabel="y")
-    c.scatter(data={"x": xs, "y": ys}, x="x", y="y", s=5, alpha=0.25, color="#444444")
+    c.scatter(data={"x": xs, "y": ys}, x="x", y="y", size=1.2, alpha=0.25, color="#444444")
     c.kde_2d(data={"x": xs, "y": ys}, x="x", y="y", n_grid=40, cmap="viridis")
     c.legend()
     return c
@@ -1601,7 +1601,7 @@ def chart_regression_color():
                  data_width=320, data_height=240,
                  title="per-color regression",
                  xlabel="x", ylabel="y", legend=True)
-    c.scatter(s=14, alpha=0.5)
+    c.scatter(size=2, alpha=0.5)
     c.regression()
     c.legend()
     return c
@@ -1690,7 +1690,7 @@ def chart_aes_inheritance():
                  data_width=320, data_height=240,
                  title="aes inheritance (boxplot + strip)")
     c.boxplot()
-    c.strip(s=3, alpha=0.5)
+    c.strip(size=3, alpha=0.5)
     return c
 
 
