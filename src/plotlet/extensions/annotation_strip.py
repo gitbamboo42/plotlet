@@ -1,49 +1,71 @@
 """Custom artist: annotation strip.
 
-A row or column of colored cells encoding one value per position. The
-default is horizontal (positions along the x axis), designed to align
-with a host panel above or below via `share_x` — sample-group bars on
-top of a heatmap, regime tags above a time series, cluster labels
-alongside a dendrogram, score tracks aligned with a coverage plot, etc.
-Pass `orient="y"` for a vertical column that aligns with a host panel
-via `share_y` (per-row group labels next to a heatmap, per-row chunk
-strips).
+A row or column of cells encoding one value per position (band mode) or
+per contiguous run of equal values (block mode). The default is
+horizontal (positions along the x axis), designed to align with a host
+panel above or below via `share_x` — sample-group bars on top of a
+heatmap, regime tags above a time series, cluster labels alongside a
+dendrogram, score tracks aligned with a coverage plot, group titles
+above a split heatmap, etc. Pass `orient="y"` for a vertical column.
 
-Two color modes — same artist, the color spec chooses:
+Each cell can carry any combination of fill, text, and border:
 
-- **Categorical** (`palette={...}`): each unique value gets a discrete
-  color via a label→color dict. Legend renders as swatches.
-- **Continuous** (`cmap=...`): numeric values are mapped through a
-  colormap with optional `vmin`/`vmax`/`norm`. Legend renders as a
-  gradient strip (same shape as `heatmap` / `bubble_grid`).
+- **Fill** (categorical via `palette={...}` or continuous via
+  `cmap=...`). cmap is band-mode only — per-block cmap aggregates
+  would mask within-block variation.
+- **Text** (`text=True` shows the value; `text="other_col"` pulls
+  display text from a different column). Position+rotation controlled
+  by `side=`, `rotation=`, `fontsize=`, `text_color=`, `text_pad=`.
+- **Border** (`cell_border="#999"` or `{"color":..., "width":...}`).
+  In block mode with text only, the border outlines each block.
 
 Two scale kinds on the position axis:
 
 - **Categorical** (heatmap-style): pass `positions` as category names.
-  Cell size on that axis comes from `bandwidth`.
 - **Numeric** (time-series-style): pass `positions` as numbers and set
   `width=` in data units of the position axis.
 
-API:
+API examples:
 
-    c.annotation_strip(data=df, position="col", value="col",
+    # categorical color bar
+    c.annotation_strip(df, position="col", value="col",
                        palette={...}, name="Group")
-    c.annotation_strip(data=df, position="col", value="col",
+    # continuous score bar (band mode only)
+    c.annotation_strip(df, position="col", value="col",
                        cmap="viridis", name="Score")
-    c.annotation_strip(data=df, position="col", value="col",
-                       orient="y", ...)  # vertical
+    # per-position text labels
+    c.annotation_strip(df, position="col", value="col",
+                       text=True, side="bottom", rotation=90)
+    # per-block group titles with fill + text + border
+    c.annotation_strip(df, position="col", value="group",
+                       mode="block", palette={...}, text=True,
+                       cell_border="#000", text_color="white")
+    # per-block group titles, text only (no fill, no border)
+    c.annotation_strip(df, position="col", value="group",
+                       mode="block", text=True)
 
 `None` / `""` (or NaN in cmap mode) means missing data — drawn as
 `absent_fill` if set, otherwise transparent.
+
+In block mode, runs are computed per-contiguous-value (not per unique
+value): `[A, B, A, B]` produces four blocks, each rendered with its own
+label/fill. Pair with `column_split=`/`row_split=` on the host heatmap
+so the cluster machinery groups equal values into single runs.
 """
 
-SUMMARY = 'One-cell-per-position color strip (categorical palette or continuous cmap) for annotation tracks aligned to a host panel.'
+SUMMARY = 'Annotation strip — categorical/continuous fill, optional per-cell text, optional border. Band mode (per position) or block mode (per contiguous run of equal values) for group titles.'
 from pathlib import Path
 
 import plotlet as pt
 from plotlet.draw import rect, resolve_color
 from plotlet.draw import colormap, ContinuousNorm
+from plotlet.draw import text_path, cap_height, descender
 from plotlet.utils import to_list
+from plotlet._splits import block_bbox_1d
+
+
+_VALID_SIDES = {"x": {"bottom", "top"}, "y": {"left", "right"}}
+_DEFAULT_SIDE = {"x": "bottom", "y": "right"}
 
 
 def annotation_strip_record(args, kw):
@@ -78,6 +100,53 @@ def annotation_strip_record(args, kw):
     if kw.get("palette"):
         kw = dict(kw)
         kw["palette"] = {k: resolve_color(v) for k, v in kw["palette"].items()}
+    # mode=: "band" (default) one cell per position; "block" one cell per
+    # contiguous run of equal values (per-run, not per-unique-value — see
+    # `_splits.group_order` for the permuting variant).
+    mode = kw.get("mode", "band")
+    if mode not in ("band", "block"):
+        raise ValueError(
+            f"annotation_strip: mode= must be 'band' or 'block'; got {mode!r}."
+        )
+    if mode == "block" and kw.get("cmap") is not None:
+        raise ValueError(
+            "annotation_strip: mode='block' does not support cmap= "
+            "(per-block aggregate would mask within-block variation). "
+            "Use mode='band' for cmap fills."
+        )
+    # text=: None/False → no per-cell text; True → use `value` column as
+    # text; str → name of a separate column to read text from.
+    text_spec = kw.get("text")
+    text_values = None
+    side = None
+    if text_spec not in (None, False):
+        if text_spec is True:
+            text_values = [None if v is None or (isinstance(v, float) and v != v)
+                           else str(v) for v in values]
+        elif isinstance(text_spec, str):
+            if text_spec not in data:
+                raise ValueError(
+                    f"annotation_strip: text={text_spec!r} is not a column in data."
+                )
+            raw = to_list(data[text_spec])
+            if len(raw) != len(positions):
+                raise ValueError(
+                    f"annotation_strip: text column {text_spec!r} length "
+                    f"({len(raw)}) doesn't match positions ({len(positions)})."
+                )
+            text_values = [None if v is None or v == ""
+                           else str(v) for v in raw]
+        else:
+            raise ValueError(
+                f"annotation_strip: text= must be True, False, None, or a "
+                f"column name; got {type(text_spec).__name__}."
+            )
+        side = kw.get("side") or _DEFAULT_SIDE[orient]
+        if side not in _VALID_SIDES[orient]:
+            raise ValueError(
+                f"annotation_strip: side={side!r} invalid for orient={orient!r}; "
+                f"expected one of {sorted(_VALID_SIDES[orient])}."
+            )
     # Precompute vmin/vmax for cmap mode so the legend gradient and the
     # draw step agree on the range without recomputing.
     vmin = vmax = None
@@ -94,6 +163,17 @@ def annotation_strip_record(args, kw):
         else:
             vmin = user_vmin if user_vmin is not None else (1.0 if norm == "log" else 0.0)
             vmax = user_vmax if user_vmax is not None else (10.0 if norm == "log" else 1.0)
+    # In block mode, find boundaries where consecutive values differ.
+    # `block_bbox_1d` consumes this list to yield per-block pixel extents.
+    run_bounds = None
+    if mode == "block":
+        if not kw.get("palette") and text_values is None:
+            raise ValueError(
+                "annotation_strip: mode='block' needs at least one of "
+                "palette= or text= (otherwise the strip has no content)."
+            )
+        run_bounds = [i for i in range(1, len(values))
+                      if values[i] != values[i-1]]
     return {
         "type": "annotation_strip",
         "positions": positions,
@@ -101,6 +181,10 @@ def annotation_strip_record(args, kw):
         "_orient": orient,
         "_vmin": vmin,
         "_vmax": vmax,
+        "_text_values": text_values,
+        "_side": side,
+        "_mode": mode,
+        "_run_bounds": run_bounds,
         "opts": kw,
     }
 
@@ -117,6 +201,19 @@ def annotation_strip_ydomain(a):
     if a.get("_orient") == "y":
         return list(a["positions"])
     return [0, 1]
+
+
+def _resolve_cell_border(spec):
+    """Normalize `cell_border=` kwarg to `(color, width)` or `None`.
+
+    Accepts a color spec (string → width 1) or a `{color, width}` dict.
+    """
+    if spec in (None, False):
+        return None
+    if isinstance(spec, dict):
+        return (resolve_color(spec.get("color", "#222")),
+                float(spec.get("width", 1.0)))
+    return (resolve_color(spec), 1.0)
 
 
 def _ordered_values(values, palette):
@@ -177,7 +274,58 @@ def annotation_strip_draw(a, ctx):
             f"integer positions)."
         )
 
+    border = _resolve_cell_border(opts.get("cell_border"))
+    stroke_kw = ({"stroke": border[0], "stroke_width": border[1]}
+                 if border else {})
+
     out = []
+    mode = a.get("_mode", "band")
+    text_values = a.get("_text_values")
+
+    if mode == "block":
+        # Per-block iteration: one rect (palette only — cmap forbidden) +
+        # optional centered text per contiguous run. `block_bbox_1d`
+        # already accounts for split-gap pixels via `cat_scale(cats[i])`.
+        run_bounds = a.get("_run_bounds") or []
+        fontsize = opts.get("fontsize", 11)
+        text_color = opts.get("text_color", "#222")
+        rotation = float(opts.get("rotation", 0))
+        cap = cap_height(fontsize)
+        desc = descender(fontsize)
+        omid = (o_lo + o_hi) / 2
+        for i0, i1, c_lo_raw, c_hi_raw in block_bbox_1d(
+                cat_scale, a["positions"], bw, run_bounds):
+            v = a["values"][i0]
+            missing = v is None or v == ""
+            c_lo = c_lo_raw + bw * cat_pad
+            c_hi = c_hi_raw - bw * cat_pad
+            c_w = c_hi - c_lo
+            if orient == "y":
+                x0, y0, w, h = o_inner, c_lo, h_inner_orth, c_w
+            else:
+                x0, y0, w, h = c_lo, o_inner, c_w, h_inner_orth
+            if absent_fill is not None:
+                out.append(rect(x0, y0, w, h, fill=absent_fill, **stroke_kw))
+            if palette and not missing:
+                fill = palette.get(v, fallback)
+                out.append(rect(x0, y0, w, h, fill=fill, **stroke_kw))
+            elif border and not missing and absent_fill is None:
+                # Text-only block with cell_border= → outline the block.
+                out.append(rect(x0, y0, w, h, **stroke_kw))
+            if text_values is not None:
+                label = text_values[i0]
+                if label is None or label == "":
+                    continue
+                cmid = (c_lo + c_hi) / 2
+                if orient == "y":
+                    tx, ty = omid, cmid + (cap - desc) / 2
+                else:
+                    tx, ty = cmid, omid + (cap - desc) / 2
+                out.append(text_path(label, tx, ty, fontsize,
+                                     anchor="middle", color=text_color,
+                                     rotate=rotation))
+        return "".join(out)
+
     for pos, v in zip(a["positions"], a["values"]):
         cp = cat_scale(pos)
         c_lo = cp - bw / 2
@@ -191,7 +339,7 @@ def annotation_strip_draw(a, ctx):
             x0, y0, w, h = c_inner, o_inner, c_inner_w, h_inner_orth
 
         if absent_fill is not None:
-            out.append(rect(x0, y0, w, h, fill=absent_fill))
+            out.append(rect(x0, y0, w, h, fill=absent_fill, **stroke_kw))
         missing = v is None or v == "" or (cmap_fn is not None and v != v)
         if missing:
             continue
@@ -200,7 +348,45 @@ def annotation_strip_draw(a, ctx):
             fill = f"rgb({r},{g},{b})"
         else:
             fill = palette.get(v, fallback)
-        out.append(rect(x0, y0, w, h, fill=fill))
+        out.append(rect(x0, y0, w, h, fill=fill, **stroke_kw))
+
+    # Optional per-cell text overlay. Centered along the position axis
+    # with side= picking which orthogonal edge to anchor against.
+    # Unrotated text uses cap-height padding from the inner edge;
+    # rotated text switches to an end-anchored placement so the rotated
+    # body sits inside the strip.
+    if text_values is not None:
+        side = a["_side"]
+        fontsize = opts.get("fontsize", 11)
+        text_color = opts.get("text_color", "#222")
+        rotation = float(opts.get("rotation", 0))
+        text_pad = float(opts.get("text_pad", 3))
+        cap = cap_height(fontsize)
+        desc = descender(fontsize)
+        for pos, label in zip(a["positions"], text_values):
+            if label is None or label == "":
+                continue
+            cp = cat_scale(pos)
+            if orient == "x":
+                x = cp
+                if side == "bottom":
+                    if rotation == 0:
+                        anchor, y = "middle", o_hi - desc - text_pad
+                    else:
+                        anchor, y = "start", o_hi - text_pad
+                else:  # "top"
+                    if rotation == 0:
+                        anchor, y = "middle", o_lo + cap + text_pad
+                    else:
+                        anchor, y = "end", o_lo + text_pad
+            else:  # orient == "y"
+                if side == "right":
+                    anchor, x = "end", o_hi - text_pad
+                else:  # "left"
+                    anchor, x = "start", o_lo + text_pad
+                y = cp + (cap - desc) / 2
+            out.append(text_path(label, x, y, fontsize, anchor=anchor,
+                                 color=text_color, rotate=rotation))
     return "".join(out)
 
 
@@ -285,9 +471,11 @@ pt.add_artist(pt.ArtistSpec(
 def demo():
     """Build the demonstration chart with synthetic data.
 
-    Two stacked strips on the same sample axis: a categorical group track
-    (palette) above a continuous score track (cmap). The cmap-mode strip
-    pulls a gradient legend on the right via `pt.legend()`.
+    Three stacked strips on the same sample axis:
+
+    1. Block-mode group titles with palette fill + text + border.
+    2. Band-mode categorical strip (one cell per sample, palette fill).
+    3. Band-mode continuous strip with cmap and a gradient legend.
 
     Returns a `pt.Chart` ready for `.save_svg()` or further composition."""
     import math
@@ -297,6 +485,14 @@ def demo():
     scores = [math.sin(i * 0.6) for i in range(12)]
 
     df = {"sample": samples, "group": groups, "score": scores}
+
+    blocks = pt.chart(data_width=420, data_height=22)
+    blocks.annotation_strip(df, position="sample", value="group",
+                            mode="block", palette=palette, text=True,
+                            text_color="white", cell_border="#222",
+                            name="Cohort")
+    blocks.xticks([])
+
     cat = pt.chart(data_width=420, data_height=24)
     cat.annotation_strip(df, position="sample", value="group",
                          palette=palette, name="Treatment")
@@ -307,7 +503,7 @@ def demo():
                           cmap="RdBu_r", vmin=-1, vmax=1, name="Score")
     cont.xticks(rotation=45)
 
-    return pt.grid([[cat], [cont]]).share_x(True) | pt.legend()
+    return pt.grid([[blocks], [cat], [cont]]).share_x(True) | pt.legend()
 
 
 if __name__ == "__main__":

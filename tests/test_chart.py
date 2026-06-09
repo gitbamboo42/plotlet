@@ -653,6 +653,55 @@ def chart_heatmap_split_attached():
     return pt.grid([[hm, pt.legend()]]).touch()
 
 
+def chart_heatmap_block_titles():
+    # Block-mode annotation_strip on top of a column-split heatmap:
+    # one text label per group, no fill, no border. The shared scale
+    # places labels at the centre of each column block.
+    import plotlet.extensions.annotation_strip
+    nrows, ncols = 6, 9
+    matrix = [[r * ncols + c for c in range(ncols)] for r in range(nrows)]
+    col_labels = [f"c{i+1}" for i in range(ncols)]
+    row_labels = [f"r{i+1}" for i in range(nrows)]
+    col_groups = ["alpha"] * 3 + ["beta"] * 4 + ["gamma"] * 2
+
+    titles = pt.chart(data_height=18)
+    titles.annotation_strip({"col": col_labels, "group": col_groups},
+                            position="col", value="group",
+                            mode="block", text=True)
+
+    hm = pt.chart(data_width=360, data_height=180)
+    hm.heatmap(matrix, xticklabels=col_labels, yticklabels=row_labels,
+               column_split=col_groups, legend={"label": "value"})
+    hm.attach_above(titles)
+
+    return pt.grid([[hm, pt.legend()]]).touch()
+
+
+def chart_heatmap_block_filled():
+    # Block-mode strip with palette fill, white text, and a black
+    # border outlining each block — the full filled-titles look.
+    import plotlet.extensions.annotation_strip
+    nrows, ncols = 6, 9
+    matrix = [[r * ncols + c for c in range(ncols)] for r in range(nrows)]
+    col_labels = [f"c{i+1}" for i in range(ncols)]
+    row_labels = [f"r{i+1}" for i in range(nrows)]
+    col_groups = ["alpha"] * 3 + ["beta"] * 4 + ["gamma"] * 2
+    palette = {"alpha": pt.TAB10[0], "beta": pt.TAB10[1], "gamma": pt.TAB10[2]}
+
+    block = pt.chart(data_height=22)
+    block.annotation_strip({"col": col_labels, "group": col_groups},
+                           position="col", value="group",
+                           mode="block", palette=palette, text=True,
+                           text_color="white", cell_border="#222")
+
+    hm = pt.chart(data_width=360, data_height=180)
+    hm.heatmap(matrix, xticklabels=col_labels, yticklabels=row_labels,
+               column_split=col_groups, legend={"label": "value"})
+    hm.attach_above(block)
+
+    return pt.grid([[hm, pt.legend()]]).touch()
+
+
 def chart_split_rect():
     # Row 1 "sym":     n=1..8, symmetric=True  — cuts land on corners.
     # Row 2 "n":       n=1..8, symmetric=False — equal arc length.
@@ -1776,6 +1825,8 @@ PLOTS = {
     "heatmap_nan":         chart_heatmap_nan,
     "heatmap_split":          chart_heatmap_split,
     "heatmap_split_attached": chart_heatmap_split_attached,
+    "heatmap_block_titles":   chart_heatmap_block_titles,
+    "heatmap_block_filled":   chart_heatmap_block_filled,
     "dendrogram_split":          chart_dendrogram_split,
     "dendrogram_split_parent":   chart_dendrogram_split_parent,
     "imshow_annot_custom": chart_imshow_annot_custom,

@@ -12,7 +12,6 @@ import random
 
 import plotlet as pt
 import plotlet.extensions.annotation_strip  # noqa: F401
-import plotlet.extensions.labels_strip       # noqa: F401
 
 
 def make_data(seed=0):
@@ -62,7 +61,7 @@ if __name__ == "__main__":
                  xticklabels=ctrl_s, yticklabels=genes,
                  row_split=pathways,
                  cmap="RdBu_r", center=0, vmin=-3, vmax=3,
-                 border=False, linewidth=0.5,
+                 linewidth=0.5,
                  legend={"label": "expression"})
     left.attach_left(left_strip, left_tree)
 
@@ -70,14 +69,14 @@ if __name__ == "__main__":
     right.heatmap(trt_m,
                   xticklabels=trt_s, yticklabels=genes,
                   cmap="RdBu_r", center=0, vmin=-3, vmax=3,
-                  border=False, linewidth=0.5,
+                  linewidth=0.5,
                   legend=False)
 
-    # labels_strip draws glyphs, so share_y's tick-label suppression
-    # doesn't eat gene names on the seam.
+    # annotation_strip with text= draws glyphs, so share_y's tick-label
+    # suppression doesn't eat gene names on the seam.
     right_labels = pt.chart(data_width=70)
-    right_labels.labels_strip({"gene": genes}, position="gene", label="gene",
-                              orient="y", side="left")
+    right_labels.annotation_strip({"gene": genes}, position="gene", value="gene",
+                                  text=True, orient="y", side="left")
     right.attach_right(right_labels)
 
     fig = (left | right | pt.legend(

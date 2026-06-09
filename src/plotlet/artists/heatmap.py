@@ -119,11 +119,11 @@ def _heatmap_frame_defaults(args, kw):
         ("xticks", [None], {"marks": False}),
         ("yticks", [None], {"marks": False}),
     ]
-    # `border=False` drops the axis-spine rectangle around the heatmap so
-    # the colored cells alone define the data block — the typical look
-    # when the heatmap is wrapped by annotation strips. Default (True)
-    # keeps the spine frame.
-    if not kw.get("border", True):
+    # Default `border=False` — the colored cells alone define the data
+    # block, which is the typical look when wrapping the heatmap with
+    # annotation strips. Pass `border=True` to draw the axis-spine
+    # rectangle.
+    if not kw.get("border", False):
         out.append(("spines", [], {"top": False, "right": False,
                                    "bottom": False, "left": False}))
     return out

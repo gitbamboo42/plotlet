@@ -37,7 +37,7 @@ import pytest
 # extension is built entirely on a public API surface we want to keep
 # stable (a canary that catches drift in `pt.cluster_split` /
 # `pt.cluster.layout_tree` / `pt.add_artist` — see `curved_tree`).
-BASELINE_EXTENSIONS = {"annotation_strip", "bubble_grid", "labels_strip",
+BASELINE_EXTENSIONS = {"annotation_strip", "bubble_grid",
                        "significance_brackets", "curved_tree"}
 
 

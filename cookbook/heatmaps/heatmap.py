@@ -85,7 +85,6 @@ if __name__ == "__main__":
                xticklabels=samples, yticklabels=genes,
                column_split=conditions, row_split=pathways,
                cmap="RdBu_r", center=0,
-               border=False,
                linewidth=0.5,
                legend={"label": "expression"})
 
