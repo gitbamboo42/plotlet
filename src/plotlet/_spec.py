@@ -58,6 +58,7 @@ _LEGSPEC = SPEC["legend"]
 _PADSPEC = SPEC["pad"]
 _SIZESPEC = SPEC["size"]
 _MARGIN_FLOOR = SPEC["size"]["margin_floor"]
+_OUTER_MARGIN = SPEC["size"]["outer_margin"]
 _LAYOUTSPEC = SPEC["layout"]
 _FIGSPEC = SPEC["figure"]
 

@@ -186,11 +186,12 @@ def custom_gap_method():
 
 
 def custom_gap_grid_kwarg():
-    # `pt.grid(..., gap=N)` — same override, declared at construction.
+    # `.gap(N)` chained after `pt.grid([[...]])` — same override path
+    # as for `|` / `/` layouts.
     a = _sin(data_width=120)
     b = _cos(data_width=120)
     c = _bar(data_width=120)
-    return pt.grid([[a, b, c]], gap=8)
+    return pt.grid([[a, b, c]]).gap(8)
 
 
 def complex_grid_shares():
@@ -232,7 +233,7 @@ def fit_width_only():
 def share_x_col_v_of_h():
     # v-of-h composition with cross-row column-wise x-sharing — the
     # canonical "stacked tracks across a genome" shape. Each row uses
-    # share_y().touch() to collapse inner spines within the row; the
+    # share_y().gap(0) to collapse inner spines within the row; the
     # outer `share_x("col")` aligns the same column across rows (column
     # widths differ on purpose to match the genome-tracks use case).
     def row(name):
@@ -242,7 +243,7 @@ def share_x_col_v_of_h():
         a.line(data={"x": [0, 1, 2, 3, 4], "y": [0, 1, 2, 1, 0]}, x="x", y="y")
         b.line(data={"x": [0, 1, 2, 3], "y": [2, 1, 3, 1]}, x="x", y="y")
         c.line(data={"x": [0, 1, 2], "y": [1, 2, 1]}, x="x", y="y")
-        return (a | b | c).share_y().touch()
+        return (a | b | c).share_y().gap(0)
     return (row("r1") / row("r2") / row("r3")).share_x("col")
 
 

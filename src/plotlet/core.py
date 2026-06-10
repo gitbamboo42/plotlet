@@ -27,7 +27,7 @@ from importlib.metadata import version as _pkg_version
 from pathlib import Path
 
 from ._spec import (
-    SPEC, _SIZESPEC, _MARGIN_FLOOR, _FRAME, _GRIDSPEC, _FONTSPEC, _LEGSPEC,
+    SPEC, _MARGIN_FLOOR, _FRAME, _GRIDSPEC, _FONTSPEC, _LEGSPEC,
     _LAYOUTSPEC, _PADSPEC, _D, _DASH,
 )
 from .draw import resolve_color, TAB10
@@ -1533,26 +1533,37 @@ def _panel_open(st, panel_opts: _PanelOpts | None, transform: str,
     return f'<g transform="{transform}"{attrs}>{meta}'
 
 
-def _render(st, W, H, M):
+def _render(st, W, H, M, outer=None):
     """Emit one SVG. (W, H) = canvas dims; M = effective margin already
     resolved by the caller via `layout._build_panel_opts` →
     `_compute_measured_margins`. Single-panel and multi-panel paths
     share that pre-pass; this function just paints one panel into its
     own outer `<svg>`. Splitting margin resolution out of `_render` is
-    what lets the data-path skip canvas-based scaling."""
+    what lets the data-path skip canvas-based scaling.
+
+    `outer` is the figure-level breathing-room margin applied only at
+    the public root render — passed as `{top, right, bottom, left}` from
+    `to_svg()`. Embedded calls (inset, layout cell) pass `None` and the
+    function is a no-op on outer breathing room."""
     iw = W - M["left"] - M["right"]
     ih = H - M["top"] - M["bottom"]
-    transform = f'translate({M["left"]},{M["top"]})'
+    ol = outer["left"] if outer else 0
+    ot = outer["top"]  if outer else 0
+    or_ = outer["right"]  if outer else 0
+    ob = outer["bottom"] if outer else 0
+    Wt = W + ol + or_
+    Ht = H + ot + ob
+    transform = f'translate({M["left"] + ol},{M["top"] + ot})'
     # Track the panel translate on the region sink so chrome bboxes land
     # in outer-SVG coords. No-op when no sink is active (normal render).
-    with _regions.translate(M["left"], M["top"]):
+    with _regions.translate(M["left"] + ol, M["top"] + ot):
         inner = _render_inner(st, iw, ih, M)
     return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
-        f'viewBox="0 0 {W} {H}" font-family="{_FONTSPEC["family"]}" font-size="11" '
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{Wt}" height="{Ht}" '
+        f'viewBox="0 0 {Wt} {Ht}" font-family="{_FONTSPEC["family"]}" font-size="11" '
         f'style="background:{SPEC["figure"]["background"]}"'
         f'{_figure_root_attrs("figure")}>'
-        + _panel_open(st, None, transform, M, iw, ih, (0, 0, W, H))
+        + _panel_open(st, None, transform, M, iw, ih, (ol, ot, W, H))
         + inner
         + '</g></svg>'
     )

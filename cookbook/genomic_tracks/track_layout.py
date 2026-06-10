@@ -21,11 +21,11 @@ features here are things that *can't* live in a paint callback:
 
 Layout — same for both styles:
 
-  each track row is `(c1 | c2 | ... | cN).share_y().touch()` — chroms
-  within a track share y; touch overlaps adjacent canvases by
-  `2 * margin_floor` so data regions abut exactly. Tracks stack
-  vertically with `/`; the outer composition gets `.share_x("col")` so
-  the same chrom column shares x across all rows.
+  each track row is `(c1 | c2 | ... | cN).share_y().gap(0)` — chroms
+  within a track share y; `.gap(0)` collapses the default inter-panel
+  gap so data regions abut exactly. Tracks stack vertically with `/`;
+  the outer composition gets `.share_x("col")` so the same chrom
+  column shares x across all rows.
 
 Style — only differs in per-cell decoration:
 
@@ -149,7 +149,7 @@ def _build_track_row(track, gs, panel_widths, *, height, style, theme,
         # Drop top/right always; for inner cells, suppress the left spine
         # (facecolor mode) or restyle it as a dotted separator (spine mode).
         # plotlet's share_y hide_left only hides labels, not the spine —
-        # without an explicit override, touch() would render every cell's
+        # without an explicit override, `.gap(0)` would render every cell's
         # left spine at the chrom boundary as a solid black line.
         c.spines(top=False, right=False)
         if i > 0:
@@ -186,12 +186,12 @@ def _build_track_row(track, gs, panel_widths, *, height, style, theme,
     row = cells[0]
     for c in cells[1:]:
         row = row | c
-    # share_y + touch — keeps inner ylabel/tick-label suppression,
-    # collapses floor margins between cells. plotlet's `hide_left` from
-    # share_y only hides labels, not the spine itself; the per-cell
-    # `c.spines(left={...})` override above in spine mode still renders
-    # the dotted boundary line at the now-coincident edge.
-    row.share_y().touch()
+    # share_y + .gap(0) — keeps inner ylabel/tick-label suppression,
+    # collapses inter-panel gap between cells so spines coincide.
+    # plotlet's `hide_left` from share_y only hides labels, not the spine
+    # itself; the per-cell `c.spines(left={...})` override above in spine
+    # mode still renders the dotted boundary line at the coincident edge.
+    row.share_y().gap(0)
     return row
 
 
@@ -357,7 +357,7 @@ def _build_sv_row(sv, gs, panel_widths, *, theme, chrom_column, style):
         # The full triangle's left edge is `y = x_linear`; each chrom's
         # midpoint maps to (t_mid/2, t_mid/2) on that edge. That point
         # usually falls in another slice's x range, but `text` is in the
-        # foreground layer (not data-clipped) and slices abut via touch(),
+        # foreground layer (not data-clipped) and slices abut via .gap(0),
         # so pixel positions stay continuous across slices.
         t_mid = Bi0 + length / 2
         offs  = 6 / math.sqrt(2)        # 6 px perpendicular to the edge
@@ -371,7 +371,7 @@ def _build_sv_row(sv, gs, panel_widths, *, theme, chrom_column, style):
     row = cells[0]
     for c in cells[1:]:
         row = row | c
-    row.share_y().touch()
+    row.share_y().gap(0)
     return row
 
 

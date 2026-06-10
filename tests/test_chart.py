@@ -555,7 +555,7 @@ def chart_dendrogram_split():
                column_split=col_groups,
                cmap="viridis", legend={"label": "value"})
     hm.attach_above(tree)
-    return pt.grid([[hm, pt.legend()]]).touch()
+    return pt.grid([[hm, pt.legend()]]).gap(0)
 
 
 def chart_dendrogram_split_parent():
@@ -612,7 +612,7 @@ def chart_dendrogram_split_parent():
     hm.attach_above(top_c, top_d)
     hm.attach_left(left_c, left_d)
 
-    return pt.grid([[hm, pt.legend()]]).touch()
+    return pt.grid([[hm, pt.legend()]]).gap(0)
 
 
 def chart_heatmap_split_attached():
@@ -650,7 +650,7 @@ def chart_heatmap_split_attached():
     # First arg sits closest to the host; order outward is strip, bar.
     hm.attach_above(strip, bar)
 
-    return pt.grid([[hm, pt.legend()]]).touch()
+    return pt.grid([[hm, pt.legend()]]).gap(0)
 
 
 def chart_heatmap_block_titles():
@@ -674,7 +674,7 @@ def chart_heatmap_block_titles():
                column_split=col_groups, legend={"label": "value"})
     hm.attach_above(titles)
 
-    return pt.grid([[hm, pt.legend()]]).touch()
+    return pt.grid([[hm, pt.legend()]]).gap(0)
 
 
 def chart_heatmap_block_filled():
@@ -699,7 +699,7 @@ def chart_heatmap_block_filled():
                column_split=col_groups, legend={"label": "value"})
     hm.attach_above(block)
 
-    return pt.grid([[hm, pt.legend()]]).touch()
+    return pt.grid([[hm, pt.legend()]]).gap(0)
 
 
 def chart_split_rect():

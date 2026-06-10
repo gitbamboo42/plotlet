@@ -78,14 +78,30 @@ def _share_root(leaf: Chart, axis: str) -> Chart:
         cur = nxt
 
 
-def _resolve_gap(a: Chart | None, b: Chart | None) -> float:
-    """Pull the per-parent `gap` override off whichever cell is non-None;
-    fall back to `spec.json:layout.gap`. Both-None happens when an entire
-    grid boundary is empty cells; spec default is the right answer there."""
+def _resolve_gap(a: Chart | None, b: Chart | None, *, axis: str) -> float:
+    """Resolve the inter-panel gap for a boundary on `axis` ("h" between
+    columns / "v" between rows). Falls back in this order, most-specific
+    first:
+
+      1. Per-axis parent override   (`._gap_x` / `._gap_y`)
+      2. Unified parent override    (`._gap`, set via `.gap(value)`)
+      3. Per-axis spec default      (`layout.gap_x` / `gap_y`)
+      4. Unified spec default       (`layout.gap`)
+
+    Both-None happens when an entire grid boundary is empty cells; the
+    spec default is the right answer there."""
     parent = (a._parent if a is not None else None) \
           or (b._parent if b is not None else None)
-    if parent is not None and parent._gap is not None:
-        return parent._gap
+    per_axis_attr = "_gap_x" if axis == "h" else "_gap_y"
+    spec_per_axis = _LAYOUTSPEC.get("gap_x" if axis == "h" else "gap_y")
+    if parent is not None:
+        per_axis = getattr(parent, per_axis_attr, None)
+        if per_axis is not None:
+            return per_axis
+        if parent._gap is not None:
+            return parent._gap
+    if spec_per_axis is not None:
+        return spec_per_axis
     return _GAP
 
 
@@ -97,14 +113,15 @@ def _pair_gap(a: Chart | None, b: Chart | None, *, axis: str) -> float:
         explicit source) → `legend_gap`, a small intentional separation
         that's not a share-pair joint and doesn't trigger spine/label
         suppression.
-      - Anything else → the parent's gap (set via `(a | b).gap(N)` or
-        `pt.grid(..., gap=N)`), or the spec default if unset. Joined
+      - Anything else → the parent's gap (set via `.gap(N)` on any
+        Layout — `|`-, `/`-, or `pt.grid`-built), or the spec default
+        if unset. Joined
         share-pairs use this same gap too: their close-side breathing
         comes from the floor + content-aware `_required_margin` (joined
         sides have no tick labels / axis labels / title → just floor),
         so `gap` is genuinely extra inter-panel space layered on top.
     """
-    default_gap = _resolve_gap(a, b)
+    default_gap = _resolve_gap(a, b, axis=axis)
     if a is None or b is None or a._is_parent or b._is_parent:
         return default_gap
     a_leg = a._leaf_kind == "legend"
@@ -850,7 +867,7 @@ def _effective_margin(leaf: Chart, po: _PanelOpts, w: float, h: float) -> dict:
     return _enforce_floors(leaf._margin)
 
 
-def _render_layout(root: Chart) -> str:
+def _render_layout(root: Chart, outer=None) -> str:
     panel_opts, states = _build_panel_opts(root)
     # Override each legend leaf's intrinsic _fig size with its
     # content-driven size before measure runs.
@@ -861,12 +878,24 @@ def _render_layout(root: Chart) -> str:
     placements: list = []
     _allocate(root, 0, 0, W, H, placements)
 
+    # Figure-level breathing room. Only the public root render passes a
+    # non-None `outer`; embedded layouts (e.g. attachment routing through
+    # this function) pass `None` and stay byte-identical.
+    ol = outer["left"] if outer else 0
+    ot = outer["top"]  if outer else 0
+    or_ = outer["right"]  if outer else 0
+    ob = outer["bottom"] if outer else 0
+    Wt = W + ol + or_
+    Ht = H + ot + ob
+
     parts = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
-        f'viewBox="0 0 {W} {H}" font-family="{_FONTSPEC["family"]}" font-size="11" '
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{Wt}" height="{Ht}" '
+        f'viewBox="0 0 {Wt} {Ht}" font-family="{_FONTSPEC["family"]}" font-size="11" '
         f'style="background:{SPEC["figure"]["background"]}"'
         f'{_figure_root_attrs("layout")}>'
     ]
+    if ol or ot:
+        parts.append(f'<g transform="translate({ol},{ot})">')
     # Two passes so legends can read color-cycle assignments off data
     # artists. _render_inner mutates each artist dict's `_color`; legends
     # then harvest those for their swatches. Diagram leaves render in
@@ -898,8 +927,14 @@ def _render_layout(root: Chart) -> str:
         # the sink so chrome bboxes land in outer-SVG coords; multi-panel
         # layouts get correct per-panel positions without extra work.
         with active_theme(_extract_theme(leaf._calls)):
-            parts.append(_panel_open(st, po, transform, M_eff, iw, ih, (x, y, w, h)))
-            with _regions.translate(x + M_eff["left"], y + M_eff["top"]):
+            # panel-bbox attr is documented as outer-SVG coords; add the
+            # outer offset (ol, ot) since we live inside a translate wrapper.
+            parts.append(_panel_open(st, po, transform, M_eff, iw, ih,
+                                     (x + ol, y + ot, w, h)))
+            # Add the outer offset (ol, ot) so chrome bboxes land in
+            # outer-SVG coords; matches the `<g transform="translate(ol, ot)">`
+            # wrapper on the SVG side.
+            with _regions.translate(x + M_eff["left"] + ol, y + M_eff["top"] + ot):
                 parts.append(_render_inner(st, iw, ih, M_eff, po))
             parts.append('</g>')
         data_leaves.append(leaf)
@@ -910,13 +945,18 @@ def _render_layout(root: Chart) -> str:
         # Same `data-plotlet-kind` + bbox attrs the data-panel wrapper
         # carries, so `layout_diagram` can render an outline for the
         # legend leaf the way it does for charts (minus the data area).
+        # legend-bbox attr is documented as outer-SVG coords; add the outer
+        # offset (ol, ot) since we live inside a translate wrapper.
         parts.append(
             f'<g transform="translate({x:.2f},{y:.2f})" '
             f'data-plotlet-kind="legend" '
-            f'data-plotlet-legend-bbox="{x:.0f},{y:.0f},{w:.0f},{h:.0f}">'
+            f'data-plotlet-legend-bbox="{x + ol:.0f},{y + ot:.0f},'
+            f'{w:.0f},{h:.0f}">'
         )
-        with _regions.translate(x, y):
+        with _regions.translate(x + ol, y + ot):
             parts.append(_render_legend(leaf, w, h, states, data_leaves))
+        parts.append('</g>')
+    if ol or ot:
         parts.append('</g>')
     parts.append('</svg>')
     return "".join(parts)

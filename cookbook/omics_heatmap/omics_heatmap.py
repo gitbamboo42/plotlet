@@ -115,7 +115,7 @@ if __name__ == "__main__":
     fig = pt.grid([
         [None, top, None         ],
         [tree, hm,  pt.legend()  ],
-    ]).share_x("col").share_y("row").touch()
+    ]).share_x("col").share_y("row").gap(0)
 
     out = Path(__file__).with_suffix(".svg")
     fig.save_svg(out)

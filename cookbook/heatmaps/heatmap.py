@@ -94,7 +94,7 @@ if __name__ == "__main__":
     fig = (hm | pt.legend(
         top_strip, left_strip, hm,
         names={top_strip: "Condition", left_strip: "Pathway", hm: None},
-    )).touch()
+    )).gap(0)
 
     out = Path(__file__).with_suffix(".svg")
     fig.save_svg(out)

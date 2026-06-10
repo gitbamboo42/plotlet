@@ -225,4 +225,4 @@ def demo():
                column_split=col_groups,
                cmap="viridis", legend={"label": "value"})
     hm.attach_above(tree)
-    return pt.grid([[hm, pt.legend()]]).touch()
+    return pt.grid([[hm, pt.legend()]]).gap(0)

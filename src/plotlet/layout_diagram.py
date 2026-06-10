@@ -65,16 +65,16 @@ def layout_diagram(chart: Chart) -> Chart:
 
     Shows: panel bboxes (dashed), data areas (solid, sized to scale so
     the colored ring between them encodes margin proportions), gaps
-    between adjacent panels (hatched slabs labeled with pixel size),
-    standalone-legend leaves (dashed border, no data-area fill), and
-    each chrome bbox (panel, spines, title, axis labels, ticks, legend
-    sub-elements) overlaid as a translucent shape — rotated tick labels
-    render as their precise rotated rectangle, not the loose AABB hull.
+    between adjacent panels (hatched slabs), standalone-legend leaves
+    (dashed border, no data-area fill), and each chrome bbox (panel,
+    spines, title, axis labels, ticks, legend sub-elements) overlaid
+    as a translucent shape — rotated tick labels render as their
+    precise rotated rectangle, not the loose AABB hull.
 
-    Built by re-parsing `chart.to_svg()` for the abstract layout
-    (panel + data-area + legend-leaf bboxes from `data-plotlet-*`
-    attrs) and `chart.regions()` for the chrome overlay layer; both
-    are public surfaces.
+    Built by re-parsing the chart's inner (no-outer-margin) SVG for
+    the abstract layout (panel + data-area + legend-leaf bboxes from
+    `data-plotlet-*` attrs) and the regions sink for the chrome
+    overlay layer.
 
     Caveat: the diagram is a *snapshot* of `chart`'s layout at call time.
     For body-first leaves (the 0.2.0+ default) and the no-margin diagram
@@ -83,9 +83,18 @@ def layout_diagram(chart: Chart) -> Chart:
     explicit width-constrained parents can rescale during composition;
     in that rare case the diagram may slightly drift from how `chart`
     ends up rendered."""
-    src_svg = chart.to_svg()
+    # Use the inner (no-outer-margin) render so the diagram leaf's
+    # natural size matches what `chart` will be in a sibling layout —
+    # `to_svg()` would include the figure-level outer_margin that only
+    # the public root render adds, and that 8-px-each-axis padding
+    # would force `chart` to grow when re-composed via `|` or `grid`.
+    chart._require_render_root()
+    from . import _regions
+    with _regions.collecting() as sink:
+        src_svg = chart._to_svg_unchecked()
+    regions_data = [{"kind": r.kind, "bbox": r.bbox, "name": r.name,
+                     "meta": r.meta} for r in sink.regions]
     W, H = _figure_size(src_svg)
-    regions_data = chart.regions()
     inner = _render_diagram_inner(src_svg, W, H, regions_data)
 
     leaf = Chart._new_sized_leaf(
@@ -140,8 +149,8 @@ def _render_diagram_inner(src_svg: str, W: int, H: int,
         _HATCH_DEF,
         rect(0, 0, W, H, stroke="#bbb", stroke_width=0.5, dash="2,2"),
     ]
-    for axis, gx, gy, gw, gh in gaps:
-        parts.append(_render_gap(axis, gx, gy, gw, gh))
+    for _axis, gx, gy, gw, gh in gaps:
+        parts.append(_render_gap(gx, gy, gw, gh))
     show_overlays = bool(regions_data)
     for i, p in enumerate(panels):
         parts.append(_render_panel(p, _PALETTE[i % len(_PALETTE)],
@@ -301,18 +310,11 @@ def _render_panel(p: dict, col: str, *, hide_margin_numbers: bool = False) -> st
     return "".join(parts)
 
 
-def _render_gap(axis: str, gx: float, gy: float, gw: float, gh: float) -> str:
-    body = rect(gx, gy, gw, gh,
+def _render_gap(gx: float, gy: float, gw: float, gh: float) -> str:
+    return rect(gx, gy, gw, gh,
                 fill="url(#plotlet-gap-hatch)",
                 stroke="#666", stroke_width=0.5,
                 stroke_alpha=0.5, dash="2,2")
-    size = gw if axis == "h" else gh
-    cx, cy = gx + gw / 2, gy + gh / 2
-    if axis == "h":
-        label = _txt(cx, cy, f"gap {int(size)}", size=9, fill="#333", rotate=-90)
-    else:
-        label = _txt(cx, cy + 3, f"gap {int(size)}", size=9, fill="#333")
-    return body + label
 
 
 def _txt(x: float, y: float, s, *, anchor: str = "middle", size: int = 10,

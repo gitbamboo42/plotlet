@@ -61,7 +61,7 @@ Body-first: declare the **data region**, the canvas grows to fit content.
 c = pt.chart(data_width=400, data_height=300, ...)
 ```
 
-Margins are floored at `spec.size.margin_floor` and grow as needed (measure-driven from actual title / tick-label widths). For a specific final SVG canvas, chain `.fit()` *after* composing:
+Margins are floored at `spec.size.margin_floor` (default zero) and grow as needed (measure-driven from actual title / tick-label widths). The figure root render adds a separate `spec.size.outer_margin` around the whole composition for edge breathing. For a specific final SVG canvas, chain `.fit()` *after* composing:
 
 ```python
 fig = (a | b | c).fit(canvas_width=1200, canvas_height=400)
@@ -72,11 +72,12 @@ fig = (a | b | c).fit(canvas_width=1200, canvas_height=400)
 ## Gaps
 
 ```python
-pt.grid([[a, b], [c, d]], gap=10)   # explicit gap (horizontal + vertical)
-(a | b).gap(0)                       # override on an existing parent
+pt.grid([[a, b], [c, d]]).gap(10)         # unified gap (between cols + rows)
+(a | b).gap(0)                             # adjacent spines fuse
+pt.grid([[a, b], [c, d]]).gap(x=4, y=16)   # per-axis override
 ```
 
-Default gap comes from `spec.json`. Don't reach for the kwarg unless auto-collapse + sensible default isn't covering you.
+Defaults come from `spec.json` (`layout.gap`, `layout.gap_x`, `layout.gap_y`). Gap is configured on the layout object — `pt.grid` and `|`/`/` share the same `.gap()` surface.
 
 ## Legends
 

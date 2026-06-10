@@ -3,8 +3,8 @@
   "size": {
     "data_width": 524,
     "data_height": 322,
-    "margin_floor": {"top": 4, "right": 4, "bottom": 4, "left": 4},
-    "inset_margin": {"top": 8, "right": 8, "bottom": 24, "left": 37}
+    "margin_floor": {"top": 0, "right": 0, "bottom": 0, "left": 0},
+    "outer_margin": {"top": 4, "right": 4, "bottom": 4, "left": 4}
   },
   "figure": {
     "background": "#fff"
@@ -102,7 +102,9 @@
     "section_gap": 11
   },
   "layout": {
-    "gap": 0,
+    "gap": 8,
+    "gap_x": null,
+    "gap_y": null,
     "legend_gap": 13,
     "attach_gap": 5
   }

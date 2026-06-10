@@ -39,7 +39,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from ._spec import _SIZESPEC, _MARGIN_FLOOR, _LAYOUTSPEC, active_theme
+from ._spec import _SIZESPEC, _MARGIN_FLOOR, _OUTER_MARGIN, _LAYOUTSPEC, active_theme
 from .core import (
     _FRAME_METHODS, _replay, _render,
     _to_px,
@@ -120,7 +120,7 @@ class _Renderable:
         want a plain SVG for embedding or sharing and don't need the
         AI/schema surface documented in `docs/AI_ATTRS.md`."""
         self._require_render_root()
-        svg = self._to_svg_unchecked()
+        svg = self._to_svg_unchecked(outer=dict(_OUTER_MARGIN))
         if clean:
             svg = _strip_plotlet_attrs(svg)
         return svg
@@ -142,11 +142,11 @@ class _Renderable:
         from . import _regions
         self._require_render_root()
         with _regions.collecting() as sink:
-            self._to_svg_unchecked()
+            self._to_svg_unchecked(outer=dict(_OUTER_MARGIN))
         return [{"kind": r.kind, "bbox": r.bbox, "name": r.name, "meta": r.meta}
                 for r in sink.regions]
 
-    def _to_svg_unchecked(self) -> str:
+    def _to_svg_unchecked(self, *, outer=None) -> str:
         raise NotImplementedError
 
     def to_html(self, full_page: bool = False) -> str:
@@ -580,11 +580,10 @@ class Chart(_Renderable):
             )
         dw = max(1, int(round(self._data_width  * w)))
         dh = max(1, int(round(self._data_height * h)))
-        # Inset gets a tight margin by default — small canvas, no room
-        # for long axis labels unless the user sizes the inset bigger.
-        inset = Chart(data_width=dw, data_height=dh,
-                      margin=dict(_SIZESPEC["inset_margin"]),
-                      **chart_opts)
+        # Inherits the global floor (zero by default) — content-fit
+        # margins only, no pre-reserved breathing room. Small canvas: no
+        # room for long axis labels unless the user sizes it bigger.
+        inset = Chart(data_width=dw, data_height=dh, **chart_opts)
         inset._inset_owner = self
         self._insets.append((tuple(rect), inset))
         return inset
@@ -696,9 +695,12 @@ class Chart(_Renderable):
 
     # ---------- render ----------
 
-    def _to_svg_unchecked(self) -> str:
+    def _to_svg_unchecked(self, *, outer=None) -> str:
         """Render path that skips the root check — used by parents
-        embedding this chart (insets, layout panels)."""
+        embedding this chart (insets, layout panels). `outer` is the
+        figure-level breathing-room margin; only the public `to_svg()`
+        passes it. Embedded callers (insets) leave it None for a
+        byte-identical embedded render."""
         if self._leaf_kind == "legend":
             from .legend import _render_standalone_legend
             return _render_standalone_legend(self)
@@ -711,7 +713,7 @@ class Chart(_Renderable):
         if (self._attached_left or self._attached_right
                 or self._attached_above or self._attached_below):
             from ._layout_engine import _render_layout
-            return _render_layout(self)
+            return _render_layout(self, outer=outer)
         # Data leaf. Route through the same pre-pass parents use — single
         # leaf is a degenerate single-cell case; share-scaling, collapse
         # annotation, and margin coordination all no-op for it, leaving
@@ -728,7 +730,7 @@ class Chart(_Renderable):
         W = self._data_width  + M_eff["left"] + M_eff["right"]
         H = self._data_height + M_eff["top"]  + M_eff["bottom"]
         with active_theme(_extract_theme(self._calls)):
-            return _render(states[id(self)], W, H, M_eff)
+            return _render(states[id(self)], W, H, M_eff, outer=outer)
 
     def _require_render_root(self):
         super()._require_render_root()
@@ -758,7 +760,9 @@ class Layout(_Renderable):
         self._layout_kind: str = kind          # "h" | "v" | "grid"
         self._children: list = list(children)
         self._parent: "Layout | None" = None
-        self._gap: float | None = None
+        self._gap:   float | None = None  # unified override
+        self._gap_x: float | None = None  # per-axis override (between cols)
+        self._gap_y: float | None = None  # per-axis override (between rows)
         # Grid-specific shape; left at None for h/v parents.
         self._grid_rows: int | None = None
         self._grid_cols: int | None = None
@@ -821,22 +825,36 @@ class Layout(_Renderable):
         self._apply_align("y", mode)
         return self
 
-    def gap(self, value: int | float) -> "Layout":
-        """Override the inter-panel gap. Falls back to
-        `spec.json:layout.gap` (default 0) when unset. Applies uniformly
-        — joined share-pairs get the same gap as non-joined siblings.
-        Negative values are accepted (panels overlap)."""
-        self._gap = float(value)
-        return self
+    def gap(self, value: int | float | None = None, *,
+            x: int | float | None = None,
+            y: int | float | None = None) -> "Layout":
+        """Override the inter-panel gap. Two forms:
 
-    def touch(self) -> "Layout":
-        """Set the gap so adjacent panels' spines coincide. Useful for
-        joined share-pairs whose joined-side margins are pure floor:
-        the negative gap `-2 * margin_floor` cancels both floors exactly,
-        making the two spines render as one continuous line.
+        - `.gap(8)` — unified: both x (between columns) and y (between
+          rows) use 8. Clears any prior per-axis overrides.
+        - `.gap(x=4)` / `.gap(y=8)` / `.gap(x=4, y=8)` — per-axis:
+          override just the named axis (or both), leaving the others
+          on their current setting.
 
-        Auto-adapts to the active theme's `margin_floor`."""
-        self._gap = -2.0 * _MARGIN_FLOOR["top"]
+        Mixing the positional and kwarg forms in one call is rejected
+        (chain two calls instead). Falls back to `spec.json:layout.gap_x`
+        / `gap_y` (then unified `gap`) when nothing is set. Joined
+        share-pairs get the same gap as non-joined siblings. Negative
+        values are accepted (panels overlap)."""
+        if value is not None and (x is not None or y is not None):
+            raise TypeError(
+                "Layout.gap(): pass either a positional value (unified) "
+                "or `x=` / `y=` kwargs (per-axis), not both. To set both, "
+                "chain: `.gap(8).gap(x=4)`."
+            )
+        if value is not None:
+            self._gap = float(value)
+            self._gap_x = None
+            self._gap_y = None
+        if x is not None:
+            self._gap_x = float(x)
+        if y is not None:
+            self._gap_y = float(y)
         return self
 
     def _apply_share(self, axis: str, mode, *,
@@ -958,9 +976,9 @@ class Layout(_Renderable):
 
     # ---------- render ----------
 
-    def _to_svg_unchecked(self) -> str:
+    def _to_svg_unchecked(self, *, outer=None) -> str:
         from ._layout_engine import _render_layout
-        return _render_layout(self)
+        return _render_layout(self, outer=outer)
 
 
 def chart(data=None, **opts) -> Chart:
@@ -968,9 +986,7 @@ def chart(data=None, **opts) -> Chart:
     return Chart(data, **opts)
 
 
-def grid(cells: list[list],
-         gap: int | float | None = None,
-         **kwargs) -> "Layout":
+def grid(cells: list[list], **kwargs) -> "Layout":
     """Build a grid-layout `Layout` from a list-of-lists of cells.
 
     Each cell is either a `Chart` or `None` (empty). All rows must have
@@ -982,11 +998,12 @@ def grid(cells: list[list],
     charts; the grid then sums their natural canvases plus per-boundary
     gaps.
 
-    For axis sharing, chain `.share_x("col"/"row"/"all")` /
-    `.share_y(...)` on the returned `Layout`. The constructor takes only
-    the structural arguments (`cells`, `gap`); behavior knobs live on
-    methods so they compose uniformly across grid-built and `|`/`/`-built
-    layouts.
+    The constructor takes only the structural argument (`cells`); all
+    behavior knobs live on methods so they compose uniformly across
+    grid-built and `|`/`/`-built layouts. For inter-panel gap, chain
+    `.gap(N)` for a unified value or `.gap(x=..., y=...)` for per-axis
+    control. For axis sharing, chain `.share_x("col"/"row"/"all")` /
+    `.share_y(...)`.
     """
     # Migration error — `widths=` / `heights=` were canvas-ratio overrides
     # in 0.1.x. With body-size-first composition there's no longer a
@@ -1011,6 +1028,15 @@ def grid(cells: list[list],
             "`pt.grid([[...]]).share_x('col').share_y('row')`. This keeps "
             "one configuration path across grid- and `|`/`/`-built layouts "
             "and leaves room for options like `hide_labels=`."
+        )
+    # Migration error — `gap=` was a constructor shortcut redundant with
+    # `.gap(N)`. Dropped so `pt.grid` matches `|` / `/` (no behavior
+    # kwargs on the constructor). Per-axis: `.gap(x=4, y=8)`.
+    if "gap" in kwargs:
+        raise TypeError(
+            "pt.grid() no longer accepts `gap=` (use `.gap(N)` after "
+            "construction): `pt.grid([[...]]).gap(8)`. For per-axis "
+            "control use `.gap(x=4, y=8)`."
         )
     if kwargs:
         raise TypeError(f"pt.grid() got unexpected keyword arguments: {list(kwargs)!r}")
@@ -1038,8 +1064,6 @@ def grid(cells: list[list],
     parent = Layout("grid", flat)      # row-major; may contain None
     parent._grid_rows = rows
     parent._grid_cols = cols
-    if gap is not None:
-        parent._gap = float(gap)
     return parent
 
 
