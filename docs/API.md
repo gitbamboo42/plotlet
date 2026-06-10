@@ -1,11 +1,16 @@
 # API reference
 
-`pt.chart(data=None, **opts)` returns a `Chart`. When `data` is given —
-any object supporting `data[col_name]` returning an iterable (pandas /
-polars / dict-of-lists / dict-of-arrays) — every mark method accepts
-long-form `(x="col", y="col", color="col")` (or `fill="col"` on
-fill-defaulted artists). Otherwise marks take wide-form positional
-arrays. All methods return `self`, so they chain.
+`pt.chart(data=None, **opts)` returns a `Chart`. Table-shaped marks
+(`scatter`, `line`, `bar`, `hist`, `ecdf`, …) take long-form input
+only: pass `data=` (any object supporting `data[col_name]` — pandas /
+polars / dict-of-lists / dict-of-arrays) and refer to columns by name
+(`x="col"`, `y="col"`, `color="col"`, `fill="col"` on fill-defaulted
+artists). `data=` set on `pt.chart(...)` propagates to every mark, so
+per-call `data=` is optional once it's set at chart level. Matrix and
+shape marks (`heatmap`, `imshow`, `contour`, `dendrogram`,
+`axhline`/`axvline`, `rect`, `polygon`) take their natural positional
+input — there's no "column name" version for a 2-D matrix or a single
+y-value. All methods return `self`, so they chain.
 
 ## Frame options
 

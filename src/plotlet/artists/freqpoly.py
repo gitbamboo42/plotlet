@@ -3,7 +3,6 @@
 Better than overlaid `hist` calls when comparing two or more distributions
 — no fill-blocking, no semi-transparent muddle.
 
-  c.freqpoly(values)                                 # wide-form
   c.freqpoly(data=df, x="col")                       # long-form
   c.freqpoly(data=df, x="col", color="group")        # one polygon per group
 

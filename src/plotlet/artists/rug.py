@@ -4,8 +4,7 @@ No-bin alternative (or companion) to a histogram. Pairs especially well
 with `density_1d` to show both the smoothed estimate and the raw
 observations.
 
-  c.rug(values, axis="x")                       # wide-form
-  c.rug(data=df, x="col")                       # long-form
+  c.rug(data=df, x="col")                       # long-form (axis="y" too)
   c.rug(data=df, x="col", color="group")        # ticks colored per group
 
 Aesthetics:

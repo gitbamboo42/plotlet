@@ -5,7 +5,6 @@ preferred alternative to histograms: no bin choice, no smoothing, every
 observation visible — overlaying multiple groups makes distribution
 differences obvious.
 
-  c.ecdf(values)                                # wide-form
   c.ecdf(data=df, x="col")                      # long-form
   c.ecdf(data=df, x="col", color="group")       # one curve per group
 

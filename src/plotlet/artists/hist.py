@@ -1,6 +1,5 @@
 """Histogram — binned counts of a 1-D distribution.
 
-  c.hist(values)                                # wide-form
   c.hist(data=df, x="col")                      # long-form
   c.hist(data=df, x="col", fill="group")        # overlaid by group
 

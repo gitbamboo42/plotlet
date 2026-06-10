@@ -382,8 +382,9 @@ def _replay(calls):
             # First-positional-is-data sugar: `c.line(df, x=, y=)` is the
             # same as `c.line(data=df, x=, y=)`. Opt-in via
             # `ArtistSpec.accepts_data_positional=True`. Keeps the long-form
-            # call shape from carrying a `data=` keyword on every site
-            # while keeping the wide-form `(xs, ys)` shape deprecated.
+            # call shape from carrying a `data=` keyword on every site;
+            # multi-positional shapes (e.g. `(xs, ys)`) are rejected by
+            # each record fn so the artist sees only long-form input.
             if (spec.accepts_data_positional and len(call_args) == 1
                     and "data" not in call_kw):
                 call_kw["data"] = call_args.pop(0)
