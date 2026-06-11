@@ -1171,25 +1171,75 @@ def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     # `xticks(labels=False)` also fully suppresses them via `x_show_labels`.
     suppress_xt = (po is not None and po.suppress_bottom_labels) or not st["x_show_labels"]
     suppress_yt = (po is not None and po.suppress_left_labels)   or not st["y_show_labels"]
+    # `i_left` / `i_right` index the labels at the pixel-leftmost / pixel-
+    # rightmost rendered tick positions (which can differ from x_labels[0]
+    # / [-1] when the scale is flipped — labels travel with their tick
+    # values). The render loop uses `zip(x_ticks, x_labels)`, so only the
+    # first `min(n_ticks, n_labels)` actually paint — clamp here too.
     has_xtl = (not suppress_xt) and any(str(l) for l in x_labels)
     if has_xtl:
         max_xtl_w = max((measure_text(str(l), x_size) for l in x_labels), default=0.0)
-        first_xtl_w = measure_text(str(x_labels[0]), x_size)
-        last_xtl_w = measure_text(str(x_labels[-1]), x_size)
-        _, xtl_bbox_h = _rotated_label_bbox(max_xtl_w, x_size, x_rot)
-        first_bbox_w, _ = _rotated_label_bbox(first_xtl_w, x_size, x_rot)
-        last_bbox_w, _ = _rotated_label_bbox(last_xtl_w, x_size, x_rot)
+        # Vertical extent of an x-tick label past the tick_pad end (= top of
+        # the xtl band). The anchor sits at `cap_height` below tick_pad
+        # (placing cap top flush with tick_pad for rot=0). Rotated text
+        # extends `|sin θ|·label_w + cos|θ|·descender` below the anchor
+        # — derived from the AABB of the rotated label rect (label_w ×
+        # x_size) with the anchor at the right edge / baseline. The full
+        # AABB height (`|sin|·w + |cos|·h`) would silently drop the
+        # anchor offset and clip rotated labels past the figure edge.
+        rad = math.radians(abs(x_rot))
+        xtl_band_h = (cap_height(x_size)
+                      + math.sin(rad) * max_xtl_w
+                      + math.cos(rad) * descender(x_size))
+        n_x = min(len(x_ticks), len(x_labels))
+        x_tick_px = [x_scale(t) for t in x_ticks[:n_x]]
+        if x_tick_px:
+            i_left  = min(range(n_x), key=lambda i: x_tick_px[i])
+            i_right = max(range(n_x), key=lambda i: x_tick_px[i])
+            left_lbl_w,  _ = _rotated_label_bbox(measure_text(str(x_labels[i_left]),  x_size), x_size, x_rot)
+            right_lbl_w, _ = _rotated_label_bbox(measure_text(str(x_labels[i_right]), x_size), x_size, x_rot)
+            left_inset  = x_tick_px[i_left]
+            right_inset = dw - x_tick_px[i_right]
+        else:
+            left_lbl_w = right_lbl_w = 0.0
+            left_inset = right_inset = 0.0
     else:
-        xtl_bbox_h = 0.0
-        first_bbox_w = 0.0
-        last_bbox_w = 0.0
+        xtl_band_h = 0.0
+        left_lbl_w = right_lbl_w = 0.0
+        left_inset = right_inset = 0.0
 
+    # Same shape for y: `i_top` / `i_bot` index labels at pixel-topmost /
+    # pixel-bottommost tick positions. For rot=0 the label is centered on
+    # the tick (baseline = tick + cap/2), so the cap top extends `cap/2`
+    # above the tick and the descender bottom extends `cap/2 + descender`
+    # below — asymmetric. Rotated labels follow their rotated AABB,
+    # symmetric around the anchor as an approximation.
     has_ytl = (not suppress_yt) and any(str(l) for l in y_labels)
     if has_ytl:
         max_ytl_w = max((measure_text(str(l), y_size) for l in y_labels), default=0.0)
         ytl_bbox_w, _ = _rotated_label_bbox(max_ytl_w, y_size, y_rot)
+        n_y = min(len(y_ticks), len(y_labels))
+        y_tick_px = [y_scale(t) for t in y_ticks[:n_y]]
+        if y_tick_px:
+            i_top = min(range(n_y), key=lambda i: y_tick_px[i])
+            i_bot = max(range(n_y), key=lambda i: y_tick_px[i])
+            if y_rot == 0:
+                top_half_h    = cap_height(y_size) / 2
+                bottom_half_h = cap_height(y_size) / 2 + descender(y_size)
+            else:
+                _, top_h = _rotated_label_bbox(measure_text(str(y_labels[i_top]), y_size), y_size, y_rot)
+                _, bot_h = _rotated_label_bbox(measure_text(str(y_labels[i_bot]), y_size), y_size, y_rot)
+                top_half_h    = top_h / 2
+                bottom_half_h = bot_h / 2
+            top_inset    = y_tick_px[i_top]
+            bottom_inset = dh - y_tick_px[i_bot]
+        else:
+            top_half_h = bottom_half_h = 0.0
+            top_inset = bottom_inset = 0.0
     else:
         ytl_bbox_w = 0.0
+        top_half_h = bottom_half_h = 0.0
+        top_inset = bottom_inset = 0.0
 
     # Joined-side hide flags — drop reservations the renderer skips.
     # `hide_*` suppresses title / xlabel / ylabel on that side; the
@@ -1216,12 +1266,13 @@ def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     top = max(title_top, top_marks)
 
     # Bottom: each term only contributes when its element actually renders.
-    # tick marks → bottom_marks; tick labels → tick_pad + xtl_bbox_h (only
-    # when labels exist); xlabel → 2 px visual gap, full glyph
-    # (≈ label_size), pad.xlabel.
+    # tick marks → bottom_marks; tick labels → tick_pad + xtl_band_h (the
+    # rotation-aware extent below tick_pad end, including the cap_height
+    # baseline offset — see has_xtl block above); xlabel → 2 px visual
+    # gap, full glyph (≈ label_size), pad.xlabel.
     bottom = bottom_marks
     if has_xtl:
-        bottom += _FRAME["tick_pad"] + xtl_bbox_h
+        bottom += _FRAME["tick_pad"] + xtl_band_h
     if st["xlabel"] and not hide_b:
         bottom += 2 + label_size + _PADSPEC["xlabel"]
 
@@ -1240,9 +1291,9 @@ def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     #   rot == 0  → anchor="middle"  → bbox extends w/2 each side
     #   rot >  0  → anchor="end"     → bbox extends fully LEFT  (0 right)
     #   rot <  0  → anchor="start"   → bbox extends fully RIGHT (0 left)
-    # Tick-inset distance: the first/last tick sits ~dw/(2N) px inside
-    # the data area (true for category scales, approx for numeric), so
-    # the actual past-spine overhang is `bbox * share - tick_inset`.
+    # The past-spine overhang is `bbox * share - inset` where `inset` is
+    # the actual scale-mapped distance from panel edge to the leftmost/
+    # rightmost tick (works for both category and numeric scales).
     right = right_marks
     if x_rot == 0:
         left_share, right_share = 0.5, 0.5
@@ -1250,15 +1301,26 @@ def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
         left_share, right_share = 1.0, 0.0
     else:
         left_share, right_share = 0.0, 1.0
-    tick_inset = dw / (2 * len(x_ticks)) if x_ticks else 0.0
     left_xtl_overhang  = (0.0 if hide_l
-                          else max(0.0, first_bbox_w * left_share - tick_inset))
+                          else max(0.0, left_lbl_w  * left_share  - left_inset))
     right_xtl_overhang = (0.0 if hide_r
-                          else max(0.0, last_bbox_w * right_share - tick_inset))
+                          else max(0.0, right_lbl_w * right_share - right_inset))
+
+    # Vertical cross-axis spillover from horizontal y-tick labels: the
+    # topmost label extends `top_half_h` above its tick; the bottommost
+    # extends `bottom_half_h` below. For rot=0 these are asymmetric
+    # (cap/2 above, cap/2 + descender below — see has_ytl block); for
+    # rotated labels we use the rotated AABB split symmetrically.
+    top_ytl_overhang    = (0.0 if hide_t
+                           else max(0.0, top_half_h    - top_inset))
+    bottom_ytl_overhang = (0.0 if hide_b
+                           else max(0.0, bottom_half_h - bottom_inset))
 
     return {"top": top, "right": right, "bottom": bottom, "left": left,
             "left_xtl_overhang": left_xtl_overhang,
-            "right_xtl_overhang": right_xtl_overhang}
+            "right_xtl_overhang": right_xtl_overhang,
+            "top_ytl_overhang": top_ytl_overhang,
+            "bottom_ytl_overhang": bottom_ytl_overhang}
 
 
 # ---------------------------------------------------------------------------
@@ -1348,9 +1410,13 @@ def _required_margin(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     # `_label_band_sizes` and reported separately so an inline right
     # legend (which positions itself at `iw + bands["right"] + gap`)
     # hugs the data area instead of being shoved out by a fat 45°-
-    # rotated tick label.
+    # rotated tick label. The y-tick mirror (top/bottom) keeps the
+    # cap-top / descender of the first/last horizontal y-tick label from
+    # bleeding past the panel edges or figure boundary.
     left  = max(left,  bands["left_xtl_overhang"])
     right = max(right, bands["right_xtl_overhang"])
+    top    = max(top,    bands["top_ytl_overhang"])
+    bottom = max(bottom, bands["bottom_ytl_overhang"])
 
     # Outside-legend reservation is *additive* with the label band so the
     # legend block sits beyond the title/labels rather than overlapping
@@ -1858,10 +1924,14 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         # Drop only labels redundant with a sharing sibling. A small label
         # overflow into a joined neighbor's collapsed margin is acceptable.
         if not suppress_xt:
-            # baseline = tick_end + tick_pad + cap_height, so the label's cap
-            # top sits flush with `tick_pad` past the tick mark.
+            # baseline = mark_end + tick_pad + cap_height, so the label's cap
+            # top sits flush with `tick_pad` past the visible mark (or the
+            # spine, when the mark is inward / suppressed). Mirrors
+            # `y_label_x`'s handling above for consistency.
+            x_label_dy = (_FRAME["tick_pad"] if (x_dir == "in" or not x_marks)
+                          else _FRAME["tick_length"] + _FRAME["tick_pad"])
             parts.append(_tick_label(str(lbl), x,
-                                     ih + _FRAME["tick_length"] + _FRAME["tick_pad"] + cap_height(x_size),
+                                     ih + x_label_dy + cap_height(x_size),
                                      x_size, x_rot, axis="x",
                                      fontstyle=x_style, decoration=x_decor,
                                      tag="tick-x"))
