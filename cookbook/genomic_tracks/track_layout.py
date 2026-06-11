@@ -102,7 +102,7 @@ class SVTriangleTrack:
     chrom2_col: str = "chrom2"
     start2_col: str = "start2"
     end2_col:   str = "end2"
-    s: float = 8
+    size: float = 8
     alpha: float = 0.6
     color: str = "steelblue"
     ylabel: str | None = "SV span"
@@ -341,7 +341,7 @@ def _build_sv_row(sv, gs, panel_widths, *, theme, chrom_column, style):
                 c.scatter(data={"x": (dx_lin[mask] - Bi0).tolist(),
                                 "y": dy_lin[mask].tolist()},
                           x="x", y="y",
-                          color=sv.color, alpha=sv.alpha, s=sv.s)
+                          color=sv.color, alpha=sv.alpha, size=sv.size)
 
         # --- Boundary tick: small notch at every inner right edge ---
         # Drawn just inside the data area (clip=True crops below y=0).

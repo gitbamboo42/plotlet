@@ -190,7 +190,7 @@ if __name__ == "__main__":
         Track(points_df,
               paint=lambda c, df: c.scatter(data={"x": df.start.tolist(),
                                                   "y": df.value.tolist()},
-                                            x="x", y="y", s=4, alpha=0.4),
+                                            x="x", y="y", size=4, alpha=0.4),
               ylabel="logR", ylim=(-1.5, 2.0),
               highlight_df=highlight_df),
 
@@ -213,7 +213,7 @@ if __name__ == "__main__":
 
         SVTriangleTrack(svs_df,
                         highlight_df=highlight_df,
-                        s=10, alpha=0.7),
+                        size=10, alpha=0.7),
     ]
 
     for style, suffix in [("facecolor", ""), ("spine", "_spine")]:
