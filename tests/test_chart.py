@@ -17,6 +17,15 @@ import plotlet as pt
 import pytest
 
 
+def _by_label(items, labels):
+    """Group `items` by parallel `labels`, preserving first-seen group order.
+    Returns ``{group: [items, ...]}`` — the categorical-Sectors shape."""
+    out = {}
+    for it, lbl in zip(items, labels):
+        out.setdefault(lbl, []).append(it)
+    return out
+
+
 def _xs():
     return [i * 0.1 for i in range(64)]
 
@@ -501,20 +510,25 @@ def chart_heatmap_nan():
 
 
 def chart_heatmap_split():
-    # ComplexHeatmap-style row_split + column_split. Both grouping
-    # vectors are deliberately interleaved so the auto cluster-and-gap
-    # reordering is exercised on both axes — rows regroup to A,A,A /
-    # B,B,B / C,C and cols regroup to X,X,X / Y,Y,Y,Y,Y / Z,Z,Z,Z. The
-    # uneven block sizes (3-3-2 rows × 3-5-4 cols) make the gaps obvious.
+    # ComplexHeatmap-style row + column clusters via c.sectors. Both
+    # grouping vectors are deliberately interleaved so the auto
+    # cluster-and-gap reordering is exercised on both axes — rows regroup
+    # to A,A,A / B,B,B / C,C and cols regroup to X,X,X / Y,Y,Y,Y,Y /
+    # Z,Z,Z,Z. The uneven block sizes (3-3-2 rows × 3-5-4 cols) make the
+    # gaps obvious.
     nrows, ncols = 8, 12
     matrix = [[r * ncols + c for c in range(ncols)] for r in range(nrows)]
-    c = pt.chart(title="heatmap (row_split + column_split)")
-    c.heatmap(matrix,
-              xticklabels=[f"c{i+1}" for i in range(ncols)],
-              yticklabels=[f"r{i+1}" for i in range(nrows)],
-              row_split=   ["A", "B", "A", "C", "A", "B", "C", "B"],
-              column_split=["X", "Y", "Z", "X", "Y", "Z", "Y", "Z",
-                            "X", "Y", "Z", "Y"],
+    row_labels = [f"r{i+1}" for i in range(nrows)]
+    col_labels = [f"c{i+1}" for i in range(ncols)]
+    row_groups = ["A", "B", "A", "C", "A", "B", "C", "B"]
+    col_groups = ["X", "Y", "Z", "X", "Y", "Z", "Y", "Z",
+                  "X", "Y", "Z", "Y"]
+    c = pt.chart(title="heatmap (row + column clusters)")
+    c.sectors(_by_label(col_labels, col_groups), axis="x",
+              divider=False, label=False)
+    c.sectors(_by_label(row_labels, row_groups), axis="y",
+              divider=False, label=False)
+    c.heatmap(matrix, xticklabels=col_labels, yticklabels=row_labels,
               annot=True)
     c.legend()
     return c
@@ -546,13 +560,14 @@ def chart_dendrogram_split():
 
     tree = pt.chart(data_height=60)
     tree.dendrogram(data_t, labels=col_labels, orient="top",
-                    column_split=col_groups, method="ward")
+                    clusters=col_groups, method="ward")
 
     hm = pt.chart(title="dendrogram-driven split heatmap",
                   data_width=420, data_height=180)
+    hm.sectors(_by_label(col_labels, col_groups), axis="x",
+               divider=False, label=False)
     hm.heatmap(matrix, xticklabels=col_labels,
                yticklabels=[f"r{i+1}" for i in range(nrows_hm)],
-               column_split=col_groups,
                cmap="viridis", legend={"label": "value"})
     hm.attach_above(tree)
     return pt.grid([[hm, pt.legend()]]).gap(0)
@@ -560,11 +575,11 @@ def chart_dendrogram_split():
 
 def chart_dendrogram_split_parent():
     """Both axes split + parent-tree on top and left, dendrogram + the
-    curved_tree extension on each side. Same grouping vector flows to:
-    (a) both top trees via `column_split=`, (b) both left trees via
-    `row_split=`, (c) the heatmap via both — all four trees and the
-    heatmap pick up the dendrogram's between-cluster order through the
-    artist `axis_order` precedence rule.
+    curved_tree extension on each side. Same grouping vector flows to
+    every tree via `clusters=`, and the panel declares
+    `c.sectors(...)` once on each axis for the visual gap whitespace —
+    all four trees and the heatmap pick up the dendrogram's
+    between-cluster order through the artist `axis_order` precedence rule.
 
     Stresses `cluster.fit_parent` on both orient=top and orient=left,
     via both the built-in (`dendrogram`) and an extension
@@ -591,22 +606,25 @@ def chart_dendrogram_split_parent():
 
     top_d = pt.chart(data_height=90)
     top_d.dendrogram(data_top, labels=col_labels, orient="top",
-                     column_split=col_groups, method="ward", parent=True)
+                     clusters=col_groups, method="ward", parent=True)
     top_c = pt.chart(data_height=90)
     top_c.curved_tree(data_top, labels=col_labels, orient="top",
-                      column_split=col_groups, method="ward", parent=True)
+                      clusters=col_groups, method="ward", parent=True)
 
     left_d = pt.chart(data_width=100)
     left_d.dendrogram(data_left, labels=row_labels, orient="left",
-                      row_split=row_groups, method="ward", parent=True)
+                      clusters=row_groups, method="ward", parent=True)
     left_c = pt.chart(data_width=100)
     left_c.curved_tree(data_left, labels=row_labels, orient="left",
-                       row_split=row_groups, method="ward", parent=True)
+                       clusters=row_groups, method="ward", parent=True)
 
     hm = pt.chart(title="split heatmap with parent trees on both sides",
                   data_width=360, data_height=240)
+    hm.sectors(_by_label(col_labels, col_groups), axis="x",
+               divider=False, label=False)
+    hm.sectors(_by_label(row_labels, row_groups), axis="y",
+               divider=False, label=False)
     hm.heatmap(matrix, xticklabels=col_labels, yticklabels=row_labels,
-               column_split=col_groups, row_split=row_groups,
                cmap="viridis", legend={"label": "value"})
     # First arg sits closest to host; outermost arg sits furthest.
     hm.attach_above(top_c, top_d)
@@ -643,9 +661,12 @@ def chart_heatmap_split_attached():
 
     hm = pt.chart(title="heatmap (split + attached)",
                   data_width=420, data_height=240)
+    hm.sectors(_by_label(col_labels, col_groups), axis="x",
+               divider=False, label=False)
+    hm.sectors(_by_label(row_labels, row_groups), axis="y",
+               divider=False, label=False)
     hm.heatmap(matrix,
                xticklabels=col_labels, yticklabels=row_labels,
-               row_split=row_groups, column_split=col_groups,
                legend={"label": "value"})
     # First arg sits closest to the host; order outward is strip, bar.
     hm.attach_above(strip, bar)
@@ -670,8 +691,10 @@ def chart_heatmap_block_titles():
                             mode="block", text=True)
 
     hm = pt.chart(data_width=360, data_height=180)
+    hm.sectors(_by_label(col_labels, col_groups), axis="x",
+               divider=False, label=False)
     hm.heatmap(matrix, xticklabels=col_labels, yticklabels=row_labels,
-               column_split=col_groups, legend={"label": "value"})
+               legend={"label": "value"})
     hm.attach_above(titles)
 
     return pt.grid([[hm, pt.legend()]]).gap(0)
@@ -695,8 +718,10 @@ def chart_heatmap_block_filled():
                            text_color="white", cell_border="#222")
 
     hm = pt.chart(data_width=360, data_height=180)
+    hm.sectors(_by_label(col_labels, col_groups), axis="x",
+               divider=False, label=False)
     hm.heatmap(matrix, xticklabels=col_labels, yticklabels=row_labels,
-               column_split=col_groups, legend={"label": "value"})
+               legend={"label": "value"})
     hm.attach_above(block)
 
     return pt.grid([[hm, pt.legend()]]).gap(0)

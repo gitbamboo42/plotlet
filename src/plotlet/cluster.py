@@ -419,20 +419,19 @@ def build_tree(args, kw, split):
     return cluster(data, labels=labels, method=method, metric=metric), had_labels
 
 
-def tree_frame_defaults(kw, *, split_gap_default,
+def tree_frame_defaults(kw, *,
                         root_expand_frac=0.05):
     """Standard `frame_defaults` for a tree-shaped artist.
 
     Returns the list of `(name, args, kw)` tuples that any dendrogram-
     style renderer needs: spines off, hide the height-axis ticks, hide
-    the leaf-axis ticks when there are no labels, inject `groups=` on
-    the leaf scale when split is set, and add a small root-side data
-    expand so the topmost merge doesn't clip against the inner clip.
+    the leaf-axis ticks when there are no labels, and a small root-side
+    data expand so the topmost merge doesn't clip against the inner clip.
 
-    `kw` is the artist's call kwargs (read-only here — the artist's
-    own `record` is responsible for popping). `split_gap_default` is
-    the spec value to use when the user didn't pass `split_gap=`
-    explicitly.
+    Block gap whitespace and the scale's `splits` are no longer pushed
+    here — declare `c.sectors({cluster: [members]}, axis=...)` on the
+    panel for those, and any peer category-scale artist (dendrogram,
+    heatmap, annotation_strip) inherits the gaps via the shared scale.
     """
     orient = kw.get("orient", "top")
     leaf_on_x = orient in ("top", "bottom")
@@ -442,15 +441,6 @@ def tree_frame_defaults(kw, *, split_gap_default,
            ("yticks" if leaf_on_x else "xticks", [[]], {})]
     if not has_labels:
         out.append(("xticks" if leaf_on_x else "yticks", [[]], {}))
-    split_key = "column_split" if leaf_on_x else "row_split"
-    split = kw.get(split_key)
-    if split is not None and has_labels and len(split) == len(kw["labels"]):
-        gap = float(kw.get("split_gap", split_gap_default))
-        groups = {str(l): g for l, g in zip(kw["labels"], split)}
-        scale_call = "xscale" if leaf_on_x else "yscale"
-        out.append((scale_call, ["category"], {
-            "groups": groups, "split_gap": gap,
-        }))
     expand_axis, expand_args = (
         ("y_expand", [0, root_expand_frac]) if orient == "top" else
         ("y_expand", [root_expand_frac, 0]) if orient == "bottom" else

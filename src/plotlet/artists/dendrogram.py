@@ -7,15 +7,22 @@ clustering math lives in [`cluster.py`](../cluster.py).
 Three input paths, all funnel into the same SplitTree → layout → draw
 pipeline:
 
-- `data=` (+ optional `column_split=` / `row_split=`) → `cluster()` or
-  `cluster_split()` builds the tree.
+- `data=` (+ optional `clusters=` for two-level clustering) →
+  `cluster()` or `cluster_split()` builds the tree.
 - `linkage=` → one-block tree wrap (skip scipy.linkage, user has Z).
 - `tree=` → use a pre-built SplitTree directly (lets the same cluster
   result drive multiple charts without redoing scipy work).
 
-When split is in play, the dendrogram exposes its final leaf order via
-`axis_order`, so a peer heatmap with the same grouping vector picks up
-the two-level block order automatically — artist `axis_order` beats
+`clusters=` is a parallel list of group labels (one per row of `data`,
+aligned with `labels=`) — it drives the two-level cluster (per-block
+linkage + per-centroid linkage). The visual gap whitespace between
+blocks is a separate concern: declare `c.sectors({cluster: [members]},
+axis=...)` on the panel for that — the dendrogram and any peer heatmap
+on the same shared scale pick up the gaps automatically.
+
+When clusters are in play, the dendrogram exposes its final leaf order
+via `axis_order`, so a peer heatmap with the same grouping vector picks
+up the two-level block order automatically — artist `axis_order` beats
 `frame_defaults` order in core's precedence rule.
 
 **`labels=` indexes the ORIGINAL input order, NOT the display order.**
@@ -51,12 +58,10 @@ def _dendrogram_record(args, kw):
         raise ValueError(
             f"dendrogram(): orient={orient!r}; expected one of {_ORIENTS}"
         )
-    # Split kwarg follows the leaf axis: column_split for top/bottom
-    # (leaves on x), row_split for left/right (leaves on y) — matches the
-    # heatmap naming so the same grouping vector flows to both artists.
-    split_key = "column_split" if orient in ("top", "bottom") else "row_split"
-    split = kw.pop(split_key, None)
-    kw.pop("split_gap", None)  # consumed by frame_defaults
+    # ``clusters=`` is the parallel list (label-per-row) that drives
+    # two-level clustering. The visual gap whitespace between blocks
+    # lives on the panel as ``c.sectors(...)`` — not duplicated here.
+    split = kw.pop("clusters", None)
     # `parent=` opt-in: False (default) = today's behavior; True = enable
     # with default 0.30 height fraction; float = custom fraction.
     # Silently a no-op when the tree has no `between_Z` (single block).
@@ -190,7 +195,7 @@ def _dendrogram_draw(a, ctx):
 
 
 def _dendrogram_frame_defaults(args, kw):
-    return tree_frame_defaults(kw, split_gap_default=_D["category_split_gap"])
+    return tree_frame_defaults(kw)
 
 
 def _dendrogram_axis_order(a):

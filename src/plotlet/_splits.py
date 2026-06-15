@@ -1,4 +1,4 @@
-"""Group-split primitive shared by category-scale artists.
+"""Group-split primitives for category-scale artists.
 
 A 'split' takes a 1-D grouping vector (one label per band) and produces:
 
@@ -14,20 +14,10 @@ or a per-block dendrogram with its own scipy linkage) iterates with
 no boundaries are present, so the artist's draw code looks the same
 shape split or not.
 
-Two levels of API:
-
-- **Primitives** (`group_order`, `permute`, `permute_2d`, `blocks`,
-  `partition`, `block_bbox_1d`, `block_bboxes_2d`) — pure functions; pick
-  the ones you need. Useful for 1-axis artists (dendrogram) that don't
-  fit the row+col bundle.
-- **`Splits` bundle** — packages both axes for a 2-D artist (heatmap)
-  so kwarg parsing, reorder, scale-extras and annot-permute collapse to
-  one object passed around. `from_kwargs` does length validation with a
-  configurable error prefix so the same class works for dendrogram, etc.
+Pure functions: `group_order`, `permute`, `permute_2d`, `blocks`,
+`partition`, `block_bbox_1d`, `block_bboxes_2d`. Pick the ones you need.
 """
 from __future__ import annotations
-
-from dataclasses import dataclass, field
 
 
 def group_order(groups):
@@ -113,80 +103,3 @@ def block_bboxes_2d(ctx, rows, cols, bw, bh, row_bounds, col_bounds):
             yield r0, r1, c0, c1, sy_t, sy_b, sx_l, sx_r
 
 
-@dataclass
-class Splits:
-    """Per-axis split state for a 2-D category artist (heatmap, future
-    annotated-heatmap blocks).
-
-    `row_perm` / `col_perm` are `None` when that axis isn't split, so
-    `if sp.row_perm:` / `if sp.has_any:` are the natural guards.
-    `row_bounds` / `col_bounds` are always lists (empty when not split),
-    so they pass straight into the scale and into `blocks()` without
-    `None`-guarding.
-    """
-    row_perm: list | None = None
-    row_bounds: list = field(default_factory=list)
-    col_perm: list | None = None
-    col_bounds: list = field(default_factory=list)
-
-    @classmethod
-    def from_kwargs(cls, kw, rows, cols, *,
-                    row_key="row_split", col_key="column_split",
-                    artist="heatmap"):
-        """Pull `row_split=` / `column_split=` out of `kw`, validate
-        lengths against `rows` / `cols`, and build a `Splits`.
-
-        `artist=` is the prefix on length-mismatch errors, so dendrogram
-        etc. get their own name in the message.
-        """
-        rs, cs = kw.get(row_key), kw.get(col_key)
-        if rs is not None and len(rs) != len(rows):
-            raise ValueError(f"{artist}: {row_key} length ({len(rs)}) "
-                             f"doesn't match rows ({len(rows)})")
-        if cs is not None and len(cs) != len(cols):
-            raise ValueError(f"{artist}: {col_key} length ({len(cs)}) "
-                             f"doesn't match columns ({len(cols)})")
-        row_perm, row_bounds = group_order(rs) if rs is not None else (None, [])
-        col_perm, col_bounds = group_order(cs) if cs is not None else (None, [])
-        return cls(row_perm, row_bounds, col_perm, col_bounds)
-
-    @property
-    def has_any(self):
-        return bool(self.row_perm or self.col_perm)
-
-    def apply(self, matrix=None, rows=None, cols=None):
-        """Reorder `matrix` / `rows` / `cols` by the perms.
-
-        Any arg passed as `None` is returned as `None` unchanged — so
-        callers can permute just labels (frame_defaults) or the full
-        triple (record) with the same method.
-        """
-        if matrix is not None and (self.row_perm or self.col_perm):
-            matrix = permute_2d(matrix, self.row_perm, self.col_perm)
-        if rows is not None and self.row_perm:
-            rows = permute(rows, self.row_perm)
-        if cols is not None and self.col_perm:
-            cols = permute(cols, self.col_perm)
-        return matrix, rows, cols
-
-    def apply_2d(self, arr):
-        """Reorder a 2-D array shaped like the matrix (e.g. annot)."""
-        return permute_2d(arr, self.row_perm, self.col_perm)
-
-    def scale_extras(self, gap):
-        """Build `{splits, split_gap}` extras for x/y scale calls.
-
-        Returns `(xkw, ykw)` — each is empty when that axis isn't split,
-        so callers can `**`-merge unconditionally.
-        """
-        x = {"splits": self.col_bounds, "split_gap": gap} if self.col_bounds else {}
-        y = {"splits": self.row_bounds, "split_gap": gap} if self.row_bounds else {}
-        return x, y
-
-    @property
-    def n_row_blocks(self):
-        return len(self.row_bounds) + 1 if self.row_bounds else 0
-
-    @property
-    def n_col_blocks(self):
-        return len(self.col_bounds) + 1 if self.col_bounds else 0

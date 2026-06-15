@@ -79,11 +79,23 @@ if __name__ == "__main__":
                                 position="gene", value="pathway",
                                 palette=path_palette, orient="y")
 
+    # Group parallel cluster labels into the {cluster: [members]} shape
+    # that c.sectors() expects. divider=False, label=False keeps the
+    # heatmap visually unchanged from the pre-sectors version (gap
+    # whitespace only, no extra chrome).
+    col_clusters = {}
+    for s, c in zip(samples, conditions):
+        col_clusters.setdefault(c, []).append(s)
+    row_clusters = {}
+    for g, p in zip(genes, pathways):
+        row_clusters.setdefault(p, []).append(g)
+
     hm = pt.chart(title="Gene expression: treatment effect by pathway",
                   data_width=440, data_height=320)
+    hm.sectors(col_clusters, axis="x", divider=False, label=False)
+    hm.sectors(row_clusters, axis="y", divider=False, label=False)
     hm.heatmap(matrix,
                xticklabels=samples, yticklabels=genes,
-               column_split=conditions, row_split=pathways,
                cmap="RdBu_r", center=0,
                linewidth=0.5,
                legend={"label": "expression"})

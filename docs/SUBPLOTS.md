@@ -21,11 +21,14 @@ fig = a | b | c
 # 2×2 small multiples
 fig = pt.grid([[a, b], [c, d]])
 
-# Annotated heatmap — attach trees + strips to a split heatmap.
-# `attach_*` auto-shares the relevant axis; `column_split=` /
-# `row_split=` propagate gaps + leaf order to every panel on the same
-# scale. See cookbook/heatmaps/ for the worked examples.
-hm.heatmap(matrix, column_split=cond, row_split=path, ...)
+# Annotated heatmap — attach trees + strips to a clustered heatmap.
+# `c.sectors({cluster: [members]}, axis=...)` declares the cluster
+# partition; `attach_*` auto-shares the relevant axis so the gaps + leaf
+# order propagate to every panel on the same scale. See cookbook/heatmaps/
+# for the worked examples.
+hm.sectors(col_clusters, axis="x", divider=False, label=False)
+hm.sectors(row_clusters, axis="y", divider=False, label=False)
+hm.heatmap(matrix, xticklabels=samples, yticklabels=genes, ...)
 hm.attach_above(top_strip, top_tree)   # strip closest to host, tree above
 hm.attach_left(left_strip, left_tree)
 fig = pt.grid([[hm, pt.legend()]])
@@ -111,6 +114,6 @@ If you need a chart in two places, build two separate charts. Children can't `.s
 ## Settled invariants
 
 - **Cross-panel references are object handles**, not string IDs or grid positions. plotlet is in-process Python; serialization isn't a goal.
-- **Dendrograms use the category scale.** A dendrogram on the left of a heatmap uses the heatmap's row category scale via `share_y` (or `attach_left`, which auto-shares). With `column_split=` / `row_split=`, the dendrogram's two-level cluster exposes its leaf order via `axis_order` — the heatmap on the same shared scale picks it up automatically (artist `axis_order` beats artist `frame_defaults` order in core's precedence rule, while user-explicit `c.xscale(order=...)` still wins over both).
+- **Dendrograms use the category scale.** A dendrogram on the left of a heatmap uses the heatmap's row category scale via `share_y` (or `attach_left`, which auto-shares). With `c.sectors(...)` on the panel and a matching parallel-vector `clusters=` on the dendrogram, the dendrogram's two-level cluster exposes its leaf order via `axis_order` — the heatmap on the same shared scale picks it up automatically (artist `axis_order` beats artist `frame_defaults` order in core's precedence rule, while user-explicit `c.xscale(order=...)` still wins over both).
 - **No `share_color=`.** Color isn't position-critical the way axes are; for shared gradients across heatmaps, pass matching `cmap` / `vmin` / `vmax` to each `imshow` and point one legend at any one of them.
 - **Coordinated artists that span panels** (brackets, etc.) are out of scope; would land as a cookbook recipe.

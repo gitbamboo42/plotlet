@@ -58,7 +58,7 @@ notes at the top of [`src/plotlet/coordinates.py`](../src/plotlet/coordinates.py
 | --- | --- |
 | `"linear"` | default |
 | `"log"` | log10; respect positive data |
-| `"category"` | for strings; auto-selected when data is string-valued. `c.xscale("category", order=[...], padding=0)` for explicit ordering. `padding=0` makes bands contiguous (heatmap-track look). `groups={cat: group}` + `split_gap=<px>` reserves gap space at every group-change boundary in `cats` — used by `heatmap(column_split=...)` / `dendrogram(column_split=...)` for annotated-heatmap splits; any other category artist on the same scale inherits the gaps automatically. |
+| `"category"` | for strings; auto-selected when data is string-valued. `c.xscale("category", order=[...], padding=0)` for explicit ordering. `padding=0` makes bands contiguous (heatmap-track look). For grouped categories with visual gaps, use `c.sectors({cluster: [members]}, axis="x")` — see [Sectors](#sectors) below. The dendrogram's `clusters=` kwarg is a parallel grouping vector that drives the two-level scipy cluster (per-block + centroid linkage); it doesn't push gap layout onto the scale — declare `c.sectors(...)` for that. |
 | `"symlog"` | accepts `linthresh=` (default `1.0`) sizing the linear region around zero |
 | `"power"` | accepts `exponent=` |
 | `"sqrt"` | shorthand for `"power"` with `exponent=0.5` |
@@ -82,6 +82,55 @@ scales; sub-decade on log); `minor=[v1, v2, …]` for explicit positions.
 Density overrides: `step=0.25` forces a fixed spacing; `count=4` requests
 roughly that many major ticks (the nice-numbers algorithm still picks
 the actual values).
+
+## Sectors
+
+`c.sectors(spec, axis="x" | "y", ...)` partitions an axis into named
+regions. Two kinds, picked from the spec shape:
+
+- **Continuous** — values are numeric lengths. Each artist's value
+  column (named via `column=`) is offset into a single global
+  coordinate so the standard linear scale covers every sector.
+
+  ```python
+  c.sectors({"warmup": 100, "training": 500, "cooldown": 50},
+            column="phase")
+  c.scatter(data=df, x="t", y="v")   # df has a 'phase' column
+  ```
+
+- **Categorical** — values are lists of category labels. Sectors group
+  the categorical axis members; the category scale inserts visual gaps
+  between groups and reorders cells. This is the unification of heatmap
+  row/column clustering with continuous-axis partitioning.
+
+  ```python
+  c.sectors({"clusterA": ["c1", "c2"],
+             "clusterB": ["c3"]}, axis="x")
+  c.heatmap(matrix, xticklabels=["c1","c2","c3"], yticklabels=[...])
+  ```
+
+| kwarg | notes |
+| --- | --- |
+| `axis="x"` / `"y"` | which axis to partition |
+| `column=` | continuous only — the data row's sector tag column |
+| `divider=True` | draw boundary divider lines |
+| `label=True` | draw sector-name labels at sector centers |
+| `gap=None` | inter-sector pixel pad (categorical); `None` → spec default (6 px) |
+
+Typical usage picks one of *gap* (categorical default) or *divider line*
+(continuous default) — both at once reads as redundant clutter. For
+heatmap clusters with visible gap whitespace and no labels, pass
+`divider=False, label=False` so sectors drive axis layout only:
+```python
+c.sectors({"clusterA": ["c1", "c2"], "clusterB": ["c3"]},
+          axis="x", divider=False, label=False)
+c.heatmap(matrix, xticklabels=["c1","c2","c3"], yticklabels=[...])
+```
+
+Layout-level sugar fans out one declaration to every leaf:
+```python
+pt.grid([[t1], [t2], [t3]]).share_x("col").sectors(PHASES, column="phase")
+```
 
 ## Mark methods
 
@@ -168,8 +217,8 @@ universal and not repeated.
 | call | options |
 | --- | --- |
 | `.imshow(data, **opts)` | `cmap` (~180 vendored, default `"viridis"`), `vmin`, `vmax`, `extent`, `annot`, `fmt`, `annot_color`, `annot_fontsize` |
-| `.heatmap(df, **opts)` | `cmap`, `vmin`, `vmax`, `norm`, `center`, `xticklabels`, `yticklabels`, `legend`, `annot`, `fmt`, `annot_color`, `annot_fontsize`, `border`, `column_split=[...]`, `row_split=[...]`, `split_gap` |
-| `.dendrogram(data, **opts)` | `orient="top"\|"left"\|"right"\|"bottom"`, `labels`, `method="single"\|"complete"\|"average"\|"ward"\|...` (scipy), `metric`, `linkage=<Z>` (skip scipy.linkage), `tree=<SplitTree>` (skip clustering entirely), `column_split=[...]` / `row_split=[...]` (two-level cluster), `parent=True\|<frac>` (render centroid tree above per-block trees), `split_gap` |
+| `.heatmap(df, **opts)` | `cmap`, `vmin`, `vmax`, `norm`, `center`, `xticklabels`, `yticklabels`, `legend`, `annot`, `fmt`, `annot_color`, `annot_fontsize`, `border`. For row/column clusters with gaps, call `c.sectors({cluster: [members]}, axis=...)` on the panel — see [Sectors](#sectors). |
+| `.dendrogram(data, **opts)` | `orient="top"\|"left"\|"right"\|"bottom"`, `labels`, `method="single"\|"complete"\|"average"\|"ward"\|...` (scipy), `metric`, `linkage=<Z>` (skip scipy.linkage), `tree=<SplitTree>` (skip clustering entirely), `clusters=[...]` (parallel grouping vector for two-level cluster), `parent=True\|<frac>` (render centroid tree above per-block trees). Visual gap whitespace lives on the panel as `c.sectors(...)` — see [Sectors](#sectors). |
 | `.axhline(y, **opts)` / `.axvline(x, **opts)` | `color`, `linewidth`, `linestyle`, `alpha`, axes-fraction `xmin`/`xmax` |
 | `.axhspan(ymin, ymax, **opts)` / `.axvspan(xmin, xmax, **opts)` | `color`, `alpha`, `label` |
 | `.rect(x, y, w, h, **opts)` / `.polygon(xs, ys, **opts)` / `.polyline(xs, ys, **opts)` | data-coord shapes — `polygon` is closed-and-fillable, `polyline` is open stroke-only |
@@ -184,7 +233,7 @@ universal and not repeated.
 - On `scatter`, `size=<col>` maps a numeric column to per-point radius (px, rescaled into `sizes=(min, max)` — default `(2, 7)`); `style=<col>` cycles markers per unique value (`o`, `s`, `^`, `v`, `x`, `+`). `color`, `group`, `size`, `style`, `alpha` all compose.
 - `.imshow` emits one `<rect>` per cell for small grids (≤10000 cells, vector-clean at any zoom) and a base64 PNG above that. `.heatmap` is the DataFrame-aware companion — `df.index` becomes row labels, `df.columns` becomes column labels; cells render at integer + 0.5 centers so a top/left dendrogram pairs cleanly via `share_x` / `share_y` (or `attach_above` / `attach_left`, which auto-share).
 - On both, `annot=True` overlays each cell's value as a text label (correlation / confusion matrices). `annot=<2D array>` uses custom labels — numbers formatted via `fmt`, strings verbatim — so labels independent of cell values (e.g. significance asterisks over a correlation cmap) are a string-array away. `fmt=".2g"` is the format spec (passed to `format(value, fmt)`). `annot_color="auto"` picks black or white per cell via luminance; pass any CSS color for uniform text.
-- **Splits.** `column_split=[group_per_col]` / `row_split=[group_per_row]` on `.heatmap` reorders cells to cluster same-group columns/rows together and reserves a 6-px (default) gap at every block boundary. Pass the same grouping vector to `.dendrogram` and it runs scipy *per block* for within-block leaf order plus once more on the per-block centroids for between-block order — a two-level cluster. The dendrogram exposes the resulting leaf order via `axis_order`, so the heatmap follows automatically when both share a category axis (`attach_above` / `attach_left`). `parent=True` on the dendrogram also renders the centroid tree above the per-block trees in the same panel. See [`cookbook/heatmaps/`](../cookbook/heatmaps/) for the worked examples.
+- **Cluster gaps.** Heatmap row/column clusters are declared via `c.sectors({cluster: [members]}, axis="x" | "y")` on the panel — the category scale picks up the implied split positions and inserts a 6-px (default) gap at every block boundary, and the heatmap reorders cells at draw time to match the sector cat order. Pass the *same* grouping info as a parallel list to `.dendrogram(clusters=[...])` and it runs scipy *per block* for within-block leaf order plus once more on the per-block centroids for between-block order — a two-level cluster. The dendrogram exposes the resulting leaf order via `axis_order`, so the heatmap follows automatically when both share a category axis (`attach_above` / `attach_left`). `parent=True` on the dendrogram also renders the centroid tree above the per-block trees in the same panel. See [`cookbook/heatmaps/`](../cookbook/heatmaps/) for the worked examples.
 
 ## Clustering helpers
 

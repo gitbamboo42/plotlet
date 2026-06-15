@@ -10,6 +10,12 @@ per-extension cost low.
 
 - The deferred-render pipeline (Chart, replay, render)
 - Scales: linear, log, category, time, symlog, power, sqrt
+- Axis partitioning: `c.sectors(...)` — named regions along an axis,
+  either continuous (length-weighted) or categorical (grouped members).
+  Peer of scales: any artist works inside a sectored axis without
+  modification, since the partition lives on the panel and reshapes
+  `x_scale`/`y_scale`. Unifies multi-track layouts (e.g. genomic
+  position) and heatmap row / column clusters under one concept.
 - Long-form input (`data=df, x=, y=, color=`/`fill=`) for table-shaped
   marks across the standard vocabulary — a data frame plus column
   names is the primary entry point. Matrix and shape marks (heatmap,
@@ -73,7 +79,8 @@ Three claims:
 
 2. **Composition is the hard part.** Annotated heatmaps and faceted
    layouts aren't single plots; they're coordinated panels with shared
-   scales and attached tracks. `pt.grid`, `share_x`/`share_y`,
+   scales, attached tracks, and shared axis partitions. `pt.grid`,
+   `share_x`/`share_y`, `c.sectors(...)` (layout-level fan-out),
    `attach_above`/`attach_left`, `|`/`/` are core, not glue.
 
 3. **Focused core, clear extension surface.** Standard vocabulary lives in

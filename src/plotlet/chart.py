@@ -805,6 +805,37 @@ class Layout(_Renderable):
         self._apply_share("y", mode, hide_labels=hide_labels)
         return self
 
+    def sectors(self, spec, *, column: str | None = None,
+                axis: str = "x",
+                divider: bool = True, label: bool = True,
+                gap: float | None = None) -> "Layout":
+        """Apply ``c.sectors(spec, ...)`` to every leaf chart in this
+        layout — sugar so a stacked-track figure only declares the
+        sector partition once.
+
+        Each leaf records its own ``sectors`` call; the partition is
+        per-panel under the hood, so a leaf can later override by adding
+        its own ``c.sectors(...)`` after layout construction.
+        """
+        kw = {"axis": axis, "divider": divider, "label": label}
+        if column is not None:
+            kw["column"] = column
+        if gap is not None:
+            kw["gap"] = gap
+        for leaf in self._iter_leaves():
+            leaf._calls.append(("sectors", [spec], kw))
+        return self
+
+    def _iter_leaves(self):
+        """Depth-first yield of every leaf Chart under this layout."""
+        for child in self._children:
+            if child is None:
+                continue
+            if getattr(child, "_is_parent", False):
+                yield from child._iter_leaves()
+            else:
+                yield child
+
     def align_x(self, mode: bool | str = "col") -> "Layout":
         """Coordinate per-column widths across rows without sharing the
         x-axis or hiding any labels.

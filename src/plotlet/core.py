@@ -30,6 +30,7 @@ from ._spec import (
     SPEC, _MARGIN_FLOOR, _FRAME, _GRIDSPEC, _FONTSPEC, _LEGSPEC,
     _LAYOUTSPEC, _PADSPEC, _D, _DASH,
 )
+_SECTORSPEC = SPEC["sectors"]
 from .draw import resolve_color, TAB10
 from .scales import (_LinearScale, _LogScale, _CategoryScale, _SymlogScale,
                       _PowerScale, _TimeScale, _nice_domain, _fmt_tick,
@@ -69,7 +70,7 @@ _FRAME_METHODS = {
     "xscale", "yscale", "grid", "legend",
     "xticks", "yticks", "spines", "theme",
     "x_expand", "y_expand", "clip", "facecolor",
-    "coordinate",
+    "coordinate", "sectors",
 }
 
 
@@ -301,6 +302,70 @@ def _to_px(value):
     return int(round(num * _UNIT_PX[unit]))
 
 
+def _sector_remap_data(call_kw, st):
+    """Offset an artist call's x/y values into global sector coordinates
+    when continuous sectors are active on that axis.
+
+    No-op for axes without sectors and for categorical sectors (which use
+    the category-scale path).
+
+    Passthrough (deliberate): when the data table lacks the sector tag
+    column. Lets cross-sector annotations (reflines, axhline / axvline,
+    `x_col=` without a sector column) coexist with sectored artists.
+
+    Raise (typo guard): when the sector column IS present but a row's
+    value isn't a known sector name. Silent remap of unknown sectors
+    would corrupt the global offset and produce a wrong but plausible
+    plot — strictly worse than a clear ValueError.
+
+    Preserves pandas dtype via ``.assign`` when available.
+    """
+    data = call_kw.get("data")
+    if data is None:
+        return call_kw
+    new_cols = {}
+    for axis in ("x", "y"):
+        sec     = st[f"{axis}_sectors"]
+        sec_col = st[f"{axis}_sector_column"]
+        if sec is None or sec.kind != "continuous" or sec_col is None:
+            continue
+        val_col = call_kw.get(axis)
+        if not isinstance(val_col, str):
+            continue
+        try:
+            has_sec = sec_col in data
+            has_val = val_col in data
+        except TypeError:
+            continue
+        if not (has_sec and has_val):
+            continue
+        secs = list(data[sec_col])
+        vals = list(data[val_col])
+        known = set(sec.names)
+        unknown = [s for s in secs if s not in known]
+        if unknown:
+            sample = unknown[0]
+            raise ValueError(
+                f"c.sectors({axis}-axis): row in data[{sec_col!r}] has "
+                f"value {sample!r} which is not a known sector. "
+                f"Known sectors: {list(sec.names)}"
+            )
+        new_cols[val_col] = [sec.offset(s) + float(v)
+                             for s, v in zip(secs, vals)]
+    if not new_cols:
+        return call_kw
+    call_kw = dict(call_kw)
+    if hasattr(data, "assign"):  # pandas — preserve dtypes on sibling cols
+        call_kw["data"] = data.assign(**new_cols)
+    else:
+        new_data = dict(data) if isinstance(data, dict) else {
+            c: list(data[c]) for c in data
+        }
+        new_data.update(new_cols)
+        call_kw["data"] = new_data
+    return call_kw
+
+
 def _replay(calls):
     """Walk a Chart's recorded calls into a state dict consumed by the
     renderer. Pure function of `calls` and the artist registry — same input
@@ -360,6 +425,17 @@ def _replay(calls):
         "clip": True,
         "facecolor": None,
         "coordinate": None,
+        # Sector partitions of the x and y axes — named, length- or
+        # member-weighted regions. Continuous sectors remap artist x/y
+        # values into a single global coordinate at record time;
+        # categorical sectors drive the underlying category scale's
+        # cat order, split positions, and inter-block gap. ``chrome``
+        # toggles dividers + center labels (off for heatmap-derived
+        # sectors so existing baselines stay byte-identical).
+        "x_sectors": None,        # Sectors value
+        "x_sector_column": None,  # column name on artist data for continuous
+        "y_sectors": None,
+        "y_sector_column": None,
     }
     for call in calls:
         # Calls are stored as 3-tuples `(name, args, kw)` from user code
@@ -395,6 +471,15 @@ def _replay(calls):
             if (spec.accepts_data_positional and len(call_args) == 1
                     and "data" not in call_kw):
                 call_kw["data"] = call_args.pop(0)
+            # Sector remap: when continuous sectors are active on x or y
+            # and the data table has the corresponding sector column,
+            # offset values into the global sector coordinate so a single
+            # linear scale spans all sectors. Artists draw unchanged.
+            # Silent passthrough when the data lacks the sector column
+            # (cross-sector annotations like reflines or single-value
+            # artists).
+            if st["x_sectors"] is not None or st["y_sectors"] is not None:
+                call_kw = _sector_remap_data(call_kw, st)
             result = spec.record(call_args, call_kw)
             if isinstance(result, list):
                 st["artists"].extend(result)
@@ -433,11 +518,42 @@ def _replay(calls):
         elif name == "clip":   st["clip"] = bool(args[0]) if args else True
         elif name == "facecolor": st["facecolor"] = args[0] if args else None
         elif name == "coordinate": st["coordinate"] = args[0]
+        elif name == "sectors":
+            from .sectors import Sectors
+            col     = kw.get("column")
+            axis    = kw.get("axis", "x")
+            divider = kw.get("divider", True)
+            label   = kw.get("label",   True)
+            gap     = kw.get("gap")
+            if axis not in ("x", "y"):
+                raise ValueError(
+                    f"c.sectors(axis=): expected 'x' or 'y'; got {axis!r}"
+                )
+            sec = Sectors.coerce(args[0], name_col=col,
+                                 divider=divider, label=label, gap=gap)
+            # Continuous sectors need a column= tag on the data so the
+            # record-time remap can route each row to its sector.
+            if sec.kind == "continuous" and col is None:
+                raise TypeError(
+                    "c.sectors(...): continuous sectors need column= "
+                    "(name of the sector tag on each data row)."
+                )
+            st[f"{axis}_sectors"] = sec
+            st[f"{axis}_sector_column"] = col
         elif name == "theme":
             # `theme` is applied outside replay (by `active_theme(...)` in
             # `Chart.to_svg`) so the spec dicts are already on the right
             # values by the time we get here. No state to record.
             pass
+    # When continuous sectors are active and the user didn't supply an
+    # explicit lim, span the full sector range so every partition is
+    # visible. Categorical sectors land on a category scale where ``lim``
+    # isn't meaningful — skip them here.
+    for axis in ("x", "y"):
+        sec = st[f"{axis}_sectors"]
+        if (sec is not None and sec.kind == "continuous"
+                and st[f"{axis}lim"] is None):
+            st[f"{axis}lim"] = (0.0, sec.total())
     return st
 
 
@@ -772,32 +888,60 @@ def _check_share_kinds_compatible(states, axis):
     )
 
 
+def _categorical_sector_extras(sec):
+    """Translate a categorical Sectors into descriptor extras.
+
+    Returns ``(groups, split_gap)``. Splits are left for ``_CategoryScale``
+    to derive from ``groups`` in the final cat order — that way a higher-
+    priority order source (user ``x_order``, an artist's ``axis_order``)
+    can reorder cats and the splits still land where each group changes.
+    """
+    groups = sec.cat_to_group()
+    split_gap = (_D["category_split_gap"] if sec.gap is None else sec.gap)
+    return groups, split_gap
+
+
 def _x_descriptor(st) -> _AxisDescriptor:
     """Compute this panel's natural x-axis descriptor from its own state.
 
-    Categorical precedence:
-      1. user-explicit `c.xscale("category", order=[...])` → that exact order
-      2. an artist's `axis_order` hook (e.g. dendrogram's leaf order)
-      3. an artist `frame_defaults` `xscale(order=[...])` (e.g. heatmap's
+    Categorical cat-order precedence (sectors' ``groups=`` derives splits
+    in the final cat order, so split positions are correct under any
+    ordering source — only the cat list itself contends):
+      1. user-explicit ``c.xscale("category", order=[...])`` → that exact order
+      2. an artist's ``axis_order`` hook (e.g. dendrogram's leaf order)
+      3. an artist ``frame_defaults`` ``xscale(order=[...])`` (e.g. heatmap's
          first-seen clustered order) → x_order_default
-      4. `collect_categories` → first-appearance of unique x values
+      4. categorical ``c.sectors(...)`` on x → flat sector-member order
+      5. ``collect_categories`` → first-appearance of unique x values
     """
     _prebin_hist(st)
     artists = st["artists"]
+    sec = st["x_sectors"]
+    sec_cat = sec is not None and sec.kind == "categorical"
     explicit_cat = st["xscale"] == "category"
     auto_cat = _is_categorical_axis(artists, "x")
 
-    if explicit_cat or auto_cat:
+    if sec_cat or explicit_cat or auto_cat:
         if st["x_order"] is not None:
             cats = list(st["x_order"])
         else:
-            cats = (_artist_axis_order(artists, "x")
-                    or st["x_order_default"]
-                    or collect_categories(artists, "x"))
+            order = _artist_axis_order(artists, "x") or st["x_order_default"]
+            if order:
+                cats = order
+            elif sec_cat:
+                cats = list(sec.cats())
+            else:
+                cats = collect_categories(artists, "x")
+        if sec_cat:
+            groups, split_gap = _categorical_sector_extras(sec)
+            splits = None
+        else:
+            splits, groups = st["x_splits"], st["x_groups"]
+            split_gap = st["x_split_gap"]
         padding = _D["category_padding"] if st["x_padding"] is None else st["x_padding"]
         return _AxisDescriptor(kind="category", cats=cats, padding=padding,
-                               splits=st["x_splits"], split_gap=st["x_split_gap"],
-                               groups=st["x_groups"])
+                               splits=splits, split_gap=split_gap,
+                               groups=groups)
 
     is_time = st["xscale"] == "time" or _is_temporal_axis(artists, "x")
     x_lo, x_hi = _scan_domain(artists, "x")
@@ -869,20 +1013,32 @@ def _y_descriptor(st) -> _AxisDescriptor:
     """
     _prebin_hist(st)
     artists = st["artists"]
+    sec = st["y_sectors"]
+    sec_cat = sec is not None and sec.kind == "categorical"
     explicit_cat = st["yscale"] == "category"
     auto_cat = _is_categorical_axis(artists, "y")
 
-    if explicit_cat or auto_cat:
+    if sec_cat or explicit_cat or auto_cat:
         if st["y_order"] is not None:
             cats = list(st["y_order"])
         else:
-            cats = (_artist_axis_order(artists, "y")
-                    or st["y_order_default"]
-                    or collect_categories(artists, "y"))
+            order = _artist_axis_order(artists, "y") or st["y_order_default"]
+            if order:
+                cats = order
+            elif sec_cat:
+                cats = list(sec.cats())
+            else:
+                cats = collect_categories(artists, "y")
+        if sec_cat:
+            groups, split_gap = _categorical_sector_extras(sec)
+            splits = None
+        else:
+            splits, groups = st["y_splits"], st["y_groups"]
+            split_gap = st["y_split_gap"]
         padding = _D["category_padding"] if st["y_padding"] is None else st["y_padding"]
         return _AxisDescriptor(kind="category", cats=cats, padding=padding,
-                               splits=st["y_splits"], split_gap=st["y_split_gap"],
-                               groups=st["y_groups"])
+                               splits=splits, split_gap=split_gap,
+                               groups=groups)
 
     is_time = st["yscale"] == "time" or _is_temporal_axis(artists, "y")
     force_zero = _any_artist_force_zero(artists, "y")
@@ -931,19 +1087,32 @@ def _x_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
         _prebin_hist(st)
     anchor = states[0]
     all_artists = [a for st in states for a in st["artists"]]
+    sec = anchor["x_sectors"]
+    sec_cat = sec is not None and sec.kind == "categorical"
     explicit_cat = anchor["xscale"] == "category"
     auto_cat = _is_categorical_axis(all_artists, "x")
-    if explicit_cat or auto_cat:
+    if sec_cat or explicit_cat or auto_cat:
         if anchor["x_order"] is not None:
             cats = list(anchor["x_order"])
         else:
-            cats = (_artist_axis_order(all_artists, "x")
-                    or anchor["x_order_default"]
-                    or collect_categories(all_artists, "x"))
+            order = (_artist_axis_order(all_artists, "x")
+                     or anchor["x_order_default"])
+            if order:
+                cats = order
+            elif sec_cat:
+                cats = list(sec.cats())
+            else:
+                cats = collect_categories(all_artists, "x")
+        if sec_cat:
+            groups, split_gap = _categorical_sector_extras(sec)
+            splits = None
+        else:
+            splits, groups = anchor["x_splits"], anchor["x_groups"]
+            split_gap = anchor["x_split_gap"]
         padding = _resolve_shared_padding(states, "x_padding")
         return _AxisDescriptor(kind="category", cats=cats, padding=padding,
-                               splits=anchor["x_splits"], split_gap=anchor["x_split_gap"],
-                               groups=anchor["x_groups"])
+                               splits=splits, split_gap=split_gap,
+                               groups=groups)
     is_time = anchor["xscale"] == "time" or _is_temporal_axis(all_artists, "x")
     x_lo, x_hi = _scan_domain(all_artists, "x")
     x_tight = _axis_is_tight(all_artists, "x")
@@ -970,19 +1139,32 @@ def _y_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
         _prebin_hist(st)
     anchor = states[0]
     all_artists = [a for st in states for a in st["artists"]]
+    sec = anchor["y_sectors"]
+    sec_cat = sec is not None and sec.kind == "categorical"
     explicit_cat = anchor["yscale"] == "category"
     auto_cat = _is_categorical_axis(all_artists, "y")
-    if explicit_cat or auto_cat:
+    if sec_cat or explicit_cat or auto_cat:
         if anchor["y_order"] is not None:
             cats = list(anchor["y_order"])
         else:
-            cats = (_artist_axis_order(all_artists, "y")
-                    or anchor["y_order_default"]
-                    or collect_categories(all_artists, "y"))
+            order = (_artist_axis_order(all_artists, "y")
+                     or anchor["y_order_default"])
+            if order:
+                cats = order
+            elif sec_cat:
+                cats = list(sec.cats())
+            else:
+                cats = collect_categories(all_artists, "y")
+        if sec_cat:
+            groups, split_gap = _categorical_sector_extras(sec)
+            splits = None
+        else:
+            splits, groups = anchor["y_splits"], anchor["y_groups"]
+            split_gap = anchor["y_split_gap"]
         padding = _resolve_shared_padding(states, "y_padding")
         return _AxisDescriptor(kind="category", cats=cats, padding=padding,
-                               splits=anchor["y_splits"], split_gap=anchor["y_split_gap"],
-                               groups=anchor["y_groups"])
+                               splits=splits, split_gap=split_gap,
+                               groups=groups)
     is_time = anchor["yscale"] == "time" or _is_temporal_axis(all_artists, "y")
     force_zero = _any_artist_force_zero(all_artists, "y")
     y_lo, y_hi = _scan_domain(all_artists, "y")
@@ -1160,6 +1342,14 @@ def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     y_labels = (st["y_labels"] if st["y_labels"] is not None
                 else [y_fmt(t) for t in y_ticks])
 
+    # Continuous sectors strip the auto tick labels on their axis — keep
+    # this measure pass in sync with `_render_inner` so the bottom / left
+    # margin doesn't double-reserve a tick-label band that never renders.
+    if st["x_sectors"] is not None and st["x_sectors"].kind == "continuous":
+        x_ticks, x_labels = [], []
+    if st["y_sectors"] is not None and st["y_sectors"].kind == "continuous":
+        y_ticks, y_labels = [], []
+
     x_size = st["x_fontsize"] if st["x_fontsize"] is not None else tick_size
     y_size = st["y_fontsize"] if st["y_fontsize"] is not None else tick_size
     x_rot  = st["x_rotation"] or 0
@@ -1281,6 +1471,18 @@ def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     bottom = bottom_marks
     if has_xtl:
         bottom += _FRAME["tick_pad"] + xtl_band_h
+    # Sector labels on x reserve their own band. For continuous sectors
+    # the auto tick labels are suppressed (has_xtl=False), so the sector
+    # band stands in for the tick band. For categorical the sector band
+    # stacks below the cat-label band — same height (cap + descender)
+    # plus a sec_pad gap above it.
+    x_sec = st["x_sectors"]
+    if (x_sec is not None and x_sec.label and not hide_b):
+        sec_pad = _SECTORSPEC["label_pad"]
+        if x_sec.kind == "continuous":
+            bottom += _FRAME["tick_pad"] + cap_height(x_size) + descender(x_size)
+        else:
+            bottom += sec_pad + cap_height(x_size) + descender(x_size)
     if st["xlabel"] and not hide_b:
         bottom += 2 + label_size + _PADSPEC["xlabel"]
 
@@ -1288,6 +1490,15 @@ def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     left = left_marks
     if has_ytl:
         left += _FRAME["tick_pad"] + ytl_bbox_w
+    y_sec = st["y_sectors"]
+    if (y_sec is not None and y_sec.label and not hide_l):
+        sec_pad = _SECTORSPEC["label_pad"]
+        sec_lbl_w = max((measure_text(str(n), y_size) for n in y_sec.names),
+                        default=0.0)
+        if y_sec.kind == "continuous":
+            left += _FRAME["tick_pad"] + sec_lbl_w
+        else:
+            left += sec_pad + sec_lbl_w
     if st["ylabel"] and not hide_l:
         left += 2 + label_size + _PADSPEC["ylabel"]
 
@@ -1767,6 +1978,21 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     x_labels = st["x_labels"] if st["x_labels"] is not None else [x_fmt(t) for t in x_ticks]
     y_labels = st["y_labels"] if st["y_labels"] is not None else [y_fmt(t) for t in y_ticks]
 
+    # Continuous sectors own that axis's chrome — boundary dividers and
+    # sector-name labels replace numeric ticks. Drop the auto-generated
+    # ticks on the sectored axis so the standard major/minor/grid passes
+    # don't fire there. Categorical sectors keep the category-scale ticks
+    # (cat labels), so we don't strip them — the chrome adds dividers /
+    # sector labels on top.
+    _x_sec = st["x_sectors"]
+    _y_sec = st["y_sectors"]
+    if _x_sec is not None and _x_sec.kind == "continuous":
+        x_ticks = []
+        x_labels = []
+    if _y_sec is not None and _y_sec.kind == "continuous":
+        y_ticks = []
+        y_labels = []
+
     hide_l, hide_r = panel_opts.hide_left, panel_opts.hide_right
     hide_t, hide_b = panel_opts.hide_top, panel_opts.hide_bottom
     # `xticks(labels=False)` joins forces with the share-pair label
@@ -2022,6 +2248,91 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
                 elif x_dir == "out":   y1, y2 = 0, -minor_len
                 else:                  y1, y2 = -minor_len, minor_len
                 parts.append(segment(x, y1, x, y2, color=col, width=sw))
+
+    # Sector chrome — boundary dividers and sector-name labels along the
+    # sectored axis. ``divider`` and ``label`` toggle each independently;
+    # heatmap clustering uses both False so existing baselines stay
+    # byte-identical. Typical user-facing usage picks one (gap whitespace
+    # OR a divider line) — both at once reads as redundant clutter.
+    if _x_sec is not None and (_x_sec.divider or _x_sec.label):
+        sec_col = resolve_color(_SECTORSPEC["divider_color"])
+        sec_w   = _SECTORSPEC["divider_width"]
+        sec_dash = _SECTORSPEC["divider_dasharray"]
+        sec_pad  = _SECTORSPEC["label_pad"]
+        sec = _x_sec
+        if sec.kind == "continuous":
+            boundaries = sec.boundaries()
+            divider_xs = [x_scale(b) for b in boundaries[1:-1]]
+            label_xs   = [x_scale(sec.center(n)) for n in sec.names]
+        else:
+            bw = x_scale.bandwidth
+            spans = []
+            for members in sec.members:
+                xs = [x_scale(m) for m in members]
+                spans.append((min(xs) - bw / 2, max(xs) + bw / 2))
+            divider_xs = [(spans[i][1] + spans[i + 1][0]) / 2
+                          for i in range(len(spans) - 1)]
+            label_xs   = [(lo + hi) / 2 for lo, hi in spans]
+        if sec.divider:
+            for x in divider_xs:
+                parts.append(segment(x, 0, x, ih,
+                                     color=sec_col, width=sec_w, dash=sec_dash,
+                                     tag="sector-divider"))
+        if sec.label and not suppress_xt and not hide_b:
+            # Continuous: ticks are suppressed, label sits at the
+            # standard tick-label baseline. Categorical: stack below the
+            # cat-label band (cat baseline + descender + sec_pad + cap).
+            if sec.kind == "continuous":
+                sec_baseline = ih + _FRAME["tick_pad"] + cap_height(x_size)
+            else:
+                sec_baseline = (ih + _FRAME["tick_pad"]
+                                + cap_height(x_size) + descender(x_size)
+                                + sec_pad + cap_height(x_size))
+            for name, cx in zip(sec.names, label_xs):
+                parts.append(_tick_label(str(name), cx, sec_baseline,
+                                         x_size, x_rot, axis="x",
+                                         fontstyle=x_style, decoration=x_decor,
+                                         tag="sector-label"))
+    if _y_sec is not None and (_y_sec.divider or _y_sec.label):
+        sec_col = resolve_color(_SECTORSPEC["divider_color"])
+        sec_w   = _SECTORSPEC["divider_width"]
+        sec_dash = _SECTORSPEC["divider_dasharray"]
+        sec_pad  = _SECTORSPEC["label_pad"]
+        sec = _y_sec
+        if sec.kind == "continuous":
+            boundaries = sec.boundaries()
+            divider_ys = [y_scale(b) for b in boundaries[1:-1]]
+            label_ys   = [y_scale(sec.center(n)) for n in sec.names]
+        else:
+            bh = y_scale.bandwidth
+            spans = []
+            for members in sec.members:
+                ys = [y_scale(m) for m in members]
+                spans.append((min(ys) - bh / 2, max(ys) + bh / 2))
+            divider_ys = [(spans[i][1] + spans[i + 1][0]) / 2
+                          for i in range(len(spans) - 1)]
+            label_ys   = [(lo + hi) / 2 for lo, hi in spans]
+        if sec.divider:
+            for y in divider_ys:
+                parts.append(segment(0, y, iw, y,
+                                     color=sec_col, width=sec_w, dash=sec_dash,
+                                     tag="sector-divider"))
+        if sec.label and not suppress_yt and not hide_l:
+            # Continuous: y-ticks suppressed, label anchors at the
+            # standard tick-label x. Categorical: clear the cat labels
+            # (max cat label width) before placing the sector label.
+            if sec.kind == "continuous":
+                y_label_x = -_FRAME["tick_pad"]
+            else:
+                ytl_w = max((measure_text(str(l), y_size) for l in y_labels),
+                            default=0.0)
+                y_label_x = -(_FRAME["tick_pad"] + ytl_w + sec_pad)
+            for name, cy in zip(sec.names, label_ys):
+                parts.append(_tick_label(str(name), y_label_x,
+                                         cy + cap_height(y_size) / 2,
+                                         y_size, y_rot, axis="y",
+                                         fontstyle=y_style, decoration=y_decor,
+                                         tag="sector-label"))
 
     # y-axis — coordinate-aware (left spine + ticks + labels via draw_frame)
     # or standard Cartesian.

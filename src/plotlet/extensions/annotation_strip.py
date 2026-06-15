@@ -49,8 +49,9 @@ API examples:
 
 In block mode, runs are computed per-contiguous-value (not per unique
 value): `[A, B, A, B]` produces four blocks, each rendered with its own
-label/fill. Pair with `column_split=`/`row_split=` on the host heatmap
-so the cluster machinery groups equal values into single runs.
+label/fill. Pair with `c.sectors({cluster: [members]}, axis=...)` on the
+host heatmap so the cluster machinery groups equal values into single
+runs.
 """
 
 SUMMARY = 'Annotation strip — categorical/continuous fill, optional per-cell text, optional border. Band mode (per position) or block mode (per contiguous run of equal values) for group titles.'

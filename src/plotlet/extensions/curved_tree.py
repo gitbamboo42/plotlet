@@ -1,6 +1,6 @@
 """Custom artist: dendrogram with curved (Bezier) branches.
 
-Same data contract and split-aware behavior as the built-in
+Same data contract and cluster-aware behavior as the built-in
 `c.dendrogram(...)`, but each merge is rendered as a cubic Bezier
 between its two children instead of the orthogonal upside-down-U.
 Visual flourish — no algorithmic difference.
@@ -13,12 +13,14 @@ no private symbols, no plotlet-core changes.
 API mirrors `dendrogram`:
 
     c.curved_tree(data, labels=..., orient="top",
-                  column_split=groups, method="ward")
+                  clusters=groups, method="ward")
 
-`column_split` / `row_split` triggers the same two-level cluster
-(per-group within + centroid between) the built-in uses; the
-resulting leaf order is exposed via `axis_order` so a peer heatmap
-follows automatically.
+`clusters=` is the parallel grouping vector that drives the two-level
+cluster (per-group within + centroid between); the resulting leaf order
+is exposed via `axis_order` so a peer heatmap follows automatically. The
+visual gap whitespace between blocks lives on the panel as
+`c.sectors(...)` — declare it once and any peer category-scale artist
+inherits the gaps.
 """
 SUMMARY = "Dendrogram variant rendering each merge as a cubic Bezier curve."
 import math
@@ -42,9 +44,7 @@ def _curved_record(args, kw):
             f"curved_tree(): orient={orient!r}; expected one of {_ORIENTS}"
         )
     leaf_on_x = orient in ("top", "bottom")
-    split_key = "column_split" if leaf_on_x else "row_split"
-    split = kw.pop(split_key, None)
-    kw.pop("split_gap", None)
+    split = kw.pop("clusters", None)
     parent_kw = kw.pop("parent", False)
 
     tree, had_labels = build_tree(args, kw, split)
@@ -179,7 +179,7 @@ def _curved_axis_order(a):
 
 
 def _curved_frame_defaults(args, kw):
-    return tree_frame_defaults(kw, split_gap_default=_DEFAULTS["category_split_gap"])
+    return tree_frame_defaults(kw)
 
 
 add_artist(ArtistSpec(
@@ -214,15 +214,19 @@ def demo():
     data_t = [[matrix[r][c] for r in range(nrows_hm)]
               for c in range(ncols_hm)]
 
+    col_clusters = {}
+    for c, g in zip(col_labels, col_groups):
+        col_clusters.setdefault(g, []).append(c)
+
     tree = pt.chart(data_height=60)
     tree.curved_tree(data_t, labels=col_labels,
-                     column_split=col_groups, method="ward")
+                     clusters=col_groups, method="ward")
 
     hm = pt.chart(title="curved-tree-driven split heatmap",
                   data_width=420, data_height=180)
+    hm.sectors(col_clusters, axis="x", divider=False, label=False)
     hm.heatmap(matrix, xticklabels=col_labels,
                yticklabels=[f"r{i+1}" for i in range(nrows_hm)],
-               column_split=col_groups,
                cmap="viridis", legend={"label": "value"})
     hm.attach_above(tree)
     return pt.grid([[hm, pt.legend()]]).gap(0)

@@ -1,6 +1,6 @@
 """Heatmap list: two heatmaps sharing rows. The anchor (LEFT) drives row
-order and split gaps via its `row_split=` and attached dendrogram; the
-follower (RIGHT) inherits both through `share_y()`.
+order and split gaps via `c.sectors(..., axis="y")` and attached
+dendrogram; the follower (RIGHT) inherits both through `share_y()`.
 
 Plotlet analog of ComplexHeatmap's `ht1 + ht2` heatmap-list pattern.
 
@@ -55,11 +55,17 @@ if __name__ == "__main__":
                                 position="gene", value="pathway",
                                 palette=path_palette, orient="y")
 
-    # Only the anchor declares row_split; share_y delivers it to the follower.
+    # Group parallel pathway labels into the {cluster: [members]} shape
+    # that c.sectors() expects. Only the anchor declares sectors;
+    # share_y delivers the partition to the follower.
+    row_clusters = {}
+    for g, p in zip(genes, pathways):
+        row_clusters.setdefault(p, []).append(g)
+
     left = pt.chart(title="Control", data_width=180, data_height=320)
+    left.sectors(row_clusters, axis="y", divider=False, label=False)
     left.heatmap(ctrl_m,
                  xticklabels=ctrl_s, yticklabels=genes,
-                 row_split=pathways,
                  cmap="RdBu_r", center=0, vmin=-3, vmax=3,
                  linewidth=0.5,
                  legend={"label": "expression"})

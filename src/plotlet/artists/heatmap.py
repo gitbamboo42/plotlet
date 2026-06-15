@@ -17,6 +17,13 @@ Rendering branches on size: below `imshow_max_rects` we emit one `<rect>`
 per cell (vector-clean, zoomable). Above the threshold we encode the
 whole grid as a base64 PNG inside one `<image>` — same fallback shape as
 imshow, just keyed on the category-scale extent instead of a numeric one.
+
+For row/column clustering with visual gaps and ordering, call
+``c.sectors({cluster: [members], ...}, axis="x" | "y")`` on the panel.
+The category scale picks up the implied split positions and inserts a
+gap between groups; ``_align_to_scale`` (below) reorders the matrix at
+draw time to match the sector cat order, so the input matrix can stay in
+its natural order and the user only declares the clustering once.
 """
 import base64
 
@@ -94,28 +101,14 @@ def _png_for_blocks(ctx, cols, rows, bw, bh, rgb_at):
 
 
 def _heatmap_frame_defaults(args, kw):
-    _, cols_orig, rows_orig = _parse_heatmap_input(args, kw)
-    sp = _splits.Splits.from_kwargs(kw, rows_orig, cols_orig)
-    _, rows, cols = sp.apply(rows=rows_orig, cols=cols_orig)
-    gap = float(kw.get("split_gap", _D["category_split_gap"]))
-    # `order=` provides the heatmap's first-seen clustered order as a
-    # default — it routes to `x_order_default` via the frame-default
-    # tagging in core, so a peer artist's `axis_order` (e.g. a clustering
-    # dendrogram) can override.
-    # `groups=` is the cat->group dict; the scale derives gaps from
-    # (final cats, groups) so they land in the right place regardless
-    # of who won the order race.
-    xkw = {"order": cols, "padding": 0}
-    ykw = {"order": rows, "padding": 0}
-    if kw.get("column_split") is not None:
-        xkw["groups"] = dict(zip(cols_orig, kw["column_split"]))
-        xkw["split_gap"] = gap
-    if kw.get("row_split") is not None:
-        ykw["groups"] = dict(zip(rows_orig, kw["row_split"]))
-        ykw["split_gap"] = gap
+    _, cols, rows = _parse_heatmap_input(args, kw)
+    # `order=` provides the heatmap's first-seen order as a default — it
+    # routes to `*_order_default` via the frame-default tagging in core,
+    # so a peer artist's `axis_order` (e.g. a clustering dendrogram) and
+    # any categorical ``c.sectors(...)`` can override.
     out = [
-        ("xscale", ["category"], xkw),
-        ("yscale", ["category"], ykw),
+        ("xscale", ["category"], {"order": cols, "padding": 0}),
+        ("yscale", ["category"], {"order": rows, "padding": 0}),
         ("xticks", [None], {"marks": False}),
         ("yticks", [None], {"marks": False}),
     ]
@@ -131,8 +124,6 @@ def _heatmap_frame_defaults(args, kw):
 
 def _heatmap_record(args, kw):
     matrix, cols, rows = _parse_heatmap_input(args, kw)
-    sp = _splits.Splits.from_kwargs(kw, rows, cols)
-    matrix, rows, cols = sp.apply(matrix, rows, cols)
     nrows  = len(matrix)
     ncols  = len(matrix[0]) if matrix else 0
     if nrows != len(rows) or (matrix and ncols != len(cols)):
@@ -141,16 +132,9 @@ def _heatmap_record(args, kw):
             f"labels (rows={len(rows)}, cols={len(cols)})"
         )
     opts = {k: v for k, v in kw.items()
-            if k not in ("xticklabels", "yticklabels", "border",
-                         "row_split", "column_split", "split_gap")}
+            if k not in ("xticklabels", "yticklabels", "border")}
 
-    # A custom annot array is indexed like the original matrix; reorder
-    # it the same way so each label stays on its cell after a split.
-    annot = opts.get("annot")
-    if annot not in (None, True, False) and sp.has_any:
-        opts["annot"] = sp.apply_2d(to_list_2d(annot))
-
-    base = {"_splits": sp}
+    base: dict = {}
     palette = opts.get("palette")
     if palette is not None:
         return {"type": "heatmap", "_matrix": matrix, "_cols": cols, "_rows": rows,
@@ -399,17 +383,12 @@ def _heatmap_legend_gradient(a):
 
 
 def _heatmap_data_attrs(a):
-    sp = a["_splits"]
-    blocks = {}
-    if sp.n_row_blocks: blocks["row-blocks"] = sp.n_row_blocks
-    if sp.n_col_blocks: blocks["col-blocks"] = sp.n_col_blocks
     if a.get("_is_categorical"):
         return {
             "rows": a["_nrows"],
             "cols": a["_ncols"],
             "mode": "categorical",
             "categories": list(a["_palette"].keys()),
-            **blocks,
         }
     out = {
         "rows": a["_nrows"],
@@ -429,7 +408,6 @@ def _heatmap_data_attrs(a):
     annot = a["opts"].get("annot", False)
     if annot is not False and annot is not None:
         out["annot"] = "values" if annot is True else "custom"
-    out.update(blocks)
     return out
 
 
