@@ -37,6 +37,19 @@ after composing.
 space; default `True` clips at the data boundary so off-axis data can't
 paint over tick labels.
 
+### Coordinates
+
+`c.coordinate(pt.LinearCoordinate(angle=30))` rotates the y-axis so artists
+draw on a sheared coordinate frame — useful for waterfall layouts and
+small tilted insets. One coordinate per panel; for two coordinate systems,
+use two panels (composed via `pt.grid` / `|` / `/`).
+
+`LinearCoordinate` is the only coordinate shipped in core. It's affine, so
+all standard artists work unchanged. For non-affine coordinates (circular
+rings, polar, etc.), see [`cookbook/circle/`](../cookbook/circle/) for a
+worked example using post-render SVG coordinate warping, and the protocol
+notes at the top of [`src/plotlet/coordinates.py`](../src/plotlet/coordinates.py).
+
 ### Scales
 
 `xscale` / `yscale` values:

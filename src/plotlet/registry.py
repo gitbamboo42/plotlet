@@ -122,6 +122,10 @@ class RenderContext:
     color: str | None
     defaults: dict
     dash: dict
+    # Set by the panel-level c.coordinate(...) when a non-affine coordinate is
+    # active. Maps (t, r) -> (px, py) in canvas-pixel space. Coordinate-aware
+    # artists call ctx.project(t, r) instead of ctx.x_scale / ctx.y_scale.
+    project: Any = None
 
 
 _REGISTRY: dict[str, ArtistSpec] = {}

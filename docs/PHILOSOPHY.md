@@ -65,15 +65,25 @@ artists can't resolve pixel positions or palettes at record time — see
 
 ## Why this shape
 
-Code is becoming cheap. The cost of writing a 100-line custom plot type
-keeps dropping as AI assistance improves. The cost of *understanding* a
-30,000-line library, by contrast, doesn't drop — and that mental model is
-what gates productivity.
+Three claims:
 
-So plotlet keeps the **core focused on what every figure reaches for** and
-pushes **niche feature breadth to user projects**. The codebase stays
-readable; the extension points are documented and deliberate; adding a
-custom plot type is a 3-step recipe, not an architecture project.
+1. **Reproducibility.** Text rendered as paths, deterministic replay — same
+   script, byte-identical output, any machine. Baseline-image tests work;
+   "looks fine on my laptop" stops being a bug class.
+
+2. **Composition is the hard part.** Annotated heatmaps and faceted
+   layouts aren't single plots; they're coordinated panels with shared
+   scales and attached tracks. `pt.grid`, `share_x`/`share_y`,
+   `attach_above`/`attach_left`, `|`/`/` are core, not glue.
+
+3. **Focused core, clear extension surface.** Standard vocabulary lives in
+   core; domain idioms live in [`extensions/`](../src/plotlet/extensions/)
+   and [`cookbook/`](../cookbook/) as copy-and-adapt examples. The
+   boundary is explicit ("What's *not* in the core" above), the
+   extension API is `ArtistSpec` + three callbacks, and the replay model
+   means custom artists compose like built-in ones.
+
+The cost: if your plot type isn't shipped, you write it.
 
 ## Non-goals
 

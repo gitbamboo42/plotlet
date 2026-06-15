@@ -25,7 +25,15 @@ BASELINE_ROOT = HERE / "baseline_images"
 # before comparing so a version bump alone doesn't invalidate every
 # committed baseline. All other `data-plotlet-*` attrs describe the plot
 # itself and stay in the compare.
-_VOLATILE_ATTR_RE = re.compile(r' data-plotlet-version="[^"]*"')
+#
+# Coordinate clip-path ids are derived from `id(obj)` (memory address) and
+# are volatile across processes. Strip the id declaration and the url(#...)
+# reference; the polygon geometry is still compared.
+_VOLATILE_ATTR_RE = re.compile(
+    r' data-plotlet-version="[^"]*"'
+    r'| id="pc[0-9a-f]+"'
+    r'| clip-path="url\(#pc[0-9a-f]+\)"'
+)
 
 
 def _normalize(svg: str) -> str:

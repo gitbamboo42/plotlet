@@ -1,6 +1,6 @@
 # plotlet
 
-plotlet is a Python library for SVG plots. It provides reproducible, byte-identical multi-panel scientific figures with a standard plotting vocabulary and a first-class extension story for custom plot types.
+plotlet is a Python library for reproducible, multi-panel scientific figures. Byte-identical output across machines, a standard plotting vocabulary, and a first-class extension story for custom plot types.
 
 ## Documentation
 

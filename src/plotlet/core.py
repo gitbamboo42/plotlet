@@ -69,6 +69,7 @@ _FRAME_METHODS = {
     "xscale", "yscale", "grid", "legend",
     "xticks", "yticks", "spines", "theme",
     "x_expand", "y_expand", "clip", "facecolor",
+    "coordinate",
 }
 
 
@@ -358,6 +359,7 @@ def _replay(calls):
         # let lines and large markers bleed into the margin space.
         "clip": True,
         "facecolor": None,
+        "coordinate": None,
     }
     for call in calls:
         # Calls are stored as 3-tuples `(name, args, kw)` from user code
@@ -379,6 +381,11 @@ def _replay(calls):
             # by color/group/linestyle levels).
             call_args = list(args)
             call_kw = dict(kw)
+            if "coordinate" in call_kw:
+                raise TypeError(
+                    "coordinate= is not accepted on artist calls. "
+                    "Use c.coordinate(...) once per panel instead."
+                )
             # First-positional-is-data sugar: `c.line(df, x=, y=)` is the
             # same as `c.line(data=df, x=, y=)`. Opt-in via
             # `ArtistSpec.accepts_data_positional=True`. Keeps the long-form
@@ -425,6 +432,7 @@ def _replay(calls):
                 st["legend_position"] = kw["position"]
         elif name == "clip":   st["clip"] = bool(args[0]) if args else True
         elif name == "facecolor": st["facecolor"] = args[0] if args else None
+        elif name == "coordinate": st["coordinate"] = args[0]
         elif name == "theme":
             # `theme` is applied outside replay (by `active_theme(...)` in
             # `Chart.to_svg`) so the spec dicts are already on the right
@@ -1438,6 +1446,24 @@ def _required_margin(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
         elif pos == "bottom":
             bottom = bottom + gap + lh
 
+    # Coordinate-aware frame: the projected parallelogram may extend outside
+    # the data area.  Inflate each side by however far the frame sticks out.
+    _margin_cobj = st.get("coordinate")
+    if (_margin_cobj is not None
+            and (hasattr(_margin_cobj, "draw_frame")
+                 or hasattr(_margin_cobj, "svg_transform"))):
+        _proj = _margin_cobj({}, dw, dh)
+        _bl_x, _bl_y = _proj(0.0, 0.0)
+        _tl_x, _tl_y = _proj(0.0, 1.0)
+        _br_x, _br_y = _proj(1.0, 0.0)
+        _tr_x, _tr_y = _proj(1.0, 1.0)
+        _xs = [_bl_x, _tl_x, _br_x, _tr_x]
+        _ys = [_bl_y, _tl_y, _br_y, _tr_y]
+        left   = max(left,   max(0.0, -min(_xs)))
+        right  = max(right,  max(0.0,  max(_xs) - dw))
+        top    = max(top,    max(0.0, -min(_ys)))
+        bottom = max(bottom, max(0.0,  max(_ys) - dh))
+
     return {"top":    int(round(top)),
             "right":  int(round(right)),
             "bottom": int(round(bottom)),
@@ -1718,6 +1744,7 @@ def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal,
     return ''.join(parts)
 
 
+
 def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     """Body fragment for one panel — everything inside the outer `<svg>` and
     the outer translate-by-margin `<g>`. `panel_opts` carries layout-supplied
@@ -1803,11 +1830,27 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         else:
             a["_color"] = spec.default_color if spec else None
 
-    # build the render context once — passed to every draw call
+    # Resolve the panel coordinate — always panel-level via c.coordinate(...).
+    _coord_object = st.get("coordinate")
+    _coord_project = _coord_object({}, iw, ih) if _coord_object is not None else None
+
+    _has_coord_frame   = _coord_object is not None and hasattr(_coord_object, "draw_frame")
+    _has_svg_transform = _coord_object is not None and hasattr(_coord_object, "svg_transform")
+
+    # build the render context once — passed to every draw call.
+    # When svg_transform is present the coordinate mapping is handled at the
+    # SVG group level; artists draw in Cartesian, so ctx.project stays None.
     def _ctx_for(a):
+        if _has_svg_transform:
+            proj = None
+        elif _coord_object is not None:
+            proj = _coord_object(a, iw, ih)
+        else:
+            proj = None
         return RenderContext(
             x_scale=x_scale, y_scale=y_scale, iw=iw, ih=ih,
             color=a["_color"], defaults=_D, dash=_DASH,
+            project=proj,
         )
 
     # three-pass draw: background → data → foreground.
@@ -1820,24 +1863,47 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         if spec is None: continue
         by_layer[spec.layer].append((idx, a))
     clip_data = st.get("clip", True)
+
+    # For coordinate frames the clip region is the projected parallelogram,
+    # not the Cartesian rectangle.  Emit a <clipPath> polygon into <defs>
+    # and reference it with clip-path="url(#...)".
+    _clip_id = None
+    if (_has_coord_frame or _has_svg_transform) and clip_data:
+        bl_x, bl_y = _coord_project(0.0, 0.0)
+        tl_x, tl_y = _coord_project(0.0, 1.0)
+        br_x, br_y = _coord_project(1.0, 0.0)
+        tr_x, tr_y = _coord_project(1.0, 1.0)
+        _clip_id = f"pc{id(st):x}"
+        pts = (f"{bl_x:.2f},{bl_y:.2f} {br_x:.2f},{br_y:.2f} "
+               f"{tr_x:.2f},{tr_y:.2f} {tl_x:.2f},{tl_y:.2f}")
+        parts.append(f'<defs><clipPath id="{_clip_id}">'
+                     f'<polygon points="{pts}"/></clipPath></defs>')
+
     for layer in ("background", "data", "foreground"):
         if not by_layer[layer]:
             continue
         # Clip the data layer to the data area so an artist drawing
         # outside the visible xlim/ylim (zoom insets, explicit xlim that
         # excludes data) can't paint over tick labels or the parent.
-        # Nested <svg> with overflow="hidden" establishes the clip; SVG2
-        # makes that the default for nested-svg but SVG1.1 viewers leave
-        # overflow visible, so we set it explicitly. Caller can opt out
-        # via `c.clip(False)` to allow artists to paint past the data area.
+        # Coordinate frames use a polygon <clipPath>; others use a nested
+        # <svg> with overflow="hidden" (SVG1.1-safe rectangular clip).
+        # Caller can opt out via `c.clip(False)`.
         if layer == "data" and clip_data:
-            parts.append(f'<svg x="0" y="0" width="{iw}" height="{ih}" overflow="hidden">')
+            if _clip_id:
+                parts.append(f'<g clip-path="url(#{_clip_id})">')
+            else:
+                parts.append(f'<svg x="0" y="0" width="{iw}" height="{ih}" overflow="hidden">')
+            if _has_svg_transform:
+                xfm = _coord_object.svg_transform(_coord_project, iw, ih)
+                parts.append(f'<g transform="{xfm}">')
         for idx, a in by_layer[layer]:
             spec = get_artist(a["type"])
             body = spec.draw(a, _ctx_for(a))
             parts.append(_wrap_artist(a, idx, body))
         if layer == "data" and clip_data:
-            parts.append('</svg>')
+            if _has_svg_transform:
+                parts.append('</g>')
+            parts.append('</g>' if _clip_id else '</svg>')
 
     # Spines — toggleable per side via `c.spines(top=False, right=False, ...)`,
     # restylable via `c.spines(top={"color": "red", "width": 1.5})`.
@@ -1861,18 +1927,6 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     # is the inner-margin corner; (iw, ih) is the data-area extent.
     _regions.record("rect", (0, 0, iw, ih), name="panel")
 
-    for side, (x1, y1, x2, y2) in (
-        ("top",    (0, 0, iw, 0)),
-        ("bottom", (0, ih, iw, ih)),
-        ("left",   (0, 0, 0, ih)),
-        ("right",  (iw, 0, iw, ih)),
-    ):
-        if not st[f"spine_{side}"]:
-            continue
-        col, w = _side_stroke(side)
-        parts.append(segment(x1, y1, x2, y2, color=col, width=w,
-                             dash=_side_dash(side), tag="spine"))
-
     tick_size = _FONTSPEC["tick_size"]
     label_size = _FONTSPEC["label_size"]
     title_size = _FONTSPEC["title_size"]
@@ -1888,6 +1942,21 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     x_dir, y_dir = st["x_direction"], st["y_direction"]
     x_marks, y_marks = st["x_marks"], st["y_marks"]
 
+    # Spines — left side handed to the coordinate when draw_frame is present.
+    for side, (x1, y1, x2, y2) in (
+        ("top",    (0, 0, iw, 0)),
+        ("bottom", (0, ih, iw, ih)),
+        ("left",   (0, 0, 0, ih)),
+        ("right",  (iw, 0, iw, ih)),
+    ):
+        if side in ("left", "top", "right") and _has_coord_frame:
+            continue
+        if not st[f"spine_{side}"]:
+            continue
+        col, w = _side_stroke(side)
+        parts.append(segment(x1, y1, x2, y2, color=col, width=w,
+                             dash=_side_dash(side), tag="spine"))
+
     # Tick-mark endpoints relative to the spine. "in" goes inside the data
     # area, "out" goes outside, "inout" spans both sides at full length each.
     bot_in, bot_out = ih - _FRAME["tick_length"], ih + _FRAME["tick_length"]  # bottom spine offsets
@@ -1901,12 +1970,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     elif y_dir == "out":   y_left_endpoints, y_right_endpoints = (0, left_out), (iw, right_out)
     else:                  y_left_endpoints, y_right_endpoints = (left_out, left_in), (right_out, right_in)
 
-    # y-axis labels need to clear an outward/inout tick mark; x-axis labels
-    # already sit far enough below the spine to clear all three modes.
-    # When marks are suppressed there are no ticks to clear — sit tight
-    # against the spine regardless of direction.
-    y_label_x = -_FRAME["tick_pad"] if (y_dir == "in" or not y_marks) else -(_FRAME["tick_length"] + _FRAME["tick_pad"])
-
+    # x-ticks + labels — always Cartesian
     for t, lbl in zip(x_ticks, x_labels):
         x = x_scale(t)
         if x_marks:
@@ -1959,45 +2023,68 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
                 else:                  y1, y2 = -minor_len, minor_len
                 parts.append(segment(x, y1, x, y2, color=col, width=sw))
 
-    # y ticks + labels
-    for t, lbl in zip(y_ticks, y_labels):
-        y = y_scale(t)
-        if y_marks:
-            if st["spine_left"] and not hide_l:
-                x1, x2 = y_left_endpoints
-                col, sw = _side_stroke("left")
-                parts.append(segment(x1, y, x2, y, color=col, width=sw))
-            if st["spine_right"] and st["y_right"] and not hide_r:
-                x1, x2 = y_right_endpoints
-                col, sw = _side_stroke("right")
-                parts.append(segment(x1, y, x2, y, color=col, width=sw))
-        if not suppress_yt:
-            # `y + cap_height/2` places the baseline so the cap is vertically
-            # centered on the tick line (cap top at y - cap/2, cap bottom at y + cap/2).
-            parts.append(_tick_label(str(lbl), y_label_x, y + cap_height(y_size) / 2,
-                                     y_size, y_rot, axis="y",
-                                     fontstyle=y_style, decoration=y_decor,
-                                     tag="tick-y"))
-
-    y_minor = _resolve_minor_ticks(st["y_minor"], y_scale, y_ticks)
-    if y_minor and y_marks:
-        minor_len = _FRAME["tick_length"] * _FRAME["minor_tick_ratio"]
-        for t in y_minor:
+    # y-axis — coordinate-aware (left spine + ticks + labels via draw_frame)
+    # or standard Cartesian.
+    if _has_coord_frame:
+        # Normalize y tick positions to [0,1] r-space so draw_frame works for
+        # any scale (numeric, log, categorical) without knowing the scale type.
+        _y_ticks_r = [(ih - y_scale(t)) / ih for t in y_ticks]
+        parts.append(_coord_object.draw_frame(
+            _coord_project, iw, ih,
+            _y_ticks_r, y_labels,
+            {
+                "spine_color":   _FRAME["color"],
+                "spine_width":   _FRAME["width"],
+                "tick_length":   _FRAME["tick_length"],
+                "tick_pad":      _FRAME["tick_pad"],
+                "y_fontsize":    y_size,
+                "font_color":    _FONTSPEC["color"],
+                "y_marks":       y_marks,
+                "y_show_labels": not suppress_yt,
+                "y_fontstyle":   y_style,
+                "y_decoration":  y_decor,
+            }
+        ))
+    else:
+        y_label_x = -_FRAME["tick_pad"] if (y_dir == "in" or not y_marks) else -(_FRAME["tick_length"] + _FRAME["tick_pad"])
+        for t, lbl in zip(y_ticks, y_labels):
             y = y_scale(t)
-            if not math.isfinite(y):
-                continue
-            if st["spine_left"] and not hide_l:
-                col, sw = _side_stroke("left")
-                if y_dir == "in":      x1, x2 = 0, minor_len
-                elif y_dir == "out":   x1, x2 = 0, -minor_len
-                else:                  x1, x2 = -minor_len, minor_len
-                parts.append(segment(x1, y, x2, y, color=col, width=sw))
-            if st["spine_right"] and st["y_right"] and not hide_r:
-                col, sw = _side_stroke("right")
-                if y_dir == "in":      x1, x2 = iw, iw - minor_len
-                elif y_dir == "out":   x1, x2 = iw, iw + minor_len
-                else:                  x1, x2 = iw + minor_len, iw - minor_len
-                parts.append(segment(x1, y, x2, y, color=col, width=sw))
+            if y_marks:
+                if st["spine_left"] and not hide_l:
+                    x1, x2 = y_left_endpoints
+                    col, sw = _side_stroke("left")
+                    parts.append(segment(x1, y, x2, y, color=col, width=sw))
+                if st["spine_right"] and st["y_right"] and not hide_r:
+                    x1, x2 = y_right_endpoints
+                    col, sw = _side_stroke("right")
+                    parts.append(segment(x1, y, x2, y, color=col, width=sw))
+            if not suppress_yt:
+                # `y + cap_height/2` places the baseline so the cap is vertically
+                # centered on the tick line (cap top at y - cap/2, cap bottom at y + cap/2).
+                parts.append(_tick_label(str(lbl), y_label_x, y + cap_height(y_size) / 2,
+                                         y_size, y_rot, axis="y",
+                                         fontstyle=y_style, decoration=y_decor,
+                                         tag="tick-y"))
+
+        y_minor = _resolve_minor_ticks(st["y_minor"], y_scale, y_ticks)
+        if y_minor and y_marks:
+            minor_len = _FRAME["tick_length"] * _FRAME["minor_tick_ratio"]
+            for t in y_minor:
+                y = y_scale(t)
+                if not math.isfinite(y):
+                    continue
+                if st["spine_left"] and not hide_l:
+                    col, sw = _side_stroke("left")
+                    if y_dir == "in":      x1, x2 = 0, minor_len
+                    elif y_dir == "out":   x1, x2 = 0, -minor_len
+                    else:                  x1, x2 = -minor_len, minor_len
+                    parts.append(segment(x1, y, x2, y, color=col, width=sw))
+                if st["spine_right"] and st["y_right"] and not hide_r:
+                    col, sw = _side_stroke("right")
+                    if y_dir == "in":      x1, x2 = iw, iw - minor_len
+                    elif y_dir == "out":   x1, x2 = iw, iw + minor_len
+                    else:                  x1, x2 = iw + minor_len, iw - minor_len
+                    parts.append(segment(x1, y, x2, y, color=col, width=sw))
 
     # xlabel / ylabel / title live in margin space; drop when that margin
     # is collapsed against a joined neighbor. Positioned against the

@@ -215,3 +215,41 @@ A new tree variant is then ~3 callbacks (record / draw / axis_order),
 each a thin wrapper around these helpers — the clustering and layout
 are not your concern. The visible API stays uniform: `c.<artist>(data,
 labels=, orient=, column_split=, parent=, ...)`.
+
+---
+
+## Coordinate classes
+
+`c.coordinate(MyCoordinate())` swaps the Cartesian projection for a custom
+one — useful for tilted, polar, or arbitrary non-Cartesian layouts. A
+coordinate is a callable + a couple of optional protocol methods:
+
+```python
+class MyCoordinate:
+    def __call__(self, artist_dict, iw, ih):
+        def project(t, r):       # (t, r) in [0, 1] → pixel (px, py)
+            ...
+            return px, py
+        return project
+```
+
+That's the required surface. Two optional methods unlock deeper integration:
+
+| Method | When it kicks in |
+|---|---|
+| `svg_transform(project, iw, ih) -> "matrix(...)"` | Affine coordinates only. The core wraps every artist's output in `<g transform="matrix(...)">`, so existing artists draw in Cartesian and the SVG matrix handles the rest — zero per-artist changes. `LinearCoordinate` uses this. |
+| `draw_frame(project, iw, ih, y_ticks_r, y_labels, frame_opts) -> str` | Replaces the Cartesian y-axis rendering (left spine, y ticks, y labels). The x-axis stays Cartesian. Use when your coordinate has a different "y" geometry (e.g. tilted spine). |
+
+**Non-affine coordinates** (circular, polar, anything that can't be expressed
+as a 2-D matrix) can't use `svg_transform`. Two options:
+
+1. **Coordinate-aware artists.** Read `ctx.project` in `draw` instead of
+   `ctx.x_scale` / `ctx.y_scale`. Custom artists work; standard ones don't.
+2. **Post-render SVG coordinate warping.** Render artists into a normalized
+   Cartesian space, then parse and remap each coordinate pair through
+   `project(t, r)`. Works for standard artists with no per-artist code, at
+   the cost of straight segments becoming chords across the warp.
+   [`cookbook/circle/`](../cookbook/circle/) is a worked example.
+
+One coordinate per panel; use separate panels (composed via `pt.grid` / `|` /
+`/`) for two coordinate systems.
