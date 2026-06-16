@@ -1,30 +1,35 @@
 """Genome-wide tracks demo.
 
-Stacked, length-weighted faceting via the small coordination layer in
-[track_layout.py](track_layout.py). Each per-chrom track is a (data, paint)
-pair; the paint callback draws whatever you want into one chrom's chart.
-The SV triangle is a different shape — one chart spanning the genome —
-and lives as its own `SVTriangleTrack` type.
+Stacked, length-weighted faceting built on `c.sectors()`. Each track is
+one chart spanning the full genome; the paint callback writes into the
+chart with the full DataFrame, and sectors handles the chrom→global x
+remap automatically for any artist that takes `data=` and carries the
+chrom column.
 
 Patterns shown:
-- one-liner painters (`lambda c, df: c.scatter(...)`).
+- one-liner `data=`-style painters
+  (`lambda c, df, off: c.scatter(data=df, ...)`); sectors auto-remaps the
+  x column via the `chrom` tag that rides along in `df`.
 - pre-factored painter closures for multi-statement paints
-  (`step_paint`, `bar_paint`).
+  (`step_paint`, `bar_paint`) — they group by chrom and emit one
+  artist call per chrom in **global** coords (positional `xs` lists
+  bypass `data=`-driven remap).
 - highlight regions passed at the framework level via
-  `Track(..., highlight_df=...)` — drawn into every per-chrom cell before
-  the paint runs, so all tracks share the same overlay without each
-  paint repeating axvspan boilerplate. SV tracks accept the same kwarg.
+  `Track(..., highlight_df=...)` — drawn into every track before the
+  paint runs, so all tracks share the same overlay without each paint
+  repeating axvspan boilerplate.
 - font / size customization via a pre-registered theme passed to
   `plot_tracks(theme=...)`.
 - alternating chrom banding via `plot_tracks(style="facecolor")`
-  (default); `"spine"` for a dotted-separator look instead.
+  (default); `"spine"` uses dotted sector dividers via
+  `c.sectors(..., divider={"linestyle": "dotted", ...})`; `"gap"` opens
+  an inter-sector px pad via `c.sectors(..., gap=N)` — same unit as the
+  categorical heatmap path so gaps align across mixed-scale tracks.
 - log-scale tracks via `Track(..., yscale="log")`.
 - `chrom=[...]` / `showX=False` filtering via the framework.
-- SV triangle plot — `SVTriangleTrack` mixes into the same `plot_tracks`
-  call as per-chrom tracks and renders below them.
 """
 
-SUMMARY = "Genome-wide tracks as stacked, length-weighted faceting."
+SUMMARY = "Genome-wide tracks as a stacked, sector-partitioned figure."
 
 from pathlib import Path
 
@@ -32,7 +37,7 @@ import numpy as np
 import pandas as pd
 import plotlet as pt
 
-from track_layout import Track, SVTriangleTrack, plot_tracks
+from track_layout import Track, plot_tracks
 
 
 # =============================================================================
@@ -41,29 +46,65 @@ from track_layout import Track, SVTriangleTrack, plot_tracks
 
 def step_paint(start_col, end_col, y_col, *, fill=False,
                alpha=0.9, fill_alpha=0.2):
-    """Step-after line with optional zero-baseline fill. The 'repeat the
-    last value at the right edge' trick closes the trailing bin as a
-    rectangle rather than leaving it as an open step."""
-    def paint(c, df):
-        xs = df[start_col].tolist() + [df[end_col].iloc[-1]]
-        ys = df[y_col].tolist()    + [df[y_col].iloc[-1]]
-        if fill:
-            c.fill_between(data={"x": xs, "y1": [0] * len(xs), "y2": ys},
-                           x="x", y1="y1", y2="y2",
-                           curve="step-after", alpha=fill_alpha)
-        c.step(data={"x": xs, "y": ys}, x="x", y="y", where="post", alpha=alpha)
+    """Step-after line with optional zero-baseline fill. Groups per chrom
+    so the 'repeat the last value at the right edge' trick closes each
+    chrom's trailing bin as a rectangle. xs are emitted in global coords
+    via the `offsets` dict — positional list-data bypasses sectors auto-
+    remap, so we precompute.
+
+    The trailing close-point gets a tiny inward shift so a bin ending
+    exactly at ``chrom_length`` still maps inside this chrom under the
+    sectored linear scale's strict-`<` boundary convention (see
+    `_SectoredLinearScale.__call__`). Without this, the last step would
+    visually extend across the inter-sector gap in gap style."""
+    def paint(c, df, offsets):
+        for cname, sub in df.groupby("chrom", sort=False):
+            if cname not in offsets:
+                continue
+            off = offsets[cname]
+            close_end = float(sub[end_col].iloc[-1])
+            eps = max(close_end, 1.0) * 1e-9
+            xs = [off + x for x in sub[start_col].tolist()] \
+                 + [off + close_end - eps]
+            ys = sub[y_col].tolist() + [float(sub[y_col].iloc[-1])]
+            if fill:
+                c.fill_between(data={"x": xs, "y1": [0] * len(xs), "y2": ys},
+                               x="x", y1="y1", y2="y2",
+                               curve="step-after", alpha=fill_alpha)
+            c.step(data={"x": xs, "y": ys}, x="x", y="y",
+                   where="post", alpha=alpha)
     return paint
 
 
 def bar_paint(start_col, end_col, y_col, *, alpha=0.75):
-    """Bar look: filled step-after area, no line on top. Assumes
-    contiguous bins."""
-    def paint(c, df):
-        xs = df[start_col].tolist() + [df[end_col].iloc[-1]]
-        ys = df[y_col].tolist()    + [df[y_col].iloc[-1]]
-        c.fill_between(data={"x": xs, "y1": [0] * len(xs), "y2": ys},
-                       x="x", y1="y1", y2="y2",
-                       curve="step-after", alpha=alpha)
+    """Bar look: filled step-after area, no line on top. Same per-chrom
+    grouping + close-point epsilon trick as ``step_paint``."""
+    def paint(c, df, offsets):
+        for cname, sub in df.groupby("chrom", sort=False):
+            if cname not in offsets:
+                continue
+            off = offsets[cname]
+            close_end = float(sub[end_col].iloc[-1])
+            eps = max(close_end, 1.0) * 1e-9
+            xs = [off + x for x in sub[start_col].tolist()] \
+                 + [off + close_end - eps]
+            ys = sub[y_col].tolist() + [float(sub[y_col].iloc[-1])]
+            c.fill_between(data={"x": xs, "y1": [0] * len(xs), "y2": ys},
+                           x="x", y1="y1", y2="y2",
+                           curve="step-after", alpha=alpha)
+    return paint
+
+
+def hlines_paint(start_col, end_col, y_col, *, linewidth=1.4, alpha=0.9):
+    """Horizontal segments from `start_col` to `end_col` at height `y_col`.
+    Positional artist — we precompute global xs from `offsets`."""
+    def paint(c, df, offsets):
+        x0 = [offsets[r] + s for r, s in zip(df["chrom"], df[start_col])
+              if r in offsets]
+        x1 = [offsets[r] + e for r, e in zip(df["chrom"], df[end_col])
+              if r in offsets]
+        ys = [v for r, v in zip(df["chrom"], df[y_col]) if r in offsets]
+        c.hlines(ys, x0, x1, linewidth=linewidth, alpha=alpha)
     return paint
 
 
@@ -135,31 +176,6 @@ def make_gc(gs, *, bin_mb=5, seed=3):
     return pd.concat(rows, ignore_index=True)
 
 
-def make_svs(gs, *, n_intra=40, n_inter=12, seed=4):
-    """BEDPE-like SV table. Local SVs cluster near the triangle bottom;
-    a handful of inter-chromosomal events float near the apex."""
-    rng = np.random.default_rng(seed)
-    chroms = gs["chrom"].tolist()
-    lens = dict(zip(gs["chrom"], gs["length"]))
-    rows = []
-    for _ in range(n_intra):
-        ch = chroms[rng.integers(len(chroms))]
-        L = lens[ch]
-        a = rng.uniform(0, L)
-        span = abs(rng.normal(0, L * 0.15))
-        b = float(np.clip(a + span, 0, L))
-        s1, s2 = sorted([a, b])
-        rows.append((ch, s1, s1 + 0.1, ch, s2, s2 + 0.1))
-    for _ in range(n_inter):
-        i, j = rng.choice(len(chroms), size=2, replace=False)
-        ca, cb = chroms[i], chroms[j]
-        sa = rng.uniform(0, lens[ca])
-        sb = rng.uniform(0, lens[cb])
-        rows.append((ca, sa, sa + 0.1, cb, sb, sb + 0.1))
-    return pd.DataFrame(rows, columns=["chrom1", "start1", "end1",
-                                       "chrom2", "start2", "end2"])
-
-
 # =============================================================================
 # Demo
 # =============================================================================
@@ -169,7 +185,6 @@ if __name__ == "__main__":
     segs_df   = make_segments(GENOME_SIZE)
     counts_df = make_counts(GENOME_SIZE)
     gc_df     = make_gc(GENOME_SIZE)
-    svs_df    = make_svs(GENOME_SIZE)
 
     highlight_df = pd.DataFrame([
         ("chr1", 20, 90),
@@ -188,16 +203,13 @@ if __name__ == "__main__":
 
     tracks = [
         Track(points_df,
-              paint=lambda c, df: c.scatter(data={"x": df.start.tolist(),
-                                                  "y": df.value.tolist()},
-                                            x="x", y="y", size=4, alpha=0.4),
+              paint=lambda c, df, off: c.scatter(
+                  data=df, x="start", y="value", size=4, alpha=0.4),
               ylabel="logR", ylim=(-1.5, 2.0),
               highlight_df=highlight_df),
 
         Track(segs_df,
-              paint=lambda c, df: c.hlines(df.value.tolist(),
-                                           df.start.tolist(), df.end.tolist(),
-                                           linewidth=1.4, alpha=0.9),
+              paint=hlines_paint("start", "end", "value"),
               ylabel="coverage", ylim=(0, 2.0),
               highlight_df=highlight_df),
 
@@ -210,13 +222,10 @@ if __name__ == "__main__":
               paint=step_paint("start", "end", "value", fill=True),
               ylabel="GC %", ylim=(0.35, 0.60),
               highlight_df=highlight_df),
-
-        SVTriangleTrack(svs_df,
-                        highlight_df=highlight_df,
-                        size=10, alpha=0.7),
     ]
 
-    for style, suffix in [("facecolor", ""), ("spine", "_spine")]:
+    for style, suffix in [("facecolor", ""), ("spine", "_spine"),
+                          ("gap", "_gap"), ("boxed", "_boxed")]:
         fig = plot_tracks(tracks, GENOME_SIZE,
                           width=600, track_height=55, gap=8,
                           style=style,
