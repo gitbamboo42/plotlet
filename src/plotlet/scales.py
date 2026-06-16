@@ -68,6 +68,102 @@ class _LinearScale:
         return _nice_ticks(self.d0, self.d1, n)
 
 
+class _SectoredLinearScale:
+    """Piecewise linear scale that reserves ``gap_px`` pixels between
+    sectors. Sibling of ``_CategoryScale`` for continuous values — the
+    pattern (gap as a px parameter at scale construction) matches.
+
+    Sectors carve the data domain ``[d0, d1]`` into ``n`` contiguous
+    chunks whose lengths are ``sector_lengths``. The pixel range
+    ``[r0, r1]`` is split into ``n`` per-sector strips with ``gap_px``
+    px reserved between consecutive strips. Per-sector data → pixel
+    is linear within each strip; the boundary maps to the right edge of
+    the prior sector. Out-of-domain values extrapolate from the nearest
+    sector's strip (used for refline / axspan artists).
+
+    For axis-aligned artists (scatter/line/bar/heatmap/refline) this
+    yields the visually correct "data with gap between sectors" look.
+    Cross-sector geometry (diagonals that span multiple sectors) will
+    kink at each boundary by ``gap_px`` — that's the honest visual
+    consequence of the gap actually being there.
+    """
+    def __init__(self, d0, d1, r0, r1, sector_lengths, gap_px):
+        self.d0, self.d1, self.r0, self.r1 = d0, d1, r0, r1
+        self.sector_lengths = tuple(float(L) for L in sector_lengths)
+        self.gap_px = float(gap_px)
+        n = len(self.sector_lengths)
+        L_sum = sum(self.sector_lengths)
+        # data-coord left edges of each sector (in the no-gap domain)
+        self._sector_lefts_d = []
+        cum = 0.0
+        for L in self.sector_lengths:
+            self._sector_lefts_d.append(cum)
+            cum += L
+        # pixel allocation: total px = |r1 - r0|; reserve (n-1)*gap_px,
+        # split the remainder proportionally to sector_lengths.
+        total_px = float(r1 - r0)
+        sign = 1.0 if total_px >= 0 else -1.0
+        data_px = abs(total_px) - max(0, n - 1) * self.gap_px
+        if data_px < 0:
+            # Pathological: pixel range can't hold the requested gaps.
+            # Fall back to plain proportional with no gap to avoid div/0.
+            data_px = abs(total_px)
+            self.gap_px = 0.0
+        self._sector_lefts_px = []
+        self._sector_widths_px = []
+        cum_px = float(r0)
+        for L in self.sector_lengths:
+            w = (L / L_sum) * data_px if L_sum > 0 else 0.0
+            self._sector_lefts_px.append(cum_px)
+            self._sector_widths_px.append(sign * w)
+            cum_px += sign * (w + self.gap_px)
+
+    def __call__(self, v):
+        n = len(self.sector_lengths)
+        if n == 0:
+            return self.r0
+        # Strict-`<` boundary convention: a value at a sector boundary
+        # belongs to the *next* sector's left edge. This is the right
+        # call for axis-aligned artists whose left endpoint sits at a
+        # sector's *origin* (highlight starting at chrom 0, bar starting
+        # at chrom 0, etc.) — those values numerically equal the prior
+        # sector's right edge, but semantically belong to the new sector.
+        # Painters whose *right* endpoint lands exactly on a sector's
+        # right edge (e.g. step-after closing at `chrom_length`) need a
+        # tiny inward shift to stay inside the ending sector; see the
+        # cookbook's `step_paint` / `bar_paint`.
+        idx = n - 1
+        for i in range(n):
+            right = self._sector_lefts_d[i] + self.sector_lengths[i]
+            if v < right:
+                idx = i
+                break
+        L_i = self.sector_lengths[idx]
+        frac = ((v - self._sector_lefts_d[idx]) / L_i) if L_i > 0 else 0.0
+        return self._sector_lefts_px[idx] + frac * self._sector_widths_px[idx]
+
+    def ticks(self, n=8):
+        return _nice_ticks(self.d0, self.d1, n)
+
+    def gap_midpoint_px(self, i):
+        """Pixel position halfway between sector ``i`` and sector ``i+1``.
+        Used by the chrome renderer to place divider lines."""
+        right_of_i = self._sector_lefts_px[i] + self._sector_widths_px[i]
+        left_of_next = self._sector_lefts_px[i + 1]
+        return (right_of_i + left_of_next) / 2
+
+    def sector_pixel_ranges(self):
+        """``[(lo_px, hi_px), ...]`` per sector. Used by spine rendering
+        to render top/bottom as per-sector segments and left/right as
+        per-sector verticals when ``gap_px > 0`` — each sector reads as
+        its own bounded subplot."""
+        out = []
+        for left_px, width_px in zip(self._sector_lefts_px,
+                                      self._sector_widths_px):
+            out.append((left_px, left_px + width_px))
+        return out
+
+
 class _LogScale:
     def __init__(self, d0, d1, r0, r1):
         if d0 <= 0 or d1 <= 0:

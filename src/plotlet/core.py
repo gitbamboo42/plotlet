@@ -33,6 +33,7 @@ from ._spec import (
 _SECTORSPEC = SPEC["sectors"]
 from .draw import resolve_color, TAB10
 from .scales import (_LinearScale, _LogScale, _CategoryScale, _SymlogScale,
+                      _SectoredLinearScale,
                       _PowerScale, _TimeScale, _nice_domain, _fmt_tick,
                       _to_epoch, _coerce_time_lim)
 from .draw import measure_text, cap_height, descender
@@ -97,6 +98,8 @@ class _AxisDescriptor:
     splits: list | None = None   # category only: band indices that begin a block
     split_gap: float = 0.0       # category only: px reserved before each split
     groups: dict | None = None   # category only: cat -> group label; scale derives splits
+    sector_lengths: tuple | None = None   # continuous only: per-sector lengths
+    sector_gap_px: float = 0.0            # continuous only: px reserved between sectors
 
     def build(self, r0, r1):
         if self.kind == "log":
@@ -113,6 +116,10 @@ class _AxisDescriptor:
             return _PowerScale(self.lo, self.hi, r0, r1, exponent=0.5)
         if self.kind == "time":
             return _TimeScale(self.lo, self.hi, r0, r1)
+        if self.sector_lengths and self.sector_gap_px > 0:
+            return _SectoredLinearScale(self.lo, self.hi, r0, r1,
+                                        self.sector_lengths,
+                                        self.sector_gap_px)
         return _LinearScale(self.lo, self.hi, r0, r1)
 
 
@@ -519,18 +526,19 @@ def _replay(calls):
         elif name == "facecolor": st["facecolor"] = args[0] if args else None
         elif name == "coordinate": st["coordinate"] = args[0]
         elif name == "sectors":
-            from .sectors import Sectors
+            from .sectors import Sectors, _parse_divider
             col     = kw.get("column")
             axis    = kw.get("axis", "x")
-            divider = kw.get("divider", True)
             label   = kw.get("label",   True)
             gap     = kw.get("gap")
+            divider_on, divider_style = _parse_divider(kw.get("divider", True))
             if axis not in ("x", "y"):
                 raise ValueError(
                     f"c.sectors(axis=): expected 'x' or 'y'; got {axis!r}"
                 )
             sec = Sectors.coerce(args[0], name_col=col,
-                                 divider=divider, label=label, gap=gap)
+                                 divider=divider_on, label=label, gap=gap,
+                                 divider_style=divider_style)
             # Continuous sectors need a column= tag on the data so the
             # record-time remap can route each row to its sector.
             if sec.kind == "continuous" and col is None:
@@ -538,6 +546,10 @@ def _replay(calls):
                     "c.sectors(...): continuous sectors need column= "
                     "(name of the sector tag on each data row)."
                 )
+            # `gap=` is in **pixels** for both kinds. Categorical: routed
+            # to `_CategoryScale.split_gap`. Continuous: routed to the
+            # `_SectoredLinearScale` via `_AxisDescriptor.sector_gap_px`
+            # — both paths absorb the gap at scale-construction time.
             st[f"{axis}_sectors"] = sec
             st[f"{axis}_sector_column"] = col
         elif name == "theme":
@@ -901,6 +913,57 @@ def _categorical_sector_extras(sec):
     return groups, split_gap
 
 
+def _continuous_sector_extras(sec):
+    """Translate a continuous Sectors into descriptor extras for
+    ``_SectoredLinearScale``. Returns ``(sector_lengths, sector_gap_px)``
+    or ``(None, 0.0)`` when the descriptor should fall back to the
+    plain ``_LinearScale`` (no sectors or gap == 0)."""
+    if sec is None or sec.kind != "continuous":
+        return None, 0.0
+    if sec.gap is None or sec.gap <= 0:
+        return None, 0.0
+    return tuple(sec.lengths), float(sec.gap)
+
+
+def _spine_segments(side, iw, ih, x_ranges, y_ranges):
+    """Yield ``(x1, y1, x2, y2)`` per spine segment for ``side``.
+
+    When the orthogonal axis carries a sectored scale (continuous gap >
+    0), the spine breaks into per-sector pieces so each sector reads as
+    its own bounded subplot. Otherwise one full-side segment is yielded.
+
+    For ``top`` / ``bottom`` the relevant break-up axis is x (horizontal
+    segments per x-sector); ``left`` / ``right`` break by x (verticals
+    at each x-sector's edges) when x is sectored, else by y (verticals
+    per y-sector). Symmetric on top/bottom when y is sectored.
+    """
+    if side in ("top", "bottom"):
+        y_edge = 0 if side == "top" else ih
+        if x_ranges is not None:
+            for lo, hi in x_ranges:
+                yield lo, y_edge, hi, y_edge
+        elif y_ranges is not None:
+            for lo, hi in y_ranges:
+                y = lo if side == "top" else hi
+                yield 0, y, iw, y
+        else:
+            yield 0, y_edge, iw, y_edge
+    else:  # left / right
+        if x_ranges is not None:
+            for lo, hi in x_ranges:
+                x = lo if side == "left" else hi
+                yield x, 0, x, ih
+        else:
+            x_edge = 0 if side == "left" else iw
+            if y_ranges is not None:
+                for lo, hi in y_ranges:
+                    yield x_edge, lo, x_edge, hi
+            else:
+                yield x_edge, 0, x_edge, ih
+
+
+
+
 def _x_descriptor(st) -> _AxisDescriptor:
     """Compute this panel's natural x-axis descriptor from its own state.
 
@@ -953,10 +1016,16 @@ def _x_descriptor(st) -> _AxisDescriptor:
                                     force_zero=x_force_zero,
                                     tight=x_tight,
                                     expand=_resolve_expand(st["x_expand"], x_tight, "x"))
+    # Continuous sector gap: route the px gap to _SectoredLinearScale via
+    # _AxisDescriptor — same shape as how categorical does it through
+    # _CategoryScale.split_gap.
+    sec_lengths, sec_gap_px = _continuous_sector_extras(sec)
     return _AxisDescriptor(kind=x_scale_kind, lo=x_min, hi=x_max,
                            flip=st["x_reverse"],
                            linthresh=st["x_linthresh"],
-                           exponent=st["x_exponent"])
+                           exponent=st["x_exponent"],
+                           sector_lengths=sec_lengths,
+                           sector_gap_px=sec_gap_px)
 
 
 def _any_artist_flips_y(artists) -> bool:
@@ -1050,10 +1119,13 @@ def _y_descriptor(st) -> _AxisDescriptor:
                                     force_zero=force_zero,
                                     tight=y_tight,
                                     expand=_resolve_expand(st["y_expand"], y_tight, "y"))
+    sec_lengths, sec_gap_px = _continuous_sector_extras(sec)
     return _AxisDescriptor(kind=y_scale_kind, lo=y_min, hi=y_max,
                            flip=_any_artist_flips_y(artists) or st["y_reverse"],
                            linthresh=st["y_linthresh"],
-                           exponent=st["y_exponent"])
+                           exponent=st["y_exponent"],
+                           sector_lengths=sec_lengths,
+                           sector_gap_px=sec_gap_px)
 
 
 def _resolve_shared_padding(states: list[dict], key: str) -> float:
@@ -1123,10 +1195,13 @@ def _x_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
                                     force_zero=x_force_zero,
                                     tight=x_tight,
                                     expand=_resolve_expand(anchor["x_expand"], x_tight, "x"))
+    sec_lengths, sec_gap_px = _continuous_sector_extras(sec)
     return _AxisDescriptor(kind=x_scale_kind, lo=x_min, hi=x_max,
                            flip=anchor["x_reverse"],
                            linthresh=anchor["x_linthresh"],
-                           exponent=anchor["x_exponent"])
+                           exponent=anchor["x_exponent"],
+                           sector_lengths=sec_lengths,
+                           sector_gap_px=sec_gap_px)
 
 
 def _y_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
@@ -1175,10 +1250,13 @@ def _y_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
                                     force_zero=force_zero,
                                     tight=y_tight,
                                     expand=_resolve_expand(anchor["y_expand"], y_tight, "y"))
+    sec_lengths, sec_gap_px = _continuous_sector_extras(sec)
     return _AxisDescriptor(kind=y_scale_kind, lo=y_min, hi=y_max,
                            flip=_any_artist_flips_y(all_artists) or anchor["y_reverse"],
                            linthresh=anchor["y_linthresh"],
-                           exponent=anchor["y_exponent"])
+                           exponent=anchor["y_exponent"],
+                           sector_lengths=sec_lengths,
+                           sector_gap_px=sec_gap_px)
 
 
 def _rotated_label_bbox(label_w: float, label_h: float, rot_deg: float) -> tuple[float, float]:
@@ -2169,19 +2247,25 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     x_marks, y_marks = st["x_marks"], st["y_marks"]
 
     # Spines — left side handed to the coordinate when draw_frame is present.
-    for side, (x1, y1, x2, y2) in (
-        ("top",    (0, 0, iw, 0)),
-        ("bottom", (0, ih, iw, ih)),
-        ("left",   (0, 0, 0, ih)),
-        ("right",  (iw, 0, iw, ih)),
-    ):
+    # `_spine_segments` breaks each side into per-sector pieces when a
+    # sectored scale is active, so each sector reads as its own bounded
+    # subplot. Plain linear / categorical paths yield one full-side
+    # segment and stay byte-identical to the pre-sector behavior.
+    _x_ranges = (x_scale.sector_pixel_ranges()
+                 if hasattr(x_scale, "sector_pixel_ranges") else None)
+    _y_ranges = (y_scale.sector_pixel_ranges()
+                 if hasattr(y_scale, "sector_pixel_ranges") else None)
+    for side in ("top", "bottom", "left", "right"):
         if side in ("left", "top", "right") and _has_coord_frame:
             continue
         if not st[f"spine_{side}"]:
             continue
         col, w = _side_stroke(side)
-        parts.append(segment(x1, y1, x2, y2, color=col, width=w,
-                             dash=_side_dash(side), tag="spine"))
+        dash = _side_dash(side)
+        for sx1, sy1, sx2, sy2 in _spine_segments(side, iw, ih,
+                                                   _x_ranges, _y_ranges):
+            parts.append(segment(sx1, sy1, sx2, sy2,
+                                 color=col, width=w, dash=dash, tag="spine"))
 
     # Tick-mark endpoints relative to the spine. "in" goes inside the data
     # area, "out" goes outside, "inout" spans both sides at full length each.
@@ -2255,14 +2339,22 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     # byte-identical. Typical user-facing usage picks one (gap whitespace
     # OR a divider line) — both at once reads as redundant clutter.
     if _x_sec is not None and (_x_sec.divider or _x_sec.label):
-        sec_col = resolve_color(_SECTORSPEC["divider_color"])
-        sec_w   = _SECTORSPEC["divider_width"]
-        sec_dash = _SECTORSPEC["divider_dasharray"]
+        _xds = _x_sec.divider_style or {}
+        sec_col = resolve_color(_xds.get("color", _SECTORSPEC["divider_color"]))
+        sec_w   = _xds.get("width", _SECTORSPEC["divider_width"])
+        sec_dash = _xds.get("dasharray", _SECTORSPEC["divider_dasharray"])
         sec_pad  = _SECTORSPEC["label_pad"]
         sec = _x_sec
         if sec.kind == "continuous":
-            boundaries = sec.boundaries()
-            divider_xs = [x_scale(b) for b in boundaries[1:-1]]
+            # Pixel divider midpoints come from the scale (so a sectored
+            # linear scale with gap_px > 0 lands them in the gap, not at
+            # the data-coord boundary).
+            if hasattr(x_scale, "gap_midpoint_px"):
+                divider_xs = [x_scale.gap_midpoint_px(i)
+                              for i in range(len(sec.names) - 1)]
+            else:
+                boundaries = sec.boundaries()
+                divider_xs = [x_scale(b) for b in boundaries[1:-1]]
             label_xs   = [x_scale(sec.center(n)) for n in sec.names]
         else:
             bw = x_scale.bandwidth
@@ -2294,14 +2386,19 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
                                          fontstyle=x_style, decoration=x_decor,
                                          tag="sector-label"))
     if _y_sec is not None and (_y_sec.divider or _y_sec.label):
-        sec_col = resolve_color(_SECTORSPEC["divider_color"])
-        sec_w   = _SECTORSPEC["divider_width"]
-        sec_dash = _SECTORSPEC["divider_dasharray"]
+        _yds = _y_sec.divider_style or {}
+        sec_col = resolve_color(_yds.get("color", _SECTORSPEC["divider_color"]))
+        sec_w   = _yds.get("width", _SECTORSPEC["divider_width"])
+        sec_dash = _yds.get("dasharray", _SECTORSPEC["divider_dasharray"])
         sec_pad  = _SECTORSPEC["label_pad"]
         sec = _y_sec
         if sec.kind == "continuous":
-            boundaries = sec.boundaries()
-            divider_ys = [y_scale(b) for b in boundaries[1:-1]]
+            if hasattr(y_scale, "gap_midpoint_px"):
+                divider_ys = [y_scale.gap_midpoint_px(i)
+                              for i in range(len(sec.names) - 1)]
+            else:
+                boundaries = sec.boundaries()
+                divider_ys = [y_scale(b) for b in boundaries[1:-1]]
             label_ys   = [y_scale(sec.center(n)) for n in sec.names]
         else:
             bh = y_scale.bandwidth
