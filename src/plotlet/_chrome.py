@@ -153,7 +153,7 @@ def emit_chrome(*,
                 x_ticks, x_labels, y_ticks, y_labels,
                 panel_opts,
                 coord_object, coord_project,
-                has_coord_frame, has_x_frame,
+                has_coord_frame, has_x_frame, has_x_sector_chrome,
                 x_sec, y_sec,
                 suppress_xt, suppress_yt):
     """Emit all panel chrome — spines, ticks, minor ticks, sector chrome,
@@ -348,26 +348,58 @@ def emit_chrome(*,
             divider_xs = [(spans[i][1] + spans[i + 1][0]) / 2
                           for i in range(len(spans) - 1)]
             label_xs   = [(lo + hi) / 2 for lo, hi in spans]
-        if sec.divider:
-            for x in divider_xs:
-                parts.append(segment(x, 0, x, ih,
-                                     color=sec_col, width=sec_w, dash=sec_dash,
-                                     tag="sector-divider"))
-        if sec.label and not suppress_xt and not hide_b:
-            # Continuous: ticks are suppressed, label sits at the
-            # standard tick-label baseline. Categorical: stack below the
-            # cat-label band (cat baseline + descender + sec_pad + cap).
-            if sec.kind == "continuous":
-                sec_baseline = ih + _FRAME["tick_pad"] + cap_height(x_size)
+        if has_x_sector_chrome:
+            # Coordinate owns x-sector chrome (e.g. ring → two walls per
+            # sector bracketing the gap whitespace). Compute each sector's
+            # (start, end) pixel range and normalize to t-space — the coord
+            # re-projects through its own angle/radius mapping.
+            if hasattr(x_scale, "sector_pixel_ranges"):
+                sector_pixel_ranges = x_scale.sector_pixel_ranges()
+            elif sec.kind == "continuous":
+                bs = sec.boundaries()
+                sector_pixel_ranges = [(x_scale(bs[i]), x_scale(bs[i + 1]))
+                                        for i in range(len(sec.names))]
             else:
-                sec_baseline = (ih + _FRAME["tick_pad"]
-                                + cap_height(x_size) + descender(x_size)
-                                + sec_pad + cap_height(x_size))
-            for name, cx in zip(sec.names, label_xs):
-                parts.append(_tick_label(str(name), cx, sec_baseline,
-                                         x_size, x_rot, axis="x",
-                                         fontstyle=x_style, decoration=x_decor,
-                                         tag="sector-label"))
+                sector_pixel_ranges = spans
+            parts.append(coord_object.draw_x_sector_chrome(
+                coord_project, iw, ih,
+                [(lo / iw, hi / iw) for lo, hi in sector_pixel_ranges],
+                [x / iw for x in label_xs],
+                list(sec.names),
+                {
+                    "divider_color":     sec_col,
+                    "divider_width":     sec_w,
+                    "divider_dash":      sec_dash,
+                    "tick_pad":          _FRAME["tick_pad"],
+                    "label_fontsize":    x_size,
+                    "label_fontcolor":   _FONTSPEC["color"],
+                    "label_fontstyle":   x_style,
+                    "label_decoration":  x_decor,
+                    "draw_dividers":     bool(sec.divider),
+                    "draw_labels":       bool(sec.label) and not suppress_xt,
+                },
+            ))
+        else:
+            if sec.divider:
+                for x in divider_xs:
+                    parts.append(segment(x, 0, x, ih,
+                                         color=sec_col, width=sec_w, dash=sec_dash,
+                                         tag="sector-divider"))
+            if sec.label and not suppress_xt and not hide_b:
+                # Continuous: ticks are suppressed, label sits at the
+                # standard tick-label baseline. Categorical: stack below the
+                # cat-label band (cat baseline + descender + sec_pad + cap).
+                if sec.kind == "continuous":
+                    sec_baseline = ih + _FRAME["tick_pad"] + cap_height(x_size)
+                else:
+                    sec_baseline = (ih + _FRAME["tick_pad"]
+                                    + cap_height(x_size) + descender(x_size)
+                                    + sec_pad + cap_height(x_size))
+                for name, cx in zip(sec.names, label_xs):
+                    parts.append(_tick_label(str(name), cx, sec_baseline,
+                                             x_size, x_rot, axis="x",
+                                             fontstyle=x_style, decoration=x_decor,
+                                             tag="sector-label"))
     if y_sec is not None and (y_sec.divider or y_sec.label):
         _yds = y_sec.divider_style or {}
         sec_col = resolve_color(_yds.get("color", _SECTORSPEC["divider_color"]))
@@ -420,6 +452,22 @@ def emit_chrome(*,
         # Normalize y tick positions to [0,1] r-space so draw_frame works for
         # any scale (numeric, log, categorical) without knowing the scale type.
         _y_ticks_r = [(ih - y_scale(t)) / ih for t in y_ticks]
+        # When the coord also owns the x-sector chrome, hand the y-axis the
+        # same sector_ts so it can break its spines at gap boundaries
+        # (Circos: each sector is a bounded arc, the rings don't bleed
+        # through gap whitespace). Cartesian / non-sector renders ignore it.
+        _y_sector_ts = None
+        if has_x_sector_chrome and x_sec is not None:
+            if hasattr(x_scale, "sector_pixel_ranges"):
+                _spr = x_scale.sector_pixel_ranges()
+            elif x_sec.kind == "continuous":
+                bs = x_sec.boundaries()
+                _spr = [(x_scale(bs[i]), x_scale(bs[i + 1]))
+                        for i in range(len(x_sec.names))]
+            else:
+                _spr = None  # categorical+circular not supported
+            if _spr is not None:
+                _y_sector_ts = [(lo / iw, hi / iw) for lo, hi in _spr]
         parts.append(coord_object.draw_frame(
             coord_project, iw, ih,
             _y_ticks_r, y_labels,
@@ -434,6 +482,7 @@ def emit_chrome(*,
                 "y_show_labels": not suppress_yt,
                 "y_fontstyle":   y_style,
                 "y_decoration":  y_decor,
+                "sector_ts":     _y_sector_ts,
             }
         ))
     else:

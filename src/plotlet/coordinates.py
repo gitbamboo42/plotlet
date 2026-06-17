@@ -23,10 +23,21 @@ Optional methods on the coordinate object unlock additional integration:
     Replaces the Cartesian x-axis rendering (bottom spine, x ticks, x labels).
     Mirror of ``draw_frame`` for the t-axis.  When present, the standard
     bottom-spine + Cartesian x-tick block is skipped and this is emitted
-    instead; the standard x-axis sector chrome is incompatible and raises.
-    ``x_ticks_t`` are tick positions pre-normalized to [0, 1] t-space.
-    ``frame_opts`` keys mirror ``draw_frame`` (x_fontsize, x_marks,
-    x_show_labels, x_fontstyle, x_decoration in place of the y_ variants).
+    instead.  ``x_ticks_t`` are tick positions pre-normalized to [0, 1]
+    t-space.  ``frame_opts`` keys mirror ``draw_frame`` (x_fontsize,
+    x_marks, x_show_labels, x_fontstyle, x_decoration in place of the
+    y_ variants).
+
+``draw_x_sector_chrome(project, iw, ih, sector_ts, label_ts, names, sec_opts) -> str``
+    Replaces the Cartesian x-axis sector chrome (vertical dividers + bottom
+    labels) — required when ``draw_x_frame`` is implemented AND the user
+    sets ``c.sectors(axis="x")``.  ``sector_ts`` is a list of
+    ``(start_t, end_t)`` for each sector in t-space (already accounting
+    for any pixel gap between sectors); ``label_ts`` are the sector
+    centers.  The hook decides whether to draw one divider per gap or two
+    walls per sector — ``CircularCoordinate`` draws walls so each sector
+    reads as a bounded wedge.  ``sec_opts`` carries divider style + label
+    font style plus ``draw_dividers`` / ``draw_labels`` toggles.
 
 ``svg_transform(project, iw, ih) -> str``
     Returns an SVG ``matrix(…)`` string.  When present, plotlet wraps the
@@ -157,8 +168,9 @@ class CircularCoordinate:
       unwarped.  Frame-level text (titles, x/y tick labels via
       ``draw_x_frame`` / ``draw_frame``) is positioned in the coordinate
       directly and renders correctly.
-    - Combining ``c.sectors(axis="x")`` with a ring is not supported and
-      raises at render time.
+    - ``c.sectors(axis="x")`` is supported (Circos-style wedges with
+      radial dividers and tangential labels).  ``c.sectors(axis="y")``
+      (concentric bands) is not yet supported and raises at render time.
 
     Parameters
     ----------
@@ -167,17 +179,31 @@ class CircularCoordinate:
     gap : float, default 0.05
         Padding between outer ring edge and canvas edge, as a fraction
         of half the canvas size.
+    wrap_gap_deg : float, default 0.0
+        Angular gap (in degrees) at the 12 o'clock wrap-around boundary.
+        With sectors set, matching ``wrap_gap_deg`` to your
+        ``c.sectors(gap=N)`` (visually) gives the ring a symmetric look —
+        otherwise the wrap-around joins back-to-back while internal
+        boundaries show whitespace. Works without sectors too: produces
+        an open arc instead of a closed ring.
     """
 
-    def __init__(self, r_inner: float = 0.30, gap: float = 0.05):
-        self.r_inner = r_inner
-        self.gap     = gap
+    def __init__(self, r_inner: float = 0.30, gap: float = 0.05,
+                 wrap_gap_deg: float = 0.0):
+        self.r_inner      = r_inner
+        self.gap          = gap
+        self.wrap_gap_deg = wrap_gap_deg
+
+    @property
+    def _wrap_gap_rad(self) -> float:
+        return math.radians(self.wrap_gap_deg)
 
     def __call__(self, artist: dict, iw: float, ih: float):
         cx, cy, R, ri = _cc.geometry(self.r_inner, self.gap, iw, ih)
+        wrap = self._wrap_gap_rad
 
         def project(t: float, r: float):
-            ang    = math.pi / 2 - 2 * math.pi * t
+            ang    = _cc.t_to_angle(t, wrap)
             radius = ri + r * (R - ri)
             return cx + radius * math.cos(ang), cy - radius * math.sin(ang)
 
@@ -196,9 +222,19 @@ class CircularCoordinate:
     def draw_frame(self, project, iw, ih, y_ticks_r, y_labels, frame_opts) -> str:
         return _cc.draw_y_chrome(
             *_cc.geometry(self.r_inner, self.gap, iw, ih),
+            self._wrap_gap_rad,
             y_ticks_r, y_labels, frame_opts,
         )
 
     def draw_x_frame(self, project, iw, ih, x_ticks_t, x_labels, frame_opts) -> str:
         cx, cy, R, _ri = _cc.geometry(self.r_inner, self.gap, iw, ih)
-        return _cc.draw_x_chrome(cx, cy, R, x_ticks_t, x_labels, frame_opts)
+        return _cc.draw_x_chrome(cx, cy, R, self._wrap_gap_rad,
+                                 x_ticks_t, x_labels, frame_opts)
+
+    def draw_x_sector_chrome(self, project, iw, ih,
+                             sector_ts, label_ts, names, sec_opts) -> str:
+        return _cc.draw_x_sector_chrome(
+            *_cc.geometry(self.r_inner, self.gap, iw, ih),
+            self._wrap_gap_rad,
+            sector_ts, label_ts, names, sec_opts,
+        )

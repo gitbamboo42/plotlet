@@ -2,9 +2,11 @@
 
 Each plot wires a standard plotlet artist through
 ``c.coordinate(CircularCoordinate())`` and renders the chart through the
-core warp_svg / draw_frame / draw_x_frame / clip_path_d hooks — no
-cookbook ``circular()`` helper involved.  The sector_error test pins the
-NotImplementedError guard when sectors are combined with a ring.
+core warp_svg / draw_frame / draw_x_frame / draw_x_sector_chrome /
+clip_path_d hooks — no cookbook ``circular()`` helper involved.
+``ring_x_sectors`` exercises the Circos-style x-sector chrome (wall pairs,
+ring-arc segments, wrap-around gap).  ``test_circular_with_y_sectors_raises``
+pins the NotImplementedError guard for the deferred y-sector case.
 """
 from __future__ import annotations
 
@@ -85,6 +87,52 @@ def ring_numeric_bar():
     return c
 
 
+def ring_x_sectors():
+    # Three named wedges with a continuous-sector scale on x. Data carries
+    # a `sec` tag so the sector remap routes each point to its wedge;
+    # line+scatter inside each wedge exercises warp_svg + per-sector ring
+    # arc segments.
+    sec_names = ["A", "B", "C"]
+    sec_lens  = [0.45, 0.30, 0.25]
+    ts_per    = 30
+    pts_x, pts_y, pts_sec = [], [], []
+    for sname, slen in zip(sec_names, sec_lens):
+        for i in range(ts_per):
+            t_in = (i + 0.5) / ts_per
+            pts_x.append(t_in * slen)
+            pts_y.append(_clamp01(0.5 + 0.35 * math.sin(4 * math.pi * t_in)))
+            pts_sec.append(sname)
+
+    c = pt.chart(title="ring — x-sectors",
+                 xlim=(0, 1), ylim=(0, 1),
+                 data_width=320, data_height=320)
+    # `wrap_gap_deg=12` gives a visible whitespace gap at the 12 o'clock
+    # wrap-around, comparable to the internal sector gaps from `gap=12`
+    # px. Note: `gap` lives on the `Sectors` constructor — passing it as
+    # a kwarg to `c.sectors()` alongside a pre-built Sectors is silently
+    # dropped (kwargs are ignored when the spec is already a Sectors).
+    c.coordinate(pt.CircularCoordinate(wrap_gap_deg=12))
+    c.sectors(
+        pt.Sectors(names=tuple(sec_names), lengths=tuple(sec_lens), gap=12),
+        axis="x", column="sec",
+    )
+    c.yticks([0.0, 0.5, 1.0])
+    # Per-sector line calls — a single polyline through all 90 points
+    # would draw chords across the gap whitespace where consecutive
+    # points span sectors. One call per sector keeps each wedge's line
+    # self-contained.
+    for sname in sec_names:
+        xs = [x for x, s in zip(pts_x, pts_sec) if s == sname]
+        ys = [y for y, s in zip(pts_y, pts_sec) if s == sname]
+        ss = [sname] * len(xs)
+        c.line(data={"x": xs, "y": ys, "sec": ss},
+               x="x", y="y", color="#1D9E75", width=1.2)
+    # Scatter has no connections — single call is fine.
+    c.scatter(data={"x": pts_x, "y": pts_y, "sec": pts_sec},
+              x="x", y="y", color="#534AB7", size=2.5, alpha=0.7)
+    return c
+
+
 def ring_inner_outer():
     # Custom inner radius — exercises the r_inner=0.55 path so the
     # geometry helper isn't accidentally collapsed to defaults.
@@ -102,11 +150,13 @@ def ring_inner_outer():
 # Sector × CircularCoordinate guard
 # ---------------------------------------------------------------------------
 
-def test_circular_with_x_sectors_raises():
-    # Categorical sectors (don't require a column= tag) — minimal repro.
+def test_circular_with_y_sectors_raises():
+    # y-sectors with CircularCoordinate (concentric bands) is not yet
+    # supported — pinning the guard. x-sectors ARE supported and exercised
+    # by the `ring_x_sectors` baseline below.
     c = pt.chart(xlim=(0, 1), ylim=(0, 1), data_width=200, data_height=200)
     c.coordinate(pt.CircularCoordinate())
-    c.sectors({"A": ["x"], "B": ["y"]}, axis="x")
+    c.sectors({"A": ["x"], "B": ["y"]}, axis="y")
     c.line(data={"x": [0, 0.5, 1.0], "y": [0, 0.5, 1.0]}, x="x", y="y")
     with pytest.raises(NotImplementedError, match="sectors"):
         c.to_svg()
@@ -122,6 +172,7 @@ PLOTS = {
     "ring_line_band":    ring_line_band,
     "ring_numeric_bar":  ring_numeric_bar,
     "ring_inner_outer":  ring_inner_outer,
+    "ring_x_sectors":    ring_x_sectors,
 }
 
 

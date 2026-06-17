@@ -1987,18 +1987,26 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     _coord_project = _coord_object({}, iw, ih) if _coord_object is not None else None
 
     _has_coord_frame   = _coord_object is not None and hasattr(_coord_object, "draw_frame")
-    _has_svg_transform = _coord_object is not None and hasattr(_coord_object, "svg_transform")
-    _has_warp_svg      = _coord_object is not None and hasattr(_coord_object, "warp_svg")
-    _has_x_frame       = _coord_object is not None and hasattr(_coord_object, "draw_x_frame")
-    _has_clip_d        = _coord_object is not None and hasattr(_coord_object, "clip_path_d")
+    _has_svg_transform   = _coord_object is not None and hasattr(_coord_object, "svg_transform")
+    _has_warp_svg        = _coord_object is not None and hasattr(_coord_object, "warp_svg")
+    _has_x_frame         = _coord_object is not None and hasattr(_coord_object, "draw_x_frame")
+    _has_clip_d          = _coord_object is not None and hasattr(_coord_object, "clip_path_d")
+    _has_x_sector_chrome = _coord_object is not None and hasattr(_coord_object, "draw_x_sector_chrome")
 
-    # A coordinate that owns the x-axis (draw_x_frame) is incompatible with
-    # the sectored-axis chrome. Sectors paint as Cartesian dividers + labels
-    # along straight spines; under a ring those mappings are undefined.
-    if _has_x_frame and (_x_sec is not None or _y_sec is not None):
+    # A coordinate that owns the x-axis (draw_x_frame) needs a matching
+    # `draw_x_sector_chrome` to handle x-sectors; otherwise the Cartesian
+    # vertical-divider chrome would land outside the coordinate.
+    if _has_x_frame and _x_sec is not None and not _has_x_sector_chrome:
         raise NotImplementedError(
-            "c.sectors() and a coordinate with draw_x_frame "
-            "(e.g. CircularCoordinate) cannot be combined yet."
+            "c.sectors(axis='x') with a coordinate that owns draw_x_frame "
+            "requires the coordinate to implement draw_x_sector_chrome."
+        )
+    # y-sectors with a coord-owned x-axis (CircularCoordinate's concentric
+    # bands case) is a different design and not yet supported.
+    if _has_x_frame and _y_sec is not None:
+        raise NotImplementedError(
+            "c.sectors(axis='y') is not yet supported with a coordinate "
+            "that owns the x-axis (e.g. CircularCoordinate)."
         )
 
     # ---- emit body fragment ----
@@ -2137,6 +2145,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         panel_opts=panel_opts,
         coord_object=_coord_object, coord_project=_coord_project,
         has_coord_frame=_has_coord_frame, has_x_frame=_has_x_frame,
+        has_x_sector_chrome=_has_x_sector_chrome,
         x_sec=_x_sec, y_sec=_y_sec,
         suppress_xt=suppress_xt, suppress_yt=suppress_yt,
     ))
