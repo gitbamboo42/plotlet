@@ -3,15 +3,16 @@
 Each chart occupies an equal r-band by default; pass r_bands=[(lo, hi), ...]
 for manual control.
 
-How it works (the circular analogue of LinearCoordinate.svg_transform)
----------------------------------------------------------------------
-Artists draw in normalised Cartesian pixel space [0, iw] × [0, ih] using
-fake scales x_scale(t)=t*iw and y_scale(r)=ih*(1-r).  _warp_svg() then
-back-projects each pixel pair to (t, r) and forward-projects through the
-band-scoped circular project function.
+How it works (multi-ring composition on top of CircularCoordinate)
+------------------------------------------------------------------
+Single-ring circular charts are first-class via ``c.coordinate(pt.CircularCoordinate())``
+in core. This helper is the *composition* on top: it draws several charts as
+stacked radial bands by reusing ``CircularCoordinate.warp_svg`` per band with
+a band-scoped project closure.
 
-Because the warp happens at the SVG-string level, standard plotlet
-artists (scatter, numeric_bar, line, ...) work without modification.
+Each chart's artists draw in normalised Cartesian pixel space using fake
+scales (x_scale(t)=t*iw, y_scale(r)=ih*(1-r)); ``warp_svg`` then back-projects
+to (t, r) and forward-projects through the band-scoped circular project.
 
 Constraints
 -----------
@@ -25,7 +26,7 @@ Constraints
 
 Usage::
 
-    from coordinate import CircularCoordinate
+    import plotlet as pt
     from layout import circular
 
     c1 = pt.chart(xlim=(0, 1), ylim=(0, 1))
@@ -34,78 +35,12 @@ Usage::
     circular([c1], width=400, height=400).save_svg("out.svg")
 """
 import math
-import re
 
 from plotlet.chart import Chart
+from plotlet.coordinates import CircularCoordinate
 from plotlet.core import _prebin_hist, _replay
 from plotlet.draw import TAB10, resolve_color
 from plotlet.registry import RenderContext, get_artist
-
-from coordinate import CircularCoordinate
-
-
-# ---------------------------------------------------------------------------
-# SVG coordinate warper
-# ---------------------------------------------------------------------------
-
-def _warp_svg(fragment: str, project, iw: float, ih: float) -> str:
-    """Remap Cartesian pixel coords in an SVG fragment through `project`.
-
-    Substitution order matters: circle → path → rect → line.  rect emits a
-    fresh <path d="M..L..Z"> with already-warped coords; running the path
-    substitution before rect prevents a double-warp.
-    """
-    def remap(x_str, y_str):
-        t = float(x_str) / iw
-        r = 1.0 - float(y_str) / ih
-        px, py = project(t, r)
-        return f"{px:.2f}", f"{py:.2f}"
-
-    # 1. <circle cx cy r> — scatter / dot markers
-    def sub_cxcy(m):
-        nx, ny = remap(m.group(1), m.group(2))
-        return f'cx="{nx}" cy="{ny}"'
-    fragment = re.sub(r'cx="([^"]+)"\s+cy="([^"]+)"', sub_cxcy, fragment)
-
-    # 2. <path d="..."> — polylines / polygons (M/L/Z only).
-    # Skip if d contains bezier/arc commands (= glyph paths from text_path).
-    def sub_path_d(m):
-        d = m.group(1)
-        if re.search(r'[CcQqAaHhVvSsTt]', d):
-            return m.group(0)
-        def remap_pair(pm):
-            nx, ny = remap(pm.group(1), pm.group(2))
-            return f"{nx},{ny}"
-        return f'd="{re.sub(r"(-?[0-9.]+),(-?[0-9.]+)", remap_pair, d)}"'
-    fragment = re.sub(r'd="([^"]+)"', sub_path_d, fragment)
-
-    # 3. <rect x y width height> — bars / box markers.
-    # Expand to a 4-corner <path>; runs after the path pass so it isn't
-    # re-warped on a second sweep.
-    def sub_rect(m):
-        x, y = float(m.group(1)), float(m.group(2))
-        w, h = float(m.group(3)), float(m.group(4))
-        rest = m.group(5)
-        bl = remap(str(x),     str(y + h))
-        br = remap(str(x + w), str(y + h))
-        tr = remap(str(x + w), str(y))
-        tl = remap(str(x),     str(y))
-        d = f"M{bl[0]},{bl[1]} L{br[0]},{br[1]} L{tr[0]},{tr[1]} L{tl[0]},{tl[1]}Z"
-        return f'<path d="{d}"{rest}'
-    fragment = re.sub(
-        r'<rect x="([^"]+)" y="([^"]+)" width="([^"]+)" height="([^"]+)"([^>]*>)',
-        sub_rect, fragment)
-
-    # 4. <line x1 x2 y1 y2> — axvline / segment
-    def sub_line(m):
-        nx1, ny1 = remap(m.group(1), m.group(3))
-        nx2, ny2 = remap(m.group(2), m.group(4))
-        return f'x1="{nx1}" x2="{nx2}" y1="{ny1}" y2="{ny2}"'
-    fragment = re.sub(
-        r'x1="([^"]+)"\s+x2="([^"]+)"\s+y1="([^"]+)"\s+y2="([^"]+)"',
-        sub_line, fragment)
-
-    return fragment
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +149,7 @@ def circular(charts, *, coordinate=None, width=400, height=400, r_bands=None,
                 project=None,
             )
             body = spec.draw(a, ctx)
-            parts.append(_warp_svg(body, band_project, iw, ih))
+            parts.append(coordinate.warp_svg(body, band_project, iw, ih))
 
     # `_diagram_inner` is the SVG body — no outer <svg>. The layout engine
     # wraps it in <g transform="translate(x,y)"> when composing; standalone

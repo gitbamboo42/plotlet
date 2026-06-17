@@ -16,7 +16,6 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 import plotlet as pt
 import plotlet.extensions.numeric_bar  # noqa — registers numeric_bar
-from coordinate import CircularCoordinate
 from layout import circular
 
 random.seed(11)

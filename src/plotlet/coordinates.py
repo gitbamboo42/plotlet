@@ -14,11 +14,19 @@ Optional methods on the coordinate object unlock additional integration:
 
 ``draw_frame(project, iw, ih, y_ticks_r, y_labels, frame_opts) -> str``
     Replaces the Cartesian y-axis rendering (left spine, y ticks, y labels).
-    The x-axis (bottom spine, x ticks, x labels) always stays Cartesian.
     ``y_ticks_r`` are tick positions pre-normalized to [0, 1] r-space
     (0 = bottom, 1 = top); pass them directly to ``project(0, r)``.
     ``frame_opts`` keys: spine_color, spine_width, tick_length, tick_pad,
     y_fontsize, font_color, y_marks, y_show_labels, y_fontstyle, y_decoration.
+
+``draw_x_frame(project, iw, ih, x_ticks_t, x_labels, frame_opts) -> str``
+    Replaces the Cartesian x-axis rendering (bottom spine, x ticks, x labels).
+    Mirror of ``draw_frame`` for the t-axis.  When present, the standard
+    bottom-spine + Cartesian x-tick block is skipped and this is emitted
+    instead; the standard x-axis sector chrome is incompatible and raises.
+    ``x_ticks_t`` are tick positions pre-normalized to [0, 1] t-space.
+    ``frame_opts`` keys mirror ``draw_frame`` (x_fontsize, x_marks,
+    x_show_labels, x_fontstyle, x_decoration in place of the y_ variants).
 
 ``svg_transform(project, iw, ih) -> str``
     Returns an SVG ``matrix(…)`` string.  When present, plotlet wraps the
@@ -31,14 +39,31 @@ Optional methods on the coordinate object unlock additional integration:
     When ``svg_transform`` is present, ``ctx.project`` is not set — artists
     should draw in Cartesian as usual.
 
-``LinearCoordinate`` is the reference implementation: x-axis stays horizontal,
-y-axis tilts at ``angle`` degrees from vertical.  It implements both
-``draw_frame`` and ``svg_transform``, so existing artists (scatter, line, bar,
-…) work inside it automatically.
+``warp_svg(body, project, iw, ih) -> str``
+    Non-affine analogue of ``svg_transform``.  Operates on the joined SVG
+    body of the data-layer artists *after* they've drawn in Cartesian pixel
+    space, rewriting coordinate attributes in-place through ``project``.
+    Used by ``CircularCoordinate`` (rings can't be expressed as an affine
+    matrix).  Caveats inherited from string-level warping: line segments
+    become straight chords between warped endpoints; glyph paths (text)
+    are passed through unwarped.
+
+``clip_path_d(iw, ih) -> str``
+    Returns an SVG path-data string used as the data-area clip region.
+    When absent, the renderer falls back to the four-corner parallelogram
+    polygon (correct for affine coordinates).  ``CircularCoordinate``
+    returns an annulus; the renderer applies ``clip-rule="evenodd"`` so
+    two concentric subpaths describe the ring.
+
+``LinearCoordinate`` is the affine reference implementation (x-axis horizontal,
+y-axis tilts).  ``CircularCoordinate`` is the non-affine reference (ring with
+inner/outer radii), demonstrating the ``warp_svg`` / ``draw_x_frame`` /
+``clip_path_d`` hooks.
 """
 from __future__ import annotations
 
 import math
+import re
 
 
 class LinearCoordinate:
@@ -181,5 +206,253 @@ class LinearCoordinate:
                                        y_size, anchor="middle", color=font_col,
                                        fontstyle=y_style, decoration=y_decor,
                                        rotate=rot, tag="tick-y"))
+
+        return "".join(parts)
+
+
+class CircularCoordinate:
+    """Ring-shaped coordinate: t around the ring, r along the radius.
+
+    Maps (t, r) → pixel (x, y) on an annulus.  ``t ∈ [0, 1]`` runs clockwise
+    from 12 o'clock; ``r ∈ [0, 1]`` is radial depth (0 = inner edge,
+    1 = outer edge).  Non-affine, so the ``svg_transform`` matrix path
+    can't be used — the renderer instead applies ``warp_svg`` to the
+    data-layer SVG body so standard plotlet artists (scatter, line,
+    numeric_bar, hist, …) work unchanged.
+
+    Caveats inherited from the string-level warp:
+
+    - Line segments warp endpoint-by-endpoint and become straight chords
+      across the ring.  Fine for dense data, visible for sparse — pass
+      more points if you need smoother arcs.
+    - Glyph paths (text drawn inside data artists) are passed through
+      unwarped.  Frame-level text (titles, x/y tick labels via
+      ``draw_x_frame`` / ``draw_frame``) is positioned in the coordinate
+      directly and renders correctly.
+    - Combining ``c.sectors(axis="x")`` with a ring is not supported and
+      raises at render time.
+
+    Parameters
+    ----------
+    r_inner : float, default 0.30
+        Inner ring radius as a fraction of the outer radius.
+    gap : float, default 0.05
+        Padding between outer ring edge and canvas edge, as a fraction
+        of half the canvas size.
+    """
+
+    def __init__(self, r_inner: float = 0.30, gap: float = 0.05):
+        self.r_inner = r_inner
+        self.gap     = gap
+
+    # ------------------------------------------------------------------
+    # Geometry
+    # ------------------------------------------------------------------
+
+    def _geometry(self, iw: float, ih: float):
+        R  = min(iw, ih) / 2 * (1.0 - self.gap)
+        ri = R * self.r_inner
+        cx, cy = iw / 2, ih / 2
+        return cx, cy, R, ri
+
+    def __call__(self, artist: dict, iw: float, ih: float):
+        cx, cy, R, ri = self._geometry(iw, ih)
+
+        def project(t: float, r: float):
+            ang    = math.pi / 2 - 2 * math.pi * t
+            radius = ri + r * (R - ri)
+            return cx + radius * math.cos(ang), cy - radius * math.sin(ang)
+
+        return project
+
+    # ------------------------------------------------------------------
+    # Non-affine warp: rewrite Cartesian artist SVG into ring space
+    # ------------------------------------------------------------------
+
+    def warp_svg(self, body: str, project, iw: float, ih: float) -> str:
+        """Remap Cartesian pixel coords in an SVG fragment through ``project``.
+
+        Order matters: circle → path → rect → line.  ``rect`` emits a fresh
+        ``<path d="…">`` with already-warped coords; running the path
+        substitution before rect prevents a double-warp.
+        """
+        def remap(x_str, y_str):
+            t = float(x_str) / iw
+            r = 1.0 - float(y_str) / ih
+            px, py = project(t, r)
+            return f"{px:.2f}", f"{py:.2f}"
+
+        # 1. <circle cx cy r> — scatter / dot markers
+        def sub_cxcy(m):
+            nx, ny = remap(m.group(1), m.group(2))
+            return f'cx="{nx}" cy="{ny}"'
+        body = re.sub(r'cx="([^"]+)"\s+cy="([^"]+)"', sub_cxcy, body)
+
+        # 2. <path d="…"> — polylines / polygons (M/L/Z only).
+        # Skip when d contains bezier/arc commands (= glyph paths from
+        # text_path); warping glyph control points would mangle the letters.
+        def sub_path_d(m):
+            d = m.group(1)
+            if re.search(r'[CcQqAaHhVvSsTt]', d):
+                return m.group(0)
+            def remap_pair(pm):
+                nx, ny = remap(pm.group(1), pm.group(2))
+                return f"{nx},{ny}"
+            return f'd="{re.sub(r"(-?[0-9.]+),(-?[0-9.]+)", remap_pair, d)}"'
+        body = re.sub(r'd="([^"]+)"', sub_path_d, body)
+
+        # 3. <rect x y width height> — bars / box markers.
+        # Expand to a 4-corner <path>; runs after the path pass so it isn't
+        # re-warped on a second sweep.
+        def sub_rect(m):
+            x, y = float(m.group(1)), float(m.group(2))
+            w, h = float(m.group(3)), float(m.group(4))
+            rest = m.group(5)
+            bl = remap(str(x),     str(y + h))
+            br = remap(str(x + w), str(y + h))
+            tr = remap(str(x + w), str(y))
+            tl = remap(str(x),     str(y))
+            d = f"M{bl[0]},{bl[1]} L{br[0]},{br[1]} L{tr[0]},{tr[1]} L{tl[0]},{tl[1]}Z"
+            return f'<path d="{d}"{rest}'
+        body = re.sub(
+            r'<rect x="([^"]+)" y="([^"]+)" width="([^"]+)" height="([^"]+)"([^>]*>)',
+            sub_rect, body)
+
+        # 4. <line x1 x2 y1 y2> — axvline / segment
+        def sub_line(m):
+            nx1, ny1 = remap(m.group(1), m.group(3))
+            nx2, ny2 = remap(m.group(2), m.group(4))
+            return f'x1="{nx1}" x2="{nx2}" y1="{ny1}" y2="{ny2}"'
+        body = re.sub(
+            r'x1="([^"]+)"\s+x2="([^"]+)"\s+y1="([^"]+)"\s+y2="([^"]+)"',
+            sub_line, body)
+
+        return body
+
+    # ------------------------------------------------------------------
+    # Annulus clip region — replaces the renderer's parallelogram polygon
+    # ------------------------------------------------------------------
+
+    def clip_path_d(self, iw: float, ih: float) -> str:
+        """SVG path-d for an annular clip; renderer applies clip-rule="evenodd".
+
+        Two concentric subpaths (outer ring, inner ring); evenodd fill
+        leaves the annular region between them as the clip area.
+        """
+        cx, cy, R, ri = self._geometry(iw, ih)
+        return (
+            f"M {cx - R:.2f},{cy:.2f} "
+            f"A {R:.2f},{R:.2f} 0 1,0 {cx + R:.2f},{cy:.2f} "
+            f"A {R:.2f},{R:.2f} 0 1,0 {cx - R:.2f},{cy:.2f} Z "
+            f"M {cx - ri:.2f},{cy:.2f} "
+            f"A {ri:.2f},{ri:.2f} 0 1,0 {cx + ri:.2f},{cy:.2f} "
+            f"A {ri:.2f},{ri:.2f} 0 1,0 {cx - ri:.2f},{cy:.2f} Z"
+        )
+
+    # ------------------------------------------------------------------
+    # Frame chrome: inner+outer ring spines + y-tick rings + labels
+    # ------------------------------------------------------------------
+
+    def draw_frame(self, project, iw, ih,
+                   y_ticks_r, y_labels,
+                   frame_opts) -> str:
+        """Inner+outer ring spines + concentric y-tick rings + labels.
+
+        Spines: filled circles at r=0 (inner) and r=1 (outer).
+        Intermediate y-ticks: short radial marks at 12 o'clock (t=0) with
+        labels stacked outward along the +y axis.  r=0 and r=1 coincide
+        with the rings themselves and are skipped to avoid duplicates.
+        """
+        from .draw import circle, segment, text_path, cap_height
+
+        spine_col = frame_opts["spine_color"]
+        spine_w   = frame_opts["spine_width"]
+        tl        = frame_opts["tick_length"]
+        tp        = frame_opts["tick_pad"]
+        y_size    = frame_opts["y_fontsize"]
+        font_col  = frame_opts["font_color"]
+        y_marks   = frame_opts["y_marks"]
+        show_yl   = frame_opts["y_show_labels"]
+        y_style   = frame_opts.get("y_fontstyle", "normal")
+        y_decor   = frame_opts.get("y_decoration", "none")
+
+        cx, cy, R, ri = self._geometry(iw, ih)
+        parts = []
+
+        # Inner and outer ring spines
+        for radius in (ri, R):
+            parts.append(circle(cx, cy, radius,
+                                stroke=spine_col, stroke_width=spine_w,
+                                tag="spine"))
+
+        # Intermediate y-ticks: skip exact 0/1 (they're the rings).
+        for r_f, lbl in zip(y_ticks_r, y_labels):
+            if r_f <= 1e-9 or r_f >= 1.0 - 1e-9:
+                continue
+            radius = ri + r_f * (R - ri)
+            tx, ty = cx, cy - radius   # 12 o'clock position
+            if y_marks:
+                parts.append(segment(tx, ty, tx, ty - tl,
+                                     color=spine_col, width=spine_w))
+            if show_yl:
+                off = tl + tp + cap_height(y_size)
+                parts.append(text_path(str(lbl), tx, ty - off,
+                                       y_size, anchor="middle", color=font_col,
+                                       fontstyle=y_style, decoration=y_decor,
+                                       tag="tick-y"))
+
+        return "".join(parts)
+
+    # ------------------------------------------------------------------
+    # X-frame chrome: angular tick marks + labels outside the outer ring
+    # ------------------------------------------------------------------
+
+    def draw_x_frame(self, project, iw, ih,
+                     x_ticks_t, x_labels,
+                     frame_opts) -> str:
+        """Radial tick marks just outside the outer ring + tangential labels.
+
+        Labels sit at one tick_length + tick_pad outside the ring, rotated
+        to the tangent direction (flipped 180° when otherwise upside-down)
+        so the text reads naturally regardless of where on the ring it is.
+        """
+        from .draw import segment, text_path, cap_height
+
+        spine_col = frame_opts["spine_color"]
+        spine_w   = frame_opts["spine_width"]
+        tl        = frame_opts["tick_length"]
+        tp        = frame_opts["tick_pad"]
+        x_size    = frame_opts["x_fontsize"]
+        font_col  = frame_opts["font_color"]
+        x_marks   = frame_opts["x_marks"]
+        show_xl   = frame_opts["x_show_labels"]
+        x_style   = frame_opts.get("x_fontstyle", "normal")
+        x_decor   = frame_opts.get("x_decoration", "none")
+
+        cx, cy, R, _ri = self._geometry(iw, ih)
+        parts = []
+
+        for t, lbl in zip(x_ticks_t, x_labels):
+            ang = math.pi / 2 - 2 * math.pi * t
+            # Outward radial unit vector (SVG y-down).
+            ux, uy = math.cos(ang), -math.sin(ang)
+            ox, oy = cx + R * ux, cy + R * uy
+            if x_marks:
+                parts.append(segment(ox, oy,
+                                     ox + tl * ux, oy + tl * uy,
+                                     color=spine_col, width=spine_w))
+            if show_xl:
+                off = tl + tp + cap_height(x_size) / 2
+                lx, ly = cx + (R + off) * ux, cy + (R + off) * uy
+                # Tangent direction rotated to text baseline.
+                rot = math.degrees(math.atan2(uy, ux)) + 90.0
+                # Keep text right-side-up: flip 180° when it would otherwise
+                # read upside-down (bottom half of the ring).
+                if rot > 90:  rot -= 180
+                if rot < -90: rot += 180
+                parts.append(text_path(str(lbl), lx, ly,
+                                       x_size, anchor="middle", color=font_col,
+                                       fontstyle=x_style, decoration=x_decor,
+                                       rotate=rot, tag="tick-x"))
 
         return "".join(parts)

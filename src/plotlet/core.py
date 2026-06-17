@@ -2096,14 +2096,38 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         top_marks_size = out_x_for_legend if (st["x_top"] and not hide_t) else 0
         inner_gap_top = max(top_marks_size, legend_gap)
 
+    # Resolve the panel coordinate — always panel-level via c.coordinate(...).
+    # Lifted above the grid block so the grid/spine/x-tick passes below can
+    # check the coordinate's optional hooks (warp_svg, draw_x_frame,
+    # clip_path_d) before emitting anything.
+    _coord_object = st.get("coordinate")
+    _coord_project = _coord_object({}, iw, ih) if _coord_object is not None else None
+
+    _has_coord_frame   = _coord_object is not None and hasattr(_coord_object, "draw_frame")
+    _has_svg_transform = _coord_object is not None and hasattr(_coord_object, "svg_transform")
+    _has_warp_svg      = _coord_object is not None and hasattr(_coord_object, "warp_svg")
+    _has_x_frame       = _coord_object is not None and hasattr(_coord_object, "draw_x_frame")
+    _has_clip_d        = _coord_object is not None and hasattr(_coord_object, "clip_path_d")
+
+    # A coordinate that owns the x-axis (draw_x_frame) is incompatible with
+    # the sectored-axis chrome. Sectors paint as Cartesian dividers + labels
+    # along straight spines; under a ring those mappings are undefined.
+    if _has_x_frame and (_x_sec is not None or _y_sec is not None):
+        raise NotImplementedError(
+            "c.sectors() and a coordinate with draw_x_frame "
+            "(e.g. CircularCoordinate) cannot be combined yet."
+        )
+
     # ---- emit body fragment ----
     parts = []
 
     if st["facecolor"] is not None:
         parts.append(rect(0, 0, iw, ih, fill=resolve_color(st["facecolor"])))
 
-    # grid
-    if st["grid"]:
+    # grid — straight Cartesian lines; suppressed when the coordinate owns
+    # the x-axis (e.g. CircularCoordinate) because horizontals/verticals
+    # render outside the ring after the warp would naturally apply.
+    if st["grid"] and not _has_x_frame:
         gw = _GRIDSPEC["width"]; gd = _GRIDSPEC["dasharray"]
         if not x_is_cat:
             for t in x_ticks:
@@ -2134,13 +2158,6 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         else:
             a["_color"] = spec.default_color if spec else None
 
-    # Resolve the panel coordinate — always panel-level via c.coordinate(...).
-    _coord_object = st.get("coordinate")
-    _coord_project = _coord_object({}, iw, ih) if _coord_object is not None else None
-
-    _has_coord_frame   = _coord_object is not None and hasattr(_coord_object, "draw_frame")
-    _has_svg_transform = _coord_object is not None and hasattr(_coord_object, "svg_transform")
-
     # build the render context once — passed to every draw call.
     # When svg_transform is present the coordinate mapping is handled at the
     # SVG group level; artists draw in Cartesian, so ctx.project stays None.
@@ -2168,20 +2185,28 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         by_layer[spec.layer].append((idx, a))
     clip_data = st.get("clip", True)
 
-    # For coordinate frames the clip region is the projected parallelogram,
-    # not the Cartesian rectangle.  Emit a <clipPath> polygon into <defs>
-    # and reference it with clip-path="url(#...)".
+    # For coordinate frames the clip region is the projected data area,
+    # not the Cartesian rectangle. By default we emit a polygon from the
+    # four corners of the (t, r) unit square (correct for affine coords).
+    # A coordinate can override via `clip_path_d` for non-affine shapes
+    # (e.g. an annulus for CircularCoordinate); we apply clip-rule="evenodd"
+    # so multi-subpath ds (outer + inner ring) describe a hole.
     _clip_id = None
     if (_has_coord_frame or _has_svg_transform) and clip_data:
-        bl_x, bl_y = _coord_project(0.0, 0.0)
-        tl_x, tl_y = _coord_project(0.0, 1.0)
-        br_x, br_y = _coord_project(1.0, 0.0)
-        tr_x, tr_y = _coord_project(1.0, 1.0)
         _clip_id = f"pc{id(st):x}"
-        pts = (f"{bl_x:.2f},{bl_y:.2f} {br_x:.2f},{br_y:.2f} "
-               f"{tr_x:.2f},{tr_y:.2f} {tl_x:.2f},{tl_y:.2f}")
-        parts.append(f'<defs><clipPath id="{_clip_id}">'
-                     f'<polygon points="{pts}"/></clipPath></defs>')
+        if _has_clip_d:
+            d = _coord_object.clip_path_d(iw, ih)
+            parts.append(f'<defs><clipPath id="{_clip_id}">'
+                         f'<path d="{d}" clip-rule="evenodd"/></clipPath></defs>')
+        else:
+            bl_x, bl_y = _coord_project(0.0, 0.0)
+            tl_x, tl_y = _coord_project(0.0, 1.0)
+            br_x, br_y = _coord_project(1.0, 0.0)
+            tr_x, tr_y = _coord_project(1.0, 1.0)
+            pts = (f"{bl_x:.2f},{bl_y:.2f} {br_x:.2f},{br_y:.2f} "
+                   f"{tr_x:.2f},{tr_y:.2f} {tl_x:.2f},{tl_y:.2f}")
+            parts.append(f'<defs><clipPath id="{_clip_id}">'
+                         f'<polygon points="{pts}"/></clipPath></defs>')
 
     for layer in ("background", "data", "foreground"):
         if not by_layer[layer]:
@@ -2200,10 +2225,22 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             if _has_svg_transform:
                 xfm = _coord_object.svg_transform(_coord_project, iw, ih)
                 parts.append(f'<g transform="{xfm}">')
+
+        # Data-layer artist bodies are collected into a buffer so warp_svg
+        # (non-affine coordinates) can rewrite the whole batch in a single
+        # pass — symmetric to svg_transform wrapping the affine case in a
+        # <g transform="..."> group.
+        layer_bodies = []
         for idx, a in by_layer[layer]:
             spec = get_artist(a["type"])
             body = spec.draw(a, _ctx_for(a))
-            parts.append(_wrap_artist(a, idx, body))
+            layer_bodies.append(_wrap_artist(a, idx, body))
+        if layer == "data" and _has_warp_svg:
+            parts.append(_coord_object.warp_svg(
+                "".join(layer_bodies), _coord_project, iw, ih))
+        else:
+            parts.extend(layer_bodies)
+
         if layer == "data" and clip_data:
             if _has_svg_transform:
                 parts.append('</g>')
@@ -2258,6 +2295,8 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     for side in ("top", "bottom", "left", "right"):
         if side in ("left", "top", "right") and _has_coord_frame:
             continue
+        if side == "bottom" and _has_x_frame:
+            continue
         if not st[f"spine_{side}"]:
             continue
         col, w = _side_stroke(side)
@@ -2280,58 +2319,81 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     elif y_dir == "out":   y_left_endpoints, y_right_endpoints = (0, left_out), (iw, right_out)
     else:                  y_left_endpoints, y_right_endpoints = (left_out, left_in), (right_out, right_in)
 
-    # x-ticks + labels — always Cartesian
-    for t, lbl in zip(x_ticks, x_labels):
-        x = x_scale(t)
-        if x_marks:
-            # Hidden sides (joined share-pair) drop tick marks too — marks
-            # bleeding into the inter-panel gap read as visual clutter
-            # when the two panels are meant to merge.
-            if st["spine_bottom"] and not hide_b:
-                y1, y2 = x_bot_endpoints
-                col, sw = _side_stroke("bottom")
-                parts.append(segment(x, y1, x, y2, color=col, width=sw))
-            if st["spine_top"] and st["x_top"] and not hide_t:
-                y1, y2 = x_top_endpoints
-                col, sw = _side_stroke("top")
-                parts.append(segment(x, y1, x, y2, color=col, width=sw))
-        # Drop only labels redundant with a sharing sibling. A small label
-        # overflow into a joined neighbor's collapsed margin is acceptable.
-        if not suppress_xt:
-            # baseline = mark_end + tick_pad + cap_height, so the label's cap
-            # top sits flush with `tick_pad` past the visible mark (or the
-            # spine, when the mark is inward / suppressed). Mirrors
-            # `y_label_x`'s handling above for consistency.
-            x_label_dy = (_FRAME["tick_pad"] if (x_dir == "in" or not x_marks)
-                          else _FRAME["tick_length"] + _FRAME["tick_pad"])
-            parts.append(_tick_label(str(lbl), x,
-                                     ih + x_label_dy + cap_height(x_size),
-                                     x_size, x_rot, axis="x",
-                                     fontstyle=x_style, decoration=x_decor,
-                                     tag="tick-x"))
-
-    # Minor ticks — shorter than majors (frame.minor_tick_ratio), no
-    # labels. Emit only when the user opted in via xticks(minor=True) or
-    # xticks(minor=[...]).
-    x_minor = _resolve_minor_ticks(st["x_minor"], x_scale, x_ticks)
-    if x_minor and x_marks:
-        minor_len = _FRAME["tick_length"] * _FRAME["minor_tick_ratio"]
-        for t in x_minor:
+    # x-axis — coordinate-aware (bottom spine + ticks + labels via
+    # draw_x_frame) or standard Cartesian.
+    if _has_x_frame:
+        # Normalize x tick positions to [0,1] t-space, mirroring draw_frame's
+        # y_ticks_r convention. Works for any scale (linear, log, categorical).
+        _x_ticks_t = [x_scale(t) / iw for t in x_ticks]
+        parts.append(_coord_object.draw_x_frame(
+            _coord_project, iw, ih,
+            _x_ticks_t, x_labels,
+            {
+                "spine_color":   _FRAME["color"],
+                "spine_width":   _FRAME["width"],
+                "tick_length":   _FRAME["tick_length"],
+                "tick_pad":      _FRAME["tick_pad"],
+                "x_fontsize":    x_size,
+                "font_color":    _FONTSPEC["color"],
+                "x_marks":       x_marks,
+                "x_show_labels": not suppress_xt,
+                "x_fontstyle":   x_style,
+                "x_decoration":  x_decor,
+            }
+        ))
+    else:
+        # x-ticks + labels — always Cartesian
+        for t, lbl in zip(x_ticks, x_labels):
             x = x_scale(t)
-            if not math.isfinite(x):
-                continue
-            if st["spine_bottom"] and not hide_b:
-                col, sw = _side_stroke("bottom")
-                if x_dir == "in":      y1, y2 = ih, ih - minor_len
-                elif x_dir == "out":   y1, y2 = ih, ih + minor_len
-                else:                  y1, y2 = ih + minor_len, ih - minor_len
-                parts.append(segment(x, y1, x, y2, color=col, width=sw))
-            if st["spine_top"] and st["x_top"] and not hide_t:
-                col, sw = _side_stroke("top")
-                if x_dir == "in":      y1, y2 = 0, minor_len
-                elif x_dir == "out":   y1, y2 = 0, -minor_len
-                else:                  y1, y2 = -minor_len, minor_len
-                parts.append(segment(x, y1, x, y2, color=col, width=sw))
+            if x_marks:
+                # Hidden sides (joined share-pair) drop tick marks too — marks
+                # bleeding into the inter-panel gap read as visual clutter
+                # when the two panels are meant to merge.
+                if st["spine_bottom"] and not hide_b:
+                    y1, y2 = x_bot_endpoints
+                    col, sw = _side_stroke("bottom")
+                    parts.append(segment(x, y1, x, y2, color=col, width=sw))
+                if st["spine_top"] and st["x_top"] and not hide_t:
+                    y1, y2 = x_top_endpoints
+                    col, sw = _side_stroke("top")
+                    parts.append(segment(x, y1, x, y2, color=col, width=sw))
+            # Drop only labels redundant with a sharing sibling. A small label
+            # overflow into a joined neighbor's collapsed margin is acceptable.
+            if not suppress_xt:
+                # baseline = mark_end + tick_pad + cap_height, so the label's cap
+                # top sits flush with `tick_pad` past the visible mark (or the
+                # spine, when the mark is inward / suppressed). Mirrors
+                # `y_label_x`'s handling above for consistency.
+                x_label_dy = (_FRAME["tick_pad"] if (x_dir == "in" or not x_marks)
+                              else _FRAME["tick_length"] + _FRAME["tick_pad"])
+                parts.append(_tick_label(str(lbl), x,
+                                         ih + x_label_dy + cap_height(x_size),
+                                         x_size, x_rot, axis="x",
+                                         fontstyle=x_style, decoration=x_decor,
+                                         tag="tick-x"))
+
+        # Minor ticks — shorter than majors (frame.minor_tick_ratio), no
+        # labels. Emit only when the user opted in via xticks(minor=True) or
+        # xticks(minor=[...]).
+        x_minor = _resolve_minor_ticks(st["x_minor"], x_scale, x_ticks)
+        if x_minor and x_marks:
+            minor_len = _FRAME["tick_length"] * _FRAME["minor_tick_ratio"]
+            for t in x_minor:
+                x = x_scale(t)
+                if not math.isfinite(x):
+                    continue
+                if st["spine_bottom"] and not hide_b:
+                    col, sw = _side_stroke("bottom")
+                    if x_dir == "in":      y1, y2 = ih, ih - minor_len
+                    elif x_dir == "out":   y1, y2 = ih, ih + minor_len
+                    else:                  y1, y2 = ih + minor_len, ih - minor_len
+                    parts.append(segment(x, y1, x, y2, color=col, width=sw))
+                if st["spine_top"] and st["x_top"] and not hide_t:
+                    col, sw = _side_stroke("top")
+                    if x_dir == "in":      y1, y2 = 0, minor_len
+                    elif x_dir == "out":   y1, y2 = 0, -minor_len
+                    else:                  y1, y2 = -minor_len, minor_len
+                    parts.append(segment(x, y1, x, y2, color=col, width=sw))
 
     # Sector chrome — boundary dividers and sector-name labels along the
     # sectored axis. ``divider`` and ``label`` toggle each independently;
