@@ -36,6 +36,7 @@ See `docs/SUBPLOTS.md` for the design rationale.
 """
 from __future__ import annotations
 
+import re
 from graphlib import CycleError, TopologicalSorter
 
 from ._spec import SPEC, _LAYOUTSPEC, _FONTSPEC, active_theme
@@ -868,6 +869,27 @@ def _effective_margin(leaf: Chart, po: _PanelOpts, w: float, h: float) -> dict:
 
 
 def _render_layout(root: Chart, outer=None) -> str:
+    # If the root has a container coord that implements `render_layout`,
+    # delegate the entire render to it — the coord owns its strategy
+    # (overlay, faceting, etc.). Coords that don't implement
+    # `render_layout` fall through to the rectangular default; the coord
+    # is then a no-op at the container level.
+    coord = getattr(root, "_coordinate", None)
+    if coord is not None and hasattr(coord, "render_layout"):
+        return coord.render_layout(root)
+    # Default: rectangular stack. Nested coord-Layouts inside a
+    # rectangular parent get pre-rendered into diagram leaves so the
+    # rectangular code treats them as opaque content.
+    substituted = _materialize_coord_descendants(root)
+    try:
+        return _render_layout_rect(root, outer=outer)
+    finally:
+        for parent, idx, original in substituted:
+            parent._children[idx] = original
+            original._parent = parent
+
+
+def _render_layout_rect(root: Chart, outer=None) -> str:
     panel_opts, states = _build_panel_opts(root)
     # Override each legend leaf's intrinsic _fig size with its
     # content-driven size before measure runs.
@@ -960,3 +982,53 @@ def _render_layout(root: Chart, outer=None) -> str:
         parts.append('</g>')
     parts.append('</svg>')
     return "".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Nested coord-Layout pre-rendering
+# ---------------------------------------------------------------------------
+#
+# When a rectangular layout contains a coord-Layout child, the
+# rectangular code would otherwise descend into the coord child and
+# render its leaves Cartesian. We pre-render any such descendant via
+# `_render_layout(child)` (which dispatches to the coord's own
+# `render_layout`) and stash the result in a sized diagram leaf, so the
+# rectangular code sees opaque content.
+
+_SVG_INNER_RE = re.compile(
+    r'<svg[^>]*width="(\d+)"\s+height="(\d+)"[^>]*>(.*)</svg>', re.DOTALL,
+)
+
+
+def _materialize_coord_descendants(layout):
+    """Walk `layout`'s subtree; for every descendant `Layout` with
+    `_coordinate` set, render it via `_render_layout(...)` and replace
+    it in its parent's `_children` with a sized diagram leaf carrying
+    the rendered SVG body. Returns `(parent, idx, original)` tuples for
+    restoration on exit.
+    """
+    substituted = []
+    # Solo Chart roots have no `_children`; nothing to walk.
+    if not getattr(layout, "_is_parent", False):
+        return substituted
+    def walk(parent):
+        for i, ch in enumerate(parent._children):
+            if ch is None or not getattr(ch, "_is_parent", False):
+                continue
+            if ch._coordinate is not None:
+                svg = _render_layout(ch)
+                sm = _SVG_INNER_RE.search(svg)
+                w, h, inner = int(sm.group(1)), int(sm.group(2)), sm.group(3)
+                leaf = Chart._new_sized_leaf(
+                    canvas_width=w, canvas_height=h,
+                    leaf_kind="diagram",
+                    margin={"left": 0, "right": 0, "top": 0, "bottom": 0},
+                )
+                leaf._diagram_inner = inner
+                leaf._parent = parent
+                substituted.append((parent, i, ch))
+                parent._children[i] = leaf
+            else:
+                walk(ch)
+    walk(layout)
+    return substituted

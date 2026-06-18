@@ -771,6 +771,11 @@ class Layout(_Renderable):
         # and coordinate margins per column/row across sub-layouts.
         # Opt-in so plain `(a | b) / (c | d)` keeps natural per-row sizing.
         self._virtual_grid_aligned: bool = False
+        # Set by `.coordinate(...)` to apply a single coordinate transform
+        # to the whole composition. When set, `_render_layout` delegates
+        # to `coord.render_layout(root)` — the coord owns its own render
+        # strategy (overlay, faceting, etc.).
+        self._coordinate = None
         # Wire children's back-link so `_require_render_root` and share
         # resolution can walk up.
         for child in self._children:
@@ -824,6 +829,19 @@ class Layout(_Renderable):
             kw["gap"] = gap
         for leaf in self._iter_leaves():
             leaf._calls.append(("sectors", [spec], kw))
+        return self
+
+    def coordinate(self, coord) -> "Layout":
+        """Apply ``coord`` to the whole composition as a single coordinate.
+
+        Hands the entire render off to ``coord.render_layout(root)`` — the
+        coord owns its strategy (overlay, faceting, etc.). Coords without
+        a ``render_layout`` method fall through to the standard
+        rectangular layout — the coord is then a no-op at the container
+        level. See the coord's own docs for what its `render_layout`
+        does and what knobs it exposes.
+        """
+        self._coordinate = coord
         return self
 
     def _iter_leaves(self):

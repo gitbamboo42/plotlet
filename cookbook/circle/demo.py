@@ -1,22 +1,18 @@
 """Circle demo — circular and linear layouts from the same shared data.
 
 Four artist types per layout: scatter, line+fill_between, numeric_bar, hist.
-All use standard plotlet artists; the circular layout maps them through
-_warp_svg without any custom artist code.
+All use standard plotlet artists. The circular layout is four single-artist
+charts composed with ``/`` and wrapped in ``CircularCoordinate``; each
+chart claims its own auto-tiled r-band so the rings nest concentrically.
 
 Run from the repo root:
     python cookbook/circle/demo.py
 """
 import math
 import random
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 import plotlet as pt
-import plotlet.extensions.numeric_bar  # noqa — registers numeric_bar
-from layout import circular
+import plotlet.extensions.numeric_bar  # noqa — registers c.numeric_bar
 
 random.seed(11)
 
@@ -46,28 +42,38 @@ bar_v = [_clamp01(0.3 + 0.5 * abs(math.sin(2 * math.pi * t))) for t in bar_t]
 
 hist_samples = [_clamp01(random.gauss(0.5, 0.15)) for _ in range(500)]
 
+
 # ---------------------------------------------------------------------------
-# Circular layout — four rings
+# Circular layout — `/` of single-artist charts, wrapped in CircularCoordinate.
+# Each chart claims its own concentric r-band (auto-tiled from data_height);
+# `r_inner` on the container is the global inner hole.
 # ---------------------------------------------------------------------------
 
-c1 = pt.chart(xlim=(0, 1), ylim=(0, 1))
+W = H = 500
+
+c1 = pt.chart(xlim=(0, 1), ylim=(0, 1), data_width=W, data_height=H)
 c1.scatter(data={"x": scatter_t, "y": scatter_v}, x="x", y="y",
            color="#534AB7", size=3, alpha=0.55)
 
-c2 = pt.chart(xlim=(0, 1), ylim=(0, 1))
+c2 = pt.chart(xlim=(0, 1), ylim=(0, 1), data_width=W, data_height=H)
 c2.fill_between(data={"x": line_ts, "lo": band_lo, "hi": band_hi},
                 x="x", y1="lo", y2="hi", fill="#1D9E75", alpha=0.25)
 c2.line(data={"x": line_ts, "y": line_v}, x="x", y="y",
         color="#1D9E75", width=1.5)
 
-c3 = pt.chart(xlim=(0, 1), ylim=(0, 1))
+c3 = pt.chart(xlim=(0, 1), ylim=(0, 1), data_width=W, data_height=H)
 c3.numeric_bar(data={"x": bar_t, "y": bar_v}, x="x", y="y",
                width=0.014, color="#D9534F", alpha=0.85)
 
-c4 = pt.chart(xlim=(0, 1), ylim=(0, 60))
+c4 = pt.chart(xlim=(0, 1), ylim=(0, 60), data_width=W, data_height=H)
 c4.hist(data={"v": hist_samples}, x="v", bins=24, color="#E0A030", alpha=0.85)
 
-circle_panel = circular([c1, c2, c3, c4], width=500, height=500)
+# Container's `r_inner` is the global inner hole; the 4 rings auto-tile
+# their r-bands proportionally to each chart's `data_height`. (All four
+# here have the same H so they get equal-width bands.)
+circle_panel = (c1 / c2 / c3 / c4).coordinate(
+    pt.CircularCoordinate(r_inner=0.12)
+)
 
 # ---------------------------------------------------------------------------
 # Linear layout — same data, standard grid for comparison
@@ -101,4 +107,4 @@ linear_panel = pt.grid([[p1], [p2], [p3], [p4]]).share_x("col")
 # ---------------------------------------------------------------------------
 
 (circle_panel | linear_panel).save_svg("cookbook/circle/output/combined.svg")
-print("wrote output/combined.svg")
+print("wrote cookbook/circle/output/combined.svg")

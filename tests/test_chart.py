@@ -1812,6 +1812,44 @@ def chart_legend_outside_top():    return _legend_position_chart("top")
 def chart_legend_outside_bottom(): return _legend_position_chart("bottom")
 
 
+def chart_circular_overlay():
+    """`Layout.coordinate(CircularCoordinate)` — overlay semantics.
+
+    Three single-artist charts stacked with `/`. Under a CircularCoordinate
+    container, `/` means "overlay each leaf into its own concentric band"
+    (not vertical stack). Auto-tiles the r-bands by `data_height`. The
+    per-band clip stops each ring's data from bleeding into neighbours.
+    """
+    import math
+    ts = [i / 60 for i in range(61)]
+    sine = [0.5 + 0.4 * math.sin(2 * math.pi * t) for t in ts]
+    bar_xs = [(i + 0.5) / 20 for i in range(20)]
+    bar_ys = [0.2 + 0.6 * abs(math.cos(math.pi * x)) for x in bar_xs]
+
+    W = H = 240
+
+    outer = pt.chart(xlim=(0, 1), ylim=(0, 1),
+                     data_width=W, data_height=H)
+    outer.line(data={"x": ts, "y": sine}, x="x", y="y",
+               color="C0", width=1.5)
+
+    middle = pt.chart(xlim=(0, 1), ylim=(0, 1),
+                      data_width=W, data_height=H)
+    middle.fill_between(data={"x": ts, "lo": [v - 0.1 for v in sine],
+                              "hi": [v + 0.1 for v in sine]},
+                        x="x", y1="lo", y2="hi",
+                        fill="C2", alpha=0.3)
+
+    inner = pt.chart(xlim=(0, 1), ylim=(0, 1),
+                     data_width=W, data_height=H)
+    inner.scatter(data={"x": ts, "y": sine}, x="x", y="y",
+                  color="C3", size=2.5, alpha=0.7)
+
+    return (outer / middle / inner).coordinate(
+        pt.CircularCoordinate(r_inner=0.20)
+    )
+
+
 PLOTS = {
     "table":               chart_table,
     "color":               chart_color,
@@ -1868,6 +1906,7 @@ PLOTS = {
     "errorbar":            chart_errorbar,
     "errorbar_category_x":  chart_errorbar_category_x,
     "plot_alpha":          chart_plot_alpha,
+    "circular_overlay":    chart_circular_overlay,
     "dendrogram_top":      chart_dendrogram_top,
     "dendrogram_left":     chart_dendrogram_left,
     "dendrogram_styled":   chart_dendrogram_styled,
