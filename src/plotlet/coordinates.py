@@ -259,19 +259,20 @@ class CircularCoordinate:
         R  = self.r_outer * R_full * (1.0 - self.gap)
         return _cc.clip_path_d(cx, cy, R, ri)
 
-    def render_layout(self, root) -> str:
+    def render_layout(self, root) -> tuple[int, int, str]:
         """`Layout.coordinate(...)` strategy for `CircularCoordinate`:
         overlay every leaf onto one canvas, each through its own r-band
-        sub-coord derived from `derive_leaf_coords`. Bodies are
-        concatenated and wrapped in one fresh `<svg>`.
+        sub-coord derived from `derive_leaf_coords`. Returns
+        `(W, H, body)` — the inner body with no `<svg>` wrapper, so the
+        caller decides whether to wrap it for a standalone render or
+        inline it inside a parent `<g translate>`.
 
-        Future coords (polar wedges, geographic facets, etc.) can
-        implement their own `render_layout` with a different strategy —
-        the dispatcher in `_layout_engine.py` is coord-agnostic and just
+        Future coords (polar wedges, geographic facets, etc.) implement
+        their own `render_layout` with a different strategy — the
+        dispatcher in `_layout_engine.py` is coord-agnostic and just
         delegates here.
         """
         import re
-        from ._spec import SPEC, _FONTSPEC
         _SVG_BODY_RE = re.compile(r'<svg[^>]*>(.*)</svg>\s*$', re.DOTALL)
 
         leaves = list(root._iter_leaves())
@@ -323,12 +324,7 @@ class CircularCoordinate:
                 )
             bodies.append(m.group(1))
 
-        body = "".join(bodies)
-        bg = SPEC["figure"]["background"]
-        return (f'<svg xmlns="http://www.w3.org/2000/svg" '
-                f'width="{W}" height="{H}" viewBox="0 0 {W} {H}" '
-                f'font-family="{_FONTSPEC["family"]}" font-size="11" '
-                f'style="background:{bg}">{body}</svg>')
+        return W, H, "".join(bodies)
 
     def draw_frame(self, project, iw, ih, y_ticks_r, y_labels, frame_opts) -> str:
         return _cc.draw_y_chrome(

@@ -36,7 +36,6 @@ See `docs/SUBPLOTS.md` for the design rationale.
 """
 from __future__ import annotations
 
-import re
 from graphlib import CycleError, TopologicalSorter
 
 from ._spec import SPEC, _LAYOUTSPEC, _FONTSPEC, active_theme
@@ -905,12 +904,19 @@ def _effective_margin(leaf: Chart, po: _PanelOpts, w: float, h: float) -> dict:
 def _render_layout(root: Chart, outer=None) -> str:
     # If the root has a container coord that implements `render_layout`,
     # delegate the entire render to it — the coord owns its strategy
-    # (overlay, faceting, etc.). Coords that don't implement
-    # `render_layout` fall through to the rectangular default; the coord
-    # is then a no-op at the container level.
+    # (overlay, faceting, etc.). The coord returns `(W, H, body)`; this
+    # function wraps in a top-level `<svg>` since it's the document
+    # root. The placement loop in `_render_layout_rect` calls
+    # `coord.render_layout` directly when embedding a coord-Layout
+    # inside a parent — there it wants the body, not a wrapper.
     coord = getattr(root, "_coordinate", None)
     if coord is not None and hasattr(coord, "render_layout"):
-        return coord.render_layout(root)
+        W, H, body = coord.render_layout(root)
+        bg = SPEC["figure"]["background"]
+        return (f'<svg xmlns="http://www.w3.org/2000/svg" '
+                f'width="{W}" height="{H}" viewBox="0 0 {W} {H}" '
+                f'font-family="{_FONTSPEC["family"]}" font-size="11" '
+                f'style="background:{bg}">{body}</svg>')
     # Default: rectangular stack. Coord-bearing sub-Layouts are treated as
     # atomic blocks by `_measure` / `_allocate` (see `_is_atomic`) and
     # rendered through their coord's own strategy at placement time —
@@ -957,19 +963,13 @@ def _render_layout_rect(root: Chart, outer=None) -> str:
     for leaf, (x, y, w, h) in placements:
         if leaf._is_parent:
             # Coord-bearing sub-Layout — `_is_atomic` kept the placement
-            # system from descending into it, so we render it here via its
-            # coord's own strategy (e.g. CircularCoordinate overlays) and
-            # embed the body at the placement rect. The <svg> wrapper its
-            # render returns is peeled off; we're inside a translate group,
+            # system from descending into it, so we ask the coord directly
+            # for its `(W, H, body)`. The body inlines inside a translate
+            # group; we don't want the `<svg>` wrapper here because we're
             # not the document root.
-            svg = _render_layout(leaf)
-            sm = _SVG_INNER_RE.search(svg)
-            if sm is None:
-                raise RuntimeError(
-                    f"coord-Layout render produced no <svg> wrapper: {leaf}"
-                )
+            _W, _H, body = leaf._coordinate.render_layout(leaf)
             parts.append(
-                f'<g transform="translate({x:.2f},{y:.2f})">{sm.group(3)}</g>'
+                f'<g transform="translate({x:.2f},{y:.2f})">{body}</g>'
             )
             continue
         kind = leaf._leaf_kind
@@ -1032,12 +1032,3 @@ def _render_layout_rect(root: Chart, outer=None) -> str:
     return "".join(parts)
 
 
-# ---------------------------------------------------------------------------
-# Embedding a coord-bearing sub-Layout: the placement loop renders it via
-# its coord's `render_layout` and peels the `<svg>` wrapper so the body can
-# inline inside the parent's `<g translate>`. Used in `_render_layout_rect`.
-# ---------------------------------------------------------------------------
-
-_SVG_INNER_RE = re.compile(
-    r'<svg[^>]*width="(\d+)"\s+height="(\d+)"[^>]*>(.*)</svg>', re.DOTALL,
-)
