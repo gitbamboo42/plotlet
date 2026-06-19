@@ -39,6 +39,32 @@ from .linestyles import resolve_linestyle
 from .._regions import record as _record_region
 
 
+# Per-edge subdivision count when a coord-native artist passes `project=`.
+# Each Cartesian edge gets split into this many sub-segments before each
+# sample is projected; the resulting polyline approximates the warped curve.
+# 20 keeps a 100-px chord smooth on a typical ring without blowing up the
+# emitted polyline. Future: per-coord override (CircularCoordinate could
+# request more samples on long arcs).
+_COORD_NATIVE_SUBDIV = 20
+
+
+def _subdivide_project(points, project, n: int = _COORD_NATIVE_SUBDIV):
+    """Sample n+1 points along each edge of `points` and project each
+    through `project(x_px, y_px) -> (px, py)`. Endpoints are projected
+    exactly; intermediate samples are linear interpolations in Cartesian
+    space (so a straight Cartesian edge becomes a curve under non-affine
+    coords). Returns the projected point list, suitable for polyline /
+    polygon emission."""
+    if not points:
+        return []
+    out = [project(*points[0])]
+    for (x0, y0), (x1, y1) in zip(points, points[1:]):
+        for i in range(1, n + 1):
+            f = i / n
+            out.append(project(x0 + f * (x1 - x0), y0 + f * (y1 - y0)))
+    return out
+
+
 def text_path(s: str, x: float, y: float, size: float,
               anchor: str = "start", color: str = "#000",
               fontstyle: str = "normal",
@@ -150,7 +176,8 @@ def _shape_opacity(alpha, fill_alpha, stroke_alpha,
 
 def marker(kind: str, x: float, y: float, size: float, color: str, alpha,
            edgecolor: str | None = None, edgewidth: float | None = None,
-           tag: str | None = None) -> str:
+           tag: str | None = None,
+           project=None) -> str:
     """Emit a single marker glyph (one of
     `"o" "s" "^" "v" "<" ">" "x" "+" "*" "D" "h"`) at pixel `(x, y)`.
     Raises `ValueError` for unknown marker codes.
@@ -158,7 +185,14 @@ def marker(kind: str, x: float, y: float, size: float, color: str, alpha,
     `edgecolor=` adds an outline to filled markers (`o`/`s`/`^`/`v`/`<`/`>`/`*`/`D`/`h`).
     `edgewidth=` overrides the stroke width for ALL markers (including the
     `x`/`+` outlines, which use `color` as their stroke); falls back to
-    `_D["marker_stroke_width"]`."""
+    `_D["marker_stroke_width"]`.
+
+    `project=` (Cartesian-pixel -> coord-pixel closure) shifts the marker's
+    anchor through a non-affine coord. The glyph itself is NOT warped — a
+    marker is a fixed-size symbol, so it keeps its Cartesian shape and just
+    lands in the right place under the ring/polar."""
+    if project is not None:
+        x, y = project(x, y)
     msw = edgewidth if edgewidth is not None else _D["marker_stroke_width"]
     _op = op(alpha)
     edge = f' stroke="{edgecolor}" stroke-width="{msw:.2f}"' if edgecolor else ""
@@ -220,12 +254,18 @@ def dash_attr(dash) -> str:
 
 def segment(x1: float, y1: float, x2: float, y2: float, *,
             color: str = "#000", width: float = 1, dash=None, alpha=1,
-            tag: str | None = None) -> str:
+            tag: str | None = None,
+            project=None) -> str:
     """Emit a single SVG `<line>` segment from pixel (x1, y1) to (x2, y2).
 
     `dash` accepts a short code (`"--"`, `":"`, `"-."`) or a raw SVG
     dasharray string (`"6,3"`); `None` (default) is solid.
-    """
+
+    `project=` (Cartesian-pixel -> coord-pixel closure) subdivides the
+    segment and emits a polyline through the warped samples instead of a
+    straight `<line>`. Region tags reflect the Cartesian footprint
+    (segment intent is layout-meaningful even when the visible shape
+    curves)."""
     if tag is not None:
         # Region bbox represents the segment's visible footprint, so a
         # horizontal/vertical 1-D line picks up its stroke-width
@@ -241,6 +281,9 @@ def segment(x1: float, y1: float, x2: float, y2: float, *,
             rx -= (width - rw) / 2
             rw = width
         _record_region("segment", (rx, ry, rw, rh), name=tag, width=width)
+    if project is not None:
+        pts = _subdivide_project([(x1, y1), (x2, y2)], project)
+        return polyline(pts, color=color, width=width, dash=dash, alpha=alpha)
     return (f'<line x1="{x1:.2f}" x2="{x2:.2f}" y1="{y1:.2f}" y2="{y2:.2f}" '
             f'stroke="{color}" stroke-width="{width:.2f}"{op(alpha)}{dash_attr(dash)}/>')
 
@@ -250,7 +293,8 @@ def rect(x: float, y: float, w: float, h: float, *,
          stroke_width: float = 1, alpha=1,
          fill_alpha=None, stroke_alpha=None,
          dash=None, shape_rendering: str | None = None,
-         tag: str | None = None) -> str:
+         tag: str | None = None,
+         project=None) -> str:
     """Emit a single SVG `<rect>` at pixel (x, y) with size (w, h).
 
     `fill=None` (default) draws an outline only — pass `stroke=` to add a
@@ -260,7 +304,18 @@ def rect(x: float, y: float, w: float, h: float, *,
     `dash` accepts a registered linestyle (`"--"`, `":"`, `"-."`) or a raw
     SVG dasharray (`"6,3"`). `shape_rendering="crispEdges"` pixel-aligns
     borders, useful for contiguous-band heatmap-style rects.
+
+    `project=` (Cartesian-pixel -> coord-pixel closure) emits a 4-edge
+    subdivided polygon instead of a `<rect>`, so heatmap cells / bars
+    curve correctly under non-affine coords. `shape_rendering` is dropped
+    on that path (pixel alignment is meaningless once the shape curves).
     """
+    if project is not None:
+        corners = [(x, y), (x + w, y), (x + w, y + h), (x, y + h)]
+        pts = _subdivide_project(corners + [corners[0]], project)
+        return polygon(pts, fill=fill, stroke=stroke,
+                       stroke_width=stroke_width, alpha=alpha,
+                       fill_alpha=fill_alpha, stroke_alpha=stroke_alpha)
     fa = f' fill="{fill}"' if fill else ' fill="none"'
     sa = (f' stroke="{stroke}" stroke-width="{stroke_width:.2f}"{dash_attr(dash)}'
           if stroke else "")
@@ -278,13 +333,20 @@ def circle(cx: float, cy: float, r: float, *,
            fill: str = None, stroke: str = None,
            stroke_width: float = 1, alpha=1,
            fill_alpha=None, stroke_alpha=None,
-           tag: str | None = None) -> str:
+           tag: str | None = None,
+           project=None) -> str:
     """Emit a single SVG `<circle>` at pixel (cx, cy) with radius r.
 
     Pass `fill=` for a filled disc, `stroke=` for an outline, or both.
     `fill=None` (default) emits `fill="none"` so an outline-only call works.
     `fill_alpha` / `stroke_alpha` override `alpha` per channel.
+
+    `project=` (Cartesian-pixel -> coord-pixel closure) shifts the center
+    through a non-affine coord; the radius stays pixel-absolute so the
+    disc keeps its physical size under the ring/polar.
     """
+    if project is not None:
+        cx, cy = project(cx, cy)
     fa = f' fill="{fill}"' if fill else ' fill="none"'
     sa = f' stroke="{stroke}" stroke-width="{stroke_width:.2f}"' if stroke else ""
     oa = _shape_opacity(alpha, fill_alpha, stroke_alpha,
@@ -314,12 +376,19 @@ def path(d: str, *,
 
 
 def polyline(points, *,
-             color: str = "#000", width: float = 1, dash=None, alpha=1) -> str:
+             color: str = "#000", width: float = 1, dash=None, alpha=1,
+             project=None) -> str:
     """Stroke a polyline through `points` (list of `(x, y)` pixel tuples).
 
     Returns `""` for fewer than two points. No fill — for a closed filled
     shape, use `polygon`.
+
+    `project=` (Cartesian-pixel -> coord-pixel closure) subdivides each
+    edge before projection so straight Cartesian edges become smooth
+    curves under non-affine coords.
     """
+    if project is not None:
+        points = _subdivide_project(list(points), project)
     if not points or len(points) < 2:
         return ""
     d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in points)
@@ -329,14 +398,23 @@ def polyline(points, *,
 def polygon(points, *,
             fill: str = None, stroke: str = None,
             stroke_width: float = 1, alpha=1,
-            fill_alpha=None, stroke_alpha=None) -> str:
+            fill_alpha=None, stroke_alpha=None,
+            project=None) -> str:
     """Closed polygon through `points` (list of `(x, y)` pixel tuples).
 
     Always emits a trailing `Z`, so the shape is closed even if the last
     point doesn't repeat the first. Pass `fill=` for a filled shape,
     `stroke=` for an outline, or both. `fill_alpha` / `stroke_alpha`
     override `alpha` per channel.
+
+    `project=` (Cartesian-pixel -> coord-pixel closure) subdivides each
+    edge — including the implicit closing edge — before projection. The
+    caller can either pass the closing point explicitly (last == first)
+    or let `polygon` close via the trailing `Z`; under `project=` the
+    explicit form gives a smoother closing seam.
     """
+    if project is not None:
+        points = _subdivide_project(list(points), project)
     if not points or len(points) < 3:
         return ""
     d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in points) + "Z"

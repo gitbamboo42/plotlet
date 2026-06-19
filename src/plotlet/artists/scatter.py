@@ -36,7 +36,7 @@ from ._shared import (_xy_minmax, expand_xy_long_form,
                        DEFAULT_ALPHA_RANGE, _alpha_for_level)
 
 
-def _artist_scatter(a, xs_, ys_, col, xs, ys):
+def _artist_scatter(a, xs_, ys_, col, xs, ys, warp=None):
     opts = a["opts"]
     raw_size = opts.get("size", _D["scatter_size"])
     raw_mk = opts.get("marker", "o")
@@ -70,7 +70,8 @@ def _artist_scatter(a, xs_, ys_, col, xs, ys):
             continue
         out.append(marker(markers[i], px, py, float(radii[i]),
                           point_colors[i], alpha,
-                          edgecolor=edgecolor, edgewidth=linewidth))
+                          edgecolor=edgecolor, edgewidth=linewidth,
+                          project=warp))
     return "".join(out)
 
 
@@ -326,7 +327,7 @@ def _scatter_data_attrs(a):
 
 def _scatter_draw(a, ctx):
     return _artist_scatter(a, ctx.x_scale, ctx.y_scale, ctx.color,
-                           a["xs"], a["ys"])
+                           a["xs"], a["ys"], warp=ctx.warp)
 
 
 def _scatter_legend_gradient(a):
@@ -439,4 +440,5 @@ add_artist(ArtistSpec(
     legend_entries=_scatter_legend_entries,
     legend_gradient=_scatter_legend_gradient,
     data_attrs=_scatter_data_attrs,
+    coord_native=True,
 ))

@@ -174,6 +174,36 @@ def _leaf_rect_size(leaf: Chart) -> tuple[int, int]:
     return leaf._canvas_width, leaf._canvas_height
 
 
+def _is_atomic(node: Chart) -> bool:
+    """A node the placement system treats as a single opaque block.
+
+    Leaves are atomic by definition. Coord-bearing Layouts are too —
+    they own their own render strategy (e.g. `CircularCoordinate` overlays
+    children on one ring canvas), and decomposing them into the parent
+    rectangular grid would render their leaves in Cartesian. Letting
+    `_measure` / `_allocate` stop at them keeps the rect path unaware of
+    coord internals; the placement loop dispatches on the coord at emit
+    time."""
+    if not getattr(node, "_is_parent", False):
+        return True
+    coord = getattr(node, "_coordinate", None)
+    return coord is not None and hasattr(coord, "render_layout")
+
+
+def _atomic_size(node: Chart) -> tuple[int, int]:
+    """Canvas size for an atomic node. Leaves use their declared
+    `_canvas_*`; coord-bearing Layouts match the (W, H) their coord's
+    `render_layout` will claim — max of inner data-leaf dims, the same
+    formula CircularCoordinate uses for its overlay canvas."""
+    if not node._is_parent:
+        return _leaf_rect_size(node)
+    leaves = [l for l in node._iter_leaves() if l._leaf_kind == "data"]
+    if not leaves:
+        return 0, 0
+    return (max(l._data_width  for l in leaves),
+            max(l._data_height for l in leaves))
+
+
 def _measure(node: Chart) -> tuple[int, int]:
     """The pixel (W, H) the node wants.
 
@@ -182,9 +212,9 @@ def _measure(node: Chart) -> tuple[int, int]:
     in the orthogonal direction. The figure size emerges from composition,
     so a 100-row heatmap stays 100 rows tall and an attached dendrogram
     sits next to it at its own natural width."""
-    if not node._is_parent:
-        w, h = _leaf_rect_size(node)
-        if _attachments.has_attachments(node):
+    if _is_atomic(node):
+        w, h = _atomic_size(node)
+        if not node._is_parent and _attachments.has_attachments(node):
             l, r = _attachments.attached_size_h(node)
             a, b = _attachments.attached_size_v(node)
             w += l + r
@@ -254,8 +284,12 @@ def _data_total_size(node: Chart) -> tuple[float, float]:
     Used so `fit()` can solve `target = s * data_total + overhead`
     directly in one pass instead of converging geometrically via
     `s = target / natural`."""
-    if not node._is_parent:
-        if node._leaf_kind == "data":
+    if _is_atomic(node):
+        # Leaves contribute their data dims (for data leaves) or 0
+        # (for legend/diagram). Coord-bearing Layouts are opaque to the
+        # rect parent and contribute 0 — their internal scale doesn't
+        # participate in `fit()`'s data-area solve.
+        if not node._is_parent and node._leaf_kind == "data":
             return float(node._data_width), float(node._data_height)
         return 0.0, 0.0
     if node._layout_kind == "h":
@@ -313,8 +347,8 @@ def _allocate(node: Chart, x: float, y: float, w: float, h: float, out: list):
     act as relative ratios — so a narrow colorbar leaf in
     `hm | pt.colorbar(hm)` self-sizes without forcing the user to declare
     explicit widths."""
-    if not node._is_parent:
-        if _attachments.has_attachments(node):
+    if _is_atomic(node):
+        if not node._is_parent and _attachments.has_attachments(node):
             # Carve out the slot for the host itself, then place
             # attachments in the surrounding margin space.
             l, r = _attachments.attached_size_h(node)
@@ -877,16 +911,11 @@ def _render_layout(root: Chart, outer=None) -> str:
     coord = getattr(root, "_coordinate", None)
     if coord is not None and hasattr(coord, "render_layout"):
         return coord.render_layout(root)
-    # Default: rectangular stack. Nested coord-Layouts inside a
-    # rectangular parent get pre-rendered into diagram leaves so the
-    # rectangular code treats them as opaque content.
-    substituted = _materialize_coord_descendants(root)
-    try:
-        return _render_layout_rect(root, outer=outer)
-    finally:
-        for parent, idx, original in substituted:
-            parent._children[idx] = original
-            original._parent = parent
+    # Default: rectangular stack. Coord-bearing sub-Layouts are treated as
+    # atomic blocks by `_measure` / `_allocate` (see `_is_atomic`) and
+    # rendered through their coord's own strategy at placement time —
+    # the rect path stays unaware of coord internals.
+    return _render_layout_rect(root, outer=outer)
 
 
 def _render_layout_rect(root: Chart, outer=None) -> str:
@@ -926,6 +955,23 @@ def _render_layout_rect(root: Chart, outer=None) -> str:
     # decorations.
     data_leaves: list[Chart] = []
     for leaf, (x, y, w, h) in placements:
+        if leaf._is_parent:
+            # Coord-bearing sub-Layout — `_is_atomic` kept the placement
+            # system from descending into it, so we render it here via its
+            # coord's own strategy (e.g. CircularCoordinate overlays) and
+            # embed the body at the placement rect. The <svg> wrapper its
+            # render returns is peeled off; we're inside a translate group,
+            # not the document root.
+            svg = _render_layout(leaf)
+            sm = _SVG_INNER_RE.search(svg)
+            if sm is None:
+                raise RuntimeError(
+                    f"coord-Layout render produced no <svg> wrapper: {leaf}"
+                )
+            parts.append(
+                f'<g transform="translate({x:.2f},{y:.2f})">{sm.group(3)}</g>'
+            )
+            continue
         kind = leaf._leaf_kind
         if kind == "legend":
             continue
@@ -961,7 +1007,9 @@ def _render_layout_rect(root: Chart, outer=None) -> str:
             parts.append('</g>')
         data_leaves.append(leaf)
     for leaf, (x, y, w, h) in placements:
-        if leaf._leaf_kind != "legend":
+        # Coord-bearing sub-Layouts were emitted in the data-leaf pass
+        # above; skip them here (they have no `_leaf_kind` attribute).
+        if leaf._is_parent or leaf._leaf_kind != "legend":
             continue
         from .legend import _render_legend
         # Same `data-plotlet-kind` + bbox attrs the data-panel wrapper
@@ -985,50 +1033,11 @@ def _render_layout_rect(root: Chart, outer=None) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Nested coord-Layout pre-rendering
+# Embedding a coord-bearing sub-Layout: the placement loop renders it via
+# its coord's `render_layout` and peels the `<svg>` wrapper so the body can
+# inline inside the parent's `<g translate>`. Used in `_render_layout_rect`.
 # ---------------------------------------------------------------------------
-#
-# When a rectangular layout contains a coord-Layout child, the
-# rectangular code would otherwise descend into the coord child and
-# render its leaves Cartesian. We pre-render any such descendant via
-# `_render_layout(child)` (which dispatches to the coord's own
-# `render_layout`) and stash the result in a sized diagram leaf, so the
-# rectangular code sees opaque content.
 
 _SVG_INNER_RE = re.compile(
     r'<svg[^>]*width="(\d+)"\s+height="(\d+)"[^>]*>(.*)</svg>', re.DOTALL,
 )
-
-
-def _materialize_coord_descendants(layout):
-    """Walk `layout`'s subtree; for every descendant `Layout` with
-    `_coordinate` set, render it via `_render_layout(...)` and replace
-    it in its parent's `_children` with a sized diagram leaf carrying
-    the rendered SVG body. Returns `(parent, idx, original)` tuples for
-    restoration on exit.
-    """
-    substituted = []
-    # Solo Chart roots have no `_children`; nothing to walk.
-    if not getattr(layout, "_is_parent", False):
-        return substituted
-    def walk(parent):
-        for i, ch in enumerate(parent._children):
-            if ch is None or not getattr(ch, "_is_parent", False):
-                continue
-            if ch._coordinate is not None:
-                svg = _render_layout(ch)
-                sm = _SVG_INNER_RE.search(svg)
-                w, h, inner = int(sm.group(1)), int(sm.group(2)), sm.group(3)
-                leaf = Chart._new_sized_leaf(
-                    canvas_width=w, canvas_height=h,
-                    leaf_kind="diagram",
-                    margin={"left": 0, "right": 0, "top": 0, "bottom": 0},
-                )
-                leaf._diagram_inner = inner
-                leaf._parent = parent
-                substituted.append((parent, i, ch))
-                parent._children[i] = leaf
-            else:
-                walk(ch)
-    walk(layout)
-    return substituted

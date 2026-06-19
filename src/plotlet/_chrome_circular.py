@@ -1,11 +1,10 @@
 """Chrome helpers for ``CircularCoordinate``.
 
-Procedural counterparts of the four optional hooks ``CircularCoordinate``
-exposes on the coordinate protocol — ``warp_svg``, ``clip_path_d``,
-``draw_y_chrome`` (the y-axis chrome on a ring), ``draw_x_chrome`` (angular
-tick marks + labels outside the outer ring). ``CircularCoordinate`` itself
-becomes a thin geometry/parameter holder that wires its methods to these
-helpers.
+Procedural counterparts of the hooks ``CircularCoordinate`` exposes on the
+coordinate protocol — ``clip_path_d``, ``draw_y_chrome`` (the y-axis chrome
+on a ring), ``draw_x_chrome`` (angular tick marks + labels outside the outer
+ring). ``CircularCoordinate`` itself becomes a thin geometry/parameter
+holder that wires its methods to these helpers.
 
 Lives in its own module so ``coordinates.py`` stays focused on the protocol
 + small affine implementations. The default Cartesian chrome lives in
@@ -14,7 +13,6 @@ Lives in its own module so ``coordinates.py`` stays focused on the protocol
 from __future__ import annotations
 
 import math
-import re
 
 from .draw import circle, segment, text_path, cap_height, path
 
@@ -46,71 +44,6 @@ def t_to_angle(t: float, wrap_gap_rad: float) -> float:
     is at angle ``π/2`` exactly.
     """
     return math.pi / 2 - wrap_gap_rad / 2 - t * (2 * math.pi - wrap_gap_rad)
-
-
-# ---------------------------------------------------------------------------
-# Non-affine warp — rewrite Cartesian artist SVG into ring space
-# ---------------------------------------------------------------------------
-
-def warp_svg(body: str, project, iw: float, ih: float) -> str:
-    """Remap Cartesian pixel coords in an SVG fragment through ``project``.
-
-    Order matters: circle → path → rect → line.  ``rect`` emits a fresh
-    ``<path d="…">`` with already-warped coords; running the path
-    substitution before rect prevents a double-warp.
-    """
-    def remap(x_str, y_str):
-        t = float(x_str) / iw
-        r = 1.0 - float(y_str) / ih
-        px, py = project(t, r)
-        return f"{px:.2f}", f"{py:.2f}"
-
-    # 1. <circle cx cy r> — scatter / dot markers
-    def sub_cxcy(m):
-        nx, ny = remap(m.group(1), m.group(2))
-        return f'cx="{nx}" cy="{ny}"'
-    body = re.sub(r'cx="([^"]+)"\s+cy="([^"]+)"', sub_cxcy, body)
-
-    # 2. <path d="…"> — polylines / polygons (M/L/Z only).
-    # Skip when d contains bezier/arc commands (= glyph paths from
-    # text_path); warping glyph control points would mangle the letters.
-    def sub_path_d(m):
-        d = m.group(1)
-        if re.search(r'[CcQqAaHhVvSsTt]', d):
-            return m.group(0)
-        def remap_pair(pm):
-            nx, ny = remap(pm.group(1), pm.group(2))
-            return f"{nx},{ny}"
-        return f'd="{re.sub(r"(-?[0-9.]+),(-?[0-9.]+)", remap_pair, d)}"'
-    body = re.sub(r'd="([^"]+)"', sub_path_d, body)
-
-    # 3. <rect x y width height> — bars / box markers.
-    # Expand to a 4-corner <path>; runs after the path pass so it isn't
-    # re-warped on a second sweep.
-    def sub_rect(m):
-        x, y = float(m.group(1)), float(m.group(2))
-        w, h = float(m.group(3)), float(m.group(4))
-        rest = m.group(5)
-        bl = remap(str(x),     str(y + h))
-        br = remap(str(x + w), str(y + h))
-        tr = remap(str(x + w), str(y))
-        tl = remap(str(x),     str(y))
-        d = f"M{bl[0]},{bl[1]} L{br[0]},{br[1]} L{tr[0]},{tr[1]} L{tl[0]},{tl[1]}Z"
-        return f'<path d="{d}"{rest}'
-    body = re.sub(
-        r'<rect x="([^"]+)" y="([^"]+)" width="([^"]+)" height="([^"]+)"([^>]*>)',
-        sub_rect, body)
-
-    # 4. <line x1 x2 y1 y2> — axvline / segment
-    def sub_line(m):
-        nx1, ny1 = remap(m.group(1), m.group(3))
-        nx2, ny2 = remap(m.group(2), m.group(4))
-        return f'x1="{nx1}" x2="{nx2}" y1="{ny1}" y2="{ny2}"'
-    body = re.sub(
-        r'x1="([^"]+)"\s+x2="([^"]+)"\s+y1="([^"]+)"\s+y2="([^"]+)"',
-        sub_line, body)
-
-    return body
 
 
 # ---------------------------------------------------------------------------

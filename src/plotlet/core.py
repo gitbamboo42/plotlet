@@ -232,6 +232,21 @@ _UNIT_PX = {
 _DIM_RE = re.compile(r"^\s*([+-]?\d*\.?\d+)\s*([a-zA-Z]*)\s*$")
 
 
+def _make_px_warp(project, iw, ih):
+    """Build the Cartesian-pixel → projected-pixel closure handed to
+    coord-native artists as `ctx.warp`. Normalizes x_px/iw → t and
+    1 - y_px/ih → r (r is bottom-up; SVG y is top-down), then calls the
+    coord's project. Returns None when there's no project to apply so
+    artists can branch with a single `if ctx.warp`."""
+    if project is None:
+        return None
+    def warp(x_px, y_px):
+        t = x_px / iw
+        r = 1.0 - y_px / ih
+        return project(t, r)
+    return warp
+
+
 def _to_px(value):
     """Resolve a dim value to integer pixels.
 
@@ -1981,17 +1996,20 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
 
     # Resolve the panel coordinate — always panel-level via c.coordinate(...).
     # Lifted above the grid block so the grid/spine/x-tick passes below can
-    # check the coordinate's optional hooks (warp_svg, draw_x_frame,
-    # clip_path_d) before emitting anything.
+    # check the coordinate's optional hooks (draw_x_frame, clip_path_d)
+    # before emitting anything.
     _coord_object = st.get("coordinate")
     _coord_project = _coord_object({}, iw, ih) if _coord_object is not None else None
 
     _has_coord_frame   = _coord_object is not None and hasattr(_coord_object, "draw_frame")
     _has_svg_transform   = _coord_object is not None and hasattr(_coord_object, "svg_transform")
-    _has_warp_svg        = _coord_object is not None and hasattr(_coord_object, "warp_svg")
     _has_x_frame         = _coord_object is not None and hasattr(_coord_object, "draw_x_frame")
     _has_clip_d          = _coord_object is not None and hasattr(_coord_object, "clip_path_d")
     _has_x_sector_chrome = _coord_object is not None and hasattr(_coord_object, "draw_x_sector_chrome")
+    # Non-affine coords project per-point through `ctx.warp` — there's no
+    # legacy SVG post-pass fallback, so every artist in the panel must opt
+    # into the coord-native contract via `ArtistSpec.coord_native=True`.
+    _requires_native = _coord_object is not None and not _has_svg_transform
 
     # A coordinate that owns the x-axis (draw_x_frame) needs a matching
     # `draw_x_sector_chrome` to handle x-sectors; otherwise the Cartesian
@@ -2008,6 +2026,21 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             "c.sectors(axis='y') is not yet supported with a coordinate "
             "that owns the x-axis (e.g. CircularCoordinate)."
         )
+    if _requires_native:
+        bad = sorted({a["type"] for a in st["artists"]
+                      if (get_artist(a["type"]) is None
+                          or not get_artist(a["type"]).coord_native)})
+        if bad:
+            supported = sorted(n for n in all_artist_names()
+                               if get_artist(n).coord_native)
+            raise NotImplementedError(
+                f"{type(_coord_object).__name__} requires coord-native artists; "
+                f"{bad} are not supported. Supported: {supported}.\n"
+                f"To make a custom artist coord-native: set "
+                f"`coord_native=True` on its ArtistSpec and forward "
+                f"`project=ctx.warp` to every `draw.*` helper call in its "
+                f"draw function."
+            )
 
     # ---- emit body fragment ----
     parts = []
@@ -2052,17 +2085,21 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     # build the render context once — passed to every draw call.
     # When svg_transform is present the coordinate mapping is handled at the
     # SVG group level; artists draw in Cartesian, so ctx.project stays None.
+    # Non-affine coords expose `ctx.warp` (pixel-space convenience closure)
+    # that artists pass to `draw.*` helpers; validation upstream guaranteed
+    # every artist here is coord_native, so we always populate `warp` when
+    # the coord is non-affine.
     def _ctx_for(a):
-        if _has_svg_transform:
+        if _has_svg_transform or _coord_object is None:
             proj = None
-        elif _coord_object is not None:
-            proj = _coord_object(a, iw, ih)
+            warp = None
         else:
-            proj = None
+            proj = _coord_object(a, iw, ih)
+            warp = _make_px_warp(proj, iw, ih)
         return RenderContext(
             x_scale=x_scale, y_scale=y_scale, iw=iw, ih=ih,
             color=a["_color"], defaults=_D, dash=_DASH,
-            project=proj,
+            project=proj, warp=warp,
         )
 
     # three-pass draw: background → data → foreground.
@@ -2117,20 +2154,14 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
                 xfm = _coord_object.svg_transform(_coord_project, iw, ih)
                 parts.append(f'<g transform="{xfm}">')
 
-        # Data-layer artist bodies are collected into a buffer so warp_svg
-        # (non-affine coordinates) can rewrite the whole batch in a single
-        # pass — symmetric to svg_transform wrapping the affine case in a
-        # <g transform="..."> group.
-        layer_bodies = []
+        # Each body is emitted in user-recording z-order. Under affine
+        # coords the surrounding <g transform="..."> handles the mapping;
+        # under non-affine coords artists projected through ctx.warp during
+        # draw. Either way the body is plain SVG — no renderer-level rewrite.
         for idx, a in by_layer[layer]:
             spec = get_artist(a["type"])
             body = spec.draw(a, _ctx_for(a))
-            layer_bodies.append(_wrap_artist(a, idx, body))
-        if layer == "data" and _has_warp_svg:
-            parts.append(_coord_object.warp_svg(
-                "".join(layer_bodies), _coord_project, iw, ih))
-        else:
-            parts.extend(layer_bodies)
+            parts.append(_wrap_artist(a, idx, body))
 
         if layer == "data" and clip_data:
             if _has_svg_transform:

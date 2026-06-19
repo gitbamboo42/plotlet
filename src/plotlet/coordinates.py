@@ -50,14 +50,13 @@ Optional methods on the coordinate object unlock additional integration:
     When ``svg_transform`` is present, ``ctx.project`` is not set — artists
     should draw in Cartesian as usual.
 
-``warp_svg(body, project, iw, ih) -> str``
-    Non-affine analogue of ``svg_transform``.  Operates on the joined SVG
-    body of the data-layer artists *after* they've drawn in Cartesian pixel
-    space, rewriting coordinate attributes in-place through ``project``.
-    Used by ``CircularCoordinate`` (rings can't be expressed as an affine
-    matrix).  Caveats inherited from string-level warping: line segments
-    become straight chords between warped endpoints; glyph paths (text)
-    are passed through unwarped.
+Non-affine coords (no ``svg_transform``) require every artist in the panel
+to opt in via ``ArtistSpec.coord_native=True``.  Coord-native artists draw
+through ``ctx.warp`` (a Cartesian-pixel → coord-pixel closure handed to
+``draw.*`` helpers), so edges subdivide and primitives project at draw time
+instead of relying on a post-pass SVG rewrite.  The renderer raises
+``NotImplementedError`` if a non-coord_native artist appears under a
+non-affine coord.
 
 ``clip_path_d(iw, ih) -> str``
     Returns an SVG path-data string used as the data-area clip region.
@@ -68,8 +67,8 @@ Optional methods on the coordinate object unlock additional integration:
 
 ``LinearCoordinate`` is the affine reference implementation (x-axis horizontal,
 y-axis tilts).  ``CircularCoordinate`` is the non-affine reference (ring with
-inner/outer radii), demonstrating the ``warp_svg`` / ``draw_x_frame`` /
-``clip_path_d`` hooks.
+inner/outer radii), demonstrating the coord-native draw contract and the
+``draw_x_frame`` / ``clip_path_d`` hooks.
 """
 from __future__ import annotations
 
@@ -154,20 +153,19 @@ class CircularCoordinate:
 
     Maps (t, r) → pixel (x, y) on an annulus.  ``t ∈ [0, 1]`` runs clockwise
     from 12 o'clock; ``r ∈ [0, 1]`` is radial depth (0 = inner edge,
-    1 = outer edge).  Non-affine, so the ``svg_transform`` matrix path
-    can't be used — the renderer instead applies ``warp_svg`` to the
-    data-layer SVG body so standard plotlet artists (scatter, line,
-    numeric_bar, hist, …) work unchanged.
+    1 = outer edge).  Non-affine, so only artists with
+    ``ArtistSpec.coord_native=True`` can render under it — they draw through
+    ``ctx.warp`` so each geometry point projects at draw time.  Today the
+    coord-native set is scatter / line / step / heatmap / hist /
+    numeric_bar / fill_between / area; other artists raise
+    ``NotImplementedError`` at render time.
 
-    Caveats inherited from the string-level warp:
+    Caveats:
 
-    - Line segments warp endpoint-by-endpoint and become straight chords
-      across the ring.  Fine for dense data, visible for sparse — pass
-      more points if you need smoother arcs.
-    - Glyph paths (text drawn inside data artists) are passed through
-      unwarped.  Frame-level text (titles, x/y tick labels via
-      ``draw_x_frame`` / ``draw_frame``) is positioned in the coordinate
-      directly and renders correctly.
+    - Glyph paths (text drawn inside data artists) project the anchor only;
+      the glyph shape stays Cartesian.  Frame-level text (titles, x/y tick
+      labels via ``draw_x_frame`` / ``draw_frame``) is positioned in the
+      coordinate directly and renders correctly.
     - ``c.sectors(axis="x")`` is supported (Circos-style wedges with
       radial dividers and tangential labels).  ``c.sectors(axis="y")``
       (concentric bands) is not yet supported and raises at render time.
@@ -228,9 +226,6 @@ class CircularCoordinate:
     # Each hook is a thin delegate to its counterpart in `_chrome_circular`.
     # Bodies live there so this module stays focused on the protocol +
     # small affine implementations.
-
-    def warp_svg(self, body: str, project, iw: float, ih: float) -> str:
-        return _cc.warp_svg(body, project, iw, ih)
 
     def derive_leaf_coords(self, leaves) -> list:
         """`Layout.coordinate(...)` overlay hook: produce a per-leaf

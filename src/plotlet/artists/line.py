@@ -22,12 +22,12 @@ import math
 from ..registry import ArtistSpec, add_artist
 from ..utils import to_list
 from .._spec import _D
-from ..draw import marker, path as draw_path
+from ..draw import marker, path as draw_path, polyline
 from ._shared import (_xy_minmax, _line_legend_entries, _CURVE_VALUES,
                        _step_coords, expand_xy_long_form, DEFAULT_ALPHA_RANGE)
 
 
-def _artist_line(a, xs_, ys_, col, xs, ys):
+def _artist_line(a, xs_, ys_, col, xs, ys, warp=None):
     out = []
     opts = a["opts"]
     alpha = opts.get("alpha", 1)
@@ -43,25 +43,45 @@ def _artist_line(a, xs_, ys_, col, xs, ys):
     path_pts = [(xs_(x), ys_(y)) for x, y in zip(path_xs, path_ys)]
     path_pts = [(px, py) if (math.isfinite(px) and math.isfinite(py)) else None
                 for px, py in path_pts]
-    d_segs, started = [], False
-    for p in path_pts:
-        if p is None:
-            started = False
-            continue
-        d_segs.append(f'{"M" if not started else "L"}{p[0]:.2f},{p[1]:.2f}')
-        started = True
     ls = opts.get("linestyle")
+    lw = opts.get("linewidth", _D["linewidth"])
     if ls not in ("", "none"):
-        out.append(draw_path("".join(d_segs), stroke=col,
-                             stroke_width=opts.get("linewidth", _D["linewidth"]),
-                             dash=ls, alpha=alpha))
+        if warp is None:
+            # Single <path> with multiple M/L subpaths — broken lines (None
+            # gaps) become separate subpaths inside one path d-string.
+            d_segs, started = [], False
+            for p in path_pts:
+                if p is None:
+                    started = False
+                    continue
+                d_segs.append(f'{"M" if not started else "L"}{p[0]:.2f},{p[1]:.2f}')
+                started = True
+            out.append(draw_path("".join(d_segs), stroke=col, stroke_width=lw,
+                                 dash=ls, alpha=alpha))
+        else:
+            # Coord-native: emit one polyline per contiguous run so each
+            # edge subdivides through warp into a smooth arc. Broken lines
+            # become separate <path> elements (the visual break is the same).
+            run = []
+            for p in path_pts:
+                if p is None:
+                    if run:
+                        out.append(polyline(run, color=col, width=lw, dash=ls,
+                                             alpha=alpha, project=warp))
+                        run = []
+                else:
+                    run.append(p)
+            if run:
+                out.append(polyline(run, color=col, width=lw, dash=ls,
+                                     alpha=alpha, project=warp))
     if opts.get("marker"):
         sz = opts.get("size", _D["markersize"])
         for x, y in zip(xs, ys):
             px, py = xs_(x), ys_(y)
             if not (math.isfinite(px) and math.isfinite(py)):
                 continue
-            out.append(marker(opts["marker"], px, py, sz, col, alpha))
+            out.append(marker(opts["marker"], px, py, sz, col, alpha,
+                              project=warp))
     return "".join(out)
 
 
@@ -118,7 +138,7 @@ def _line_data_attrs(a):
 
 def _line_draw(a, ctx):
     return _artist_line(a, ctx.x_scale, ctx.y_scale, ctx.color,
-                        a["xs"], a["ys"])
+                        a["xs"], a["ys"], warp=ctx.warp)
 
 
 add_artist(ArtistSpec(
@@ -129,6 +149,7 @@ add_artist(ArtistSpec(
     draw=_line_draw,
     legend_entries=_line_legend_entries,
     data_attrs=_line_data_attrs,
+    coord_native=True,
 ))
 
 
@@ -154,4 +175,5 @@ add_artist(ArtistSpec(
     draw=_line_draw,
     legend_entries=_line_legend_entries,
     data_attrs=_line_data_attrs,
+    coord_native=True,
 ))

@@ -217,9 +217,11 @@ def _heatmap_draw_categorical(a, ctx):
                 fill = palette.get(v, absent_fill) if v is not None else absent_fill
                 if lw:
                     out.append(rect(x0, y0, bw, bh, fill=fill,
-                                    stroke=lc, stroke_width=lw))
+                                    stroke=lc, stroke_width=lw,
+                                    project=ctx.warp))
                 else:
-                    out.append(rect(x0, y0, bw, bh, fill=fill))
+                    out.append(rect(x0, y0, bw, bh, fill=fill,
+                                    project=ctx.warp))
     else:
         rgb_map = {k: _hex_to_rgb(v) for k, v in palette.items()}
         absent_rgb = _hex_to_rgb(absent_fill)
@@ -254,7 +256,10 @@ def _heatmap_draw_categorical(a, ctx):
                 else:
                     txt_col = color_opt
                 cx = ctx.x_scale(cols[c])
-                out.append(text_path(txt, cx, cy + fontsize / 3,
+                ax, ay = cx, cy + fontsize / 3
+                if ctx.warp is not None:
+                    ax, ay = ctx.warp(ax, ay)
+                out.append(text_path(txt, ax, ay,
                                      fontsize, anchor="middle", color=txt_col))
 
     return "".join(out)
@@ -298,9 +303,11 @@ def _heatmap_draw(a, ctx):
                     fill = f"rgb({lut[i]},{lut[i+1]},{lut[i+2]})"
                 if lw:
                     out.append(rect(x0, y0, bw, bh, fill=fill,
-                                    stroke=lc, stroke_width=lw))
+                                    stroke=lc, stroke_width=lw,
+                                    project=ctx.warp))
                 else:
-                    out.append(rect(x0, y0, bw, bh, fill=fill))
+                    out.append(rect(x0, y0, bw, bh, fill=fill,
+                                    project=ctx.warp))
     else:
         # Category-scale PNG fallback. `_png_for_blocks` covers the
         # no-split case as a single full-range block — one image flush
@@ -350,7 +357,10 @@ def _heatmap_draw(a, ctx):
                 else:
                     txt_col = color_opt
                 cx = ctx.x_scale(cols[c])
-                out.append(text_path(txt, cx, cy + fontsize / 3,
+                ax, ay = cx, cy + fontsize / 3
+                if ctx.warp is not None:
+                    ax, ay = ctx.warp(ax, ay)
+                out.append(text_path(txt, ax, ay,
                                      fontsize, anchor="middle", color=txt_col))
 
     return "".join(out)
@@ -424,4 +434,5 @@ add_artist(ArtistSpec(
     uses_color_cycle=False,
     data_attrs=_heatmap_data_attrs,
     tight_domain=True,
+    coord_native=True,
 ))

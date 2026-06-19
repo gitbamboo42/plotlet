@@ -18,7 +18,7 @@ from ._shared import (_xy_minmax, _line_legend_entries,
 
 # --- fill_between ---
 
-def _artist_fill_between(a, xs_, ys_, col):
+def _artist_fill_between(a, xs_, ys_, col, warp=None):
     opts = a["opts"]
     curve = opts.get("curve", "linear")
     if curve not in _CURVE_VALUES:
@@ -39,7 +39,8 @@ def _artist_fill_between(a, xs_, ys_, col):
     lower = [(xs_(x), ys_(y)) for x, y in zip(lower_xs, lower_ys)]
     pts = upper + list(reversed(lower))
     return draw_polygon(pts, fill=col,
-                        alpha=opts.get("alpha", _D["fill_alpha"]))
+                        alpha=opts.get("alpha", _D["fill_alpha"]),
+                        project=warp)
 
 
 def _fill_between_data_attrs(a):
@@ -83,9 +84,11 @@ add_artist(ArtistSpec(
     record=_fill_between_record,
     xdomain=lambda a: a["xs"],
     ydomain=lambda a: list(a["y1"]) + list(a["y2"]),
-    draw=lambda a, ctx: _artist_fill_between(a, ctx.x_scale, ctx.y_scale, ctx.color),
+    draw=lambda a, ctx: _artist_fill_between(a, ctx.x_scale, ctx.y_scale,
+                                              ctx.color, warp=ctx.warp),
     legend_entries=_line_legend_entries,
     data_attrs=_fill_between_data_attrs,
+    coord_native=True,
 ))
 
 
@@ -195,7 +198,7 @@ def _area_draw(a, ctx):
         pts += [(ctx.x_scale(x), ctx.y_scale(y))
                 for x, y in zip(reversed(lo_x), reversed(lo_y))]
         col = _group_fill(groups, palette, j, fill_fallback) if multi else fill_fallback
-        out.append(draw_polygon(pts, fill=col, alpha=alpha))
+        out.append(draw_polygon(pts, fill=col, alpha=alpha, project=ctx.warp))
         running = upper
     return "".join(out)
 
@@ -231,4 +234,5 @@ add_artist(ArtistSpec(
     draw=_area_draw,
     legend_entries=_area_legend_entries,
     data_attrs=_area_data_attrs,
+    coord_native=True,
 ))

@@ -65,7 +65,8 @@ def numeric_bar_draw(a, ctx):
         bw = abs(x_right - x_left)
         by = min(y0, y_top)
         bh = abs(y_top - y0)
-        out.append(rect(bx, by, bw, bh, fill=col, alpha=alpha))
+        out.append(rect(bx, by, bw, bh, fill=col, alpha=alpha,
+                        project=ctx.warp))
     return "".join(out)
 
 
@@ -88,6 +89,7 @@ pt.add_artist(pt.ArtistSpec(
     draw=numeric_bar_draw,
     legend_entries=numeric_bar_legend_entries,
     force_zero_y=True,
+    coord_native=True,
 ))
 
 

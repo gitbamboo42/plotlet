@@ -98,6 +98,13 @@ class ArtistSpec:
     data_attrs: Callable[[dict], dict | None] | None = None
     flips_y_axis: Callable[[dict], bool] | None = None
     tight_domain: bool = False
+    # Coordinate-native artists project every geometry point through
+    # `ctx.warp` (a Cartesian-pixel → coord-pixel closure handed to
+    # `draw.*` helpers via `project=`) so edges subdivide accurately under
+    # non-affine coords. Required for any artist used under a non-affine
+    # coord — the renderer raises if `coord_native=False` artists appear
+    # under e.g. `CircularCoordinate`.
+    coord_native: bool = False
     # Anchor an axis to zero: when the artist contributes to autoscaling and
     # data lo > 0, push lo down to 0 so the visual sits on the baseline. Also
     # suppresses the default `expand` on that side so bars don't float below
@@ -126,6 +133,13 @@ class RenderContext:
     # active. Maps (t, r) -> (px, py) in canvas-pixel space. Coordinate-aware
     # artists call ctx.project(t, r) instead of ctx.x_scale / ctx.y_scale.
     project: Any = None
+    # Pixel-space convenience: (x_px, y_px) -> (px, py) in projected canvas
+    # space, where the input is the Cartesian pixel an artist would have
+    # emitted with no coord active. `coord_native` artists pass this to
+    # `draw.*` helpers so segments subdivide, polygons curve, and markers
+    # land in the right place under non-affine coords. None when no coord
+    # is active or when the coord is affine (handled by svg_transform).
+    warp: Any = None
 
 
 _REGISTRY: dict[str, ArtistSpec] = {}

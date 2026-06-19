@@ -22,10 +22,10 @@ from ..registry import ArtistSpec, add_artist
 from ..utils import to_list, long_form_1d, resolve_aes, palette_color
 from ..draw import TAB10, resolve_color
 from .._spec import _D, _LEGSPEC
-from ..draw import rect as draw_rect, path as draw_path
+from ..draw import rect as draw_rect, path as draw_path, polygon as draw_polygon
 
 
-def _artist_hist(a, xs_, ys_, col, bins):
+def _artist_hist(a, xs_, ys_, col, bins, warp=None):
     out = []
     opts = a["opts"]
     horizontal = opts.get("orientation") == "h"
@@ -56,7 +56,8 @@ def _artist_hist(a, xs_, ys_, col, bins):
                 x, y, w, h = bp_lo, count_lo, bin_size, count_size
             out.append(draw_rect(x, y, w, h, fill=col,
                                  stroke=stroke, stroke_width=lw,
-                                 dash=opts.get("linestyle"), alpha=alpha))
+                                 dash=opts.get("linestyle"), alpha=alpha,
+                                 project=warp))
         return "".join(out)
 
     if not bins:
@@ -69,13 +70,20 @@ def _artist_hist(a, xs_, ys_, col, bins):
     pts.append((bin_scale(bins[-1]["x1"]), base))
     if horizontal:
         pts = [(p, q) for q, p in pts]
-    d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts)
     edge = stroke or col
     edge_w = lw if stroke else _D["linewidth"]
     fill = col if histtype == "stepfilled" else None
-    out.append(draw_path(d + " Z", fill=fill,
-                         stroke=edge, stroke_width=edge_w,
-                         dash=opts.get("linestyle"), alpha=alpha))
+    if warp is None:
+        # Preserve the legacy `M..L.. Z` (with space) emission so Cartesian
+        # baselines stay byte-identical.
+        d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts)
+        out.append(draw_path(d + " Z", fill=fill,
+                             stroke=edge, stroke_width=edge_w,
+                             dash=opts.get("linestyle"), alpha=alpha))
+    else:
+        out.append(draw_polygon(pts, fill=fill, stroke=edge,
+                                stroke_width=edge_w, alpha=alpha,
+                                project=warp))
     return "".join(out)
 
 
@@ -150,7 +158,8 @@ def _hist_draw(a, ctx):
     out = []
     for j, bins in enumerate(bin_groups):
         col = _group_fill(a["groups"], palette, j, fill_fallback)
-        out.append(_artist_hist(a, ctx.x_scale, ctx.y_scale, col, bins))
+        out.append(_artist_hist(a, ctx.x_scale, ctx.y_scale, col, bins,
+                                 warp=ctx.warp))
     return "".join(out)
 
 
@@ -187,4 +196,5 @@ add_artist(ArtistSpec(
     data_attrs=_hist_data_attrs,
     force_zero_y=lambda a: not _hist_horizontal(a),
     force_zero_x=_hist_horizontal,
+    coord_native=True,
 ))
