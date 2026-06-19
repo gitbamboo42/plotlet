@@ -42,9 +42,6 @@
     "default_on": false
   },
   "sectors": {
-    "divider_color": "#666666",
-    "divider_width": 0.7,
-    "divider_dasharray": null,
     "label_pad": 5
   },
   "linestyles": {

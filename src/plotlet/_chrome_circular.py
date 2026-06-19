@@ -171,19 +171,19 @@ def draw_x_sector_chrome(cx, cy, R, ri, wrap_gap_rad,
     parts = []
 
     if draw_div:
-        # Two walls per sector — one at start_t, one at end_t.  Adjacent
-        # sectors don't share a wall; whitespace from gap_px sits between
-        # them.  The wrap-around between the last sector's end (t=1) and
-        # the first sector's start (t=0) is bracketed by the same logic
-        # under the wrap_gap angular shift.
-        for start_t, end_t in sector_ts:
-            for t in (start_t, end_t):
-                ang = t_to_angle(t, wrap_gap_rad)
-                ux, uy = math.cos(ang), -math.sin(ang)
-                parts.append(segment(cx + ri * ux, cy + ri * uy,
-                                     cx + R  * ux, cy + R  * uy,
-                                     color=div_col, width=div_w, dash=div_dash,
-                                     tag="sector-divider"))
+        # Paired radial walls at each internal boundary (and the wrap
+        # boundary) — same `_sector_walls` helper used by the linear
+        # chrome, just on cyclic t-space. At gap=0 / wrap_gap_deg=0
+        # paired walls coincide and stack; semi-transparent strokes
+        # compensate via alpha.
+        from ._chrome import _sector_walls
+        for t in _sector_walls(sector_ts, cyclic=True):
+            ang = t_to_angle(t, wrap_gap_rad)
+            ux, uy = math.cos(ang), -math.sin(ang)
+            parts.append(segment(cx + ri * ux, cy + ri * uy,
+                                 cx + R  * ux, cy + R  * uy,
+                                 color=div_col, width=div_w, dash=div_dash,
+                                 tag="sector-divider"))
 
     if draw_lbl:
         # Labels sit a font-cap above the outer ring, rotated tangent to the

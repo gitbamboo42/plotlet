@@ -21,8 +21,8 @@ Patterns shown:
 - font / size customization via a pre-registered theme passed to
   `plot_tracks(theme=...)`.
 - alternating chrom banding via `plot_tracks(style="facecolor")`
-  (default); `"spine"` uses dotted sector dividers via
-  `c.sectors(..., divider={"linestyle": "dotted", ...})`; `"gap"` opens
+  (default); `"spine"` uses dotted sector walls via
+  `c.spines(walls={"linestyle": "...", ...})`; `"gap"` opens
   an inter-sector px pad via `c.sectors(..., gap=N)` — same unit as the
   categorical heatmap path so gaps align across mixed-scale tracks.
 - log-scale tracks via `Track(..., yscale="log")`.

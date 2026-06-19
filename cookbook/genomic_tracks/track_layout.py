@@ -22,8 +22,8 @@ paint callback. The few framework-level features here are things that
 Style — only differs in per-sector decoration on the track rows:
 
 - **facecolor**: alternating axvspan bands on each track.
-- **spine**: dotted sector dividers via the ``divider={"linestyle":
-  "dotted", ...}`` chrome.
+- **spine**: dotted sector walls via ``c.spines(walls={"linestyle":
+  "3,1", ...})``.
 - **gap**: empty pixel pad between sectors — the gap *is* the separator,
   no dividers / banding. ``c.sectors(..., gap=N)`` (px) routes through
   the new ``_SectoredLinearScale``, same unit as the categorical heatmap
@@ -92,13 +92,6 @@ class Track:
 _FACECOLOR_EVEN = "white"
 _FACECOLOR_ODD  = "#cccccc"
 
-# Spine-mode divider: dotted grey at standard frame width. "3,1" gives
-# 3 px on / 1 px off — reads as a near-solid line with subtle breaks,
-# visible at thin strokes. The default ":" linestyle (1,3) is too sparse
-# to see at width 1.
-_SPINE_DIVIDER = {"dasharray": "3,1", "color": "#000000", "linewidth": 1.0}
-
-
 # =============================================================================
 # Sector helpers
 # =============================================================================
@@ -158,10 +151,14 @@ def _build_track_chart(track, gs, *, total_width, height, style, theme,
     # Tick marks off; sector labels (chrom names) own the x chrome.
     c.xticks([])
 
-    # Divider chrome: dotted in spine mode, off otherwise. Sector labels
-    # stay on — `share_x()` auto-hides them on non-bottom rows.
-    divider = _SPINE_DIVIDER if style == "spine" else False
-    sector_kw = {"column": chrom_column, "divider": divider}
+    # Wall chrome: solid in boxed mode (each sector reads as a bounded
+    # mini-subplot), "3,1" dasharray in spine mode, off in facecolor/gap.
+    # Sector labels stay on — `share_x()` auto-hides them on non-bottom rows.
+    if style == "spine":
+        c.spines(walls={"linestyle": "3,1"})
+    elif style != "boxed":
+        c.spines(walls=False)
+    sector_kw = {"column": chrom_column}
     if style in ("gap", "boxed"):
         sector_kw["gap"] = gap_size  # pixels
     c.sectors(spec, **sector_kw)

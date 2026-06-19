@@ -106,17 +106,35 @@ def _resolve_minor_ticks(user_minor, scale, major_ticks):
     return list(user_minor)
 
 
+def _sector_walls(spans, *, cyclic=False):
+    """Internal-boundary wall positions for a sectored axis.
+
+    ``spans`` is ``[(lo_0, hi_0), ...]`` — pixel range per sector. For each
+    internal boundary we emit the right edge of sector i and the left edge
+    of sector i+1 (paired walls bracketing the gap whitespace). At gap=0
+    the pair coincides and renders as overlapping strokes; semi-transparent
+    walls compensate with a proportionally smaller alpha. ``cyclic=True``
+    adds the wrap boundary (last→first) for closed-ring coordinates.
+    """
+    walls = []
+    n = len(spans)
+    last = n if cyclic else n - 1
+    for i in range(last):
+        j = (i + 1) % n
+        walls.append(spans[i][1])
+        walls.append(spans[j][0])
+    return walls
+
+
 def _spine_segments(side, iw, ih, x_ranges, y_ranges):
     """Yield ``(x1, y1, x2, y2)`` per spine segment for ``side``.
 
-    When the orthogonal axis carries a sectored scale (continuous gap >
-    0), the spine breaks into per-sector pieces so each sector reads as
-    its own bounded subplot. Otherwise one full-side segment is yielded.
-
-    For ``top`` / ``bottom`` the relevant break-up axis is x (horizontal
-    segments per x-sector); ``left`` / ``right`` break by x (verticals
-    at each x-sector's edges) when x is sectored, else by y (verticals
-    per y-sector). Symmetric on top/bottom when y is sectored.
+    The spine is the outer envelope. When the parallel-to-spine axis is
+    sectored (top/bottom + x-sectors, or left/right + y-sectors), the
+    segment breaks per sector so each sector reads as its own bounded
+    edge. Internal partitions (verticals when x is sectored, horizontals
+    when y is sectored) are emitted separately as sector walls — see
+    ``_sector_walls``.
     """
     if side in ("top", "bottom"):
         y_edge = 0 if side == "top" else ih
@@ -130,17 +148,12 @@ def _spine_segments(side, iw, ih, x_ranges, y_ranges):
         else:
             yield 0, y_edge, iw, y_edge
     else:  # left / right
-        if x_ranges is not None:
-            for lo, hi in x_ranges:
-                x = lo if side == "left" else hi
-                yield x, 0, x, ih
+        x_edge = 0 if side == "left" else iw
+        if y_ranges is not None:
+            for lo, hi in y_ranges:
+                yield x_edge, lo, x_edge, hi
         else:
-            x_edge = 0 if side == "left" else iw
-            if y_ranges is not None:
-                for lo, hi in y_ranges:
-                    yield x_edge, lo, x_edge, hi
-            else:
-                yield x_edge, 0, x_edge, ih
+            yield x_edge, 0, x_edge, ih
 
 
 # ---------------------------------------------------------------------------
@@ -187,14 +200,20 @@ def emit_chrome(*,
     # marks AND tick labels are dropped — the panels read as merged, with
     # only the two parallel spines remaining (separated by the per-panel
     # floor on each joined side).
+    # Style resolution for any spine target (a side name or "walls"):
+    # per-target override > c.spines() base > _FRAME spec.
+    def _pick(*candidates):
+        for v in candidates:
+            if v is not None: return v
+        return None
+
     def _side_stroke(side):
-        c = st[f"spine_{side}_color"]
-        w = st[f"spine_{side}_width"]
-        col = resolve_color(c) if c is not None else _FRAME["color"]
-        return col, (w if w is not None else _FRAME["width"])
+        col = _pick(st[f"spine_{side}_color"], st["spine_base_color"], _FRAME["color"])
+        w   = _pick(st[f"spine_{side}_width"], st["spine_base_width"], _FRAME["width"])
+        return resolve_color(col), w
 
     def _side_dash(side):
-        return st[f"spine_{side}_linestyle"]
+        return _pick(st[f"spine_{side}_linestyle"], st["spine_base_linestyle"])
 
     parts = []
 
@@ -316,54 +335,42 @@ def emit_chrome(*,
                     else:                  y1, y2 = -minor_len, minor_len
                     parts.append(segment(x, y1, x, y2, color=col, width=sw))
 
-    # Sector chrome — boundary dividers and sector-name labels along the
-    # sectored axis. ``divider`` and ``label`` toggle each independently;
-    # heatmap clustering uses both False so existing baselines stay
-    # byte-identical. Typical user-facing usage picks one (gap whitespace
-    # OR a divider line) — both at once reads as redundant clutter.
+    # Sector chrome — internal walls + sector-name labels along the sectored
+    # axis. Walls are conceptually side spines, so style resolves through
+    # the same _side_stroke/_side_dash with "walls" as the target. The
+    # c.spines(walls=False) toggle suppresses walls regardless of
+    # `Sectors.divider`.
     if x_sec is not None and (x_sec.divider or x_sec.label):
-        _xds = x_sec.divider_style or {}
-        sec_col = resolve_color(_xds.get("color", _SECTORSPEC["divider_color"]))
-        sec_w   = _xds.get("width", _SECTORSPEC["divider_width"])
-        sec_dash = _xds.get("dasharray", _SECTORSPEC["divider_dasharray"])
+        sec_col, sec_w = _side_stroke("walls")
+        sec_dash = _side_dash("walls")
         sec_pad  = _SECTORSPEC["label_pad"]
         sec = x_sec
         if sec.kind == "continuous":
-            # Pixel divider midpoints come from the scale (so a sectored
-            # linear scale with gap_px > 0 lands them in the gap, not at
-            # the data-coord boundary).
-            if hasattr(x_scale, "gap_midpoint_px"):
-                divider_xs = [x_scale.gap_midpoint_px(i)
-                              for i in range(len(sec.names) - 1)]
+            if hasattr(x_scale, "sector_pixel_ranges"):
+                spans = x_scale.sector_pixel_ranges()
             else:
-                boundaries = sec.boundaries()
-                divider_xs = [x_scale(b) for b in boundaries[1:-1]]
-            label_xs   = [x_scale(sec.center(n)) for n in sec.names]
+                # Plain linear (no sector gap) — synthesize spans from
+                # data-coord boundaries.
+                bs = sec.boundaries()
+                spans = [(x_scale(bs[i]), x_scale(bs[i + 1]))
+                         for i in range(len(sec.names))]
+            label_xs = [x_scale(sec.center(n)) for n in sec.names]
         else:
             bw = x_scale.bandwidth
             spans = []
             for members in sec.members:
                 xs = [x_scale(m) for m in members]
                 spans.append((min(xs) - bw / 2, max(xs) + bw / 2))
-            divider_xs = [(spans[i][1] + spans[i + 1][0]) / 2
-                          for i in range(len(spans) - 1)]
-            label_xs   = [(lo + hi) / 2 for lo, hi in spans]
+            label_xs = [(lo + hi) / 2 for lo, hi in spans]
+        divider_xs = _sector_walls(spans)
         if has_x_sector_chrome:
-            # Coordinate owns x-sector chrome (e.g. ring → two walls per
-            # sector bracketing the gap whitespace). Compute each sector's
-            # (start, end) pixel range and normalize to t-space — the coord
-            # re-projects through its own angle/radius mapping.
-            if hasattr(x_scale, "sector_pixel_ranges"):
-                sector_pixel_ranges = x_scale.sector_pixel_ranges()
-            elif sec.kind == "continuous":
-                bs = sec.boundaries()
-                sector_pixel_ranges = [(x_scale(bs[i]), x_scale(bs[i + 1]))
-                                        for i in range(len(sec.names))]
-            else:
-                sector_pixel_ranges = spans
+            # Coordinate owns x-sector chrome (e.g. ring → side walls per
+            # sector bracketing the gap whitespace, computed via the same
+            # `_sector_walls` helper but on cyclic t-space). Hand the coord
+            # the normalized sector spans so it can build its own walls.
             parts.append(coord_object.draw_x_sector_chrome(
                 coord_project, iw, ih,
-                [(lo / iw, hi / iw) for lo, hi in sector_pixel_ranges],
+                [(lo / iw, hi / iw) for lo, hi in spans],
                 [x / iw for x in label_xs],
                 list(sec.names),
                 {
@@ -375,12 +382,12 @@ def emit_chrome(*,
                     "label_fontcolor":   _FONTSPEC["color"],
                     "label_fontstyle":   x_style,
                     "label_decoration":  x_decor,
-                    "draw_dividers":     bool(sec.divider),
+                    "draw_dividers":     bool(sec.divider) and st["spine_walls"],
                     "draw_labels":       bool(sec.label) and not suppress_xt,
                 },
             ))
         else:
-            if sec.divider:
+            if sec.divider and st["spine_walls"]:
                 for x in divider_xs:
                     parts.append(segment(x, 0, x, ih,
                                          color=sec_col, width=sec_w, dash=sec_dash,
@@ -401,30 +408,27 @@ def emit_chrome(*,
                                              fontstyle=x_style, decoration=x_decor,
                                              tag="sector-label"))
     if y_sec is not None and (y_sec.divider or y_sec.label):
-        _yds = y_sec.divider_style or {}
-        sec_col = resolve_color(_yds.get("color", _SECTORSPEC["divider_color"]))
-        sec_w   = _yds.get("width", _SECTORSPEC["divider_width"])
-        sec_dash = _yds.get("dasharray", _SECTORSPEC["divider_dasharray"])
+        sec_col, sec_w = _side_stroke("walls")
+        sec_dash = _side_dash("walls")
         sec_pad  = _SECTORSPEC["label_pad"]
         sec = y_sec
         if sec.kind == "continuous":
-            if hasattr(y_scale, "gap_midpoint_px"):
-                divider_ys = [y_scale.gap_midpoint_px(i)
-                              for i in range(len(sec.names) - 1)]
+            if hasattr(y_scale, "sector_pixel_ranges"):
+                spans = y_scale.sector_pixel_ranges()
             else:
-                boundaries = sec.boundaries()
-                divider_ys = [y_scale(b) for b in boundaries[1:-1]]
-            label_ys   = [y_scale(sec.center(n)) for n in sec.names]
+                bs = sec.boundaries()
+                spans = [(y_scale(bs[i]), y_scale(bs[i + 1]))
+                         for i in range(len(sec.names))]
+            label_ys = [y_scale(sec.center(n)) for n in sec.names]
         else:
             bh = y_scale.bandwidth
             spans = []
             for members in sec.members:
                 ys = [y_scale(m) for m in members]
                 spans.append((min(ys) - bh / 2, max(ys) + bh / 2))
-            divider_ys = [(spans[i][1] + spans[i + 1][0]) / 2
-                          for i in range(len(spans) - 1)]
-            label_ys   = [(lo + hi) / 2 for lo, hi in spans]
-        if sec.divider:
+            label_ys = [(lo + hi) / 2 for lo, hi in spans]
+        divider_ys = _sector_walls(spans)
+        if sec.divider and st["spine_walls"]:
             for y in divider_ys:
                 parts.append(segment(0, y, iw, y,
                                      color=sec_col, width=sec_w, dash=sec_dash,

@@ -1,4 +1,6 @@
 """Circos-style demo — 7 chromosomes as sectors, 4 data tracks as rings."""
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
@@ -8,7 +10,6 @@ import plotlet.extensions.numeric_bar  # noqa
 CHROMS  = ["chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7"]
 LENGTHS = [249, 242, 198, 190, 181, 170, 159]  # Mb, real human values
 BIN_MB  = 5
-GAP_DEG = 8
 rng = np.random.default_rng(42)
 
 
@@ -45,9 +46,8 @@ c4 = pt.chart(df, xlim=XL, ylim=(0, 80), data_width=W, data_height=H)
 c4.line(x="pos", y="depth", group="chrom", color="#E0A030", width=1.5)
 
 circle_panel = (c1 / c2 / c3 / c4).coordinate(
-    pt.CircularCoordinate(r_inner=0.3, wrap_gap_deg=GAP_DEG)
-).sectors(pt.Sectors(names=CHROMS, lengths=LENGTHS, gap=GAP_DEG),
-          axis="x", column="chrom")
+    pt.CircularCoordinate(r_inner=0.3, wrap_gap_deg=5)
+).sectors(pt.Sectors(names=CHROMS, lengths=LENGTHS, gap=2), column="chrom")
 
 
 # ---- linear comparison ----
@@ -70,10 +70,9 @@ p4 = pt.chart(df, ylabel="depth", xlabel="position (Mb)",
 p4.line(x="pos", y="depth", group="chrom", color="#E0A030", width=1.5)
 
 linear_panel = pt.grid([[p1], [p2], [p3], [p4]]).share_x("col").sectors(
-    pt.Sectors(names=CHROMS, lengths=LENGTHS),
-    axis="x", column="chrom",
-)
+    pt.Sectors(names=CHROMS, lengths=LENGTHS, gap=0), column="chrom")
 
 
-(circle_panel | linear_panel).save_svg("cookbook/circle/output/combined.svg")
-print("wrote cookbook/circle/output/combined.svg")
+out = Path(__file__).parent / "output" / "combined.svg"
+(circle_panel | linear_panel).save_svg(str(out))
+print(f"wrote {out}")

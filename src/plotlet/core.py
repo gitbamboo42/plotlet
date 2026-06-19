@@ -385,15 +385,26 @@ def _replay(calls):
         "y_step": None, "y_count": None,
         "spine_top": _FRAME["spine_top"], "spine_right": _FRAME["spine_right"],
         "spine_bottom": _FRAME["spine_bottom"], "spine_left": _FRAME["spine_left"],
-        # Per-side color/width overrides; None = inherit spec.json frame defaults.
-        # Tick marks on a given side adopt the same side's spine color/width
-        # for visual consistency.
+        # Per-side color/width overrides; None = fall back to base (set via
+        # top-level color/width on c.spines()), then to spec.json frame
+        # defaults. Tick marks on a given side adopt the same side's spine
+        # color/width for visual consistency.
         "spine_top_color": None, "spine_right_color": None,
         "spine_bottom_color": None, "spine_left_color": None,
         "spine_top_width": None, "spine_right_width": None,
         "spine_bottom_width": None, "spine_left_width": None,
         "spine_top_linestyle": None, "spine_right_linestyle": None,
         "spine_bottom_linestyle": None, "spine_left_linestyle": None,
+        # Base style — set via top-level kwargs on c.spines(color=, width=,
+        # linestyle=). Sides and walls both inherit when their own override
+        # is None. None at base level falls through to _FRAME spec defaults.
+        "spine_base_color": None, "spine_base_width": None,
+        "spine_base_linestyle": None,
+        # Walls between sectors — by default inherit the base/spec spine
+        # style. c.spines(walls={...}) overrides; c.spines(walls=False) hides.
+        "spine_walls": True,
+        "spine_walls_color": None, "spine_walls_width": None,
+        "spine_walls_linestyle": None,
         "grid": _GRIDSPEC.get("default_on", False), "legend": False,
         # Inline-legend placement. Outside tokens: `"right"` (default),
         # `"left"`, `"top"`, `"bottom"` — reserve margin space beside the
@@ -480,19 +491,22 @@ def _replay(calls):
         elif name == "x_expand": st["x_expand"] = _normalize_expand(args)
         elif name == "y_expand": st["y_expand"] = _normalize_expand(args)
         elif name == "spines":
-            # Per-side value: bool toggles visibility only; dict accepts
-            # {"color": ..., "width": ..., "visible": ...} and implies
-            # visible=True unless visible is set explicitly.
-            for side in ("top", "right", "bottom", "left"):
-                if side not in kw: continue
-                v = kw[side]
+            # Top-level color/width/linestyle = base style, inherited by
+            # any side and by walls unless overridden. Per-target value
+            # (top=, walls=, etc.) is a bool (toggles visibility) or a
+            # dict ({color, width, linestyle, visible}, visible defaults
+            # True). "walls" is the inter-sector wall target.
+            for k in ("color", "width", "linestyle"):
+                if k in kw: st[f"spine_base_{k}"] = kw[k]
+            for target in ("top", "right", "bottom", "left", "walls"):
+                if target not in kw: continue
+                v = kw[target]
                 if isinstance(v, dict):
-                    st[f"spine_{side}"] = bool(v.get("visible", True))
-                    if "color" in v: st[f"spine_{side}_color"] = v["color"]
-                    if "width" in v: st[f"spine_{side}_width"] = v["width"]
-                    if "linestyle" in v: st[f"spine_{side}_linestyle"] = v["linestyle"]
+                    st[f"spine_{target}"] = bool(v.get("visible", True))
+                    for attr in ("color", "width", "linestyle"):
+                        if attr in v: st[f"spine_{target}_{attr}"] = v[attr]
                 else:
-                    st[f"spine_{side}"] = bool(v)
+                    st[f"spine_{target}"] = bool(v)
         elif name == "grid":   st["grid"] = (args[0] if args else True)
         elif name == "legend":
             st["legend"] = (args[0] if args else True)
@@ -502,19 +516,18 @@ def _replay(calls):
         elif name == "facecolor": st["facecolor"] = args[0] if args else None
         elif name == "coordinate": st["coordinate"] = args[0]
         elif name == "sectors":
-            from .sectors import Sectors, _parse_divider
+            from .sectors import Sectors
             col     = kw.get("column")
             axis    = kw.get("axis", "x")
             label   = kw.get("label",   True)
             gap     = kw.get("gap")
-            divider_on, divider_style = _parse_divider(kw.get("divider", True))
+            divider = bool(kw.get("divider", True))
             if axis not in ("x", "y"):
                 raise ValueError(
                     f"c.sectors(axis=): expected 'x' or 'y'; got {axis!r}"
                 )
             sec = Sectors.coerce(args[0], name_col=col,
-                                 divider=divider_on, label=label, gap=gap,
-                                 divider_style=divider_style)
+                                 divider=divider, label=label, gap=gap)
             # Continuous sectors need a column= tag on the data so the
             # record-time remap can route each row to its sector.
             if sec.kind == "continuous" and col is None:

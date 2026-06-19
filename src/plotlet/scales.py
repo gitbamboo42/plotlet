@@ -145,13 +145,6 @@ class _SectoredLinearScale:
     def ticks(self, n=8):
         return _nice_ticks(self.d0, self.d1, n)
 
-    def gap_midpoint_px(self, i):
-        """Pixel position halfway between sector ``i`` and sector ``i+1``.
-        Used by the chrome renderer to place divider lines."""
-        right_of_i = self._sector_lefts_px[i] + self._sector_widths_px[i]
-        left_of_next = self._sector_lefts_px[i + 1]
-        return (right_of_i + left_of_next) / 2
-
     def sector_pixel_ranges(self):
         """``[(lo_px, hi_px), ...]`` per sector. Used by spine rendering
         to render top/bottom as per-sector segments and left/right as
