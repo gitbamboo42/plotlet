@@ -226,8 +226,7 @@ def emit_chrome(*,
     # Spines — left side handed to the coordinate when draw_frame is present.
     # `_spine_segments` breaks each side into per-sector pieces when a
     # sectored scale is active, so each sector reads as its own bounded
-    # subplot. Plain linear / categorical paths yield one full-side
-    # segment and stay byte-identical to the pre-sector behavior.
+    # subplot. Plain linear / categorical paths yield one full-side segment.
     _x_ranges = (x_scale.sector_pixel_ranges()
                  if hasattr(x_scale, "sector_pixel_ranges") else None)
     _y_ranges = (y_scale.sector_pixel_ranges()

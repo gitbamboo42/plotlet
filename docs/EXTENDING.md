@@ -209,7 +209,7 @@ everything else.
 | `leaf_position(scale, labels, disp)` | Float leaf-position → pixel; gap-aware on split scales. |
 | `block_apex_centers(scale, labels, offsets, blocks)` | x-center of each block's topmost merge bar — where parent leaves should land. |
 | `parent_leaf_px(midpoints, x)` | Interpolate between block midpoints for fractional parent-tree x values. |
-| `tree_frame_defaults(kw)` | Standard `frame_defaults` boilerplate for tree artists: spines off, hide height-axis ticks, root-side expand. (Block gap whitespace is no longer pushed from here — declare `c.sectors(...)` on the panel for that.) |
+| `tree_frame_defaults(kw)` | Standard `frame_defaults` boilerplate for tree artists: spines off, hide height-axis ticks, root-side expand. (For block gap whitespace, declare `c.sectors(...)` on the panel.) |
 
 A new tree variant is then ~3 callbacks (record / draw / axis_order),
 each a thin wrapper around these helpers — the clustering and layout

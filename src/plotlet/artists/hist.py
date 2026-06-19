@@ -74,8 +74,6 @@ def _artist_hist(a, xs_, ys_, col, bins, warp=None):
     edge_w = lw if stroke else _D["linewidth"]
     fill = col if histtype == "stepfilled" else None
     if warp is None:
-        # Preserve the legacy `M..L.. Z` (with space) emission so Cartesian
-        # baselines stay byte-identical.
         d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts)
         out.append(draw_path(d + " Z", fill=fill,
                              stroke=edge, stroke_width=edge_w,

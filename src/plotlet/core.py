@@ -220,8 +220,7 @@ def _record_ticks(st, axis, args, kw):
 
 # Conversion factors to pixels, CSS standard: 1 in = 96 px, 1 in = 2.54 cm,
 # 1 in = 72 pt. Internal layout math is always pixels — string units are
-# parsed once at the constructor boundary and stored as ints, so SVG output
-# stays byte-identical regardless of input form.
+# parsed once at the constructor boundary and stored as ints.
 _UNIT_PX = {
     "px": 1.0,
     "in": 96.0,
@@ -410,8 +409,7 @@ def _replay(calls):
         # `"left"`, `"top"`, `"bottom"` — reserve margin space beside the
         # data area. Inside tokens: `"top-right"`, `"top-left"`,
         # `"bottom-right"`, `"bottom-left"`, `"center"` — overlay the data
-        # area. `"inside"` is a back-compat alias for `"top-right"`.
-        # Modeled on vega-lite's `legend.orient`.
+        # area.
         "legend_position": "right",
         # Data-area clipping on by default — artists past xlim/ylim get
         # cropped at the data boundary. Set False (`c.clip(False)`) to
@@ -425,7 +423,7 @@ def _replay(calls):
         # categorical sectors drive the underlying category scale's
         # cat order, split positions, and inter-block gap. ``chrome``
         # toggles dividers + center labels (off for heatmap-derived
-        # sectors so existing baselines stay byte-identical).
+        # sectors — clustering uses sectors purely as a layout primitive).
         "x_sectors": None,        # Sectors value
         "x_sector_column": None,  # column name on artist data for continuous
         "y_sectors": None,
@@ -1191,9 +1189,10 @@ def _inline_legend_layout(st):
     `spec.legend_entries`), `cont` (list of `(artist, descriptor)` pairs
     from `spec.legend_gradient`), block width/height (`lw`, `lh`), a
     `horizontal` flag (entries arranged left-to-right vs. stacked), and
-    the resolved `position` (auto-flipped from "inside" → "right" when
-    a continuous mapping is in play, since an inside colorbar inside the
-    data area is incoherent). Returns `None` if there's nothing to draw.
+    the resolved `position` (auto-flipped from inside-corner tokens →
+    "right" when a continuous mapping is in play, since an inside
+    colorbar inside the data area is incoherent). Returns `None` if
+    there's nothing to draw.
 
     Continuous + horizontal-position combos raise — a horizontal gradient
     strip is its own render variant we haven't built; users on those
@@ -1629,12 +1628,10 @@ def _required_margin(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
 
     # Outside-legend reservation is *additive* with the label band so the
     # legend block sits beyond the title/labels rather than overlapping
-    # them. "inside" paints over the data area and reserves nothing
-    # extra. The effective position comes from `_inline_legend_layout`,
-    # which auto-flips "inside" → "right" for charts with a continuous
-    # mapping (an inside colorbar makes no sense).
+    # them. Inside-corner positions paint over the data area and reserve
+    # nothing extra.
     leg = _inline_legend_layout(st)
-    if leg is not None and leg["position"] != "inside":
+    if leg is not None and leg["position"] not in _INSIDE_POSITIONS:
         lw, lh = leg["lw"], leg["lh"]
         pos = leg["position"]
         gap = _LAYOUTSPEC["legend_gap"]
@@ -1994,13 +1991,13 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     # offset depends on it. For other positions / inside / no legend, the
     # title stays at `_PADSPEC["title"]`.
     leg = _inline_legend_layout(st)
-    legend_pos = leg["position"] if leg is not None else "inside"
+    legend_pos = leg["position"] if leg is not None else None
     legend_gap = _LAYOUTSPEC["legend_gap"]
     # `inner_gap_top` is the data-side gap below the top-position legend
     # — at least `legend_gap`, but expands to clear outward top tick marks
     # when `xticks(top=True)`. None when no top legend is in play.
     inner_gap_top = None
-    if leg is not None and legend_pos == "top":
+    if legend_pos == "top":
         out_x_for_legend = (_FRAME["tick_length"]
                             if (st["x_marks"] and x_ticks and st["x_direction"] != "in")
                             else 0)
@@ -2020,8 +2017,8 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     _has_clip_d          = _coord_object is not None and hasattr(_coord_object, "clip_path_d")
     _has_x_sector_chrome = _coord_object is not None and hasattr(_coord_object, "draw_x_sector_chrome")
     # Non-affine coords project per-point through `ctx.warp` — there's no
-    # legacy SVG post-pass fallback, so every artist in the panel must opt
-    # into the coord-native contract via `ArtistSpec.coord_native=True`.
+    # SVG post-pass fallback, so every artist in the panel must opt into
+    # the coord-native contract via `ArtistSpec.coord_native=True`.
     _requires_native = _coord_object is not None and not _has_svg_transform
 
     # A coordinate that owns the x-axis (draw_x_frame) needs a matching
@@ -2211,9 +2208,9 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     # See "Margin pipeline" comment block above `_required_margin`.
     # `inflation` = text overhang + outside-legend reservation; subtracting
     # it from `M[side]` snaps ylabel / xlabel to the axis-band outer edge
-    # rather than floating in the inflated margin. Collapses to the old
+    # rather than floating in the inflated margin. Collapses to the
     # canvas-edge anchored formula when inflation is 0 (no overhang, no
-    # outside legend), keeping baselines byte-identical for that case.
+    # outside legend).
     m_req = _required_margin(st, iw, ih, panel_opts)
     left_inflation   = max(0, m_req["left"]   - int(round(label_bands["left"])))
     bottom_inflation = max(0, m_req["bottom"] - int(round(label_bands["bottom"])))
@@ -2251,8 +2248,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     # gradient descriptors from legend_gradient(a). Multi-entry artists
     # (sankey, mosaic, ...) contribute one row per category; continuous
     # artists (imshow, hexbin, ...) contribute a vertical gradient strip
-    # with ticks (this replaces the previous `c | pt.legend(c)` two-line
-    # workaround for an inline colorbar).
+    # with ticks (inline colorbar).
     if leg is not None:
         lw = leg["lw"]
         lh = leg["lh"]

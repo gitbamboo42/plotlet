@@ -368,11 +368,10 @@ def build_tree(args, kw, split):
 
     `had_labels` tracks whether `labels=` was explicitly supplied. Tree
     renderers use it to decide between a categorical leaf axis (labels
-    drive the scale) and a numeric one (legacy unlabeled fallback) —
-    `cluster()` / `cluster_split()` fabricate `str(i)` defaults when
-    labels are omitted, so the returned `SplitTree.blocks` always carries
-    labels, but the artist still wants to render the unlabeled case
-    differently.
+    drive the scale) and a numeric one (unlabeled case) — `cluster()` /
+    `cluster_split()` fabricate `str(i)` defaults when labels are
+    omitted, so the returned `SplitTree.blocks` always carries labels,
+    but the artist still wants to render the unlabeled case differently.
 
     Pops every kwarg it consumes. Caller passes `kw` (a mutable dict)
     so the leftover entries belong to the artist's `opts`.
@@ -428,10 +427,10 @@ def tree_frame_defaults(kw, *,
     the leaf-axis ticks when there are no labels, and a small root-side
     data expand so the topmost merge doesn't clip against the inner clip.
 
-    Block gap whitespace and the scale's `splits` are no longer pushed
-    here — declare `c.sectors({cluster: [members]}, axis=...)` on the
-    panel for those, and any peer category-scale artist (dendrogram,
-    heatmap, annotation_strip) inherits the gaps via the shared scale.
+    Block gap whitespace and the scale's `splits` are owned by
+    `c.sectors({cluster: [members]}, axis=...)` on the panel — any peer
+    category-scale artist (dendrogram, heatmap, annotation_strip)
+    inherits the gaps via the shared scale.
     """
     orient = kw.get("orient", "top")
     leaf_on_x = orient in ("top", "bottom")

@@ -937,7 +937,7 @@ def _render_layout_rect(root: Chart, outer=None) -> str:
 
     # Figure-level breathing room. Only the public root render passes a
     # non-None `outer`; embedded layouts (e.g. attachment routing through
-    # this function) pass `None` and stay byte-identical.
+    # this function) pass `None`.
     ol = outer["left"] if outer else 0
     ot = outer["top"]  if outer else 0
     or_ = outer["right"]  if outer else 0

@@ -158,12 +158,12 @@ class _Renderable:
         return svg
 
     def _repr_html_(self) -> str:
-        # Overlay responsive CSS for notebook display only — `to_svg()` stays
-        # byte-identical for file output. `max-width:100%` lets the figure
-        # shrink with a narrow cell; the existing `width` attribute caps it
-        # at natural size; `height:auto` preserves aspect via the viewBox.
-        # Merged into the existing `style="background:..."` to avoid a
-        # duplicate attribute (browsers would drop one).
+        # Overlay responsive CSS for notebook display only — the file
+        # output from `to_svg()` is not touched. `max-width:100%` lets the
+        # figure shrink with a narrow cell; the existing `width` attribute
+        # caps it at natural size; `height:auto` preserves aspect via the
+        # viewBox. Merged into the existing `style="background:..."` to
+        # avoid a duplicate attribute (browsers would drop one).
         return self.to_svg().replace(
             'style="background:',
             'style="max-width:100%;height:auto;background:',
@@ -283,26 +283,6 @@ class Chart(_Renderable):
                  linestyle: str | None = None,
                  palette=None,
                  **kwargs):
-        # Migration errors — surface the rename loudly rather than silently
-        # accepting and producing a different-sized figure.
-        if "width" in kwargs or "height" in kwargs:
-            raise TypeError(
-                "pt.chart() no longer accepts `width=` / `height=` (changed in 0.2.0). "
-                "Pass `data_width=` / `data_height=` for the data region."
-            )
-        if "canvas_width" in kwargs or "canvas_height" in kwargs:
-            raise TypeError(
-                "pt.chart() no longer accepts `canvas_width=` / `canvas_height=` "
-                "(removed in 0.4.0). Use `data_width=` / `data_height=` to size the "
-                "data region; if you need the rendered SVG to fit a specific canvas, "
-                "chain `.fit(canvas_width=…, canvas_height=…)` after composition."
-            )
-        if "share_x" in kwargs or "share_y" in kwargs:
-            raise TypeError(
-                "pt.chart() no longer accepts `share_x=` / `share_y=` "
-                "(moved to compose-time). Chain `.share_x()` on the parent "
-                "layout: `pt.grid([[a, b]]).share_x()` or `(a | b).share_x()`."
-            )
         if kwargs:
             raise TypeError(f"Chart() got unexpected keyword arguments: {list(kwargs)!r}")
 
@@ -471,13 +451,6 @@ class Chart(_Renderable):
         For a separate, layout-level legend leaf (the kind that lives in
         its own panel and harvests entries from sibling charts), use
         `pt.legend(...)` or `parent.legend(...)` on a `Layout`."""
-        if "width" in kwargs or "height" in kwargs:
-            raise TypeError(
-                "Chart.legend() no longer accepts `width=` / `height=` "
-                "(changed in 0.2.0). Use `canvas_width=` / `canvas_height=` "
-                "on `pt.legend(...)` instead — those are layout-legend "
-                "options, not in-frame ones."
-            )
         if kwargs:
             raise TypeError(
                 f"Chart.legend() got unexpected keyword arguments: {list(kwargs)!r}"
@@ -699,8 +672,7 @@ class Chart(_Renderable):
         """Render path that skips the root check — used by parents
         embedding this chart (insets, layout panels). `outer` is the
         figure-level breathing-room margin; only the public `to_svg()`
-        passes it. Embedded callers (insets) leave it None for a
-        byte-identical embedded render."""
+        passes it. Embedded callers (insets) leave it None."""
         if self._leaf_kind == "legend":
             from .legend import _render_standalone_legend
             return _render_standalone_legend(self)
@@ -1059,39 +1031,6 @@ def grid(cells: list[list], **kwargs) -> "Layout":
     control. For axis sharing, chain `.share_x("col"/"row"/"all")` /
     `.share_y(...)`.
     """
-    # Migration error — `widths=` / `heights=` were canvas-ratio overrides
-    # in 0.1.x. With body-size-first composition there's no longer a
-    # well-defined "redistribute the canvas" operation: leaves carry data,
-    # parents derive canvas. Set per-leaf `data_width=` to control sizing.
-    if "widths" in kwargs or "heights" in kwargs:
-        raise TypeError(
-            "pt.grid() no longer accepts `widths=` / `heights=` (changed "
-            "in 0.2.0). To make a column 2× wider than another, set "
-            "`data_width=` on each leaf — e.g. "
-            "`pt.chart(data_width=200) | pt.chart(data_width=100)`. The grid "
-            "sums each cell's natural canvas; per-leaf data sizes give you "
-            "all the control ratios used to."
-        )
-    # Migration error — `share_x=` / `share_y=` were constructor kwargs
-    # that duplicated the post-construction methods. Methods scale better
-    # to new options (e.g. `share_x("col", hide_labels=False)`).
-    if "share_x" in kwargs or "share_y" in kwargs:
-        raise TypeError(
-            "pt.grid() no longer accepts `share_x=` / `share_y=` kwargs. "
-            "Call the methods after construction instead: "
-            "`pt.grid([[...]]).share_x('col').share_y('row')`. This keeps "
-            "one configuration path across grid- and `|`/`/`-built layouts "
-            "and leaves room for options like `hide_labels=`."
-        )
-    # Migration error — `gap=` was a constructor shortcut redundant with
-    # `.gap(N)`. Dropped so `pt.grid` matches `|` / `/` (no behavior
-    # kwargs on the constructor). Per-axis: `.gap(x=4, y=8)`.
-    if "gap" in kwargs:
-        raise TypeError(
-            "pt.grid() no longer accepts `gap=` (use `.gap(N)` after "
-            "construction): `pt.grid([[...]]).gap(8)`. For per-axis "
-            "control use `.gap(x=4, y=8)`."
-        )
     if kwargs:
         raise TypeError(f"pt.grid() got unexpected keyword arguments: {list(kwargs)!r}")
     if not cells or not isinstance(cells, list):

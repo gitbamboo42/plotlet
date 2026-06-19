@@ -82,10 +82,10 @@ def _dendrogram_record(args, kw):
             blocks, layout_parent(tree), parent_frac,
             gap_frac=_D["tree_parent_gap"],
         )
-    # No user-supplied labels = numeric leaf axis (legacy fallback);
-    # `cluster` / `cluster_split` fabricate string indices in this case,
-    # but the renderer keeps the unlabeled path active so `_leaf_axis_pos`
-    # uses scale.idx instead of cat lookup.
+    # No user-supplied labels = numeric leaf axis. `cluster` /
+    # `cluster_split` fabricate string indices in this case, but the
+    # renderer keeps the unlabeled path active so `_leaf_axis_pos` uses
+    # scale.idx instead of cat lookup.
     leaf_labels = final_labels if had_labels else None
     all_dc = [v for _, dc, _ in blocks for row in dc for v in row]
     if parent_block is not None:

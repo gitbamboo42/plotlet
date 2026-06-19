@@ -79,8 +79,7 @@ def _png_for_blocks(ctx, cols, rows, bw, bh, rgb_at):
     display order even when a peer artist (dendrogram) drove the cats
     order. `_splits.block_bboxes_2d` yields a single full-range block
     when no splits are set, so this is also the no-split fallback — one
-    PNG covering all cells, byte-identical to a hand-rolled single-
-    image path.
+    PNG covering all cells.
     """
     out = []
     for r0, r1, c0, c1, sy_t, sy_b, sx_l, sx_r in _splits.block_bboxes_2d(
@@ -311,7 +310,7 @@ def _heatmap_draw(a, ctx):
     else:
         # Category-scale PNG fallback. `_png_for_blocks` covers the
         # no-split case as a single full-range block — one image flush
-        # across all cells, byte-identical to the hand-rolled path.
+        # across all cells.
         def rgb_at(r, c):
             v = matrix[r][c]
             if v is None or v != v:

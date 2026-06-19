@@ -77,12 +77,8 @@ def layout_diagram(chart: Chart) -> Chart:
     overlay layer.
 
     Caveat: the diagram is a *snapshot* of `chart`'s layout at call time.
-    For body-first leaves (the 0.2.0+ default) and the no-margin diagram
-    sibling produced here, composition preserves `chart`'s layout, so
-    the snapshot stays accurate. Canvas-first legacy leaves under
-    explicit width-constrained parents can rescale during composition;
-    in that rare case the diagram may slightly drift from how `chart`
-    ends up rendered."""
+    Composition preserves the body-first leaf's layout, so the snapshot
+    stays accurate."""
     # Use the inner (no-outer-margin) render so the diagram leaf's
     # natural size matches what `chart` will be in a sibling layout —
     # `to_svg()` would include the figure-level outer_margin that only

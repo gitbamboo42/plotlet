@@ -65,12 +65,6 @@ def legend(*sources: Chart, names: dict | None = None,
     separation between this legend and its source neighbor (falls back
     to `spec.json:layout.legend_gap` when unset).
     """
-    if "width" in kwargs or "height" in kwargs:
-        raise TypeError(
-            "pt.legend() no longer accepts `width=` / `height=` (changed in 0.2.0). "
-            "Use `canvas_width=` / `canvas_height=` instead — legend leaves "
-            "have no data axes, so the canvas is the only meaningful dimension."
-        )
     if kwargs:
         raise TypeError(f"pt.legend() got unexpected keyword arguments: {list(kwargs)!r}")
     if valign not in ("top", "middle"):
@@ -172,8 +166,8 @@ def _partition_by_group(entries, key):
     (all color entries together, all size entries together, etc.)
     regardless of which artist record contributed them.
 
-    None-keyed entries (the legacy un-grouped path) stay first in their
-    relative order. Named groups follow, ordered by first-appearance."""
+    None-keyed entries (un-grouped) stay first in their relative order.
+    Named groups follow, ordered by first-appearance."""
     none_items: list = []
     named: dict = {}
     order: list = []
@@ -319,8 +313,7 @@ def _inline_gradient_block_size(cont_entries: list[dict]) -> tuple[float, float]
     own positioning relative to the data edge).
 
     Returns plain `0, 0` (int) for an empty input so callers that add
-    to an integer `lh` don't get float promotion — keeps byte-identical
-    discrete-only legend output."""
+    to an integer `lh` stay int (no float promotion)."""
     if not cont_entries:
         return 0, 0
     tick_size = _FONTSPEC["tick_size"]

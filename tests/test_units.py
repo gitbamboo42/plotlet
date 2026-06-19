@@ -136,10 +136,8 @@ def main() -> int:
     _check("mixed str/int data_width",  f_mix._data_width,  384, failures)
     _check("mixed str/int data_height", f_mix._data_height, 300, failures)
 
-    # `pt.chart(canvas_width=…)` no longer exists (removed in 0.4.0 —
-    # use `data_width=` to size the data region, or `.fit(canvas_width=…)`
-    # on a composed chart to scale the data region until the figure fits
-    # the target canvas).
+    # `pt.chart(canvas_width=…)` is not a valid kwarg — use `data_width=`
+    # for the data region, or `.fit(canvas_width=…)` on a composed chart.
     _check_raises("canvas_width on pt.chart raises",
                   lambda: pt.chart(canvas_width="6in"), TypeError, failures)
     _check_raises("canvas_height on pt.chart raises",

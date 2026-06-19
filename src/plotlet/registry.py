@@ -62,57 +62,29 @@ class ArtistSpec:
     layer: str = "data"  # "background" | "data" | "foreground"
     uses_color_cycle: bool = True
     default_color: str | None = None  # used when uses_color_cycle is False
-    # Each entry: {
-    #   "label":  str           — text shown beside the swatch
-    #   "color":  str           — fill color for the default rect swatch
-    #   "alpha"?: float         — fill-opacity for the default swatch
-    #                             (ignored when `paint` is set; the paint
-    #                             function controls its own opacity)
-    #   "group"?: str           — sub-group key. Entries sharing a group
-    #                             cluster together with a small header
-    #                             above them; entries without `group`
-    #                             render flat. Used by multi-aesthetic
-    #                             artists (e.g. scatter with color +
-    #                             size) to stack one guide per aesthetic.
-    #   "paint"?: callable      — custom swatch renderer (signature below)
-    #   "_a"?:    dict          — auto-attached by the harvester
-    # }
-    # `paint(a, ctx, x0, y_mid) -> str` is optional; default is a colored
-    # rect swatch using entry["color"] (with entry["alpha"] if set).
-    # `_a` is auto-attached by the harvester so paint functions have the
-    # original recorded artist for context (linewidth, alpha, marker
-    # kind, etc.).
-    # When True (default), `c.<artist>(df, x="col", y="col")` is sugar for
-    # `c.<artist>(data=df, x="col", y="col")` — dispatch hoists the single
-    # positional arg into `data=` before calling `record`. Long-form is
-    # plotlet's standard, so the sugar is on by default.
-    #
-    # Set False on positional-only artists that take exactly one positional
-    # arg (matrix or single primary input). Without the opt-out, that
-    # single arg gets hoisted into `kw["data"]` and the record's `args[0]`
-    # raises IndexError. Multi-positional artists (rect, polygon, hlines,
-    # ...) are unaffected — the sugar only triggers when `len(args) == 1`.
+    # Sugar for `c.<artist>(df, x="col", y="col")` → `c.<artist>(data=df, ...)`.
+    # Disable on positional-only artists (matrix or single primary input) so
+    # the lone positional arg isn't hoisted into `kw["data"]`.
     accepts_data_positional: bool = True
+    # Returns a list of legend-entry dicts:
+    #   {"label": str, "color": str, "alpha"?: float, "group"?: str,
+    #    "paint"?: callable, "_a"?: dict}
+    # `group` clusters entries under one header (multi-aesthetic guides).
+    # `paint(a, ctx, x0, y_mid) -> str` overrides the default rect swatch;
+    # `_a` is auto-attached so paint functions can read the recorded artist.
     legend_entries: Callable[[dict], list[dict]] | None = None
     legend_gradient: Callable[[dict], dict | None] | None = None
     data_attrs: Callable[[dict], dict | None] | None = None
     flips_y_axis: Callable[[dict], bool] | None = None
     tight_domain: bool = False
-    # Coordinate-native artists project every geometry point through
-    # `ctx.warp` (a Cartesian-pixel → coord-pixel closure handed to
-    # `draw.*` helpers via `project=`) so edges subdivide accurately under
-    # non-affine coords. Required for any artist used under a non-affine
-    # coord — the renderer raises if `coord_native=False` artists appear
-    # under e.g. `CircularCoordinate`.
+    # Required for any artist drawn under a non-affine coord. Coord-native
+    # artists project every geometry point through `ctx.warp` (Cartesian-pixel
+    # → coord-pixel closure passed to `draw.*` helpers via `project=`).
     coord_native: bool = False
-    # Anchor an axis to zero: when the artist contributes to autoscaling and
-    # data lo > 0, push lo down to 0 so the visual sits on the baseline. Also
-    # suppresses the default `expand` on that side so bars don't float below
-    # zero. Built-in `bar` and `hist` set `force_zero_y=True`; recipes that
-    # implement bar-like artists (numeric_bar, horizontal_bar, ...) opt in.
-    # Either field may also be a callable `(artist_dict) -> bool` so an
-    # artist can decide per-instance based on its opts (e.g., a bar with
-    # `orientation='h'` forces zero on x, not y).
+    # When the artist contributes to autoscaling and data lo > 0, push lo to
+    # 0 so the visual sits on the baseline; also suppresses the default
+    # `expand` on that side. May be a `(artist_dict) -> bool` callable so e.g.
+    # a horizontal bar can force zero on x instead of y.
     force_zero_x: bool | Callable[[dict], bool] = False
     force_zero_y: bool | Callable[[dict], bool] = False
     axis_order: Callable[[dict], dict | None] | None = None
@@ -129,16 +101,13 @@ class RenderContext:
     color: str | None
     defaults: dict
     dash: dict
-    # Set by the panel-level c.coordinate(...) when a non-affine coordinate is
-    # active. Maps (t, r) -> (px, py) in canvas-pixel space. Coordinate-aware
-    # artists call ctx.project(t, r) instead of ctx.x_scale / ctx.y_scale.
+    # Set by c.coordinate(...) for non-affine coords. None for Cartesian and
+    # for affine coords (handled by svg_transform).
+    #   project(t, r)    -> (px, py)  data-space → canvas-pixel
+    #   warp(x_px, y_px) -> (px, py)  pre-warp Cartesian pixel → canvas-pixel
+    # `coord_native` artists pass `warp` to `draw.*` helpers via `project=`
+    # so segments subdivide, polygons curve, and markers land correctly.
     project: Any = None
-    # Pixel-space convenience: (x_px, y_px) -> (px, py) in projected canvas
-    # space, where the input is the Cartesian pixel an artist would have
-    # emitted with no coord active. `coord_native` artists pass this to
-    # `draw.*` helpers so segments subdivide, polygons curve, and markers
-    # land in the right place under non-affine coords. None when no coord
-    # is active or when the coord is affine (handled by svg_transform).
     warp: Any = None
 
 
