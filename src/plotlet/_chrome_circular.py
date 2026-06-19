@@ -186,16 +186,29 @@ def draw_x_sector_chrome(cx, cy, R, ri, wrap_gap_rad,
                                      tag="sector-divider"))
 
     if draw_lbl:
-        # Same tangential anchoring as `draw_x_chrome` tick labels — labels
-        # sit a font-cap above the outer ring and rotate with the tangent.
-        off = tp + cap_height(font_size) / 2
+        # Labels sit a font-cap above the outer ring, rotated tangent to the
+        # ring (parallel to the sector's arc). Bottom-half labels are flipped
+        # 180° so they read upright rather than upside down. For natural
+        # (un-flipped) labels the baseline is the inner edge of the text;
+        # for flipped labels the cap top is the inner edge — so flipped
+        # labels need an extra cap-height of outward offset to keep the
+        # visible gap to the ring symmetric.
+        cap = cap_height(font_size)
+        off_natural = tp + cap / 2
+        off_flipped = tp + cap / 2 + cap
         for name, t in zip(names, label_ts):
             ang = t_to_angle(t, wrap_gap_rad)
+            # Tangent (CW around ring) — text tops point outward on the top
+            # half; antiflip clamp keeps bottom-half labels upright (their
+            # tops then point inward, but reading direction stays natural).
+            rot = math.degrees(ang) - 90.0
+            rot = ((rot + 180.0) % 360.0) - 180.0
+            flipped = rot > 90.0 or rot < -90.0
+            if rot > 90.0:  rot -= 180.0
+            if rot < -90.0: rot += 180.0
+            off = off_flipped if flipped else off_natural
             ux, uy = math.cos(ang), -math.sin(ang)
             lx, ly = cx + (R + off) * ux, cy + (R + off) * uy
-            rot = math.degrees(math.atan2(uy, ux)) + 90.0
-            if rot > 90:  rot -= 180
-            if rot < -90: rot += 180
             parts.append(text_path(str(name), lx, ly,
                                    font_size, anchor="middle", color=font_col,
                                    fontstyle=font_st, decoration=font_dc,

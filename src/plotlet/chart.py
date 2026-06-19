@@ -818,9 +818,14 @@ class Layout(_Renderable):
         layout — sugar so a stacked-track figure only declares the
         sector partition once.
 
-        Each leaf records its own ``sectors`` call; the partition is
-        per-panel under the hood, so a leaf can later override by adding
-        its own ``c.sectors(...)`` after layout construction.
+        Inserted at the *front* of each leaf's call list: sectors must be
+        replayed before any artist call so ``_sector_remap_data`` sees
+        ``st["x_sectors"]`` when each row's data gets offset into global
+        coords. Otherwise leaves constructed with artist calls before the
+        Layout.sectors propagation would render every chromosome's data
+        overlapping in the first sector slot. A leaf-level
+        ``c.sectors(...)`` recorded after layout construction still wins
+        — it's replayed last and overwrites the propagated value.
         """
         kw = {"axis": axis, "divider": divider, "label": label}
         if column is not None:
@@ -828,7 +833,7 @@ class Layout(_Renderable):
         if gap is not None:
             kw["gap"] = gap
         for leaf in self._iter_leaves():
-            leaf._calls.append(("sectors", [spec], kw))
+            leaf._calls.insert(0, ("sectors", [spec], kw))
         return self
 
     def coordinate(self, coord) -> "Layout":
