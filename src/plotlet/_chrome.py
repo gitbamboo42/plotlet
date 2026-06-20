@@ -17,10 +17,66 @@ import math
 
 from ._spec import SPEC, _FRAME, _FONTSPEC
 from .draw import (resolve_color, text_path, segment,
-                   measure_text, cap_height, descender)
+                   measure_text, cap_height, descender, tick_band_height,
+                   rotated_label_bbox)
 from . import _regions
 
 _SECTORSPEC = SPEC["sectors"]
+
+
+def chrome_stack_extents(st, *,
+                          x_ticks, x_labels, x_size, x_rot, suppress_xt,
+                          y_ticks, y_labels, y_size, y_rot, suppress_yt,
+                          hide_t, hide_b, hide_l, hide_r):
+    """Inside-out walks through the chrome stack on each side of the
+    data area. Returns ``{"top", "bottom", "left", "right"}`` — pixels
+    of chrome past the data edge on that side, up to BUT NOT INCLUDING
+    the outermost frame label (title / xlabel / ylabel).
+
+    Stack on each side (inside → outside):
+
+    - ``top``    : top tick marks  (title positions independently above)
+    - ``bottom`` : marks → tick band → sector band
+    - ``left``   : marks → tick band → sector band
+    - ``right``  : right tick marks
+
+    One formula, used by both ``_required_margin`` (to reserve the band)
+    and ``_render_inner`` (to position the outermost label past it).
+    Keeps the two in lockstep without a DRY violation.
+    """
+    out_x = (_FRAME["tick_length"]
+             if (st["x_marks"] and x_ticks and st["x_direction"] != "in")
+             else 0)
+    out_y = (_FRAME["tick_length"]
+             if (st["y_marks"] and y_ticks and st["y_direction"] != "in")
+             else 0)
+
+    bottom = out_x if not hide_b else 0
+    has_xtl = (not suppress_xt) and any(str(l) for l in x_labels)
+    if has_xtl:
+        bottom += _FRAME["tick_pad"] + tick_band_height(x_labels, x_size, x_rot)
+    x_sec = st["x_sectors"]
+    if x_sec is not None and x_sec.label and not hide_b:
+        top_gap = _SECTORSPEC["label_pad"] if has_xtl else _FRAME["tick_pad"]
+        bottom += top_gap + cap_height(x_size) + descender(x_size)
+
+    left = out_y if not hide_l else 0
+    has_ytl = (not suppress_yt) and any(str(l) for l in y_labels)
+    if has_ytl:
+        max_ytl_w = max((measure_text(str(l), y_size) for l in y_labels),
+                        default=0.0)
+        ytl_bbox_w, _ = rotated_label_bbox(max_ytl_w, y_size, y_rot)
+        left += _FRAME["tick_pad"] + ytl_bbox_w
+    y_sec = st["y_sectors"]
+    if y_sec is not None and y_sec.label and not hide_l:
+        sec_lbl_w = max((measure_text(str(n), y_size) for n in y_sec.names),
+                        default=0.0)
+        top_gap = _SECTORSPEC["label_pad"] if has_ytl else _FRAME["tick_pad"]
+        left += top_gap + sec_lbl_w
+
+    top = out_x if (st["x_top"] and not hide_t) else 0
+    right = out_y if (st["y_right"] and not hide_r) else 0
+    return {"top": top, "bottom": bottom, "left": left, "right": right}
 
 
 # ---------------------------------------------------------------------------
@@ -399,15 +455,20 @@ def emit_chrome(*,
                                          color=sec_col, width=sec_w, dash=sec_dash,
                                          tag="sector-divider"))
             if sec.label and not suppress_xt and not hide_b:
-                # Continuous: ticks are suppressed, label sits at the
-                # standard tick-label baseline. Categorical: stack below the
-                # cat-label band (cat baseline + descender + sec_pad + cap).
-                if sec.kind == "continuous":
-                    sec_baseline = ih + _FRAME["tick_pad"] + cap_height(x_size)
-                else:
+                # Sector label band sits flush against the spine when no
+                # tick band is above it (continuous-no-user-ticks case);
+                # otherwise it stacks below the tick band. Same rule for
+                # categorical (always has cat labels above) and continuous
+                # (has labels only when user supplied xticks). Uses the
+                # rotation-aware tick band height — must match the
+                # reservation in `_required_margin`.
+                has_xtl = any(str(l) for l in x_labels)
+                if has_xtl:
                     sec_baseline = (ih + _FRAME["tick_pad"]
-                                    + cap_height(x_size) + descender(x_size)
+                                    + tick_band_height(x_labels, x_size, x_rot)
                                     + sec_pad + cap_height(x_size))
+                else:
+                    sec_baseline = ih + _FRAME["tick_pad"] + cap_height(x_size)
                 for name, cx in zip(sec.names, label_xs):
                     parts.append(_tick_label(str(name), cx, sec_baseline,
                                              x_size, x_rot, axis="x",
@@ -440,15 +501,18 @@ def emit_chrome(*,
                                      color=sec_col, width=sec_w, dash=sec_dash,
                                      tag="sector-divider"))
         if sec.label and not suppress_yt and not hide_l:
-            # Continuous: y-ticks suppressed, label anchors at the
-            # standard tick-label x. Categorical: clear the cat labels
-            # (max cat label width) before placing the sector label.
-            if sec.kind == "continuous":
-                y_label_x = -_FRAME["tick_pad"]
-            else:
+            # Sector label column sits flush against the spine when no
+            # tick label column exists to its inside; otherwise it stacks
+            # past the tick labels. Same rule for categorical (always has
+            # cat labels) and continuous (has labels only when user
+            # supplied yticks).
+            has_ytl = any(str(l) for l in y_labels)
+            if has_ytl:
                 ytl_w = max((measure_text(str(l), y_size) for l in y_labels),
                             default=0.0)
                 y_label_x = -(_FRAME["tick_pad"] + ytl_w + sec_pad)
+            else:
+                y_label_x = -_FRAME["tick_pad"]
             for name, cy in zip(sec.names, label_ys):
                 parts.append(_tick_label(str(name), y_label_x,
                                          cy + cap_height(y_size) / 2,

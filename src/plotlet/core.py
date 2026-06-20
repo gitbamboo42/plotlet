@@ -36,8 +36,9 @@ from .scales import (_LinearScale, _LogScale, _CategoryScale, _SymlogScale,
                       _SectoredLinearScale,
                       _PowerScale, _TimeScale, _nice_domain, _fmt_tick,
                       _to_epoch, _coerce_time_lim)
-from .draw import measure_text, cap_height, descender
-from .draw import text_path, segment, rect
+from .draw import (measure_text, cap_height, descender, tick_band_height,
+                   rotated_label_bbox)
+from .draw import coord, rect, segment, text_path
 from . import _regions
 from . import _chrome
 from .utils import histogram, collect_categories
@@ -1191,19 +1192,6 @@ def _y_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
                            sector_gap_px=sec_gap_px)
 
 
-def _rotated_label_bbox(label_w: float, label_h: float, rot_deg: float) -> tuple[float, float]:
-    """Bounding-box (width, height) of a rotated text label. Conservative —
-    uses the simple `|cos|·w + |sin|·h` envelope, which is exact for the
-    AABB of an axis-aligned rectangle rotated by any angle."""
-    if rot_deg == 0:
-        return label_w, label_h
-    rad = math.radians(abs(rot_deg))
-    sin_r = math.sin(rad)
-    cos_r = math.cos(rad)
-    return (label_w * cos_r + label_h * sin_r,
-            label_w * sin_r + label_h * cos_r)
-
-
 def _inline_legend_layout(st):
     """Geometry for the in-frame legend a leaf paints.
 
@@ -1365,14 +1353,6 @@ def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     y_size = st["y_fontsize"] if st["y_fontsize"] is not None else tick_size
     x_rot  = st["x_rotation"] or 0
     y_rot  = st["y_rotation"] or 0
-    x_dir, y_dir = st["x_direction"], st["y_direction"]
-    x_marks, y_marks = st["x_marks"], st["y_marks"]
-
-    # Outward / inout tick marks reach past the spine; "in" is internal only.
-    # Only reserve clearance when marks are enabled, the direction reaches past
-    # the spine, AND there's at least one tick position to actually draw.
-    out_x = _FRAME["tick_length"] if (x_marks and x_ticks and x_dir != "in") else 0
-    out_y = _FRAME["tick_length"] if (y_marks and y_ticks and y_dir != "in") else 0
 
     # Tick labels render via `text_path`, which short-circuits on empty
     # strings — so a side with all-blank labels visually contributes nothing.
@@ -1380,53 +1360,34 @@ def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     # `xticks(labels=False)` also fully suppresses them via `x_show_labels`.
     suppress_xt = (po is not None and po.suppress_bottom_labels) or not st["x_show_labels"]
     suppress_yt = (po is not None and po.suppress_left_labels)   or not st["y_show_labels"]
-    # `i_left` / `i_right` index the labels at the pixel-leftmost / pixel-
-    # rightmost rendered tick positions (which can differ from x_labels[0]
-    # / [-1] when the scale is flipped — labels travel with their tick
-    # values). The render loop uses `zip(x_ticks, x_labels)`, so only the
-    # first `min(n_ticks, n_labels)` actually paint — clamp here too.
+
+    # Cross-axis spillover: per-tick label AABB widths/positions used to
+    # compute the leftmost/rightmost x-tick label overhang past the data
+    # area edges. The chrome stack itself is handled by the
+    # `chrome_stack_extents` helper below; here we just measure the bits
+    # `_required_margin` needs for cross-axis reservation.
     has_xtl = (not suppress_xt) and any(str(l) for l in x_labels)
     if has_xtl:
-        max_xtl_w = max((measure_text(str(l), x_size) for l in x_labels), default=0.0)
-        # Vertical extent of an x-tick label past the tick_pad end (= top of
-        # the xtl band). The anchor sits at `cap_height` below tick_pad
-        # (placing cap top flush with tick_pad for rot=0). Rotated text
-        # extends `|sin θ|·label_w + cos|θ|·descender` below the anchor
-        # — derived from the AABB of the rotated label rect (label_w ×
-        # x_size) with the anchor at the right edge / baseline. The full
-        # AABB height (`|sin|·w + |cos|·h`) would silently drop the
-        # anchor offset and clip rotated labels past the figure edge.
-        rad = math.radians(abs(x_rot))
-        xtl_band_h = (cap_height(x_size)
-                      + math.sin(rad) * max_xtl_w
-                      + math.cos(rad) * descender(x_size))
         n_x = min(len(x_ticks), len(x_labels))
         x_tick_px = [x_scale(t) for t in x_ticks[:n_x]]
         if x_tick_px:
             i_left  = min(range(n_x), key=lambda i: x_tick_px[i])
             i_right = max(range(n_x), key=lambda i: x_tick_px[i])
-            left_lbl_w,  _ = _rotated_label_bbox(measure_text(str(x_labels[i_left]),  x_size), x_size, x_rot)
-            right_lbl_w, _ = _rotated_label_bbox(measure_text(str(x_labels[i_right]), x_size), x_size, x_rot)
+            left_lbl_w,  _ = rotated_label_bbox(measure_text(str(x_labels[i_left]),  x_size), x_size, x_rot)
+            right_lbl_w, _ = rotated_label_bbox(measure_text(str(x_labels[i_right]), x_size), x_size, x_rot)
             left_inset  = x_tick_px[i_left]
             right_inset = dw - x_tick_px[i_right]
         else:
             left_lbl_w = right_lbl_w = 0.0
             left_inset = right_inset = 0.0
     else:
-        xtl_band_h = 0.0
         left_lbl_w = right_lbl_w = 0.0
         left_inset = right_inset = 0.0
 
-    # Same shape for y: `i_top` / `i_bot` index labels at pixel-topmost /
-    # pixel-bottommost tick positions. For rot=0 the label is centered on
-    # the tick (baseline = tick + cap/2), so the cap top extends `cap/2`
-    # above the tick and the descender bottom extends `cap/2 + descender`
-    # below — asymmetric. Rotated labels follow their rotated AABB,
-    # symmetric around the anchor as an approximation.
+    # y-axis cross-axis spillover (asymmetric for rot=0: cap/2 above,
+    # cap/2 + descender below — rotated labels use the rotated AABB).
     has_ytl = (not suppress_yt) and any(str(l) for l in y_labels)
     if has_ytl:
-        max_ytl_w = max((measure_text(str(l), y_size) for l in y_labels), default=0.0)
-        ytl_bbox_w, _ = _rotated_label_bbox(max_ytl_w, y_size, y_rot)
         n_y = min(len(y_ticks), len(y_labels))
         y_tick_px = [y_scale(t) for t in y_ticks[:n_y]]
         if y_tick_px:
@@ -1436,8 +1397,8 @@ def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
                 top_half_h    = cap_height(y_size) / 2
                 bottom_half_h = cap_height(y_size) / 2 + descender(y_size)
             else:
-                _, top_h = _rotated_label_bbox(measure_text(str(y_labels[i_top]), y_size), y_size, y_rot)
-                _, bot_h = _rotated_label_bbox(measure_text(str(y_labels[i_bot]), y_size), y_size, y_rot)
+                _, top_h = rotated_label_bbox(measure_text(str(y_labels[i_top]), y_size), y_size, y_rot)
+                _, bot_h = rotated_label_bbox(measure_text(str(y_labels[i_bot]), y_size), y_size, y_rot)
                 top_half_h    = top_h / 2
                 bottom_half_h = bot_h / 2
             top_inset    = y_tick_px[i_top]
@@ -1446,7 +1407,6 @@ def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
             top_half_h = bottom_half_h = 0.0
             top_inset = bottom_inset = 0.0
     else:
-        ytl_bbox_w = 0.0
         top_half_h = bottom_half_h = 0.0
         top_inset = bottom_inset = 0.0
 
@@ -1459,57 +1419,30 @@ def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     hide_l = po is not None and po.hide_left
     hide_r = po is not None and po.hide_right
 
-    # Per-side tick-mark reservation: on a hidden joined side the renderer
-    # also drops the mark (along with labels/title/etc.), so the side
-    # contributes no `out_x`/`out_y`.
-    top_marks    = out_x if (st["x_top"]   and not hide_t) else 0
-    bottom_marks = out_x if not hide_b else 0
-    left_marks   = out_y if not hide_l else 0
-    right_marks  = out_y if (st["y_right"] and not hide_r) else 0
+    # Chrome stack heights on each side (marks → tick band → sector band)
+    # — same helper drives `_render_inner`'s label positioning so the two
+    # walk identical numbers.
+    chrome = _chrome.chrome_stack_extents(
+        st,
+        x_ticks=x_ticks, x_labels=x_labels, x_size=x_size, x_rot=x_rot,
+        suppress_xt=suppress_xt,
+        y_ticks=y_ticks, y_labels=y_labels, y_size=y_size, y_rot=y_rot,
+        suppress_yt=suppress_yt,
+        hide_t=hide_t, hide_b=hide_b, hide_l=hide_l, hide_r=hide_r)
 
-    # Top: title content + outward top tick (if `xticks(top=True)`).
-    # Title baseline sits at y = -pad.title (see _render_inner); the glyph
-    # ascender extends ~title_size upward, so its top is at -(pad.title + title_size).
-    # The caller adds `_MARGIN_FLOOR.top` past this for breathing.
+    # Title walks past the top chrome band (top tick marks) then adds
+    # `pad.title + title_size` for its own block — mirrors the inside-out
+    # walk in `_render_inner` so reservation matches positioning.
     title_top = _PADSPEC["title"] + title_size if (st["title"] and not hide_t) else 0
-    top = max(title_top, top_marks)
+    top = chrome["top"] + title_top
 
-    # Bottom: each term only contributes when its element actually renders.
-    # tick marks → bottom_marks; tick labels → tick_pad + xtl_band_h (the
-    # rotation-aware extent below tick_pad end, including the cap_height
-    # baseline offset — see has_xtl block above); xlabel → 2 px visual
-    # gap, full glyph (≈ label_size), pad.xlabel.
-    bottom = bottom_marks
-    if has_xtl:
-        bottom += _FRAME["tick_pad"] + xtl_band_h
-    # Sector labels on x reserve their own band. For continuous sectors
-    # the auto tick labels are suppressed (has_xtl=False), so the sector
-    # band stands in for the tick band. For categorical the sector band
-    # stacks below the cat-label band — same height (cap + descender)
-    # plus a sec_pad gap above it.
-    x_sec = st["x_sectors"]
-    if (x_sec is not None and x_sec.label and not hide_b):
-        sec_pad = _SECTORSPEC["label_pad"]
-        if x_sec.kind == "continuous":
-            bottom += _FRAME["tick_pad"] + cap_height(x_size) + descender(x_size)
-        else:
-            bottom += sec_pad + cap_height(x_size) + descender(x_size)
+    # Outermost frame labels stack outside the chrome band: 2 px gap,
+    # full glyph height (≈ label_size), then pad.xlabel / pad.ylabel.
+    bottom = chrome["bottom"]
     if st["xlabel"] and not hide_b:
         bottom += 2 + label_size + _PADSPEC["xlabel"]
 
-    # Left: same shape mirrored on the y-axis.
-    left = left_marks
-    if has_ytl:
-        left += _FRAME["tick_pad"] + ytl_bbox_w
-    y_sec = st["y_sectors"]
-    if (y_sec is not None and y_sec.label and not hide_l):
-        sec_pad = _SECTORSPEC["label_pad"]
-        sec_lbl_w = max((measure_text(str(n), y_size) for n in y_sec.names),
-                        default=0.0)
-        if y_sec.kind == "continuous":
-            left += _FRAME["tick_pad"] + sec_lbl_w
-        else:
-            left += sec_pad + sec_lbl_w
+    left = chrome["left"]
     if st["ylabel"] and not hide_l:
         left += 2 + label_size + _PADSPEC["ylabel"]
 
@@ -1524,7 +1457,7 @@ def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     # The past-spine overhang is `bbox * share - inset` where `inset` is
     # the actual scale-mapped distance from panel edge to the leftmost/
     # rightmost tick (works for both category and numeric scales).
-    right = right_marks
+    right = chrome["right"]
     if x_rot == 0:
         left_share, right_share = 0.5, 0.5
     elif x_rot > 0:
@@ -2163,8 +2096,8 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
             tl_x, tl_y = _coord_project(0.0, 1.0)
             br_x, br_y = _coord_project(1.0, 0.0)
             tr_x, tr_y = _coord_project(1.0, 1.0)
-            pts = (f"{bl_x:.2f},{bl_y:.2f} {br_x:.2f},{br_y:.2f} "
-                   f"{tr_x:.2f},{tr_y:.2f} {tl_x:.2f},{tl_y:.2f}")
+            pts = (f"{coord(bl_x)},{coord(bl_y)} {coord(br_x)},{coord(br_y)} "
+                   f"{coord(tr_x)},{coord(tr_y)} {coord(tl_x)},{coord(tl_y)}")
             parts.append(f'<defs><clipPath id="{_clip_id}">'
                          f'<polygon points="{pts}"/></clipPath></defs>')
 
@@ -2219,49 +2152,50 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     label_size = _FONTSPEC["label_size"]
     title_size = _FONTSPEC["title_size"]
 
-    # xlabel / ylabel / title live in margin space; drop when that margin
-    # is collapsed against a joined neighbor. Positioned against the
-    # axis band (`label_bands`), not the inflated margin (`M`) — so a
-    # wide title, tall ylabel, or outside-positioned legend doesn't
-    # shove the label away from its natural slot just outside the tick
-    # labels. The inline-legend block (below) also reads `label_bands`,
-    # so compute once.
+    # `label_bands` feeds the inline-legend block below; the frame labels
+    # (xlabel/ylabel/title) anchor inside-out via `chrome_stack_extents`,
+    # so they no longer need it.
     label_bands = _label_band_sizes(st, iw, ih, panel_opts)
-    # See "Margin pipeline" comment block above `_required_margin`.
-    # `inflation` = text overhang + outside-legend reservation; subtracting
-    # it from `M[side]` snaps ylabel / xlabel to the axis-band outer edge
-    # rather than floating in the inflated margin. Collapses to the
-    # canvas-edge anchored formula when inflation is 0 (no overhang, no
-    # outside legend).
-    m_req = _required_margin(st, iw, ih, panel_opts)
-    left_inflation   = max(0, m_req["left"]   - int(round(label_bands["left"])))
-    bottom_inflation = max(0, m_req["bottom"] - int(round(label_bands["bottom"])))
     text_color = _FONTSPEC["color"]
+    # Inside-out walk: position the outermost frame labels by walking
+    # through every chrome band on their side, then through the label's
+    # own (2-px gap + label_size) block. Same helper as `_label_band_sizes`
+    # so reservation and positioning are derived from one formula.
+    x_size = st["x_fontsize"] if st["x_fontsize"] is not None else tick_size
+    y_size = st["y_fontsize"] if st["y_fontsize"] is not None else tick_size
+    x_rot  = st["x_rotation"] or 0
+    y_rot  = st["y_rotation"] or 0
+    chrome = _chrome.chrome_stack_extents(
+        st,
+        x_ticks=x_ticks, x_labels=x_labels, x_size=x_size, x_rot=x_rot,
+        suppress_xt=suppress_xt,
+        y_ticks=y_ticks, y_labels=y_labels, y_size=y_size, y_rot=y_rot,
+        suppress_yt=suppress_yt,
+        hide_t=hide_t, hide_b=hide_b, hide_l=hide_l, hide_r=hide_r)
     if st["xlabel"] and not hide_b:
-        # Baseline sits at canvas-bottom edge (minus inflation) minus
-        # pad.xlabel minus the glyph descender — visible glyph bottom
-        # is exactly `pad.xlabel` above the axis band's outer edge.
-        parts.append(text_path(st["xlabel"], iw / 2,
-                                ih + M["bottom"] - bottom_inflation - _PADSPEC["xlabel"] - descender(label_size),
+        # Outer edge of sector band + 2-px gap + full label_size, then
+        # back up by descender to land on the baseline.
+        xlabel_baseline = ih + chrome["bottom"] + 2 + label_size - descender(label_size)
+        parts.append(text_path(st["xlabel"], iw / 2, xlabel_baseline,
                                 label_size, anchor="middle", color=text_color,
                                 tag="xlabel"))
     if st["ylabel"] and not hide_l:
-        # Center sits at -(M["left"] - inflation - pad.ylabel - label_size/2)
-        # so the rotated text's left visible edge lands exactly `pad.ylabel`
-        # inside the axis band's outer edge.  `text_path(rotate=90)` does
-        # both the rotation transform and the post-rotation bbox so the
-        # sink sees the standing-up bbox without a manual override.
-        ylabel_cx = -(M["left"] - left_inflation - _PADSPEC["ylabel"] - label_size / 2)
+        # Mirror on left: walk past the chrome stack + 2-px gap, then
+        # half label_size to land on the rotated text's center.
+        ylabel_cx = -(chrome["left"] + 2 + label_size / 2)
         parts.append(text_path(st["ylabel"], ylabel_cx, ih / 2,
                                 label_size, anchor="middle",
                                 color=text_color, rotate=90, tag="ylabel"))
     if st["title"] and not hide_t:
-        # Top-position legend sits between title and data, pushing the
-        # title's baseline up by (legend block + outer gap to legend).
+        # Walk inside-out from the data area: past the top chrome band
+        # (top tick marks), past any top-position legend block, then add
+        # `pad.title` and the glyph descender so the title's visible
+        # bottom sits exactly `pad.title` above whatever's below it.
         if inner_gap_top is not None:
-            title_y = -(inner_gap_top + leg["lh"] + legend_gap)
+            outer = chrome["top"] + leg["lh"] + legend_gap + _PADSPEC["title"]
         else:
-            title_y = -_PADSPEC["title"]
+            outer = chrome["top"] + _PADSPEC["title"]
+        title_y = -(outer + descender(title_size))
         parts.append(text_path(st["title"], iw / 2, title_y, title_size,
                                 anchor="middle", color=text_color,
                                 tag="title"))
@@ -2311,7 +2245,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
                 "bottom-left":  (off,     bottom_y),
                 "center":       (mid_x,   mid_y),
             }[pos]
-        transform = f'translate({lx:.2f},{ly:.2f})'
+        transform = f'translate({coord(lx)},{coord(ly)})'
         parts.append(f'<g transform="{transform}">')
         # The translate puts the body's panel-local coords onto the
         # sink so chrome bboxes tagged inside `_render_discrete_entry`
@@ -2349,7 +2283,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
         bg_y = inset_M["top"]
         bg_w = inset_chart._data_width
         bg_h = inset_chart._data_height
-        parts.append(f'<g transform="translate({tx:.2f},{ty:.2f})" '
+        parts.append(f'<g transform="translate({coord(tx)},{coord(ty)})" '
                       f'data-plotlet-kind="inset">'
                       + rect(bg_x, bg_y, bg_w, bg_h,
                              fill=SPEC["figure"]["background"])
