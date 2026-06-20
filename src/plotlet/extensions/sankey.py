@@ -32,6 +32,8 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.draw import path, rect, text_path
+from ..draw import coord
+
 
 
 _DEFAULT_PALETTE = [
@@ -164,16 +166,16 @@ def sankey_draw(a, ctx):
         cx1 = (x_src + x_tgt) / 2
         cx2 = (x_src + x_tgt) / 2
         # Top edge: src_top -> tgt_top
-        d = (f"M{fx(x_src):.2f},{fy(st_):.2f} "
-             f"C{fx(cx1):.2f},{fy(st_):.2f} "
-             f"{fx(cx2):.2f},{fy(tt_):.2f} "
-             f"{fx(x_tgt):.2f},{fy(tt_):.2f} "
+        d = (f"M{coord(fx(x_src))},{coord(fy(st_))} "
+             f"C{coord(fx(cx1))},{coord(fy(st_))} "
+             f"{coord(fx(cx2))},{coord(fy(tt_))} "
+             f"{coord(fx(x_tgt))},{coord(fy(tt_))} "
              # Down the tgt-side band
-             f"L{fx(x_tgt):.2f},{fy(tb_):.2f} "
+             f"L{coord(fx(x_tgt))},{coord(fy(tb_))} "
              # Bottom edge: tgt_bot -> src_bot (reverse direction)
-             f"C{fx(cx2):.2f},{fy(tb_):.2f} "
-             f"{fx(cx1):.2f},{fy(sb_):.2f} "
-             f"{fx(x_src):.2f},{fy(sb_):.2f} "
+             f"C{coord(fx(cx2))},{coord(fy(tb_))} "
+             f"{coord(fx(cx1))},{coord(fy(sb_))} "
+             f"{coord(fx(x_src))},{coord(fy(sb_))} "
              f"Z")
         out.append(path(d, fill=col, alpha=ribbon_alpha))
     # Node bars + labels on top.

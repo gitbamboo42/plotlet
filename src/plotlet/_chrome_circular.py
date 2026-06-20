@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import math
 
-from .draw import circle, segment, text_path, cap_height, path
+from .draw import cap_height, circle, coord, path, segment, text_path
 
 
 # ---------------------------------------------------------------------------
@@ -57,12 +57,12 @@ def clip_path_d(cx, cy, R, ri) -> str:
     the annular region between them as the clip area.
     """
     return (
-        f"M {cx - R:.2f},{cy:.2f} "
-        f"A {R:.2f},{R:.2f} 0 1,0 {cx + R:.2f},{cy:.2f} "
-        f"A {R:.2f},{R:.2f} 0 1,0 {cx - R:.2f},{cy:.2f} Z "
-        f"M {cx - ri:.2f},{cy:.2f} "
-        f"A {ri:.2f},{ri:.2f} 0 1,0 {cx + ri:.2f},{cy:.2f} "
-        f"A {ri:.2f},{ri:.2f} 0 1,0 {cx - ri:.2f},{cy:.2f} Z"
+        f"M {coord(cx - R)},{coord(cy)} "
+        f"A {coord(R)},{coord(R)} 0 1,0 {coord(cx + R)},{coord(cy)} "
+        f"A {coord(R)},{coord(R)} 0 1,0 {coord(cx - R)},{coord(cy)} Z "
+        f"M {coord(cx - ri)},{coord(cy)} "
+        f"A {coord(ri)},{coord(ri)} 0 1,0 {coord(cx + ri)},{coord(cy)} "
+        f"A {coord(ri)},{coord(ri)} 0 1,0 {coord(cx - ri)},{coord(cy)} Z"
     )
 
 
@@ -116,8 +116,8 @@ def draw_y_chrome(cx, cy, R, ri, wrap_gap_rad,
                 x2 = cx + radius * math.cos(ang_e)
                 y2 = cy - radius * math.sin(ang_e)
                 large = 1 if abs(ang_s - ang_e) > math.pi else 0
-                d = (f"M {x1:.2f},{y1:.2f} "
-                     f"A {radius:.2f},{radius:.2f} 0 {large} 1 {x2:.2f},{y2:.2f}")
+                d = (f"M {coord(x1)},{coord(y1)} "
+                     f"A {coord(radius)},{coord(radius)} 0 {large} 1 {coord(x2)},{coord(y2)}")
                 parts.append(path(d, stroke=spine_col,
                                   stroke_width=spine_w))
 

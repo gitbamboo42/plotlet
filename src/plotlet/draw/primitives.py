@@ -37,6 +37,8 @@ _HEX_VERTICES = [
 from .font import measure_text, _glyph_path_d, _decoration_y_offset, cap_height, descender
 from .linestyles import resolve_linestyle
 from .._regions import record as _record_region
+from .format import coord, degree, opacity, stroke_w
+
 
 
 # Per-edge subdivision count when a coord-native artist passes `project=`.
@@ -141,11 +143,11 @@ def text_path(s: str, x: float, y: float, size: float,
     if decoration != "none":
         dy = _decoration_y_offset(decoration, size)
         line_w = max(0.6, size * 0.06)
-        out += (f'<line x1="{rx:.2f}" y1="{y + dy:.2f}" '
-                f'x2="{rx + w:.2f}" y2="{y + dy:.2f}" '
-                f'stroke="{color}" stroke-width="{line_w:.2f}"/>')
+        out += (f'<line x1="{coord(rx)}" y1="{coord(y + dy)}" '
+                f'x2="{coord(rx + w)}" y2="{coord(y + dy)}" '
+                f'stroke="{color}" stroke-width="{stroke_w(line_w)}"/>')
     if rotate:
-        out = f'<g transform="rotate({-rotate:.2f} {x:.2f} {y:.2f})">{out}</g>'
+        out = f'<g transform="rotate({degree(-rotate)} {coord(x)} {coord(y)})">{out}</g>'
     return out
 
 
@@ -155,7 +157,7 @@ def op(alpha) -> str:
     Quantized to 2 decimals (1%) so float-noise from upstream compute (e.g.
     1 - tiny → 0.9999999999999998) doesn't make SVG byte-different across
     numpy/scipy builds. Anything finer than 1% opacity is invisible."""
-    return "" if alpha == 1 else f' opacity="{alpha:.2f}"'
+    return "" if alpha == 1 else f' opacity="{opacity(alpha)}"'
 
 
 def _shape_opacity(alpha, fill_alpha, stroke_alpha,
@@ -169,8 +171,8 @@ def _shape_opacity(alpha, fill_alpha, stroke_alpha,
         return op(alpha)
     fa = fill_alpha if fill_alpha is not None else alpha
     sa = stroke_alpha if stroke_alpha is not None else alpha
-    fop = f' fill-opacity="{fa:.2f}"' if has_fill and fa != 1 else ""
-    sop = f' stroke-opacity="{sa:.2f}"' if has_stroke and sa != 1 else ""
+    fop = f' fill-opacity="{opacity(fa)}"' if has_fill and fa != 1 else ""
+    sop = f' stroke-opacity="{opacity(sa)}"' if has_stroke and sa != 1 else ""
     return fop + sop
 
 
@@ -195,50 +197,50 @@ def marker(kind: str, x: float, y: float, size: float, color: str, alpha,
         x, y = project(x, y)
     msw = edgewidth if edgewidth is not None else _D["marker_stroke_width"]
     _op = op(alpha)
-    edge = f' stroke="{edgecolor}" stroke-width="{msw:.2f}"' if edgecolor else ""
+    edge = f' stroke="{edgecolor}" stroke-width="{stroke_w(msw)}"' if edgecolor else ""
     if tag is not None:
         # All marker glyphs fit in a (2*size)² box centered on (x, y).
         _record_region("marker", (x - size, y - size, 2 * size, 2 * size),
                         name=tag, marker=kind, size=size)
     if kind == "o":
-        return f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{size:.2f}" fill="{color}"{edge}{_op}/>'
+        return f'<circle cx="{coord(x)}" cy="{coord(y)}" r="{coord(size)}" fill="{color}"{edge}{_op}/>'
     if kind == "s":
-        return (f'<rect x="{x - size:.2f}" y="{y - size:.2f}" width="{2 * size:.2f}" '
-                f'height="{2 * size:.2f}" fill="{color}"{edge}{_op}/>')
+        return (f'<rect x="{coord(x - size)}" y="{coord(y - size)}" width="{coord(2 * size)}" '
+                f'height="{coord(2 * size)}" fill="{color}"{edge}{_op}/>')
     if kind == "^":
-        return (f'<path d="M{x:.2f},{y - size:.2f}L{x + size:.2f},{y + size:.2f}'
-                f'L{x - size:.2f},{y + size:.2f}Z" fill="{color}"{edge}{_op}/>')
+        return (f'<path d="M{coord(x)},{coord(y - size)}L{coord(x + size)},{coord(y + size)}'
+                f'L{coord(x - size)},{coord(y + size)}Z" fill="{color}"{edge}{_op}/>')
     if kind == "v":
-        return (f'<path d="M{x:.2f},{y + size:.2f}L{x + size:.2f},{y - size:.2f}'
-                f'L{x - size:.2f},{y - size:.2f}Z" fill="{color}"{edge}{_op}/>')
+        return (f'<path d="M{coord(x)},{coord(y + size)}L{coord(x + size)},{coord(y - size)}'
+                f'L{coord(x - size)},{coord(y - size)}Z" fill="{color}"{edge}{_op}/>')
     if kind == "x":
-        return (f'<path d="M{x - size:.2f},{y - size:.2f}L{x + size:.2f},{y + size:.2f}'
-                f'M{x - size:.2f},{y + size:.2f}L{x + size:.2f},{y - size:.2f}" '
-                f'stroke="{color}" stroke-width="{msw:.2f}"{_op}/>')
+        return (f'<path d="M{coord(x - size)},{coord(y - size)}L{coord(x + size)},{coord(y + size)}'
+                f'M{coord(x - size)},{coord(y + size)}L{coord(x + size)},{coord(y - size)}" '
+                f'stroke="{color}" stroke-width="{stroke_w(msw)}"{_op}/>')
     if kind == "+":
-        return (f'<path d="M{x - size:.2f},{y:.2f}L{x + size:.2f},{y:.2f}'
-                f'M{x:.2f},{y - size:.2f}L{x:.2f},{y + size:.2f}" '
-                f'stroke="{color}" stroke-width="{msw:.2f}"{_op}/>')
+        return (f'<path d="M{coord(x - size)},{coord(y)}L{coord(x + size)},{coord(y)}'
+                f'M{coord(x)},{coord(y - size)}L{coord(x)},{coord(y + size)}" '
+                f'stroke="{color}" stroke-width="{stroke_w(msw)}"{_op}/>')
     if kind == "*":
-        d = "M" + " L".join(f"{x + size*dx:.2f},{y + size*dy:.2f}"
+        d = "M" + " L".join(f"{coord(x + size*dx)},{coord(y + size*dy)}"
                             for dx, dy in _STAR5_VERTICES) + "Z"
         return f'<path d="{d}" fill="{color}"{edge}{_op}/>'
     if kind == "D":
         # Diamond: 4 vertices (top/right/bottom/left), `size` is center-to-vertex.
-        return (f'<path d="M{x:.2f},{y - size:.2f}L{x + size:.2f},{y:.2f}'
-                f'L{x:.2f},{y + size:.2f}L{x - size:.2f},{y:.2f}Z" '
+        return (f'<path d="M{coord(x)},{coord(y - size)}L{coord(x + size)},{coord(y)}'
+                f'L{coord(x)},{coord(y + size)}L{coord(x - size)},{coord(y)}Z" '
                 f'fill="{color}"{edge}{_op}/>')
     if kind == "<":
         # Triangle-left: tip at left, two corners at right.
-        return (f'<path d="M{x - size:.2f},{y:.2f}L{x + size:.2f},{y - size:.2f}'
-                f'L{x + size:.2f},{y + size:.2f}Z" fill="{color}"{edge}{_op}/>')
+        return (f'<path d="M{coord(x - size)},{coord(y)}L{coord(x + size)},{coord(y - size)}'
+                f'L{coord(x + size)},{coord(y + size)}Z" fill="{color}"{edge}{_op}/>')
     if kind == ">":
         # Triangle-right: tip at right, two corners at left.
-        return (f'<path d="M{x + size:.2f},{y:.2f}L{x - size:.2f},{y - size:.2f}'
-                f'L{x - size:.2f},{y + size:.2f}Z" fill="{color}"{edge}{_op}/>')
+        return (f'<path d="M{coord(x + size)},{coord(y)}L{coord(x - size)},{coord(y - size)}'
+                f'L{coord(x - size)},{coord(y + size)}Z" fill="{color}"{edge}{_op}/>')
     if kind == "h":
         # Hexagon, vertex-up orientation.
-        d = "M" + " L".join(f"{x + size*dx:.2f},{y + size*dy:.2f}"
+        d = "M" + " L".join(f"{coord(x + size*dx)},{coord(y + size*dy)}"
                             for dx, dy in _HEX_VERTICES) + "Z"
         return f'<path d="{d}" fill="{color}"{edge}{_op}/>'
     raise ValueError(f"unknown marker kind {kind!r}; expected one of "
@@ -284,8 +286,8 @@ def segment(x1: float, y1: float, x2: float, y2: float, *,
     if project is not None:
         pts = _subdivide_project([(x1, y1), (x2, y2)], project)
         return polyline(pts, color=color, width=width, dash=dash, alpha=alpha)
-    return (f'<line x1="{x1:.2f}" x2="{x2:.2f}" y1="{y1:.2f}" y2="{y2:.2f}" '
-            f'stroke="{color}" stroke-width="{width:.2f}"{op(alpha)}{dash_attr(dash)}/>')
+    return (f'<line x1="{coord(x1)}" x2="{coord(x2)}" y1="{coord(y1)}" y2="{coord(y2)}" '
+            f'stroke="{color}" stroke-width="{stroke_w(width)}"{op(alpha)}{dash_attr(dash)}/>')
 
 
 def rect(x: float, y: float, w: float, h: float, *,
@@ -317,7 +319,7 @@ def rect(x: float, y: float, w: float, h: float, *,
                        stroke_width=stroke_width, alpha=alpha,
                        fill_alpha=fill_alpha, stroke_alpha=stroke_alpha)
     fa = f' fill="{fill}"' if fill else ' fill="none"'
-    sa = (f' stroke="{stroke}" stroke-width="{stroke_width:.2f}"{dash_attr(dash)}'
+    sa = (f' stroke="{stroke}" stroke-width="{stroke_w(stroke_width)}"{dash_attr(dash)}'
           if stroke else "")
     oa = _shape_opacity(alpha, fill_alpha, stroke_alpha,
                         has_fill=bool(fill), has_stroke=bool(stroke))
@@ -325,7 +327,7 @@ def rect(x: float, y: float, w: float, h: float, *,
     if tag is not None:
         _record_region("rect", (x, y, w, h), name=tag,
                         fill=fill, stroke=stroke)
-    return (f'<rect x="{x:.2f}" y="{y:.2f}" width="{w:.2f}" height="{h:.2f}"'
+    return (f'<rect x="{coord(x)}" y="{coord(y)}" width="{coord(w)}" height="{coord(h)}"'
             f'{fa}{sa}{oa}{sr}/>')
 
 
@@ -348,13 +350,13 @@ def circle(cx: float, cy: float, r: float, *,
     if project is not None:
         cx, cy = project(cx, cy)
     fa = f' fill="{fill}"' if fill else ' fill="none"'
-    sa = f' stroke="{stroke}" stroke-width="{stroke_width:.2f}"' if stroke else ""
+    sa = f' stroke="{stroke}" stroke-width="{stroke_w(stroke_width)}"' if stroke else ""
     oa = _shape_opacity(alpha, fill_alpha, stroke_alpha,
                         has_fill=bool(fill), has_stroke=bool(stroke))
     if tag is not None:
         _record_region("circle", (cx - r, cy - r, 2 * r, 2 * r),
                         name=tag, fill=fill, stroke=stroke)
-    return f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="{r:.2f}"{fa}{sa}{oa}/>'
+    return f'<circle cx="{coord(cx)}" cy="{coord(cy)}" r="{coord(r)}"{fa}{sa}{oa}/>'
 
 
 def path(d: str, *,
@@ -369,7 +371,7 @@ def path(d: str, *,
     override `alpha` per channel.
     """
     fa = f' fill="{fill}"' if fill else ' fill="none"'
-    sa = f' stroke="{stroke}" stroke-width="{stroke_width:.2f}"{dash_attr(dash)}' if stroke else ""
+    sa = f' stroke="{stroke}" stroke-width="{stroke_w(stroke_width)}"{dash_attr(dash)}' if stroke else ""
     oa = _shape_opacity(alpha, fill_alpha, stroke_alpha,
                         has_fill=bool(fill), has_stroke=bool(stroke))
     return f'<path d="{d}"{fa}{sa}{oa}/>'
@@ -391,7 +393,7 @@ def polyline(points, *,
         points = _subdivide_project(list(points), project)
     if not points or len(points) < 2:
         return ""
-    d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in points)
+    d = "M" + " L".join(f"{coord(x)},{coord(y)}" for x, y in points)
     return path(d, stroke=color, stroke_width=width, dash=dash, alpha=alpha)
 
 
@@ -417,7 +419,7 @@ def polygon(points, *,
         points = _subdivide_project(list(points), project)
     if not points or len(points) < 3:
         return ""
-    d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in points) + "Z"
+    d = "M" + " L".join(f"{coord(x)},{coord(y)}" for x, y in points) + "Z"
     return path(d, fill=fill, stroke=stroke, stroke_width=stroke_width,
                 alpha=alpha, fill_alpha=fill_alpha, stroke_alpha=stroke_alpha)
 
@@ -448,8 +450,8 @@ def arc(x0: float, y0: float, x1: float, y1: float, *,
     # For positive height = curve toward smaller y on a horizontal chord,
     # we need CCW from (x0,y0) to (x1,y1) → sweep=0.
     sweep = 0 if height > 0 else 1
-    d = (f"M {x0:.2f},{y0:.2f} "
-         f"A {rx:.2f},{ry:.2f} {angle:.2f} 0 {sweep} {x1:.2f},{y1:.2f}")
+    d = (f"M {coord(x0)},{coord(y0)} "
+         f"A {coord(rx)},{coord(ry)} {degree(angle)} 0 {sweep} {coord(x1)},{coord(y1)}")
     return path(d, **path_kwargs)
 
 
@@ -656,7 +658,7 @@ def split_pie(x: float, y: float, w: float, h: float,
     large_arc = 1 if (t1 - t0) > math.pi else 0
     x0 = cx + r * math.cos(t0);  y0 = cy + r * math.sin(t0)
     x1 = cx + r * math.cos(t1);  y1 = cy + r * math.sin(t1)
-    d = (f"M {cx:.2f},{cy:.2f} L {x0:.2f},{y0:.2f} "
-         f"A {r:.2f},{r:.2f} 0 {large_arc} 1 {x1:.2f},{y1:.2f} Z")
+    d = (f"M {coord(cx)},{coord(cy)} L {coord(x0)},{coord(y0)} "
+         f"A {coord(r)},{coord(r)} 0 {large_arc} 1 {coord(x1)},{coord(y1)} Z")
     return path(d, fill=fill, stroke=stroke, stroke_width=stroke_width,
                 alpha=alpha, fill_alpha=fill_alpha, stroke_alpha=stroke_alpha)

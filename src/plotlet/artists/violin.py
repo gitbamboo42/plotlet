@@ -35,7 +35,7 @@ from ..utils import (quantile, resolve_aes, palette_color,
                      silverman_bw, kde_1d)
 from ..utils import _drop_nan
 from ..draw import TAB10, resolve_color
-from ..draw import path, rect, segment
+from ..draw import coord, path, rect, segment
 from .._spec import _FRAME, _FIGSPEC
 
 
@@ -147,7 +147,7 @@ def _violin_draw(a, ctx):
                     left.append((cp - d_px, vp))
                     right.append((cp + d_px, vp))
             pts = left + right[::-1]
-            path_d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts) + " Z"
+            path_d = "M" + " L".join(f"{coord(x)},{coord(y)}" for x, y in pts) + " Z"
             out.append(path(path_d, fill=fill, stroke=line, stroke_width=lw,
                             fill_alpha=fill_alpha if do_fill else 1.0))
 

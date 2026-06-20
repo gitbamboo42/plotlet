@@ -27,6 +27,8 @@ import numpy as np
 import plotlet as pt
 from plotlet.utils import to_list_2d
 from plotlet.draw import text_path
+from ..draw import coord
+
 
 
 # Local label artist so the biplot is self-contained.
@@ -85,8 +87,8 @@ def pca_biplot(matrix, var_names, sample_labels=None, color=None, palette=None,
     c.axhline(0, color="#cccccc", linewidth=0.6)
     c.axvline(0, color="#cccccc", linewidth=0.6)
     c.title("PCA biplot")
-    c.xlabel(f"PC1 ({100 * var_explained[0]:.1f} %)")
-    c.ylabel(f"PC2 ({100 * var_explained[1]:.1f} %)")
+    c.xlabel(f"PC1 ({coord(100 * var_explained[0])} %)")
+    c.ylabel(f"PC2 ({coord(100 * var_explained[1])} %)")
     return c
 
 

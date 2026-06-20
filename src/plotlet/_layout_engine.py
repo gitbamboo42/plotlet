@@ -48,6 +48,8 @@ from .core import (
 from .chart import Chart, _extract_theme
 from . import _attachments
 from . import _regions
+from .draw import coord
+
 
 # Layout gaps stay captured — they're parent-level positional, not
 # per-leaf-themable. Font family and background read live from the spec
@@ -969,7 +971,7 @@ def _render_layout_rect(root: Chart, outer=None) -> str:
             # not the document root.
             _W, _H, body = leaf._coordinate.render_layout(leaf)
             parts.append(
-                f'<g transform="translate({x:.2f},{y:.2f})">{body}</g>'
+                f'<g transform="translate({coord(x)},{coord(y)})">{body}</g>'
             )
             continue
         kind = leaf._leaf_kind
@@ -977,7 +979,7 @@ def _render_layout_rect(root: Chart, outer=None) -> str:
             continue
         if kind == "diagram":
             parts.append(
-                f'<g transform="translate({x:.2f},{y:.2f})" '
+                f'<g transform="translate({coord(x)},{coord(y)})" '
                 f'data-plotlet-kind="diagram">'
             )
             parts.append(leaf._diagram_inner)
@@ -988,7 +990,7 @@ def _render_layout_rect(root: Chart, outer=None) -> str:
         iw = w - M_eff["left"] - M_eff["right"]
         ih = h - M_eff["top"] - M_eff["bottom"]
         st = states[id(leaf)]
-        transform = f'translate({x + M_eff["left"]:.2f},{y + M_eff["top"]:.2f})'
+        transform = f'translate({coord(x + M_eff["left"])},{coord(y + M_eff["top"])})'
         # Per-leaf theme wraps both panel-opening attrs and inner render,
         # so frame draws (spines, ticks, text) read the leaf's theme.
         # `_regions.translate(...)` tracks this leaf's outer offset on
@@ -1018,7 +1020,7 @@ def _render_layout_rect(root: Chart, outer=None) -> str:
         # legend-bbox attr is documented as outer-SVG coords; add the outer
         # offset (ol, ot) since we live inside a translate wrapper.
         parts.append(
-            f'<g transform="translate({x:.2f},{y:.2f})" '
+            f'<g transform="translate({coord(x)},{coord(y)})" '
             f'data-plotlet-kind="legend" '
             f'data-plotlet-legend-bbox="{x + ol:.0f},{y + ot:.0f},'
             f'{w:.0f},{h:.0f}">'

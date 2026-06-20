@@ -20,7 +20,7 @@ Styling kwargs:
   alpha=0.6      fill opacity
 """
 from ..registry import ArtistSpec, add_artist
-from ..draw import path, text_path
+from ..draw import coord, path, text_path
 from ..utils import silverman_bw, kde_1d, categorical_groups
 
 
@@ -75,12 +75,12 @@ def _ridge_draw(a, ctx):
         for gx, dy in zip(grid, d):
             px = ctx.x_scale(gx)
             py = ctx.y_scale(baseline_y + (dy / dmax) * overlap)
-            pts.append(f"{px:.2f},{py:.2f}")
+            pts.append(f"{coord(px)},{coord(py)}")
         x_right = ctx.x_scale(grid[-1])
         x_left = ctx.x_scale(grid[0])
         y_base = ctx.y_scale(baseline_y)
         path_d = ("M" + " L".join(pts)
-                  + f" L{x_right:.2f},{y_base:.2f} L{x_left:.2f},{y_base:.2f} Z")
+                  + f" L{coord(x_right)},{coord(y_base)} L{coord(x_left)},{coord(y_base)} Z")
         out.append(path(path_d, fill=col, stroke=col, stroke_width=1,
                         fill_alpha=fill_alpha, stroke_alpha=1))
         out.append(text_path(label, ctx.x_scale(lo) + 4,

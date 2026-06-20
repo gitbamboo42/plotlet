@@ -56,6 +56,8 @@ from plotlet.utils import (to_list, quantile, resolve_aes, palette_color,
 from plotlet.draw import TAB10, resolve_color
 from plotlet.draw import path, rect, segment, circle
 from plotlet._spec import _FRAME
+from ..draw import coord
+
 
 
 _M64 = 0xFFFFFFFFFFFFFFFF
@@ -184,7 +186,7 @@ def raincloud_draw(a, ctx):
             # Close along the straight edge at violin_cp.
             curve.append(_emit(horizontal, violin_cp, val_scale(grid[-1])))
             curve.append(_emit(horizontal, violin_cp, val_scale(grid[0])))
-            path_d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in curve) + " Z"
+            path_d = "M" + " L".join(f"{coord(x)},{coord(y)}" for x, y in curve) + " Z"
             out.append(path(path_d, fill=fill, stroke=fill, stroke_width=0.8,
                             fill_alpha=fill_alpha, stroke_alpha=1))
 

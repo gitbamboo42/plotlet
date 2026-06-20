@@ -30,6 +30,8 @@ from plotlet.cluster import (layout_tree, layout_parent, leaf_position,
                              block_apex_centers, parent_leaf_px, fit_parent,
                              build_tree, tree_frame_defaults)
 from plotlet.registry import ArtistSpec, add_artist
+from ..draw import coord, stroke_w
+
 
 
 _ORIENTS = ("top", "bottom", "left", "right")
@@ -106,15 +108,15 @@ def _bezier_path(x_l, x_r, y_l, y_r, y_t, color, width, leaf_on_x):
     upside-down-U.
     """
     if leaf_on_x:
-        d = (f"M{x_l:.2f},{y_l:.2f} "
-             f"C{x_l:.2f},{y_t:.2f} {x_r:.2f},{y_t:.2f} "
-             f"{x_r:.2f},{y_r:.2f}")
+        d = (f"M{coord(x_l)},{coord(y_l)} "
+             f"C{coord(x_l)},{coord(y_t)} {coord(x_r)},{coord(y_t)} "
+             f"{coord(x_r)},{coord(y_r)}")
     else:
-        d = (f"M{x_l:.2f},{y_l:.2f} "
-             f"C{y_t:.2f},{y_l:.2f} {y_t:.2f},{y_r:.2f} "
-             f"{x_r:.2f},{y_r:.2f}")
+        d = (f"M{coord(x_l)},{coord(y_l)} "
+             f"C{coord(y_t)},{coord(y_l)} {coord(y_t)},{coord(y_r)} "
+             f"{coord(x_r)},{coord(y_r)}")
     return (f'<path d="{d}" stroke="{color}" '
-            f'stroke-width="{width:.2f}" fill="none"/>')
+            f'stroke-width="{stroke_w(width)}" fill="none"/>')
 
 
 def _curved_draw(a, ctx):

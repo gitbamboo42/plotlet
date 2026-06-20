@@ -23,6 +23,8 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.draw import path, rect, text_path
+from ..draw import coord
+
 
 
 _PALETTE = [
@@ -109,14 +111,14 @@ def alluvial_draw(a, ctx):
             tgt_bot = b_top + (in_cum[b] + v) / (weights[i + 1][b] or 1) * (b_bot - b_top)
             x_src = x_left[i] + node_w; x_tgt = x_left[i + 1]
             cx1 = (x_src + x_tgt) / 2; cx2 = cx1
-            d = (f"M{fx(x_src):.2f},{fy(src_top):.2f} "
-                 f"C{fx(cx1):.2f},{fy(src_top):.2f} "
-                 f"{fx(cx2):.2f},{fy(tgt_top):.2f} "
-                 f"{fx(x_tgt):.2f},{fy(tgt_top):.2f} "
-                 f"L{fx(x_tgt):.2f},{fy(tgt_bot):.2f} "
-                 f"C{fx(cx2):.2f},{fy(tgt_bot):.2f} "
-                 f"{fx(cx1):.2f},{fy(src_bot):.2f} "
-                 f"{fx(x_src):.2f},{fy(src_bot):.2f} Z")
+            d = (f"M{coord(fx(x_src))},{coord(fy(src_top))} "
+                 f"C{coord(fx(cx1))},{coord(fy(src_top))} "
+                 f"{coord(fx(cx2))},{coord(fy(tgt_top))} "
+                 f"{coord(fx(x_tgt))},{coord(fy(tgt_top))} "
+                 f"L{coord(fx(x_tgt))},{coord(fy(tgt_bot))} "
+                 f"C{coord(fx(cx2))},{coord(fy(tgt_bot))} "
+                 f"{coord(fx(cx1))},{coord(fy(src_bot))} "
+                 f"{coord(fx(x_src))},{coord(fy(src_bot))} Z")
             cat_idx = cats_a.index(a_) if a_ in cats_a else 0
             col = _PALETTE[cat_idx % len(_PALETTE)]
             out.append(path(d, fill=col, alpha=ribbon_alpha))

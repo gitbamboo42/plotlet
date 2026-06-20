@@ -26,6 +26,8 @@ import plotlet as pt
 from plotlet.utils import to_list
 from plotlet.draw import polygon, polyline, segment
 from scipy.stats import chi2, norm
+from ..draw import coord
+
 
 
 def _km_path(times, events):
@@ -206,7 +208,7 @@ def demo():
     c = pt.chart()
     c.km({"t": t1, "e": e1}, time="t", event="e", label="treatment")
     c.km({"t": t2, "e": e2}, time="t", event="e", label="control")
-    c.title(f"Kaplan-Meier survival (log-rank χ²={chi_sq:.2f}, p={p_val:.4f})")
+    c.title(f"Kaplan-Meier survival (log-rank χ²={coord(chi_sq)}, p={p_val:.4f})")
     c.xlabel("months").ylabel("S(t)").legend(True)
     return c
 

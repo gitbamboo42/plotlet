@@ -4,6 +4,7 @@ Owns the full text → SVG-path pipeline: glyph lookup, width measurement,
 italic synthesis. `text_path` in `plotlet.draw` is a thin wrapper that
 adds the SVG `<path fill=...>` element around the path data produced here.
 """
+import math
 import re
 from pathlib import Path
 
@@ -11,6 +12,8 @@ from fontTools.ttLib import TTFont
 from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.pens.transformPen import TransformPen
 from fontTools.misc.transform import Transform
+from .format import coord
+
 
 _HERE = Path(__file__).parent
 _FONT_PATH = _HERE / "fonts" / "DejaVuSans.ttf"
@@ -64,17 +67,50 @@ def descender(size: float) -> float:
     return size * _DESCENDER_RATIO
 
 
+def rotated_label_bbox(label_w: float, label_h: float, rot_deg: float) -> tuple[float, float]:
+    """Bounding-box (width, height) of a rotated text label. Conservative —
+    uses the simple ``|cos|·w + |sin|·h`` envelope, which is exact for the
+    AABB of an axis-aligned rectangle rotated by any angle."""
+    if rot_deg == 0:
+        return label_w, label_h
+    rad = math.radians(abs(rot_deg))
+    sin_r = math.sin(rad)
+    cos_r = math.cos(rad)
+    return (label_w * cos_r + label_h * sin_r,
+            label_w * sin_r + label_h * cos_r)
+
+
+def tick_band_height(labels, size, rotation) -> float:
+    """Vertical extent of a tick-label band past its anchor row.
+
+    Anchor sits at ``cap_height`` below the band top (cap top flush with
+    the band top for rot=0). Rotated text extends ``|sin|·label_w`` plus
+    ``|cos|·descender`` below the anchor (AABB of the rotated label rect
+    with anchor at right-edge/baseline). Used by both the margin
+    reservation and the sector-label stacking position — same formula in
+    one home keeps them in lockstep.
+    """
+    if not labels:
+        return 0.0
+    max_w = max((measure_text(str(l), size) for l in labels), default=0.0)
+    rad = math.radians(abs(rotation))
+    return (cap_height(size)
+            + math.sin(rad) * max_w
+            + math.cos(rad) * descender(size))
+
+
 _GLYPH_FLOAT_RE = re.compile(r"-?\d+\.\d+")
 
 
 def _round_glyph_floats(d: str) -> str:
-    """Round every float in a glyph-path d-string to 2 decimals.
+    """Round every float in a glyph-path d-string via ``coord(...)``.
 
     fontTools sub-bit rounding inside `SVGPathPen.getCommands()` shifts
     between releases (e.g. 4.62 → 4.63 turns `10.9921875` into
-    `10.992187499999993`). Pinning to `:.2f` matches the pixel quantization
-    used everywhere else and collapses both representations identically."""
-    return _GLYPH_FLOAT_RE.sub(lambda m: f"{float(m.group()):.2f}", d)
+    `10.992187499999993`). Routing through ``coord`` matches the pixel
+    quantization used everywhere else and collapses both representations
+    identically."""
+    return _GLYPH_FLOAT_RE.sub(lambda m: f"{coord(float(m.group()))}", d)
 
 
 def _glyph_path_d(s: str, x: float, y: float, size: float,

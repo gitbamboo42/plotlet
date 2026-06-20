@@ -22,7 +22,7 @@ from ..registry import ArtistSpec, add_artist
 from ..utils import to_list, long_form_1d, resolve_aes, palette_color
 from ..draw import TAB10, resolve_color
 from .._spec import _D, _LEGSPEC
-from ..draw import rect as draw_rect, path as draw_path, polygon as draw_polygon
+from ..draw import coord, path as draw_path, polygon as draw_polygon, rect as draw_rect
 
 
 def _artist_hist(a, xs_, ys_, col, bins, warp=None):
@@ -74,7 +74,7 @@ def _artist_hist(a, xs_, ys_, col, bins, warp=None):
     edge_w = lw if stroke else _D["linewidth"]
     fill = col if histtype == "stepfilled" else None
     if warp is None:
-        d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts)
+        d = "M" + " L".join(f"{coord(x)},{coord(y)}" for x, y in pts)
         out.append(draw_path(d + " Z", fill=fill,
                              stroke=edge, stroke_width=edge_w,
                              dash=opts.get("linestyle"), alpha=alpha))

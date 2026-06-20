@@ -14,7 +14,7 @@ from ..registry import ArtistSpec, add_artist
 from ..utils import to_list
 from .._spec import _D
 from ..draw import text_path, segment, rect as draw_rect, polygon as draw_polygon
-from ..draw import measure_text
+from ..draw import coord, measure_text
 from ._shared import _xy_minmax
 
 
@@ -157,7 +157,7 @@ def _artist_text(a, xs_, ys_, col):
             # native rotation is CW in screen space (y-down), so we
             # negate at emission. Rotation anchor is the ha/va alignment
             # point so the labeled glyph stays pinned.
-            out.append(f'<g transform="rotate({-rotation:g},{px:.2f},{py:.2f})">'
+            out.append(f'<g transform="rotate({-rotation:g},{coord(px)},{coord(py)})">'
                        + "".join(parts) + "</g>")
         else:
             out.extend(parts)

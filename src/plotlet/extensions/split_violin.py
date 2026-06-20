@@ -31,6 +31,8 @@ from scipy.stats import gaussian_kde
 import plotlet as pt
 from plotlet.utils import to_list
 from plotlet.draw import path, segment, rect, circle
+from ..draw import coord
+
 
 
 def _quantile(xs, q):
@@ -127,8 +129,8 @@ def split_violin_draw(a, ctx):
             py = ctx.y_scale(gx)
             a_pts.append((cx - dx_px, py))
         top_y = ctx.y_scale(grid[-1]); bot_y = ctx.y_scale(grid[0])
-        a_path = ("M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in a_pts)
-                  + f" L{cx:.2f},{top_y:.2f} L{cx:.2f},{bot_y:.2f} Z")
+        a_path = ("M" + " L".join(f"{coord(x)},{coord(y)}" for x, y in a_pts)
+                  + f" L{coord(cx)},{coord(top_y)} L{coord(cx)},{coord(bot_y)} Z")
         out.append(path(a_path, fill=col_a, stroke=col_a, stroke_width=0.8,
                         fill_alpha=fill_alpha, stroke_alpha=1))
         # Right half (group B).
@@ -137,8 +139,8 @@ def split_violin_draw(a, ctx):
             dx_px = (dy / dmax) * half_w_px
             py = ctx.y_scale(gx)
             b_pts.append((cx + dx_px, py))
-        b_path = ("M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in b_pts)
-                  + f" L{cx:.2f},{top_y:.2f} L{cx:.2f},{bot_y:.2f} Z")
+        b_path = ("M" + " L".join(f"{coord(x)},{coord(y)}" for x, y in b_pts)
+                  + f" L{coord(cx)},{coord(top_y)} L{coord(cx)},{coord(bot_y)} Z")
         out.append(path(b_path, fill=col_b, stroke=col_b, stroke_width=0.8,
                         fill_alpha=fill_alpha, stroke_alpha=1))
         # Center line.

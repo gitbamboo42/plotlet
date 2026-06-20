@@ -20,6 +20,8 @@ Usage:
 from __future__ import annotations
 import re
 from dataclasses import dataclass
+from .draw import coord
+
 
 
 EDGE_TOL = 0.0
@@ -51,7 +53,7 @@ class Warning:
     def __str__(self):
         x, y, w, h = self.bbox
         return (f"{self.check}: {self.region} at "
-                f"({x:.1f},{y:.1f},{w:.1f},{h:.1f}) — {self.message}")
+                f"({coord(x)},{coord(y)},{coord(w)},{coord(h)}) — {self.message}")
 
 
 def _materialize(chart):
@@ -91,7 +93,7 @@ def edge_clip(regs, W, H) -> list[Warning]:
                     or vx > W + EDGE_TOL or vy > H + EDGE_TOL):
                 out.append(Warning(
                     "edge_clip", r["name"], r["bbox"],
-                    f"vertex ({vx:.1f},{vy:.1f}) outside figure "
+                    f"vertex ({coord(vx)},{coord(vy)}) outside figure "
                     f"({W:.0f}x{H:.0f})"
                 ))
                 break
@@ -113,7 +115,7 @@ def overlap(regs, W, H) -> list[Warning]:
             if ox > 0 and oy > 0:
                 out.append(Warning(
                     "overlap", f'{a["name"]} ↔ {b["name"]}',
-                    b["bbox"], f"overlap {ox:.1f}x{oy:.1f}px"
+                    b["bbox"], f"overlap {coord(ox)}x{coord(oy)}px"
                 ))
     return out
 

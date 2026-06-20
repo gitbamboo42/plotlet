@@ -23,6 +23,8 @@ from pathlib import Path
 import plotlet as pt
 from plotlet.utils import to_list
 from plotlet.draw import path, text_path
+from ..draw import coord
+
 
 
 def gene_arrow_record(args, kw):
@@ -77,19 +79,19 @@ def gene_arrow_draw(a, ctx):
         if st >= 0:
             body_l, body_r = x_s, x_e - head_w
             tip = x_e
-            d = (f"M{body_l:.2f},{y_top:.2f} L{body_r:.2f},{y_top:.2f} "
-                 f"L{body_r:.2f},{y_top - (y_top - y_bot) * 0.25:.2f} "
-                 f"L{tip:.2f},{y_mid:.2f} "
-                 f"L{body_r:.2f},{y_bot + (y_top - y_bot) * 0.25:.2f} "
-                 f"L{body_r:.2f},{y_bot:.2f} L{body_l:.2f},{y_bot:.2f} Z")
+            d = (f"M{coord(body_l)},{coord(y_top)} L{coord(body_r)},{coord(y_top)} "
+                 f"L{coord(body_r)},{coord(y_top - (y_top - y_bot) * 0.25)} "
+                 f"L{coord(tip)},{coord(y_mid)} "
+                 f"L{coord(body_r)},{coord(y_bot + (y_top - y_bot) * 0.25)} "
+                 f"L{coord(body_r)},{coord(y_bot)} L{coord(body_l)},{coord(y_bot)} Z")
         else:
             body_l, body_r = x_s + head_w, x_e
             tip = x_s
-            d = (f"M{body_r:.2f},{y_top:.2f} L{body_l:.2f},{y_top:.2f} "
-                 f"L{body_l:.2f},{y_top - (y_top - y_bot) * 0.25:.2f} "
-                 f"L{tip:.2f},{y_mid:.2f} "
-                 f"L{body_l:.2f},{y_bot + (y_top - y_bot) * 0.25:.2f} "
-                 f"L{body_l:.2f},{y_bot:.2f} L{body_r:.2f},{y_bot:.2f} Z")
+            d = (f"M{coord(body_r)},{coord(y_top)} L{coord(body_l)},{coord(y_top)} "
+                 f"L{coord(body_l)},{coord(y_top - (y_top - y_bot) * 0.25)} "
+                 f"L{coord(tip)},{coord(y_mid)} "
+                 f"L{coord(body_l)},{coord(y_bot + (y_top - y_bot) * 0.25)} "
+                 f"L{coord(body_l)},{coord(y_bot)} L{coord(body_r)},{coord(y_bot)} Z")
         out.append(path(d, fill=col))
         if labels and i < len(labels) and labels[i]:
             out.append(text_path(labels[i], (x_s + x_e) / 2, y_top - 4,

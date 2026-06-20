@@ -26,6 +26,8 @@ from pathlib import Path
 import plotlet as pt
 from plotlet.utils import to_list
 from plotlet.draw import text_path, segment, circle
+from ..draw import coord
+
 
 
 def funnel_plot_record(args, kw):
@@ -88,7 +90,7 @@ def funnel_plot_draw(a, ctx):
         # Pooled estimate vertical line.
         out.append(segment(px_top, py_top, px_top, py_b,
                            color="#444", width=0.8))
-        out.append(text_path(f"pooled = {a['_pooled']:.2f}",
+        out.append(text_path(f"pooled = {coord(a['_pooled'])}",
                               px_top + 4, py_top + 11, 9, anchor="start"))
     for e, s in zip(a["est"], a["ses"]):
         out.append(circle(ctx.x_scale(e), ctx.y_scale(s), r,

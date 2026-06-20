@@ -17,7 +17,8 @@ from .primitives import (
 )
 from .colors import TAB10, colors, resolve_color
 from .colormaps import colormap, colormap_lut, list_colormaps, ContinuousNorm
-from .font import measure_text, cap_height, descender
+from .font import measure_text, cap_height, descender, tick_band_height, rotated_label_bbox
+from .format import coord, stroke_w, opacity, degree
 from .linestyles import resolve_linestyle
 from ._png import encode_rgb
 
@@ -27,7 +28,9 @@ __all__ = [
     "errorbar_v", "errorbar_h", "dash_attr",
     "TAB10", "colors", "resolve_color",
     "colormap", "colormap_lut", "list_colormaps", "ContinuousNorm",
-    "measure_text", "cap_height", "descender",
+    "measure_text", "cap_height", "descender", "tick_band_height",
+    "rotated_label_bbox",
+    "coord", "stroke_w", "opacity", "degree",
     "resolve_linestyle",
     "encode_rgb",
 ]

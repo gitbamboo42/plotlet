@@ -22,7 +22,7 @@ import math
 from ..registry import ArtistSpec, add_artist
 from ..utils import to_list
 from .._spec import _D
-from ..draw import marker, path as draw_path, polyline
+from ..draw import coord, marker, path as draw_path, polyline
 from ._shared import (_xy_minmax, _line_legend_entries, _CURVE_VALUES,
                        _step_coords, expand_xy_long_form, DEFAULT_ALPHA_RANGE)
 
@@ -54,7 +54,7 @@ def _artist_line(a, xs_, ys_, col, xs, ys, warp=None):
                 if p is None:
                     started = False
                     continue
-                d_segs.append(f'{"M" if not started else "L"}{p[0]:.2f},{p[1]:.2f}')
+                d_segs.append(f'{"M" if not started else "L"}{coord(p[0])},{coord(p[1])}')
                 started = True
             out.append(draw_path("".join(d_segs), stroke=col, stroke_width=lw,
                                  dash=ls, alpha=alpha))

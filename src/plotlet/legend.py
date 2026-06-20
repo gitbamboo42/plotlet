@@ -23,7 +23,7 @@ from .chart import Chart
 from .draw import colormap, ContinuousNorm
 from .registry import RenderContext, get_artist
 from .draw import measure_text
-from .draw import text_path, rect, segment
+from .draw import coord, rect, segment, text_path
 from . import _regions
 from .scales import _fmt_tick
 from ._spec import _D, _DASH, _FIGSPEC, _FONTSPEC, _FRAME, _LEGSPEC
@@ -494,7 +494,7 @@ def _render_legend(leaf: Chart, w: float, h: float,
         content_h = cy + pad_y
         dy = max(0, (h - content_h) / 2)
         if dy > 0:
-            body = f'<g transform="translate(0,{dy:.2f})">{body}</g>'
+            body = f'<g transform="translate(0,{coord(dy)})">{body}</g>'
     return body
 
 

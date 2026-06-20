@@ -24,7 +24,7 @@ from ..utils import (to_list, long_form_1d, resolve_aes, palette_color,
                      silverman_bw, kde_1d)
 from ..draw import TAB10, resolve_color
 from .._spec import _LEGSPEC
-from ..draw import path, polyline, segment
+from ..draw import coord, path, polyline, segment
 
 
 def _density_1d_record(args, kw):
@@ -98,8 +98,8 @@ def _density_1d_draw(a, ctx):
         pts = [(ctx.x_scale(x), ctx.y_scale(y)) for x, y in zip(grid, d)]
         if fill_flag and pts:
             y0 = ctx.y_scale(0)
-            d_path = ("M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts)
-                      + f" L{pts[-1][0]:.2f},{y0:.2f} L{pts[0][0]:.2f},{y0:.2f} Z")
+            d_path = ("M" + " L".join(f"{coord(x)},{coord(y)}" for x, y in pts)
+                      + f" L{coord(pts[-1][0])},{coord(y0)} L{coord(pts[0][0])},{coord(y0)} Z")
             out.append(path(d_path, fill=col, alpha=alpha))
         out.append(polyline(pts, color=col, width=lw))
     return "".join(out)

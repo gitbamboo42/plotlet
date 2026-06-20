@@ -20,7 +20,7 @@ import html as _html
 import xml.etree.ElementTree as ET
 
 from .chart import Chart
-from .draw import rect
+from .draw import coord, rect
 
 
 _SVG_NS = "{http://www.w3.org/2000/svg}"
@@ -173,7 +173,7 @@ def _render_diagram_inner(src_svg: str, W: int, H: int,
             col = _REGIONS_PALETTE.get(r["name"], "#888")
             poly = r["meta"].get("polygon")
             if poly:
-                pts = " ".join(f"{px:.1f},{py:.1f}" for px, py in poly)
+                pts = " ".join(f"{coord(px)},{coord(py)}" for px, py in poly)
                 parts.append(
                     f'<polygon points="{pts}" '
                     f'fill="{col}" fill-opacity="0.3"/>'
@@ -181,8 +181,8 @@ def _render_diagram_inner(src_svg: str, W: int, H: int,
             else:
                 x, y, w, h = r["bbox"]
                 parts.append(
-                    f'<rect x="{x:.1f}" y="{y:.1f}" '
-                    f'width="{w:.1f}" height="{h:.1f}" '
+                    f'<rect x="{coord(x)}" y="{coord(y)}" '
+                    f'width="{coord(w)}" height="{coord(h)}" '
                     f'fill="{col}" fill-opacity="0.3"/>'
                 )
     parts.append('</g>')
@@ -321,6 +321,6 @@ def _txt(x: float, y: float, s, *, anchor: str = "middle", size: int = 10,
         extra += f' font-weight="{weight}"'
     if rotate is not None:
         extra += f' transform="rotate({rotate} {x} {y})"'
-    return (f'<text x="{x:.1f}" y="{y:.1f}" text-anchor="{anchor}" '
+    return (f'<text x="{coord(x)}" y="{coord(y)}" text-anchor="{anchor}" '
             f'font-size="{size}" fill="{fill}"{extra}>'
             f'{_html.escape(str(s))}</text>')
