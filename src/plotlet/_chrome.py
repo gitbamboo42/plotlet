@@ -338,7 +338,14 @@ def emit_chrome(*,
     # axis. Walls are conceptually side spines, so style resolves through
     # the same _side_stroke/_side_dash with "walls" as the target. The
     # c.spines(walls=False) toggle suppresses walls regardless of
-    # `Sectors.divider`.
+    # `Sectors.divider`. Artists that span sectors (chord_links, ribbons)
+    # also suppress walls via `ArtistSpec.crosses_sectors` — walls cutting
+    # through cross-sector curves read as a layering bug.
+    from .registry import get_artist as _get_artist
+    _crossers = any(
+        (_spec := _get_artist(a["type"])) is not None and _spec.crosses_sectors
+        for a in st["artists"]
+    )
     if x_sec is not None and (x_sec.divider or x_sec.label):
         sec_col, sec_w = _side_stroke("walls")
         sec_dash = _side_dash("walls")
@@ -381,12 +388,12 @@ def emit_chrome(*,
                     "label_fontcolor":   _FONTSPEC["color"],
                     "label_fontstyle":   x_style,
                     "label_decoration":  x_decor,
-                    "draw_dividers":     bool(sec.divider) and st["spine_walls"],
+                    "draw_dividers":     bool(sec.divider) and st["spine_walls"] and not _crossers,
                     "draw_labels":       bool(sec.label) and not suppress_xt,
                 },
             ))
         else:
-            if sec.divider and st["spine_walls"]:
+            if sec.divider and st["spine_walls"] and not _crossers:
                 for x in divider_xs:
                     parts.append(segment(x, 0, x, ih,
                                          color=sec_col, width=sec_w, dash=sec_dash,

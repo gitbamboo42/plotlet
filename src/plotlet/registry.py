@@ -89,6 +89,13 @@ class ArtistSpec:
     force_zero_y: bool | Callable[[dict], bool] = False
     axis_order: Callable[[dict], dict | None] | None = None
     frame_defaults: Callable[[list, dict], list | None] | None = None
+    # Set True for artists whose geometry spans sector boundaries
+    # (chord_links, future cross-sector ribbons). The chrome render
+    # suppresses the inter-sector divider walls when any active artist
+    # has this set — walls cutting through a cross-sector curve read
+    # as a layering bug. Sector *labels* still render (they tell the
+    # reader which sector is which).
+    crosses_sectors: bool = False
 
 
 @dataclass

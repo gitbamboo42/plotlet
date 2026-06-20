@@ -233,4 +233,8 @@ add_artist(ArtistSpec(
     axis_order=_dendrogram_axis_order,
     frame_defaults=_dendrogram_frame_defaults,
     tight_domain=True,
+    # Between-cluster joins (parent=True) span sector boundaries;
+    # within-block trees don't, but the inter-block gap whitespace
+    # already shows the partition — walls just add visual noise.
+    crosses_sectors=True,
 ))

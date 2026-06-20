@@ -306,45 +306,62 @@ def _sector_remap_data(call_kw, st):
     if data is None:
         return call_kw
     new_cols = {}
+    consumed = set()      # per-endpoint sector kwargs eaten by remap
     for axis in ("x", "y"):
         sec     = st[f"{axis}_sectors"]
         sec_col = st[f"{axis}_sector_column"]
-        if sec is None or sec.kind != "continuous" or sec_col is None:
+        if sec is None or sec.kind != "continuous":
             continue
-        val_col = call_kw.get(axis)
-        if not isinstance(val_col, str):
-            continue
-        try:
-            has_sec = sec_col in data
-            has_val = val_col in data
-        except TypeError:
-            continue
-        if not (has_sec and has_val):
-            continue
-        secs = list(data[sec_col])
-        vals = list(data[val_col])
-        known = set(sec.names)
-        unknown = [s for s in secs if s not in known]
-        if unknown:
-            sample = unknown[0]
-            raise ValueError(
-                f"c.sectors({axis}-axis): row in data[{sec_col!r}] has "
-                f"value {sample!r} which is not a known sector. "
-                f"Known sectors: {list(sec.names)}"
-            )
-        new_cols[val_col] = [sec.offset(s) + float(v)
-                             for s, v in zip(secs, vals)]
-    if not new_cols:
+        # Standard `x=` / `y=` plus multi-position variants `x1`/`x2`
+        # (`y1`/`y2`) for artists like chord_links. Each val_kw can
+        # carry its own `{val_kw}_sector=` to point at a per-endpoint
+        # sector column; missing → fall back to the layout's `sec_col`.
+        # That covers cross-sector links cleanly (each endpoint maps
+        # via its own sector tag) and keeps the simple case unchanged.
+        for val_kw in (axis, f"{axis}1", f"{axis}2"):
+            val_col = call_kw.get(val_kw)
+            if not isinstance(val_col, str):
+                continue
+            sec_kw = f"{val_kw}_sector"
+            sec_col_here = call_kw.get(sec_kw, sec_col)
+            if sec_kw in call_kw:
+                consumed.add(sec_kw)
+            if not isinstance(sec_col_here, str):
+                continue
+            try:
+                has_sec = sec_col_here in data
+                has_val = val_col in data
+            except TypeError:
+                continue
+            if not (has_sec and has_val):
+                continue
+            secs = list(data[sec_col_here])
+            vals = list(data[val_col])
+            known = set(sec.names)
+            unknown = [s for s in secs if s not in known]
+            if unknown:
+                sample = unknown[0]
+                raise ValueError(
+                    f"c.sectors({axis}-axis): row in data[{sec_col_here!r}] has "
+                    f"value {sample!r} which is not a known sector. "
+                    f"Known sectors: {list(sec.names)}"
+                )
+            new_cols[val_col] = [sec.offset(s) + float(v)
+                                 for s, v in zip(secs, vals)]
+    if not new_cols and not consumed:
         return call_kw
     call_kw = dict(call_kw)
-    if hasattr(data, "assign"):  # pandas — preserve dtypes on sibling cols
-        call_kw["data"] = data.assign(**new_cols)
-    else:
-        new_data = dict(data) if isinstance(data, dict) else {
-            c: list(data[c]) for c in data
-        }
-        new_data.update(new_cols)
-        call_kw["data"] = new_data
+    for kw in consumed:                       # framework-only, never reach record()
+        call_kw.pop(kw, None)
+    if new_cols:
+        if hasattr(data, "assign"):           # pandas — preserve dtypes on sibling cols
+            call_kw["data"] = data.assign(**new_cols)
+        else:
+            new_data = dict(data) if isinstance(data, dict) else {
+                c: list(data[c]) for c in data
+            }
+            new_data.update(new_cols)
+            call_kw["data"] = new_data
     return call_kw
 
 
@@ -526,8 +543,13 @@ def _replay(calls):
                 )
             sec = Sectors.coerce(args[0], name_col=col,
                                  divider=divider, label=label, gap=gap)
-            # Continuous sectors need a column= tag on the data so the
-            # record-time remap can route each row to its sector.
+            # `column=` is the default sector tag for single-position
+            # artists (scatter, line, bar, …). Required even for
+            # multi-position artists (chord_links) — those override per
+            # endpoint via `x1_sector=` / `x2_sector=`, but the typo
+            # guard is worth keeping: silently no-op'd remap is a
+            # footgun. For cross-sector chord_links, pass one of the
+            # endpoint columns as the default.
             if sec.kind == "continuous" and col is None:
                 raise TypeError(
                     "c.sectors(...): continuous sectors need column= "

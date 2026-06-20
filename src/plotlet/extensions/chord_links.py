@@ -1,0 +1,192 @@
+"""Custom artist: chord_links — pairwise arcs between two x-positions.
+
+Same call works in two coordinate setups:
+
+- In Cartesian (no coord, or any affine coord) the artist emits half-ellipse
+  arcs above ``y=0`` from ``x1`` to ``x2`` — a classic arc diagram. The
+  bulge defaults to a semicircle (height = ``|x2 − x1| / 2``), so the
+  chart's ``ylim`` autoscales to fit. Pair with ``c.yticks([])`` for the
+  clean arc-diagram look.
+
+- Attached to a ``CircularCoordinate`` via its ``inner=`` slot, the same
+  artist draws Bezier chords through the central disc — the Circos-style
+  link visual. The disc sub-coord ignores y data; chord endpoints land at
+  the disc boundary (``r = 1`` of the sub-coord = ``r_inner`` of the rings)
+  and curve through the canvas center.
+
+Color follows the standard ``color="col"`` (categorical → palette) or
+``color="#hex"`` (literal) convention.
+
+Sector handling:
+
+- **Intra-sector** links (both endpoints in the same sector): pass the
+  sector tag once on the layout via ``c.sectors(spec, column="chrom")``;
+  ``x1`` and ``x2`` both pick it up.
+- **Cross-sector** links: pass per-endpoint sector tags
+  ``x1_sector="src_chrom", x2_sector="dst_chrom"`` on the call. The
+  layout-level ``column=`` is then optional. ``x1_sector`` /
+  ``x2_sector`` are consumed by the sector remap and never reach the
+  artist.
+
+The chrome renderer auto-suppresses inter-sector divider walls when
+this artist is active (via ``crosses_sectors=True``) — walls cutting
+through a cross-sector curve read as a layering bug. Sector *labels*
+still render.
+"""
+
+SUMMARY = "Pairwise arcs between two x positions; renders as a linear arc diagram or, inside a CircularCoordinate inner disc, as Circos-style Bezier chords."
+
+from pathlib import Path
+
+import plotlet as pt
+from plotlet.draw import path as draw_path, segment, TAB10
+from plotlet.utils import to_list, resolve_aes, palette_color
+
+
+def _chord_links_record(args, kw):
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "chord_links requires long-form input: "
+            "c.chord_links(data=df, x1='col', x2='col')."
+        )
+    data  = kw.pop("data", None)
+    x1_col = kw.pop("x1", None)
+    x2_col = kw.pop("x2", None)
+    if data is None or x1_col is None or x2_col is None:
+        raise TypeError("chord_links requires data=, x1=, x2=.")
+    color   = kw.pop("color", None)
+    palette = kw.pop("palette", None)
+    xs1 = to_list(data[x1_col])
+    xs2 = to_list(data[x2_col])
+
+    color_kind, color_value = resolve_aes(data, color)
+    if color_kind != "column":
+        opts = dict(kw)
+        if color_value is not None:
+            opts["color"] = color_value
+        return {"type": "chord_links", "xs1": xs1, "xs2": xs2, "opts": opts}
+
+    # Categorical color: one record per level so the standard color cycle
+    # and legend dispatch apply. No continuous-color path (not common for
+    # link artists; add later if needed).
+    color_vec = list(color_value)
+    levels = list(dict.fromkeys(color_vec))
+    records = []
+    labeled: set = set()
+    for ck in levels:
+        idxs = [i for i, v in enumerate(color_vec) if v == ck]
+        opts = dict(kw)
+        idx = levels.index(ck)
+        opts["color"] = palette_color(palette, ck, idx) or TAB10[idx % 10]
+        if ck not in labeled:
+            opts["label"] = str(ck)
+            labeled.add(ck)
+        records.append({
+            "type": "chord_links",
+            "xs1": [xs1[i] for i in idxs],
+            "xs2": [xs2[i] for i in idxs],
+            "opts": opts,
+        })
+    return records
+
+
+def _chord_links_xdomain(a):
+    return list(a["xs1"]) + list(a["xs2"])
+
+
+def _chord_links_ydomain(a):
+    # Arc diagrams have no y-data — the y-axis is just space for the
+    # bulge to live in. Return [0, 1] for a degenerate-safe autoscale;
+    # `height=` (pixels) controls the actual bulge.
+    return [0, 1]
+
+
+def _chord_links_draw(a, ctx):
+    opts = a["opts"]
+    col = ctx.color
+    alpha = opts.get("alpha", 0.6)
+    width = opts.get("width", 1.0)
+    out = []
+
+    if ctx.warp is None:
+        # Cartesian: quadratic Bezier bells above y=0. All chords peak at
+        # the same height regardless of chord length — short chords get
+        # narrow bells, long chords get wide bells, both at the same y.
+        # (A half-ellipse default would give short chords a degenerate
+        # hairpin shape; same peak height, but visually reads as a
+        # vertical line.) `height=N` overrides the peak height in pixels.
+        y0 = ctx.y_scale(0)
+        h_px = float(opts.get("height", ctx.ih * 0.7))
+        # Quadratic Bezier peaks at y = 0.5 * (y0 + y_ctrl), so for the
+        # peak to land h_px above y0, control y must be y0 - 2*h_px.
+        y_ctrl = y0 - 2 * h_px
+        for x1, x2 in zip(a["xs1"], a["xs2"]):
+            x1_px = ctx.x_scale(x1)
+            x2_px = ctx.x_scale(x2)
+            xc = (x1_px + x2_px) / 2
+            d = (f"M {x1_px:.2f},{y0:.2f} "
+                 f"Q {xc:.2f},{y_ctrl:.2f} {x2_px:.2f},{y0:.2f}")
+            out.append(draw_path(d, stroke=col, stroke_width=width, alpha=alpha))
+        return "".join(out)
+
+    # Disc sub-coord (non-affine): quadratic Bezier through the canvas
+    # center. Endpoint t-positions come from x_scale; r is fixed at the
+    # disc boundary (r = 1 of the sub-coord). In pre-warp Cartesian
+    # pixels, r=1 ↔ y_px = 0 (top edge) and r=0 ↔ y_px = ih (bottom,
+    # but the warp collapses every column to the canvas center).
+    cx_px, cy_px = ctx.warp(ctx.iw / 2, ctx.ih)
+    for x1, x2 in zip(a["xs1"], a["xs2"]):
+        p1x, p1y = ctx.warp(ctx.x_scale(x1), 0.0)
+        p2x, p2y = ctx.warp(ctx.x_scale(x2), 0.0)
+        d = (f"M {p1x:.2f},{p1y:.2f} "
+             f"Q {cx_px:.2f},{cy_px:.2f} {p2x:.2f},{p2y:.2f}")
+        out.append(draw_path(d, stroke=col, stroke_width=width, alpha=alpha))
+    return "".join(out)
+
+
+def _chord_links_legend_entries(a):
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    def paint(a, ctx, x0, y_mid):
+        col = a["_color"]
+        opts = a["opts"]
+        return segment(x0, y_mid, x0 + 22, y_mid, color=col,
+                       width=opts.get("width", 1.0),
+                       alpha=opts.get("alpha", 0.6))
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
+
+
+pt.add_artist(pt.ArtistSpec(
+    name="chord_links",
+    record=_chord_links_record,
+    xdomain=_chord_links_xdomain,
+    ydomain=_chord_links_ydomain,
+    draw=_chord_links_draw,
+    legend_entries=_chord_links_legend_entries,
+    coord_native=True,
+    crosses_sectors=True,
+))
+
+
+def demo():
+    """Linear arc-diagram demo — pairs of x positions colored by category."""
+    import pandas as pd
+    df = pd.DataFrame({
+        "src":  [10, 18, 25, 35, 50, 60, 72, 80],
+        "dst":  [40, 65, 55, 88, 78, 95, 90, 96],
+        "kind": ["a", "b", "a", "b", "a", "b", "a", "b"],
+    })
+    c = pt.chart(df, xlim=(0, 100))
+    c.chord_links(data=df, x1="src", x2="dst", color="kind", width=1.5,
+                  alpha=0.7)
+    c.title("Arc diagram").xlabel("position").yticks([]).ylabel("")
+    c.legend(True)
+    return c
+
+
+if __name__ == "__main__":
+    out = Path(__file__).with_suffix(".svg")
+    demo().save_svg(out)
+    print(f"wrote {out}")

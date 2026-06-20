@@ -78,6 +78,48 @@ from . import _chrome_linear as _cl
 from . import _chrome_circular as _cc
 
 
+def _render_leaf_into(leaf, coord, W, H, body_re) -> str:
+    """Render `leaf` into a (W × H) canvas under `coord`, returning the
+    inner SVG body (no `<svg>` wrapper). Snapshots and restores the leaf
+    so repeat renders stay idempotent. Cartesian chrome is suppressed
+    because it would warp into nonsense under a non-affine coord.
+    """
+    n0 = len(leaf._calls)
+    orig_dw, orig_dh = leaf._data_width, leaf._data_height
+    orig_margin = dict(leaf._margin)
+    try:
+        has_own_coord = any(c[0] == "coordinate" for c in leaf._calls)
+        if not has_own_coord:
+            leaf._calls.append(("coordinate", [coord], {}))
+        leaf._calls.extend([
+            ("title",  [""], {}),
+            ("xlabel", [""], {}),
+            ("ylabel", [""], {}),
+            ("xticks", [[]], {}),
+            ("yticks", [[]], {}),
+            ("spines", [], {"top": False, "right": False,
+                            "bottom": False, "left": False}),
+        ])
+        leaf._data_width  = W
+        leaf._data_height = H
+        leaf._margin = {"left": 0, "right": 0, "top": 0, "bottom": 0}
+        leaf._canvas_width  = W
+        leaf._canvas_height = H
+        svg = leaf._to_svg_unchecked(outer=None)
+    finally:
+        del leaf._calls[n0:]
+        leaf._data_width, leaf._data_height = orig_dw, orig_dh
+        leaf._margin = orig_margin
+        leaf._canvas_width  = orig_dw + orig_margin["left"] + orig_margin["right"]
+        leaf._canvas_height = orig_dh + orig_margin["top"]  + orig_margin["bottom"]
+    m = body_re.match(svg)
+    if m is None:
+        raise RuntimeError(
+            "CircularCoordinate.render_layout: leaf produced no <svg> wrapper"
+        )
+    return m.group(1)
+
+
 class LinearCoordinate:
     """Coordinate transform: x-axis stays horizontal, y-axis tilts.
 
@@ -192,14 +234,25 @@ class CircularCoordinate:
         otherwise the wrap-around joins back-to-back while internal
         boundaries show whitespace. Works without sectors too: produces
         an open arc instead of a closed ring.
+    inner : Chart, optional
+        A separate ``pt.chart(...)`` rendered into the central disc
+        ``r ∈ [0, r_inner]`` — the area no ring claims. Used to host
+        Circos-style chord/link artists (e.g. ``c.chord_links``) that
+        share the t-axis with the rings but live in the inner disc.
+        The leaves passed via ``(c1 / c2 / ...).coordinate(...)`` still
+        tile the annulus exactly as today; this is additive. The inner
+        chart needs its own ``xlim`` (and ``sectors(...)`` if the rings
+        use them) matching the rings — composition doesn't propagate.
     """
 
     def __init__(self, r_inner: float = 0.30, r_outer: float = 1.0,
-                 gap: float = 0.05, wrap_gap_deg: float = 0.0):
+                 gap: float = 0.05, wrap_gap_deg: float = 0.0,
+                 inner=None):
         self.r_inner      = r_inner
         self.r_outer      = r_outer
         self.gap          = gap
         self.wrap_gap_deg = wrap_gap_deg
+        self.inner        = inner
 
     @property
     def _wrap_gap_rad(self) -> float:
@@ -262,10 +315,12 @@ class CircularCoordinate:
     def render_layout(self, root) -> tuple[int, int, str]:
         """`Layout.coordinate(...)` strategy for `CircularCoordinate`:
         overlay every leaf onto one canvas, each through its own r-band
-        sub-coord derived from `derive_leaf_coords`. Returns
-        `(W, H, body)` — the inner body with no `<svg>` wrapper, so the
-        caller decides whether to wrap it for a standalone render or
-        inline it inside a parent `<g translate>`.
+        sub-coord derived from `derive_leaf_coords`. When ``self.inner``
+        is set, an extra leaf is rendered into the central disc
+        ``[0, r_inner]`` via its own sub-coord. Returns `(W, H, body)` —
+        the inner body with no `<svg>` wrapper, so the caller decides
+        whether to wrap it for a standalone render or inline it inside
+        a parent `<g translate>`.
 
         Future coords (polar wedges, geographic facets, etc.) implement
         their own `render_layout` with a different strategy — the
@@ -282,47 +337,19 @@ class CircularCoordinate:
         H = max(leaf._data_height for leaf in leaves)
         leaf_coords = self.derive_leaf_coords(leaves)
 
-        bodies = []
-        for i, leaf in enumerate(leaves):
-            # Snapshot to restore so repeat renders stay idempotent.
-            n0 = len(leaf._calls)
-            orig_dw, orig_dh = leaf._data_width, leaf._data_height
-            orig_margin = dict(leaf._margin)
-            try:
-                has_own_coord = any(c[0] == "coordinate" for c in leaf._calls)
-                if not has_own_coord:
-                    leaf._calls.append(("coordinate", [leaf_coords[i]], {}))
-                # Suppress per-leaf Cartesian chrome — it would warp into
-                # nonsense in the ring.
-                leaf._calls.extend([
-                    ("title",  [""], {}),
-                    ("xlabel", [""], {}),
-                    ("ylabel", [""], {}),
-                    ("xticks", [[]], {}),
-                    ("yticks", [[]], {}),
-                    ("spines", [], {"top": False, "right": False,
-                                    "bottom": False, "left": False}),
-                ])
-                # Resize this leaf to fill the warp canvas; zero margins
-                # so its data area is exactly (W × H).
-                leaf._data_width  = W
-                leaf._data_height = H
-                leaf._margin = {"left": 0, "right": 0, "top": 0, "bottom": 0}
-                leaf._canvas_width  = W
-                leaf._canvas_height = H
-                svg = leaf._to_svg_unchecked(outer=None)
-            finally:
-                del leaf._calls[n0:]
-                leaf._data_width, leaf._data_height = orig_dw, orig_dh
-                leaf._margin = orig_margin
-                leaf._canvas_width  = orig_dw + orig_margin["left"] + orig_margin["right"]
-                leaf._canvas_height = orig_dh + orig_margin["top"]  + orig_margin["bottom"]
-            m = _SVG_BODY_RE.match(svg)
-            if m is None:
-                raise RuntimeError(
-                    "CircularCoordinate.render_layout: leaf produced no <svg> wrapper"
-                )
-            bodies.append(m.group(1))
+        bodies = [_render_leaf_into(leaf, c, W, H, _SVG_BODY_RE)
+                  for leaf, c in zip(leaves, leaf_coords)]
+
+        if self.inner is not None:
+            # Central disc: a sub-coord spanning [0, r_inner], inheriting
+            # this coord's gap and wrap geometry so the t-axis aligns
+            # with the rings.
+            inner_coord = CircularCoordinate(
+                r_inner=0.0, r_outer=self.r_inner,
+                gap=self.gap, wrap_gap_deg=self.wrap_gap_deg,
+            )
+            bodies.append(_render_leaf_into(self.inner, inner_coord,
+                                            W, H, _SVG_BODY_RE))
 
         return W, H, "".join(bodies)
 
