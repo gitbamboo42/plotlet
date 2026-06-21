@@ -57,8 +57,12 @@ def chrome_stack_extents(st, *,
         bottom += _FRAME["tick_pad"] + tick_band_height(x_labels, x_size, x_rot)
     x_sec = st["x_sectors"]
     if x_sec is not None and x_sec.label and not hide_b:
+        _sec_x_size = x_sec.fontsize if x_sec.fontsize is not None else _SECTORSPEC["label_size"]
+        _sec_x_rot  = x_sec.rotation if x_sec.rotation is not None else 0
+        _max_sec_w  = max((measure_text(str(n), _sec_x_size) for n in x_sec.names), default=_sec_x_size)
+        _, _sec_h   = rotated_label_bbox(_max_sec_w, _sec_x_size, _sec_x_rot)
         top_gap = _SECTORSPEC["label_pad"] if has_xtl else _FRAME["tick_pad"]
-        bottom += top_gap + cap_height(x_size) + descender(x_size)
+        bottom += top_gap + _sec_h
 
     left = out_y if not hide_l else 0
     has_ytl = (not suppress_yt) and any(str(l) for l in y_labels)
@@ -69,7 +73,8 @@ def chrome_stack_extents(st, *,
         left += _FRAME["tick_pad"] + ytl_bbox_w
     y_sec = st["y_sectors"]
     if y_sec is not None and y_sec.label and not hide_l:
-        sec_lbl_w = max((measure_text(str(n), y_size) for n in y_sec.names),
+        _sec_y_size = y_sec.fontsize if y_sec.fontsize is not None else _SECTORSPEC["label_size"]
+        sec_lbl_w = max((measure_text(str(n), _sec_y_size) for n in y_sec.names),
                         default=0.0)
         top_gap = _SECTORSPEC["label_pad"] if has_ytl else _FRAME["tick_pad"]
         left += top_gap + sec_lbl_w
@@ -119,6 +124,13 @@ def _tick_label(s, x, y, size, angle, axis,
     # captures the post-rotation hull. SVG-wise, rotating around the
     # anchor point (x, y) is equivalent to translating + rotating
     # around the origin; one transform attribute does both.
+    # Horizontal centering on the tick: with anchor=end/start the
+    # baseline endpoint sits at the anchor, but rotated text's visible
+    # bbox is offset by `(cap - descender) / 2 * sin(angle)` away from
+    # the anchor in the rotation direction. Shift the anchor x by the
+    # opposite to land the label's visible center on the tick.
+    if axis == "x" and angle:
+        x = x + (cap_height(size) - descender(size)) / 2 * math.sin(math.radians(angle))
     return text_path(s, x, y, size, anchor=anchor, color=color,
                      fontstyle=fontstyle, decoration=decoration,
                      rotate=angle, tag=tag)
@@ -355,14 +367,17 @@ def emit_chrome(*,
             # Drop only labels redundant with a sharing sibling. A small label
             # overflow into a joined neighbor's collapsed margin is acceptable.
             if not suppress_xt:
-                # baseline = mark_end + tick_pad + cap_height, so the label's cap
-                # top sits flush with `tick_pad` past the visible mark (or the
-                # spine, when the mark is inward / suppressed). Mirrors
-                # `y_label_x`'s handling above for consistency.
+                # Visible top of the label band sits at `ih + x_label_dy`
+                # (flush with `tick_pad` past the visible mark, or the spine
+                # when the mark is inward / suppressed). The anchor's y
+                # needs to be `cap_height * cos(angle)` past that, because
+                # rotating the label rect around the anchor pulls the
+                # top-right corner up by `cap * cos`. Covers rot=0 (cap),
+                # rot=±90 (0), and intermediate angles smoothly.
                 x_label_dy = (_FRAME["tick_pad"] if (x_dir == "in" or not x_marks)
                               else _FRAME["tick_length"] + _FRAME["tick_pad"])
-                parts.append(_tick_label(str(lbl), x,
-                                         ih + x_label_dy + cap_height(x_size),
+                y_lbl = ih + x_label_dy + cap_height(x_size) * math.cos(math.radians(x_rot))
+                parts.append(_tick_label(str(lbl), x, y_lbl,
                                          x_size, x_rot, axis="x",
                                          fontstyle=x_style, decoration=x_decor,
                                          tag="tick-x"))
@@ -430,6 +445,27 @@ def emit_chrome(*,
             # sector bracketing the gap whitespace, computed via the same
             # `_sector_walls` helper but on cyclic t-space). Hand the coord
             # the normalized sector spans so it can build its own walls.
+            #
+            # x_chrome_extent: radial pixels past the outer arc already
+            # consumed by tick marks + labels (drawn by draw_x_frame).
+            # Mirrors the linear stacking rule (tick marks → tick labels →
+            # sector labels, from spine outward) so sector labels clear tick
+            # chrome without overlap. When zero (no ticks on this ring),
+            # sector labels fall back to the plain tick_pad gap.
+            _tl = _FRAME["tick_length"]
+            _tp = _FRAME["tick_pad"]
+            _has_x_labels = any(str(l) for l in x_labels) and not suppress_xt
+            if _has_x_labels:
+                # Tick labels are radial: inner edge at R+tl+tp, center at
+                # R+tl+tp+w/2 (per label), outer edge at R+tl+tp+w. Use the
+                # widest label as the conservative bound for stacking.
+                _max_w = max((measure_text(str(l), x_size) for l in x_labels),
+                             default=0.0)
+                x_chrome_extent = _tl + _tp + _max_w
+            elif x_marks and x_ticks:
+                x_chrome_extent = _tl
+            else:
+                x_chrome_extent = 0.0
             parts.append(coord_object.draw_x_sector_chrome(
                 coord_project, iw, ih,
                 [(lo / iw, hi / iw) for lo, hi in spans],
@@ -439,8 +475,10 @@ def emit_chrome(*,
                     "divider_color":     sec_col,
                     "divider_width":     sec_w,
                     "divider_dash":      sec_dash,
-                    "tick_pad":          _FRAME["tick_pad"],
-                    "label_fontsize":    x_size,
+                    "tick_pad":          _tp,
+                    "label_pad":         sec_pad,
+                    "x_chrome_extent":   x_chrome_extent,
+                    "label_fontsize":    sec.fontsize if sec.fontsize is not None else _SECTORSPEC["label_size"],
                     "label_fontcolor":   _FONTSPEC["color"],
                     "label_fontstyle":   x_style,
                     "label_decoration":  x_decor,
@@ -462,16 +500,23 @@ def emit_chrome(*,
                 # (has labels only when user supplied xticks). Uses the
                 # rotation-aware tick band height — must match the
                 # reservation in `_required_margin`.
+                _sec_x_size = sec.fontsize if sec.fontsize is not None else _SECTORSPEC["label_size"]
+                _sec_x_rot  = sec.rotation if sec.rotation is not None else 0
                 has_xtl = any(str(l) for l in x_labels)
+                # sec_baseline mirrors the _tick_label y_lbl formula:
+                # cap_height * cos(rot) gives the y-offset from the band top to
+                # the anchor — 0 at 90° (anchor is at the top, text hangs down),
+                # cap_height at 0° (baseline sits one cap below the band top).
+                _sec_cap_offset = cap_height(_sec_x_size) * math.cos(math.radians(_sec_x_rot))
                 if has_xtl:
                     sec_baseline = (ih + _FRAME["tick_pad"]
                                     + tick_band_height(x_labels, x_size, x_rot)
-                                    + sec_pad + cap_height(x_size))
+                                    + sec_pad + _sec_cap_offset)
                 else:
-                    sec_baseline = ih + _FRAME["tick_pad"] + cap_height(x_size)
+                    sec_baseline = ih + _FRAME["tick_pad"] + _sec_cap_offset
                 for name, cx in zip(sec.names, label_xs):
                     parts.append(_tick_label(str(name), cx, sec_baseline,
-                                             x_size, x_rot, axis="x",
+                                             _sec_x_size, _sec_x_rot, axis="x",
                                              fontstyle=x_style, decoration=x_decor,
                                              tag="sector-label"))
     if y_sec is not None and (y_sec.divider or y_sec.label):
@@ -506,6 +551,7 @@ def emit_chrome(*,
             # past the tick labels. Same rule for categorical (always has
             # cat labels) and continuous (has labels only when user
             # supplied yticks).
+            _sec_y_size = sec.fontsize if sec.fontsize is not None else _SECTORSPEC["label_size"]
             has_ytl = any(str(l) for l in y_labels)
             if has_ytl:
                 ytl_w = max((measure_text(str(l), y_size) for l in y_labels),
@@ -515,8 +561,8 @@ def emit_chrome(*,
                 y_label_x = -_FRAME["tick_pad"]
             for name, cy in zip(sec.names, label_ys):
                 parts.append(_tick_label(str(name), y_label_x,
-                                         cy + cap_height(y_size) / 2,
-                                         y_size, y_rot, axis="y",
+                                         cy + cap_height(_sec_y_size) / 2,
+                                         _sec_y_size, 0, axis="y",
                                          fontstyle=y_style, decoration=y_decor,
                                          tag="sector-label"))
 
@@ -557,6 +603,8 @@ def emit_chrome(*,
                 "y_fontstyle":   y_style,
                 "y_decoration":  y_decor,
                 "sector_ts":     _y_sector_ts,
+                "spine_top":     st["spine_top"],
+                "spine_bottom":  st["spine_bottom"],
             }
         ))
     else:

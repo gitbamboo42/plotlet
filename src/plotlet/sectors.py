@@ -39,7 +39,9 @@ in the scale.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+
+_UNSET = object()
 
 
 @dataclass(frozen=True)
@@ -58,12 +60,14 @@ class Sectors:
     (sectors drive layout only, no visible chrome). Wall *styling* lives
     on ``c.spines(walls={...})``.
     """
-    names:   tuple
-    lengths: tuple | None = None   # continuous
-    members: tuple | None = None   # categorical (tuple of tuples of cat labels)
-    divider: bool = True
-    label:   bool = True
-    gap:     float | None = None   # px gap between sectors; None = spec default
+    names:    tuple
+    lengths:  tuple | None = None   # continuous
+    members:  tuple | None = None   # categorical (tuple of tuples of cat labels)
+    divider:  bool = True
+    label:    bool = True
+    gap:      float | None = None   # px gap between sectors; None = spec default
+    fontsize: float | None = None   # sector-label font size; None = spec default
+    rotation: float | None = None   # sector-label rotation degrees; None = spec default
 
     @property
     def kind(self) -> str:
@@ -71,7 +75,8 @@ class Sectors:
 
     @classmethod
     def coerce(cls, spec, *, name_col=None, length_col="length",
-               divider=True, label=True, gap=None):
+               divider=_UNSET, label=_UNSET, gap=_UNSET,
+               fontsize=_UNSET, rotation=_UNSET):
         """Build a Sectors from a Sectors / dict / DataFrame-like.
 
         Disambiguation by spec shape:
@@ -80,22 +85,37 @@ class Sectors:
         - ``dict`` with list/tuple values → categorical (members).
         - DataFrame → continuous; ``name_col`` and ``length_col``
           identify the columns.
-        - Existing ``Sectors`` → returned as-is (kwargs ignored).
+        - Existing ``Sectors`` → returned as-is, with ``divider`` /
+          ``label`` / ``gap`` / ``fontsize`` / ``rotation`` overrides
+          applied via ``dataclasses.replace`` when explicitly passed.
+          Lets ``c.sectors(pt.Sectors(...), label=False)`` flip display
+          flags without rebuilding the spec.
         """
         if isinstance(spec, cls):
-            return spec
+            updates = {}
+            if divider  is not _UNSET: updates["divider"]  = bool(divider)
+            if label    is not _UNSET: updates["label"]    = bool(label)
+            if gap      is not _UNSET: updates["gap"]      = gap
+            if fontsize is not _UNSET: updates["fontsize"] = fontsize
+            if rotation is not _UNSET: updates["rotation"] = rotation
+            return replace(spec, **updates) if updates else spec
+        d = True if divider  is _UNSET else bool(divider)
+        l = True if label    is _UNSET else bool(label)
+        g = None if gap      is _UNSET else gap
+        f = None if fontsize is _UNSET else fontsize
+        r = None if rotation is _UNSET else rotation
         if isinstance(spec, dict):
             vals = list(spec.values())
             if vals and all(isinstance(v, (list, tuple)) for v in vals):
                 return cls(
                     names=tuple(str(k) for k in spec.keys()),
                     members=tuple(tuple(str(m) for m in v) for v in vals),
-                    divider=divider, label=label, gap=gap,
+                    divider=d, label=l, gap=g, fontsize=f, rotation=r,
                 )
             return cls(
                 names=tuple(str(k) for k in spec.keys()),
                 lengths=tuple(float(v) for v in vals),
-                divider=divider, label=label, gap=gap,
+                divider=d, label=l, gap=g, fontsize=f, rotation=r,
             )
         # DataFrame-like: column access via ``[col_name]``.
         if hasattr(spec, "columns") or (hasattr(spec, "__getitem__")
@@ -110,7 +130,7 @@ class Sectors:
             return cls(
                 names=tuple(str(n) for n in names),
                 lengths=tuple(float(L) for L in lengths),
-                divider=divider, label=label, gap=gap,
+                divider=d, label=l, gap=g, fontsize=f, rotation=r,
             )
         raise TypeError(
             f"Sectors: cannot interpret {type(spec).__name__} — "
@@ -197,6 +217,35 @@ class Sectors:
             cum += s
             out.append(float(cum))
         return out
+
+    def expand_ticks(self, ticks, labels):
+        """Replicate per-sector LOCAL tick positions across every sector.
+
+        Each ``t`` in ``ticks`` lands at ``offset(name) + t`` in every
+        sector whose length covers it (ticks past a sector's length are
+        dropped). Labels travel with their tick value, repeated per
+        sector. Continuous only — categorical sectors use the underlying
+        category scale and don't need expansion.
+
+        Right-boundary ticks (``t == length``) are nudged a hair inward
+        so the strict-``<`` ``_SectoredLinearScale`` routes them to THIS
+        sector's right edge rather than the next sector's left.
+        """
+        if self.kind != "continuous":
+            raise TypeError("Sectors.expand_ticks is continuous-only")
+        n = min(len(ticks), len(labels))
+        out_t, out_l = [], []
+        for name, length in zip(self.names, self.lengths):
+            offset = self.offset(name)
+            for t, l in zip(ticks[:n], labels[:n]):
+                tv = float(t)
+                if not (0.0 <= tv <= length + 1e-9):
+                    continue
+                if tv >= length - 1e-9:
+                    tv = length * (1.0 - 1e-9)
+                out_t.append(offset + tv)
+                out_l.append(l)
+        return out_t, out_l
 
     # ---------- categorical-only --------------------------------------------
 

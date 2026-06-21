@@ -14,21 +14,25 @@ from __future__ import annotations
 
 import math
 
-from .draw import cap_height, circle, coord, path, segment, text_path
+from .draw import cap_height, descender, circle, coord, measure_text, path, segment, text_path
 
 
 # ---------------------------------------------------------------------------
 # Geometry
 # ---------------------------------------------------------------------------
 
-def geometry(r_inner: float, gap: float, iw: float, ih: float):
+def geometry(r_inner: float, gap: float, iw: float, ih: float,
+             r_outer: float = 1.0):
     """Compute ``(cx, cy, R, ri)`` for a ring inscribed in ``iw × ih``.
 
     ``R`` is the outer radius, ``ri`` the inner radius; both are gap-shrunk
-    from the canvas half-extent.
+    from the canvas half-extent and scaled by ``r_outer`` / ``r_inner`` so
+    nested charts (one ring in the outer band, chords in the inner disc)
+    each get a band that matches their artist projection.
     """
-    R  = min(iw, ih) / 2 * (1.0 - gap)
-    ri = R * r_inner
+    R_full = min(iw, ih) / 2 * (1.0 - gap)
+    R  = R_full * r_outer
+    ri = R_full * r_inner
     cx, cy = iw / 2, ih / 2
     return cx, cy, R, ri
 
@@ -94,20 +98,27 @@ def draw_y_chrome(cx, cy, R, ri, wrap_gap_rad,
     y_decor   = frame_opts.get("y_decoration", "none")
     sector_ts = frame_opts.get("sector_ts")
 
+    spine_top    = frame_opts.get("spine_top",    True)
+    spine_bottom = frame_opts.get("spine_bottom", True)
+
     parts = []
 
     if sector_ts is None:
-        # Closed rings — no sectors, draw both as full circles.
-        for radius in (ri, R):
-            parts.append(circle(cx, cy, radius,
-                                stroke=spine_col, stroke_width=spine_w,
-                                tag="spine"))
+        # Closed rings — no sectors, draw as full circles.
+        # top → outer arc (R), bottom → inner arc (ri).
+        for radius, show in ((ri, spine_bottom), (R, spine_top)):
+            if show:
+                parts.append(circle(cx, cy, radius,
+                                    stroke=spine_col, stroke_width=spine_w,
+                                    tag="spine"))
     else:
         # Sectored — each ring is a sequence of arc segments, one per
         # sector. The arcs run clockwise from start_t to end_t (SVG sweep=1
         # in y-down means clockwise on screen). Large-arc flag is set when
         # the angular extent exceeds 180°.
-        for radius in (ri, R):
+        for radius, show in ((ri, spine_bottom), (R, spine_top)):
+            if not show:
+                continue
             for start_t, end_t in sector_ts:
                 ang_s = t_to_angle(start_t, wrap_gap_rad)
                 ang_e = t_to_angle(end_t,   wrap_gap_rad)
@@ -194,8 +205,14 @@ def draw_x_sector_chrome(cx, cy, R, ri, wrap_gap_rad,
         # labels need an extra cap-height of outward offset to keep the
         # visible gap to the ring symmetric.
         cap = cap_height(font_size)
-        off_natural = tp + cap / 2
-        off_flipped = tp + cap / 2 + cap
+        x_ext = sec_opts.get("x_chrome_extent", 0.0)
+        lbl_pad = sec_opts.get("label_pad", tp)
+        # Stack outside tick chrome when present (mirrors linear: tick marks →
+        # tick labels → sector labels from spine outward). Fall back to plain
+        # tick_pad when no tick chrome is drawn on this ring.
+        base_off = (x_ext + lbl_pad) if x_ext > 0.0 else tp
+        off_natural = base_off + cap / 2
+        off_flipped = base_off + cap / 2 + cap
         for name, t in zip(names, label_ts):
             ang = t_to_angle(t, wrap_gap_rad)
             # Tangent (CW around ring) — text tops point outward on the top
@@ -249,14 +266,25 @@ def draw_x_chrome(cx, cy, R, wrap_gap_rad,
                                  ox + tl * ux, oy + tl * uy,
                                  color=spine_col, width=spine_w))
         if show_xl:
-            off = tl + tp + cap_height(x_size) / 2
+            # Labels are radial: inner edge sits at R+tl+tp, center at
+            # R+tl+tp+w/2 where w is this label's own rendered width.
+            w = measure_text(str(lbl), x_size)
+            off = tl + tp + w / 2
             lx, ly = cx + (R + off) * ux, cy + (R + off) * uy
-            # Tangent direction rotated to text baseline.
-            rot = math.degrees(math.atan2(uy, ux)) + 90.0
-            # Keep text right-side-up: flip 180° when it would otherwise
-            # read upside-down (bottom half of the ring).
-            if rot > 90:  rot -= 180
-            if rot < -90: rot += 180
+            # Same tangential rotation formula as sector labels so all
+            # angular text leans consistently around the ring.
+            rot = math.degrees(ang)
+            rot = ((rot + 180.0) % 360.0) - 180.0
+            if rot > 90.0:  rot -= 180.0
+            if rot < -90.0: rot += 180.0
+            # Tangential centering: mirror the linear _tick_label fix. The
+            # radial label's cap extends in the tangential direction; shift
+            # the anchor so the cap midpoint (not the baseline) aligns with
+            # the radius line. cos(rot_rad - ang) = +1 unflipped, -1 flipped.
+            _cap_shift = (cap_height(x_size) - descender(x_size)) / 2
+            _ts = _cap_shift * math.cos(math.radians(rot) - ang)
+            lx += _ts * math.sin(ang)
+            ly += _ts * math.cos(ang)
             parts.append(text_path(str(lbl), lx, ly,
                                    x_size, anchor="middle", color=font_col,
                                    fontstyle=x_style, decoration=x_decor,

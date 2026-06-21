@@ -914,11 +914,18 @@ def _render_layout(root: Chart, outer=None) -> str:
     coord = getattr(root, "_coordinate", None)
     if coord is not None and hasattr(coord, "render_layout"):
         W, H, body = coord.render_layout(root)
+        ol = outer["left"]   if outer else 0
+        ot = outer["top"]    if outer else 0
+        or_ = outer["right"] if outer else 0
+        ob = outer["bottom"] if outer else 0
+        Wt, Ht = W + ol + or_, H + ot + ob
+        wrap = f'<g transform="translate({ol},{ot})">' if (ol or ot) else ""
+        close = "</g>" if (ol or ot) else ""
         bg = SPEC["figure"]["background"]
         return (f'<svg xmlns="http://www.w3.org/2000/svg" '
-                f'width="{W}" height="{H}" viewBox="0 0 {W} {H}" '
+                f'width="{Wt}" height="{Ht}" viewBox="0 0 {Wt} {Ht}" '
                 f'font-family="{_FONTSPEC["family"]}" font-size="11" '
-                f'style="background:{bg}">{body}</svg>')
+                f'style="background:{bg}">{wrap}{body}{close}</svg>')
     # Default: rectangular stack. Coord-bearing sub-Layouts are treated as
     # atomic blocks by `_measure` / `_allocate` (see `_is_atomic`) and
     # rendered through their coord's own strategy at placement time —

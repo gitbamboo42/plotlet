@@ -108,6 +108,24 @@ def sectors_categorical_x():
     return c
 
 
+def sectors_continuous_x():
+    # Continuous x-sectors with user-explicit ticks: tick mark + tick label
+    # + sector label all coexist on the bottom (the parallel of
+    # categorical_x). Tick positions are per-sector LOCAL — they replicate
+    # across every sector at sector.offset(name) + tick.
+    c = pt.chart(title="continuous x-sectors with ticks",
+                 data_width=440, data_height=180, ylabel="value")
+    c.sectors({"A": 100, "B": 60, "C": 80}, column="region", gap=12)
+    c.scatter(
+        data={"region": ["A",  "A",  "B",  "B",  "C",  "C"],
+              "pos":    [30,   80,   20,   50,   10,   60],
+              "v":      [3,    5,    8,    6,    4,    7]},
+        x="pos", y="v",
+    )
+    c.xticks([0, 50, 100], rotation=90)
+    return c
+
+
 def sectors_continuous_y():
     # Continuous y-sectors — partition the y-axis by named band.
     c = pt.chart(title="continuous y-sectors",
@@ -281,6 +299,7 @@ PLOTS = {
     "multi_track_share_x": sectors_multi_track_share_x,
     "from_sectors_value":  sectors_from_sectors_value,
     "categorical_x":       sectors_categorical_x,
+    "continuous_x":        sectors_continuous_x,
     "continuous_y":        sectors_continuous_y,
     "categorical_y_heatmap": sectors_categorical_y_heatmap,
 }

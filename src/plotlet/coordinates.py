@@ -78,47 +78,6 @@ from . import _chrome_linear as _cl
 from . import _chrome_circular as _cc
 
 
-def _render_leaf_into(leaf, coord, W, H, body_re) -> str:
-    """Render `leaf` into a (W × H) canvas under `coord`, returning the
-    inner SVG body (no `<svg>` wrapper). Snapshots and restores the leaf
-    so repeat renders stay idempotent. Cartesian chrome is suppressed
-    because it would warp into nonsense under a non-affine coord.
-    """
-    n0 = len(leaf._calls)
-    orig_dw, orig_dh = leaf._data_width, leaf._data_height
-    orig_margin = dict(leaf._margin)
-    try:
-        has_own_coord = any(c[0] == "coordinate" for c in leaf._calls)
-        if not has_own_coord:
-            leaf._calls.append(("coordinate", [coord], {}))
-        leaf._calls.extend([
-            ("title",  [""], {}),
-            ("xlabel", [""], {}),
-            ("ylabel", [""], {}),
-            ("xticks", [[]], {}),
-            ("yticks", [[]], {}),
-            ("spines", [], {"top": False, "right": False,
-                            "bottom": False, "left": False}),
-        ])
-        leaf._data_width  = W
-        leaf._data_height = H
-        leaf._margin = {"left": 0, "right": 0, "top": 0, "bottom": 0}
-        leaf._canvas_width  = W
-        leaf._canvas_height = H
-        svg = leaf._to_svg_unchecked(outer=None)
-    finally:
-        del leaf._calls[n0:]
-        leaf._data_width, leaf._data_height = orig_dw, orig_dh
-        leaf._margin = orig_margin
-        leaf._canvas_width  = orig_dw + orig_margin["left"] + orig_margin["right"]
-        leaf._canvas_height = orig_dh + orig_margin["top"]  + orig_margin["bottom"]
-    m = body_re.match(svg)
-    if m is None:
-        raise RuntimeError(
-            "CircularCoordinate.render_layout: leaf produced no <svg> wrapper"
-        )
-    return m.group(1)
-
 
 class LinearCoordinate:
     """Coordinate transform: x-axis stays horizontal, y-axis tilts.
@@ -190,6 +149,53 @@ class LinearCoordinate:
         return _cl.draw_y_chrome(project, iw, ih, y_ticks_r, y_labels, frame_opts)
 
 
+def _circular_chrome_pad(st) -> float:
+    """Radial pixels of chrome past the outer arc for the outermost ring.
+
+    Mirrors the stacking logic in ``emit_chrome`` / ``draw_x_sector_chrome``
+    but works from the chart state dict (available after ``_build_panel_opts``)
+    rather than from a live scale.  Used by ``render_layout`` to decide how
+    much to expand the canvas so labels don't get clipped by the viewBox.
+
+    Returns 0 when no chrome is drawn outside the ring.
+    """
+    from ._spec import SPEC, _FRAME, _FONTSPEC
+    from .draw import cap_height, measure_text
+
+    tl        = _FRAME["tick_length"]
+    tp        = _FRAME["tick_pad"]
+    tick_size = _FONTSPEC["tick_size"]
+    x_size    = st["x_fontsize"] if st["x_fontsize"] is not None else tick_size
+    show_lbl  = st["x_show_labels"]
+    x_ticks_v = st.get("x_ticks")   # None=auto, []=suppressed, [...]= explicit
+
+    x_chrome = 0.0
+    has_lbl   = show_lbl and x_ticks_v != []
+    if has_lbl:
+        if x_ticks_v:                # explicit non-empty ticks
+            raw_lbl = st.get("x_labels")
+            labels = [str(l) for l in raw_lbl] if raw_lbl else [str(t) for t in x_ticks_v]
+        else:                        # auto ticks — estimate from xlim
+            xlim = st.get("xlim") or (0, 1)
+            max_val = max(abs(xlim[0]), abs(xlim[1]))
+            labels = [f"{max_val:.4g}"]
+        max_w  = max((measure_text(l, x_size) for l in labels), default=0.0)
+        x_chrome = tl + tp + max_w
+    elif st.get("x_marks", True) and x_ticks_v != []:
+        x_chrome = tl                # marks only, no labels
+
+    # Sector labels stack outside tick chrome (same rule as linear)
+    x_sec = st.get("x_sectors")
+    if x_sec is not None and getattr(x_sec, "label", False) and show_lbl:
+        sec_size  = x_sec.fontsize if x_sec.fontsize is not None else SPEC["sectors"]["label_size"]
+        sec_cap   = cap_height(sec_size)
+        label_pad = SPEC["sectors"]["label_pad"]
+        base_off  = (x_chrome + label_pad) if x_chrome > 0.0 else tp
+        # Use the flipped-label offset (conservative worst case)
+        return base_off + sec_cap * 1.5
+    return x_chrome
+
+
 class CircularCoordinate:
     """Ring-shaped coordinate: t around the ring, r along the radius.
 
@@ -227,13 +233,12 @@ class CircularCoordinate:
     gap : float, default 0.05
         Padding between outer ring edge and canvas edge, as a fraction
         of half the canvas size.
-    wrap_gap_deg : float, default 0.0
+    wrap_gap_deg : float or None, default None
         Angular gap (in degrees) at the 12 o'clock wrap-around boundary.
-        With sectors set, matching ``wrap_gap_deg`` to your
-        ``c.sectors(gap=N)`` (visually) gives the ring a symmetric look —
-        otherwise the wrap-around joins back-to-back while internal
-        boundaries show whitespace. Works without sectors too: produces
-        an open arc instead of a closed ring.
+        ``None`` (default) auto-derives the angle from the x-sector gap so
+        the wrap boundary is visually indistinguishable from any other
+        inter-sector gap. Pass an explicit float to override. Works without
+        sectors too: produces an open arc instead of a closed ring.
     inner : Chart, optional
         A separate ``pt.chart(...)`` rendered into the central disc
         ``r ∈ [0, r_inner]`` — the area no ring claims. Used to host
@@ -246,7 +251,7 @@ class CircularCoordinate:
     """
 
     def __init__(self, r_inner: float = 0.30, r_outer: float = 1.0,
-                 gap: float = 0.05, wrap_gap_deg: float = 0.0,
+                 gap: float = 0.05, wrap_gap_deg=None,
                  inner=None):
         self.r_inner      = r_inner
         self.r_outer      = r_outer
@@ -256,17 +261,11 @@ class CircularCoordinate:
 
     @property
     def _wrap_gap_rad(self) -> float:
-        return math.radians(self.wrap_gap_deg)
+        return math.radians(self.wrap_gap_deg) if self.wrap_gap_deg is not None else 0.0
 
     def __call__(self, artist: dict, iw: float, ih: float):
-        cx, cy, R, _ri = _cc.geometry(self.r_inner, self.gap, iw, ih)
-        # Per-chart radial band: r ∈ [0, 1] maps to canvas radius
-        # [r_inner * R_full, r_outer * R_full], where R_full is the
-        # ungap-shrunk outer radius — so nested rings using fractions
-        # of the canvas are consistent regardless of `gap`.
-        R_full = min(iw, ih) / 2
-        r_lo_px = self.r_inner * R_full * (1.0 - self.gap)
-        r_hi_px = self.r_outer * R_full * (1.0 - self.gap)
+        cx, cy, r_hi_px, r_lo_px = _cc.geometry(
+            self.r_inner, self.gap, iw, ih, self.r_outer)
         wrap = self._wrap_gap_rad
 
         def project(t: float, r: float):
@@ -306,10 +305,8 @@ class CircularCoordinate:
         # Clip to *this* chart's r-band [r_inner, r_outer] — not the full
         # canvas annulus. Otherwise nested rings can't constrain data to
         # their own band and overflow into the bands of other rings.
-        cx, cy = iw / 2, ih / 2
-        R_full = min(iw, ih) / 2
-        ri = self.r_inner * R_full * (1.0 - self.gap)
-        R  = self.r_outer * R_full * (1.0 - self.gap)
+        cx, cy, R, ri = _cc.geometry(self.r_inner, self.gap, iw, ih,
+                                     self.r_outer)
         return _cc.clip_path_d(cx, cy, R, ri)
 
     def render_layout(self, root) -> tuple[int, int, str]:
@@ -328,47 +325,142 @@ class CircularCoordinate:
         delegates here.
         """
         import re
+        from ._layout_engine import _build_panel_opts
+        from ._spec import active_theme
+        from .core import _render as _core_render
         _SVG_BODY_RE = re.compile(r'<svg[^>]*>(.*)</svg>\s*$', re.DOTALL)
+        _ZERO_MARGIN = {"left": 0, "right": 0, "top": 0, "bottom": 0}
 
         leaves = list(root._iter_leaves())
         if not leaves:
             raise ValueError("Layout.coordinate(): no leaf charts to render")
         W = max(leaf._data_width  for leaf in leaves)
         H = max(leaf._data_height for leaf in leaves)
-        leaf_coords = self.derive_leaf_coords(leaves)
 
-        bodies = [_render_leaf_into(leaf, c, W, H, _SVG_BODY_RE)
-                  for leaf, c in zip(leaves, leaf_coords)]
+        # Probe the outermost leaf's state (with full layout context so
+        # layout-level .sectors() propagates) to compute required chrome.
+        # chrome_pad is independent of R, so the probe can run before the
+        # geometry is finalised.
+        _, _probe_states = _build_panel_opts(root)
+        chrome_pad = _circular_chrome_pad(_probe_states[id(leaves[0])])
+
+        # Compute an effective gap that shrinks R just enough for chrome to
+        # fit within the original W×H canvas.  This keeps the size consistent
+        # with _atomic_size (which also returns W×H) so adjacent panels in a
+        # parent layout don't overlap.
+        _half = min(W, H) / 2.0
+        available = _half * (1.0 - (1.0 - self.gap) * self.r_outer)
+        if chrome_pad > available and _half * self.r_outer > 0:
+            effective_gap = 1.0 - (_half - chrome_pad) / (_half * self.r_outer)
+            effective_gap = min(max(effective_gap, self.gap), 0.99)
+        else:
+            effective_gap = self.gap
+
+        # Resolve wrap_gap_deg=None → match the inter-sector gap visually.
+        # The t-axis spans W pixels; a sector gap of gap_px pixels occupies
+        # fraction gap_px/W of the full ring, i.e. 360*gap_px/W degrees.
+        if self.wrap_gap_deg is None:
+            _x_sec = _probe_states[id(leaves[0])].get("x_sectors")
+            _gap_px = (_x_sec.gap if (_x_sec is not None and _x_sec.gap is not None
+                                      and _x_sec.gap > 0) else 0.0)
+            resolved_wrap_gap_deg = (360.0 * _gap_px / W) if (_gap_px > 0 and W > 0) else 0.0
+        else:
+            resolved_wrap_gap_deg = self.wrap_gap_deg
+
+        leaf_coords = CircularCoordinate(
+            r_inner=self.r_inner, r_outer=self.r_outer,
+            gap=effective_gap, wrap_gap_deg=resolved_wrap_gap_deg,
+        ).derive_leaf_coords(leaves)
+
+        def _render_leaf(leaf, coord, *, is_outermost=False):
+            n0 = len(leaf._calls)
+            orig_dw, orig_dh = leaf._data_width, leaf._data_height
+            orig_margin = dict(leaf._margin)
+            try:
+                has_own_coord = any(c[0] == "coordinate" for c in leaf._calls)
+                if not has_own_coord:
+                    leaf._calls.append(("coordinate", [coord], {}))
+                # title / x|y label are layout-level — suppress per leaf so
+                # they don't stack. Spines flow through to draw_frame so
+                # top/bottom drive the outer/inner arcs.
+                leaf._calls.extend([
+                    ("title",  [""], {}),
+                    ("xlabel", [""], {}),
+                    ("ylabel", [""], {}),
+                ])
+                # x-axis: only the outermost ring shows ticks/labels/sector
+                # labels (Circos convention: labels outside the outermost
+                # track). Inner rings suppress unless the user explicitly
+                # called xticks(...) on that leaf.
+                # y-axis: marks and labels off by default for all rings —
+                # the radial scale reads from the data, not from tick marks.
+                # Users can opt in with an explicit yticks(...) call.
+                has_xticks = any(c[0] == "xticks" for c in leaf._calls[:n0])
+                has_yticks = any(c[0] == "yticks" for c in leaf._calls[:n0])
+                if not is_outermost and not has_xticks:
+                    leaf._calls.append(("xticks", [[]], {"labels": False}))
+                if not has_yticks:
+                    leaf._calls.append(("yticks", [[]], {}))
+                leaf._data_width  = W
+                leaf._data_height = H
+                leaf._margin = {"left": 0, "right": 0, "top": 0, "bottom": 0}
+                leaf._canvas_width  = W
+                leaf._canvas_height = H
+                # Circular chrome places labels at angular positions inside
+                # the gap zone — no Cartesian margin band needed. Calling
+                # _build_panel_opts + _render with zero margin bypasses the
+                # margin recomputation that _to_svg_unchecked would do,
+                # which avoids a translate(N,0) offset that would misalign
+                # this leaf with others rendered onto the same canvas.
+                _panel_opts, _states = _build_panel_opts(leaf)
+                _st = _states[id(leaf)]
+                _theme = None
+                for _c in leaf._calls:
+                    if _c[0] == "theme": _theme = _c[1][0] if _c[1] else None
+                with active_theme(_theme):
+                    svg = _core_render(_st, W, H, _ZERO_MARGIN, outer=None)
+            finally:
+                del leaf._calls[n0:]
+                leaf._data_width, leaf._data_height = orig_dw, orig_dh
+                leaf._margin = orig_margin
+                leaf._canvas_width  = orig_dw + orig_margin["left"] + orig_margin["right"]
+                leaf._canvas_height = orig_dh + orig_margin["top"]  + orig_margin["bottom"]
+            m = _SVG_BODY_RE.match(svg)
+            if m is None:
+                raise RuntimeError(
+                    "CircularCoordinate.render_layout: leaf produced no <svg> wrapper"
+                )
+            return m.group(1)
+
+        bodies = [_render_leaf(leaf, c, is_outermost=(i == 0))
+                  for i, (leaf, c) in enumerate(zip(leaves, leaf_coords))]
 
         if self.inner is not None:
-            # Central disc: a sub-coord spanning [0, r_inner], inheriting
-            # this coord's gap and wrap geometry so the t-axis aligns
-            # with the rings.
             inner_coord = CircularCoordinate(
                 r_inner=0.0, r_outer=self.r_inner,
-                gap=self.gap, wrap_gap_deg=self.wrap_gap_deg,
+                gap=effective_gap, wrap_gap_deg=resolved_wrap_gap_deg,
             )
-            bodies.append(_render_leaf_into(self.inner, inner_coord,
-                                            W, H, _SVG_BODY_RE))
+            bodies.append(_render_leaf(self.inner, inner_coord))
 
         return W, H, "".join(bodies)
 
     def draw_frame(self, project, iw, ih, y_ticks_r, y_labels, frame_opts) -> str:
         return _cc.draw_y_chrome(
-            *_cc.geometry(self.r_inner, self.gap, iw, ih),
+            *_cc.geometry(self.r_inner, self.gap, iw, ih, self.r_outer),
             self._wrap_gap_rad,
             y_ticks_r, y_labels, frame_opts,
         )
 
     def draw_x_frame(self, project, iw, ih, x_ticks_t, x_labels, frame_opts) -> str:
-        cx, cy, R, _ri = _cc.geometry(self.r_inner, self.gap, iw, ih)
+        cx, cy, R, _ri = _cc.geometry(self.r_inner, self.gap, iw, ih,
+                                      self.r_outer)
         return _cc.draw_x_chrome(cx, cy, R, self._wrap_gap_rad,
                                  x_ticks_t, x_labels, frame_opts)
 
     def draw_x_sector_chrome(self, project, iw, ih,
                              sector_ts, label_ts, names, sec_opts) -> str:
         return _cc.draw_x_sector_chrome(
-            *_cc.geometry(self.r_inner, self.gap, iw, ih),
+            *_cc.geometry(self.r_inner, self.gap, iw, ih, self.r_outer),
             self._wrap_gap_rad,
             sector_ts, label_ts, names, sec_opts,
         )

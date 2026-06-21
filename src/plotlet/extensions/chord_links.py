@@ -41,6 +41,8 @@ from pathlib import Path
 import plotlet as pt
 from plotlet.draw import path as draw_path, segment, TAB10
 from plotlet.utils import to_list, resolve_aes, palette_color
+from ..draw import coord
+
 
 
 def _chord_links_record(args, kw):
@@ -125,8 +127,8 @@ def _chord_links_draw(a, ctx):
             x1_px = ctx.x_scale(x1)
             x2_px = ctx.x_scale(x2)
             xc = (x1_px + x2_px) / 2
-            d = (f"M {x1_px:.2f},{y0:.2f} "
-                 f"Q {xc:.2f},{y_ctrl:.2f} {x2_px:.2f},{y0:.2f}")
+            d = (f"M {coord(x1_px)},{coord(y0)} "
+                 f"Q {coord(xc)},{coord(y_ctrl)} {coord(x2_px)},{coord(y0)}")
             out.append(draw_path(d, stroke=col, stroke_width=width, alpha=alpha))
         return "".join(out)
 
@@ -139,8 +141,8 @@ def _chord_links_draw(a, ctx):
     for x1, x2 in zip(a["xs1"], a["xs2"]):
         p1x, p1y = ctx.warp(ctx.x_scale(x1), 0.0)
         p2x, p2y = ctx.warp(ctx.x_scale(x2), 0.0)
-        d = (f"M {p1x:.2f},{p1y:.2f} "
-             f"Q {cx_px:.2f},{cy_px:.2f} {p2x:.2f},{p2y:.2f}")
+        d = (f"M {coord(p1x)},{coord(p1y)} "
+             f"Q {coord(cx_px)},{coord(cy_px)} {coord(p2x)},{coord(p2y)}")
         out.append(draw_path(d, stroke=col, stroke_width=width, alpha=alpha))
     return "".join(out)
 
@@ -158,6 +160,22 @@ def _chord_links_legend_entries(a):
     return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
+def _chord_links_frame_defaults(args, kw):
+    # No data lives on the y-axis (it's just space for the bulge), and
+    # the strip looks cleanest free of spines — pairs naturally with
+    # `attach_above` / `attach_below` on a host panel that owns the
+    # x-axis. Same idiom as `dendrogram`. Inside a Circular inner disc
+    # the rings own t-axis labels, so suppress x-ticks by default too;
+    # users can opt in with an explicit `.xticks(...)`.
+    return [
+        ("spines", [], {"top": False, "right": False,
+                        "bottom": False, "left": False}),
+        ("xticks", [[]], {}),
+        ("yticks", [[]], {}),
+        ("ylabel", [""], {}),
+    ]
+
+
 pt.add_artist(pt.ArtistSpec(
     name="chord_links",
     record=_chord_links_record,
@@ -165,8 +183,10 @@ pt.add_artist(pt.ArtistSpec(
     ydomain=_chord_links_ydomain,
     draw=_chord_links_draw,
     legend_entries=_chord_links_legend_entries,
+    frame_defaults=_chord_links_frame_defaults,
     coord_native=True,
     crosses_sectors=True,
+    tight_domain=True,
 ))
 
 

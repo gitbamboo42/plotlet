@@ -533,17 +533,17 @@ def _replay(calls):
         elif name == "coordinate": st["coordinate"] = args[0]
         elif name == "sectors":
             from .sectors import Sectors
-            col     = kw.get("column")
-            axis    = kw.get("axis", "x")
-            label   = kw.get("label",   True)
-            gap     = kw.get("gap")
-            divider = bool(kw.get("divider", True))
+            col  = kw.get("column")
+            axis = kw.get("axis", "x")
+            # Forward only display kwargs the user explicitly set, so a
+            # pre-built `pt.Sectors(...)` keeps its own settings unless
+            # overridden — silent-drop would be a footgun.
+            extra = {k: kw[k] for k in ("divider", "label", "gap") if k in kw}
             if axis not in ("x", "y"):
                 raise ValueError(
                     f"c.sectors(axis=): expected 'x' or 'y'; got {axis!r}"
                 )
-            sec = Sectors.coerce(args[0], name_col=col,
-                                 divider=divider, label=label, gap=gap)
+            sec = Sectors.coerce(args[0], name_col=col, **extra)
             # `column=` is the default sector tag for single-position
             # artists (scatter, line, bar, …). Required even for
             # multi-position artists (chord_links) — those override per
@@ -1341,13 +1341,18 @@ def _label_band_sizes(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     y_labels = (st["y_labels"] if st["y_labels"] is not None
                 else [y_fmt(t) for t in y_ticks])
 
-    # Continuous sectors strip the auto tick labels on their axis — keep
-    # this measure pass in sync with `_render_inner` so the bottom / left
-    # margin doesn't double-reserve a tick-label band that never renders.
+    # Continuous sectors: auto ticks are meaningless on a global-offset
+    # coord, so the default is none. User-supplied ticks via xticks/yticks
+    # are interpreted as per-sector LOCAL positions and replicated at
+    # each sector's offset. Keep this pass in sync with `_render_inner`.
     if st["x_sectors"] is not None and st["x_sectors"].kind == "continuous":
-        x_ticks, x_labels = [], []
+        x_ticks, x_labels = st["x_sectors"].expand_ticks(
+            x_ticks if st["x_ticks"] is not None else [],
+            x_labels if st["x_ticks"] is not None else [])
     if st["y_sectors"] is not None and st["y_sectors"].kind == "continuous":
-        y_ticks, y_labels = [], []
+        y_ticks, y_labels = st["y_sectors"].expand_ticks(
+            y_ticks if st["y_ticks"] is not None else [],
+            y_labels if st["y_ticks"] is not None else [])
 
     x_size = st["x_fontsize"] if st["x_fontsize"] is not None else tick_size
     y_size = st["y_fontsize"] if st["y_fontsize"] is not None else tick_size
@@ -1919,20 +1924,21 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     x_labels = st["x_labels"] if st["x_labels"] is not None else [x_fmt(t) for t in x_ticks]
     y_labels = st["y_labels"] if st["y_labels"] is not None else [y_fmt(t) for t in y_ticks]
 
-    # Continuous sectors own that axis's chrome — boundary dividers and
-    # sector-name labels replace numeric ticks. Drop the auto-generated
-    # ticks on the sectored axis so the standard major/minor/grid passes
-    # don't fire there. Categorical sectors keep the category-scale ticks
-    # (cat labels), so we don't strip them — the chrome adds dividers /
-    # sector labels on top.
+    # Continuous sectors: auto ticks are meaningless on the global-offset
+    # coord — default to none. User-supplied ticks are read as per-sector
+    # LOCAL positions and replicated at each sector's offset (see
+    # `Sectors.expand_ticks`). Must mirror the resolution in
+    # `_required_margin` so reserved space matches what's rendered.
     _x_sec = st["x_sectors"]
     _y_sec = st["y_sectors"]
     if _x_sec is not None and _x_sec.kind == "continuous":
-        x_ticks = []
-        x_labels = []
+        x_ticks, x_labels = _x_sec.expand_ticks(
+            x_ticks if st["x_ticks"] is not None else [],
+            x_labels if st["x_ticks"] is not None else [])
     if _y_sec is not None and _y_sec.kind == "continuous":
-        y_ticks = []
-        y_labels = []
+        y_ticks, y_labels = _y_sec.expand_ticks(
+            y_ticks if st["y_ticks"] is not None else [],
+            y_labels if st["y_ticks"] is not None else [])
 
     hide_l, hide_r = panel_opts.hide_left, panel_opts.hide_right
     hide_t, hide_b = panel_opts.hide_top, panel_opts.hide_bottom

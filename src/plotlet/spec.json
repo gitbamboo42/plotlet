@@ -42,7 +42,8 @@
     "default_on": false
   },
   "sectors": {
-    "label_pad": 5
+    "label_pad": 5,
+    "label_size": 13
   },
   "linestyles": {
     "-":  null,
