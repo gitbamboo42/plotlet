@@ -40,12 +40,21 @@ import re
 from pathlib import Path
 
 from ._spec import _SIZESPEC, _MARGIN_FLOOR, _OUTER_MARGIN, _LAYOUTSPEC, active_theme
-from .core import (
-    _FRAME_METHODS, _replay, _render,
-    _to_px,
-)
-from .utils import to_list_2d
+from .core import _replay, _render
+from .utils import _to_px, to_list_2d
 from .registry import get_artist, all_artist_names
+
+
+# Frame-state methods recordable on a Chart (replayed by `_replay`). Lives
+# here because `Chart.__getattr__` / `__dir__` are the only consumers —
+# the dispatcher in `_replay` matches on name directly.
+_FRAME_METHODS = {
+    "title", "xlabel", "ylabel", "xlim", "ylim",
+    "xscale", "yscale", "grid", "legend",
+    "xticks", "yticks", "spines", "theme",
+    "x_expand", "y_expand", "clip", "facecolor",
+    "coordinate", "sectors",
+}
 
 
 # Strip every `data-plotlet-*="..."` attribute. The leading space is part of

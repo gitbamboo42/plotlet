@@ -21,7 +21,6 @@ import datetime
 import html
 import json
 import math
-import re
 from dataclasses import dataclass, field
 from importlib.metadata import version as _pkg_version
 from pathlib import Path
@@ -67,15 +66,6 @@ _PLOTLET_VERSION = _pkg_version("plotlet")
 _INSIDE_POSITIONS = frozenset({
     "top-right", "top-left", "bottom-right", "bottom-left", "center",
 })
-
-_FRAME_METHODS = {
-    "title", "xlabel", "ylabel", "xlim", "ylim",
-    "xscale", "yscale", "grid", "legend",
-    "xticks", "yticks", "spines", "theme",
-    "x_expand", "y_expand", "clip", "facecolor",
-    "coordinate", "sectors",
-}
-
 
 # ---------------------------------------------------------------------------
 # Scale-share types — used by the layout pre-pass.
@@ -222,16 +212,6 @@ def _record_ticks(st, axis, args, kw):
 # Conversion factors to pixels, CSS standard: 1 in = 96 px, 1 in = 2.54 cm,
 # 1 in = 72 pt. Internal layout math is always pixels — string units are
 # parsed once at the constructor boundary and stored as ints.
-_UNIT_PX = {
-    "px": 1.0,
-    "in": 96.0,
-    "cm": 96.0 / 2.54,
-    "mm": 96.0 / 25.4,
-    "pt": 96.0 / 72.0,
-}
-_DIM_RE = re.compile(r"^\s*([+-]?\d*\.?\d+)\s*([a-zA-Z]*)\s*$")
-
-
 def _make_px_warp(project, iw, ih):
     """Build the Cartesian-pixel → projected-pixel closure handed to
     coord-native artists as `ctx.warp`. Normalizes x_px/iw → t and
@@ -245,44 +225,6 @@ def _make_px_warp(project, iw, ih):
         r = 1.0 - y_px / ih
         return project(t, r)
     return warp
-
-
-def _to_px(value):
-    """Resolve a dim value to integer pixels.
-
-    Accepts:
-      - `int` / `float`: bare pixels.
-      - `str`: a number with an optional unit suffix
-        (`"4in"`, `"10cm"`, `"100mm"`, `"72pt"`, `"30px"` or `"30"`).
-        Whitespace and case insensitive (`"5 IN"` works).
-      - `None`: passthrough (constructors interpret as "use default").
-    """
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        # Guard against `True`/`False` slipping through `int` — almost never
-        # what the user meant for a dimension.
-        raise TypeError(f"dim value cannot be bool; got {value!r}")
-    if isinstance(value, (int, float)):
-        return int(round(value))
-    if not isinstance(value, str):
-        raise TypeError(
-            f"dim value must be int, float, or str; got {type(value).__name__}"
-        )
-    m = _DIM_RE.match(value)
-    if not m:
-        raise ValueError(
-            f"could not parse dim value {value!r}; expected '<number>[unit]' "
-            f"where unit is one of: {', '.join(sorted(_UNIT_PX))}"
-        )
-    num = float(m.group(1))
-    unit = m.group(2).lower() or "px"
-    if unit not in _UNIT_PX:
-        raise ValueError(
-            f"unknown unit {unit!r} in {value!r}; expected one of: "
-            f"{', '.join(sorted(_UNIT_PX))}"
-        )
-    return int(round(num * _UNIT_PX[unit]))
 
 
 def _sector_remap_data(call_kw, st):

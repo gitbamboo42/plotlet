@@ -17,9 +17,58 @@ Example:
 The inverse-direction primitives (emit SVG strings) live in `plotlet.draw`.
 """
 import math
+import re
 
 from .registry import get_artist
 from .draw import TAB10, resolve_color
+
+
+_UNIT_PX = {
+    "px": 1.0,
+    "in": 96.0,
+    "cm": 96.0 / 2.54,
+    "mm": 96.0 / 25.4,
+    "pt": 96.0 / 72.0,
+}
+_DIM_RE = re.compile(r"^\s*([+-]?\d*\.?\d+)\s*([a-zA-Z]*)\s*$")
+
+
+def _to_px(value):
+    """Resolve a dim value to integer pixels.
+
+    Accepts:
+      - `int` / `float`: bare pixels.
+      - `str`: a number with an optional unit suffix
+        (`"4in"`, `"10cm"`, `"100mm"`, `"72pt"`, `"30px"` or `"30"`).
+        Whitespace and case insensitive (`"5 IN"` works).
+      - `None`: passthrough (constructors interpret as "use default").
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        # Guard against `True`/`False` slipping through `int` — almost never
+        # what the user meant for a dimension.
+        raise TypeError(f"dim value cannot be bool; got {value!r}")
+    if isinstance(value, (int, float)):
+        return int(round(value))
+    if not isinstance(value, str):
+        raise TypeError(
+            f"dim value must be int, float, or str; got {type(value).__name__}"
+        )
+    m = _DIM_RE.match(value)
+    if not m:
+        raise ValueError(
+            f"could not parse dim value {value!r}; expected '<number>[unit]' "
+            f"where unit is one of: {', '.join(sorted(_UNIT_PX))}"
+        )
+    num = float(m.group(1))
+    unit = m.group(2).lower() or "px"
+    if unit not in _UNIT_PX:
+        raise ValueError(
+            f"unknown unit {unit!r} in {value!r}; expected one of: "
+            f"{', '.join(sorted(_UNIT_PX))}"
+        )
+    return int(round(num * _UNIT_PX[unit]))
 
 
 def to_list(obj):

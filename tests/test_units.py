@@ -26,7 +26,7 @@ import re
 import sys
 
 import plotlet as pt
-from plotlet.core import _to_px
+from plotlet.utils import _to_px
 
 
 # Spines have all-integer-valued coords — `0` and `iw` / `ih`. The
