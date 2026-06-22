@@ -24,7 +24,7 @@ from .sectors import Sectors
 from .layout_diagram import layout_diagram
 from .themes import load_theme, available_themes, register_theme
 from .facet import facet, FacetGrid
-from .data import load, list_datasets
+from .datasets import load, list_datasets
 from .cluster import cluster, cluster_split, SplitTree
 from . import draw, utils
 
