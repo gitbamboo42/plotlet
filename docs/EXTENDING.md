@@ -128,6 +128,8 @@ ArtistSpec(
     force_zero_y: bool | (a) -> bool = False,
     axis_order: (a) -> dict | None = None,
     frame_defaults: (args, kwargs) -> list[tuple] | None = None,
+    coord_native: bool = False,
+    crosses_sectors: bool = False,
 )
 ```
 
@@ -145,6 +147,8 @@ ArtistSpec(
 | `force_zero_x` / `force_zero_y` | Anchor that axis to zero: if the artist contributes to autoscaling and data lo > 0, push lo down to 0 (and suppress that side's expand). Built-in `bar` and `hist` set `force_zero_y=True`. May be a callable `(a) -> bool` so e.g. a bar with `orientation='h'` forces zero on x instead. |
 | `axis_order` | Contribute a canonical order for a categorical axis. Returns `{"x": [...]}` / `{"y": [...]}`. Use when ordering is load-bearing (dendrogram leaves). User's explicit `xscale("category", order=...)` still wins. |
 | `frame_defaults` | Return a list of `(call_name, args, kwargs)` recorded *before* your artist. Use for strong defaults (e.g. dendrogram hides all spines). User calls *after* `c.<your_artist>()` still win. |
+| `coord_native` | Set `True` when your `draw` cooperates with a non-affine coordinate (e.g. `CircularCoordinate`) by forwarding `ctx.warp` to `draw.*` helpers via `project=`. Affine coords (Cartesian, `LinearCoordinate`) don't need this — they're handled by the SVG transform matrix. Non-coord-native artists raise at render time under a non-affine coord. |
+| `crosses_sectors` | Set `True` for artists whose geometry spans sector boundaries (chord_links, chord_ribbon). Suppresses the inter-sector divider walls while the artist is active — walls cutting through a cross-sector curve read as a layering bug. Sector labels still render. |
 
 ---
 
@@ -160,6 +164,8 @@ render state so call sites stay short.
 | `color` | The resolved color for this artist. `None` if `uses_color_cycle=False` and no `default_color` (e.g. `imshow`). |
 | `defaults` | The `spec.json` defaults dict (`linewidth`, `markersize`, `scatter_s`, …). Use these instead of literals. |
 | `dash` | Linestyle codes → SVG `stroke-dasharray` strings. The `draw.*` helpers already accept the codes directly via `dash=`. |
+| `project` | Set by `c.coordinate(...)` for non-affine coords; `None` for Cartesian and affine coords. `project(t, r) -> (px, py)` maps data-space directly to canvas pixels — use it when you want to draw straight in the target coord (e.g. radial line from `r=0` to `r=1` at angle `t`). |
+| `warp` | Set by `c.coordinate(...)` for non-affine coords; `None` for Cartesian and affine coords. `warp(x_px, y_px) -> (px, py)` remaps a pre-warp Cartesian pixel through the coord. `coord_native=True` artists pass this to `draw.*` helpers via `project=` so segments subdivide, polygons curve, and markers land correctly. |
 
 ---
 

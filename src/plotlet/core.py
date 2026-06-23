@@ -32,7 +32,7 @@ from ._spec import (
 _SECTORSPEC = SPEC["sectors"]
 from .draw import resolve_color, TAB10
 from .scales import (_LinearScale, _LogScale, _CategoryScale, _SymlogScale,
-                      _SectoredLinearScale,
+                      _SectoredLinearScale, SectoredValue,
                       _PowerScale, _TimeScale, _nice_domain, _fmt_tick,
                       _to_epoch, _coerce_time_lim)
 from .draw import (measure_text, cap_height, descender, tick_band_height,
@@ -255,17 +255,29 @@ def _sector_remap_data(call_kw, st):
         sec_col = st[f"{axis}_sector_column"]
         if sec is None or sec.kind != "continuous":
             continue
-        # Standard `x=` / `y=` plus multi-position variants `x1`/`x2`
-        # (`y1`/`y2`) for artists like chord_links. Each val_kw can
-        # carry its own `{val_kw}_sector=` to point at a per-endpoint
-        # sector column; missing → fall back to the layout's `sec_col`.
-        # That covers cross-sector links cleanly (each endpoint maps
-        # via its own sector tag) and keeps the simple case unchanged.
-        for val_kw in (axis, f"{axis}1", f"{axis}2"):
+        # Resolve sector names → indices once; SectoredValue carries the
+        # int so the scale never needs a name table.
+        name_to_idx = {n: i for i, n in enumerate(sec.names)}
+        # Value kwargs the framework will remap:
+        #   `x` / `y`                 — single position (scatter, line, ...)
+        #   `x1` / `x2` / `y1` / `y2` — two endpoints (chord_links, segment)
+        #   `x1_start` / `x1_end` /
+        #     `x2_start` / `x2_end`   — interval endpoints (chord_ribbon)
+        # The corresponding sector tag is whatever the base prefix carries:
+        #   x1 / x1_start / x1_end → x1_sector
+        # so a 4-endpoint artist still only declares two `x*_sector` cols.
+        for val_kw in (axis, f"{axis}1", f"{axis}2",
+                       f"{axis}1_start", f"{axis}1_end",
+                       f"{axis}2_start", f"{axis}2_end"):
             val_col = call_kw.get(val_kw)
             if not isinstance(val_col, str):
                 continue
-            sec_kw = f"{val_kw}_sector"
+            base = val_kw
+            for suffix in ("_start", "_end"):
+                if base.endswith(suffix):
+                    base = base[: -len(suffix)]
+                    break
+            sec_kw = f"{base}_sector"
             sec_col_here = call_kw.get(sec_kw, sec_col)
             if sec_kw in call_kw:
                 consumed.add(sec_kw)
@@ -289,22 +301,25 @@ def _sector_remap_data(call_kw, st):
                     f"value {sample!r} which is not a known sector. "
                     f"Known sectors: {list(sec.names)}"
                 )
-            new_cols[val_col] = [sec.offset(s) + float(v)
-                                 for s, v in zip(secs, vals)]
+            new_cols[val_col] = [
+                SectoredValue(sec.offset(s) + float(v), name_to_idx[s])
+                for s, v in zip(secs, vals)
+            ]
     if not new_cols and not consumed:
         return call_kw
     call_kw = dict(call_kw)
     for kw in consumed:                       # framework-only, never reach record()
         call_kw.pop(kw, None)
     if new_cols:
-        if hasattr(data, "assign"):           # pandas — preserve dtypes on sibling cols
-            call_kw["data"] = data.assign(**new_cols)
-        else:
-            new_data = dict(data) if isinstance(data, dict) else {
-                c: list(data[c]) for c in data
-            }
-            new_data.update(new_cols)
-            call_kw["data"] = new_data
+        # Normalize to dict-of-lists so the SectoredValue tag (a Python
+        # object) survives storage — typed numeric containers would coerce
+        # it back to plain float. Downstream artists read columns via
+        # `to_list(data[col])`, which works the same on a dict.
+        new_data = dict(data) if isinstance(data, dict) else {
+            c: list(data[c]) for c in data
+        }
+        new_data.update(new_cols)
+        call_kw["data"] = new_data
     return call_kw
 
 

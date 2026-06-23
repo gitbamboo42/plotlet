@@ -50,22 +50,14 @@ def step_paint(start_col, end_col, y_col, *, fill=False,
     so the 'repeat the last value at the right edge' trick closes each
     chrom's trailing bin as a rectangle. xs are emitted in global coords
     via the `offsets` dict — positional list-data bypasses sectors auto-
-    remap, so we precompute.
-
-    The trailing close-point gets a tiny inward shift so a bin ending
-    exactly at ``chrom_length`` still maps inside this chrom under the
-    sectored linear scale's strict-`<` boundary convention (see
-    `_SectoredLinearScale.__call__`). Without this, the last step would
-    visually extend across the inter-sector gap in gap style."""
+    remap, so we precompute."""
     def paint(c, df, offsets):
         for cname, sub in df.groupby("chrom", sort=False):
             if cname not in offsets:
                 continue
             off = offsets[cname]
-            close_end = float(sub[end_col].iloc[-1])
-            eps = max(close_end, 1.0) * 1e-9
             xs = [off + x for x in sub[start_col].tolist()] \
-                 + [off + close_end - eps]
+                 + [off + float(sub[end_col].iloc[-1])]
             ys = sub[y_col].tolist() + [float(sub[y_col].iloc[-1])]
             if fill:
                 c.fill_between(data={"x": xs, "y1": [0] * len(xs), "y2": ys},
@@ -78,16 +70,14 @@ def step_paint(start_col, end_col, y_col, *, fill=False,
 
 def bar_paint(start_col, end_col, y_col, *, alpha=0.75):
     """Bar look: filled step-after area, no line on top. Same per-chrom
-    grouping + close-point epsilon trick as ``step_paint``."""
+    grouping as ``step_paint``."""
     def paint(c, df, offsets):
         for cname, sub in df.groupby("chrom", sort=False):
             if cname not in offsets:
                 continue
             off = offsets[cname]
-            close_end = float(sub[end_col].iloc[-1])
-            eps = max(close_end, 1.0) * 1e-9
             xs = [off + x for x in sub[start_col].tolist()] \
-                 + [off + close_end - eps]
+                 + [off + float(sub[end_col].iloc[-1])]
             ys = sub[y_col].tolist() + [float(sub[y_col].iloc[-1])]
             c.fill_between(data={"x": xs, "y1": [0] * len(xs), "y2": ys},
                            x="x", y1="y1", y2="y2",

@@ -41,6 +41,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
+from .scales import SectoredValue
+
 _UNSET = object()
 
 
@@ -227,23 +229,22 @@ class Sectors:
         sector. Continuous only — categorical sectors use the underlying
         category scale and don't need expansion.
 
-        Right-boundary ticks (``t == length``) are nudged a hair inward
-        so the strict-``<`` ``_SectoredLinearScale`` routes them to THIS
-        sector's right edge rather than the next sector's left.
+        Emits ``SectoredValue`` (tagged with the owning sector's index)
+        so right-boundary ticks (``t == length`` of sector i) and
+        left-boundary ticks (``t == 0`` of sector i+1) land on their own
+        sector's pixel edge even though they share the same global float.
         """
         if self.kind != "continuous":
             raise TypeError("Sectors.expand_ticks is continuous-only")
         n = min(len(ticks), len(labels))
         out_t, out_l = [], []
-        for name, length in zip(self.names, self.lengths):
+        for idx, (name, length) in enumerate(zip(self.names, self.lengths)):
             offset = self.offset(name)
             for t, l in zip(ticks[:n], labels[:n]):
                 tv = float(t)
-                if not (0.0 <= tv <= length + 1e-9):
+                if not (0.0 <= tv <= length):
                     continue
-                if tv >= length - 1e-9:
-                    tv = length * (1.0 - 1e-9)
-                out_t.append(offset + tv)
+                out_t.append(SectoredValue(offset + tv, idx))
                 out_l.append(l)
         return out_t, out_l
 

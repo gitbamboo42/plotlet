@@ -19,8 +19,8 @@ from pathlib import Path
 import pandas as pd
 
 import plotlet as pt
-import plotlet.extensions.chord_links     # noqa
-import plotlet.extensions.feature_strip   # noqa
+import plotlet.extensions.chord_links        # noqa
+import plotlet.extensions.annotation_strip   # noqa
 
 DATA = Path(__file__).parent / "data"
 
@@ -97,8 +97,8 @@ arcs.chord_links(x1="src", x2="dst",
 ring = pt.chart(cytobands, xlim=XL, ylim=(0, 1), data_width=W, data_height=H)
 ring.sectors(pt.Sectors(names=CHROMS, lengths=LENGTHS, gap=GAP_PX, fontsize=11),
              column="chrom")
-ring.feature_strip(x1="start", x2="end",
-                   color="stain", palette=CYTOBAND_COLORS)
+ring.annotation_strip(x1="start", x2="end",
+                      value="stain", palette=CYTOBAND_COLORS)
 
 # Per-chrom ticks every 40 Mb, matching pycirclize's
 # `xticks_by_interval(40000000, label_formatter=...)`. Positions are
@@ -119,7 +119,7 @@ circle = pt.grid([[ring]]).coordinate(
 # ---- Linear unrolling — same data, same artists, no coord ----
 #
 # Same panels as the circular version, stacked top→bottom:
-#   1. cytoband strip (feature_strip + per-chrom ticks + chrom names)
+#   1. cytoband strip (annotation_strip + per-chrom ticks + chrom names)
 #   2. chord arcs (chord_links)
 # share_x("col") joins the x-axis so sector chrome only renders once.
 
@@ -133,8 +133,8 @@ sectors_spec = pt.Sectors(names=CHROMS, lengths=LENGTHS, gap=8, fontsize=11, rot
 p_cyto = pt.chart(cytobands, xlim=XL,
                   data_width=LW, data_height=LH_CYTO)
 p_cyto.sectors(sectors_spec, column="chrom")
-p_cyto.feature_strip(x1="start", x2="end",
-                     color="stain", palette=CYTOBAND_COLORS)
+p_cyto.annotation_strip(x1="start", x2="end",
+                        value="stain", palette=CYTOBAND_COLORS)
 p_cyto.xticks(tick_pos, tick_lbl, fontsize=7, rotation=90)
 
 p_arc = pt.chart(links, xlim=XL,

@@ -57,6 +57,16 @@ _FRAME_METHODS = {
 }
 
 
+def _has_column(data, name):
+    """True if `name` looks up as a column on `data`. Used by data
+    auto-injection — pandas/dict via ``in``, other types fall back to
+    "no" so the user passes ``data=`` explicitly."""
+    try:
+        return name in data
+    except (TypeError, KeyError):
+        return False
+
+
 # Strip every `data-plotlet-*="..."` attribute. The leading space is part of
 # the match so we don't leave a double space behind — every attr is emitted
 # with a leading separator (see `_attrs_str` in core.py and the inline
@@ -498,10 +508,16 @@ class Chart(_Renderable):
                     for k, v in self._aes.items():
                         if v is not None and k not in kwargs:
                             kwargs[k] = v
-                    # Data injection — column-referencing kwargs need a table.
+                    # Data injection — inject the chart-level table when any
+                    # kwarg value names a column on it. Generic by design:
+                    # artists declare their column-referencing kwargs by
+                    # naming convention (string-valued kwarg → column ref),
+                    # so adding a new artist with new endpoint kwargs needs
+                    # no edit here.
                     if (self._data is not None and "data" not in kwargs
-                            and any(k in kwargs for k in
-                                    ("x", "y", "fill", "color", "group", "linestyle"))):
+                            and any(_has_column(self._data, v)
+                                    for v in kwargs.values()
+                                    if isinstance(v, str))):
                         kwargs["data"] = self._data
                 if spec is not None and spec.frame_defaults is not None:
                     for call in spec.frame_defaults(list(args), dict(kwargs)) or ():

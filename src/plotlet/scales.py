@@ -68,6 +68,29 @@ class _LinearScale:
         return _nice_ticks(self.d0, self.d1, n)
 
 
+class SectoredValue(float):
+    """A scalar tagged with the index of the sector it belongs to.
+
+    On a sectored axis, a position isn't a number — it's
+    ``(sector, value)``. The framework's sector remap emits these so
+    the scale can project each point unambiguously: two rows that
+    resolve to the same global float but belong to different sectors
+    land on different pixels (separated by ``gap_px``).
+
+    Subclassing ``float`` keeps these transparent for downstream math
+    (midpoints, widths, comparisons all work). Arithmetic between two
+    ``SectoredValue``s degrades to plain ``float`` — fine, because
+    derived quantities (e.g. an interval's midpoint) are interior
+    points where boundary disambiguation doesn't apply."""
+
+    __slots__ = ("sector_idx",)
+
+    def __new__(cls, value, sector_idx):
+        instance = super().__new__(cls, value)
+        instance.sector_idx = sector_idx
+        return instance
+
+
 class _SectoredLinearScale:
     """Piecewise linear scale that reserves ``gap_px`` pixels between
     sectors. Sibling of ``_CategoryScale`` for continuous values — the
@@ -119,25 +142,24 @@ class _SectoredLinearScale:
             cum_px += sign * (w + self.gap_px)
 
     def __call__(self, v):
+        # SectoredValue carries its own sector index — boundary points
+        # across sectors are disambiguated by the tag. Untagged floats
+        # (reflines, auto-ticks, hand-rolled globals) have no sector
+        # intent; pick the lower-index sector at ties so a tick at
+        # `sector_right_edge` lands on that sector's right pixel rather
+        # than jumping `gap_px` to the next sector's left.
         n = len(self.sector_lengths)
         if n == 0:
             return self.r0
-        # Strict-`<` boundary convention: a value at a sector boundary
-        # belongs to the *next* sector's left edge. This is the right
-        # call for axis-aligned artists whose left endpoint sits at a
-        # sector's *origin* (highlight starting at chrom 0, bar starting
-        # at chrom 0, etc.) — those values numerically equal the prior
-        # sector's right edge, but semantically belong to the new sector.
-        # Painters whose *right* endpoint lands exactly on a sector's
-        # right edge (e.g. step-after closing at `chrom_length`) need a
-        # tiny inward shift to stay inside the ending sector; see the
-        # cookbook's `step_paint` / `bar_paint`.
-        idx = n - 1
-        for i in range(n):
-            right = self._sector_lefts_d[i] + self.sector_lengths[i]
-            if v < right:
-                idx = i
-                break
+        if isinstance(v, SectoredValue):
+            idx = v.sector_idx
+        else:
+            idx = n - 1
+            for i in range(n):
+                right = self._sector_lefts_d[i] + self.sector_lengths[i]
+                if v <= right:
+                    idx = i
+                    break
         L_i = self.sector_lengths[idx]
         frac = ((v - self._sector_lefts_d[idx]) / L_i) if L_i > 0 else 0.0
         return self._sector_lefts_px[idx] + frac * self._sector_widths_px[idx]
