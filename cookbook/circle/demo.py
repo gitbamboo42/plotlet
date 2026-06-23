@@ -1,4 +1,4 @@
-"""Circos-style demo — 7 chromosomes as sectors, 4 data tracks as rings,
+"""Circos-style demo — 7 chromosomes as sectors, 3 data tracks as rings,
 intra-chrom links drawn through the inner disc.
 
 The same `c.chord_links(...)` artist works in both the circular inner
@@ -60,9 +60,6 @@ XL = (0, sum(LENGTHS))
 c1 = pt.chart(df, xlim=XL, ylim=(0, 30), data_width=W, data_height=H)
 c1.scatter(x="pos", y="gene_density", color="#534AB7", size=2, alpha=0.6)
 
-c2 = pt.chart(df, xlim=XL, ylim=(30, 60), data_width=W, data_height=H)
-c2.line(x="pos", y="gc", group="chrom", color="#1D9E75", width=1.5)
-
 c3 = pt.chart(df, xlim=XL, ylim=(0, 10), data_width=W, data_height=H)
 c3.numeric_bar(x="pos", y="mutations", width=4, color="#D9534F", alpha=0.85)
 
@@ -70,19 +67,12 @@ c4 = pt.chart(df, xlim=XL, ylim=(0, 80), data_width=W, data_height=H)
 c4.line(x="pos", y="depth", group="chrom", color="#E0A030", width=1.5)
 
 arcs = pt.chart(links, xlim=XL, data_width=W, data_height=H)
-# `c.sectors(...)` must come before any artist call that needs sector
-# remap — chart-level sectors record in user-call order (only the
-# layout-level `Layout.sectors(...)` inserts at the front). Labels off:
-# the rings already show them. Dividers auto-off via crosses_sectors=True
-# on chord_links — walls would cut through chords.
-arcs.sectors(pt.Sectors(names=CHROMS, lengths=LENGTHS, gap=2),
-             column="src_chrom", label=False)
 arcs.chord_links(x1="src", x2="dst",
                  x1_sector="src_chrom", x2_sector="dst_chrom",
                  color="kind", width=1.5, alpha=0.75)
 
-circle_panel = (c1 / c2 / c3 / c4).coordinate(
-    pt.CircularCoordinate(r_inner=0.3, wrap_gap_deg=5, inner=arcs)
+circle_panel = (c1 / c3 / c4).coordinate(
+    pt.CircularCoordinate(r_inner=0.45, wrap_gap_deg=5, inner=arcs)
 ).sectors(pt.Sectors(names=CHROMS, lengths=LENGTHS, gap=2), column="chrom")
 
 
@@ -92,26 +82,28 @@ p1 = pt.chart(df, ylabel="genes/bin", xlim=XL, ylim=(0, 30),
               data_width=400, data_height=110)
 p1.scatter(x="pos", y="gene_density", color="#534AB7", size=3, alpha=0.6)
 
-p2 = pt.chart(df, ylabel="GC%", xlim=XL, ylim=(30, 60),
-              data_width=400, data_height=110)
-p2.line(x="pos", y="gc", group="chrom", color="#1D9E75", width=1.5)
-
 p3 = pt.chart(df, ylabel="mutations", xlim=XL, ylim=(0, 10),
               data_width=400, data_height=110)
 p3.numeric_bar(x="pos", y="mutations", width=4, color="#D9534F", alpha=0.85)
 
-p4 = pt.chart(df, ylabel="depth", xlim=XL, ylim=(0, 80),
+p4 = pt.chart(df, ylabel="depth", xlabel="position (Mb)", xlim=XL, ylim=(0, 80),
               data_width=400, data_height=110)
 p4.line(x="pos", y="depth", group="chrom", color="#E0A030", width=1.5)
 
-p_arcs = pt.chart(links, ylabel="links", xlabel="position (Mb)", xlim=XL,
+# Top-of-figure links track: attach_above on p1 makes p_arcs a decoration
+# ring sitting above the top data track. Sectors auto-inherit from p1
+# (which gets them from `Layout.sectors` below), so chord_links' per-row
+# `x1_sector` / `x2_sector` remap into global sector coords without a
+# second `p_arcs.sectors(...)` call.
+p_arcs = pt.chart(links, ylabel="links", xlim=XL,
                   data_width=400, data_height=80)
 p_arcs.chord_links(x1="src", x2="dst",
                    x1_sector="src_chrom", x2_sector="dst_chrom",
                    color="kind", width=1.5, alpha=0.75)
 p_arcs.yticks([])
+p1.attach_above(p_arcs)
 
-linear_panel = pt.grid([[p1], [p2], [p3], [p4], [p_arcs]]).share_x("col").sectors(
+linear_panel = pt.grid([[p1], [p3], [p4]]).share_x("col").sectors(
     pt.Sectors(names=CHROMS, lengths=LENGTHS, gap=0), column="chrom")
 
 

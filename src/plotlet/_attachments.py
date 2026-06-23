@@ -165,6 +165,52 @@ def allocate(host: Chart, host_x: float, host_y: float,
         cy_top = c_canvas_y + cM["top"] + c._data_height   # c's data-bottom
 
 
+def _is_sectors_call(call, axis: str) -> bool:
+    """A `_calls` entry is `(name, args, kw)` or 4-tuple with a trailing
+    `from_default` flag. Sectors carries `axis=` in kw (default 'x')."""
+    name, _args, kw = call[0], call[1], call[2]
+    return name == "sectors" and kw.get("axis", "x") == axis
+
+
+def inherit_sectors(leaves: list[Chart]) -> None:
+    """Propagate the host's `c.sectors(...)` call onto each attached leaf,
+    on the axis the attachment auto-shares with the host. Runs before
+    `_replay` so the inserted entry sets `st["{axis}_sectors"]` like a
+    user-declared call would — making `_sector_remap_data` fire on the
+    attachment's data when it carries the sector-tag column, and giving
+    chrome the same partition info the host has.
+
+    Display flags are forced off on the inherited copy (`divider=False`,
+    `label=False`): attachments are decoration tracks, and walls/labels
+    at the host-facing seam belong on the host, not duplicated on the
+    strip. To opt out (e.g. attach independently-sectored content, or
+    keep dividers on the attachment too), declare `c.sectors(...)` on
+    the attachment explicitly — the explicit call wins and inheritance
+    is skipped on that axis.
+
+    Idempotent across re-renders: if the front of the attachment's
+    `_calls` already holds the inherited entry from a prior pass, skip.
+    """
+    for leaf in leaves:
+        if not leaf._is_attached:
+            continue
+        for share_attr, axis in (("_share_y", "y"), ("_share_x", "x")):
+            host = getattr(leaf, share_attr, None)
+            if host is None:
+                continue
+            if any(_is_sectors_call(c, axis) for c in leaf._calls):
+                continue
+            host_entry = next((c for c in host._calls
+                               if _is_sectors_call(c, axis)), None)
+            if host_entry is None:
+                continue
+            _name, args, kw = host_entry[0], host_entry[1], host_entry[2]
+            new_kw = dict(kw)
+            new_kw["divider"] = False
+            new_kw["label"] = False
+            leaf._calls.insert(0, ("sectors", list(args), new_kw))
+
+
 def annotate_joined_pairs(leaves: list[Chart],
                           panel_opts: dict[int, _PanelOpts]) -> None:
     """For each host with attachments, mark the inner-facing edge of each

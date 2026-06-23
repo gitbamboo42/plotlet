@@ -163,6 +163,65 @@ def _run_invariants() -> int:
            f"host/left data areas align in y (host_data_y={h6_data_y}, "
            f"left_data_y={left_data_y})")
 
+    # Sector inheritance: above-attachment picks up host's x-sectors.
+    from plotlet._layout_engine import _build_panel_opts as _bpo
+    h7 = pt.chart(data_width=240, data_height=100)
+    h7.sectors({"chr1": 100, "chr2": 200}, axis="x", column="chr",
+               divider=True, label=True)
+    h7.line(data={"chr": ["chr1"], "x": [50], "y": [1]}, x="x", y="y")
+    top7 = pt.chart(data_height=30)
+    top7.line(data={"chr": ["chr2"], "x": [10], "y": [1]}, x="x", y="y")
+    h7.attach_above(top7)
+    _, states7 = _bpo(h7)
+    st_top = states7[id(top7)]
+    _check(st_top["x_sectors"] is not None,
+           "above attachment inherits host's x_sectors")
+    _check(st_top["x_sectors"] is not None
+           and st_top["x_sectors"].divider is False
+           and st_top["x_sectors"].label is False,
+           "inherited sectors force divider=False, label=False on attachment")
+    _check(st_top["x_sector_column"] == "chr",
+           "inherited sector column carried through for data remap")
+
+    # Sector inheritance: left-attachment picks up host's y-sectors (categorical).
+    rows7 = ["g1", "g2", "g3", "g4"]
+    cols7 = ["s1", "s2"]
+    h8 = pt.chart(data_width=120, data_height=140)
+    h8.sectors({"A": ["g1", "g2"], "B": ["g3", "g4"]}, axis="y",
+               divider=False, label=False)
+    h8.heatmap([[1, 2], [2, 3], [3, 4], [4, 5]],
+               xticklabels=cols7, yticklabels=rows7)
+    left8 = pt.chart(data_width=20)
+    left8.yscale("category", order=rows7, padding=0)
+    left8.line(data={"x": [1, 2, 1, 2], "y": rows7}, x="x", y="y")
+    h8.attach_left(left8)
+    _, states8 = _bpo(h8)
+    _check(states8[id(left8)]["y_sectors"] is not None,
+           "left attachment inherits host's y_sectors (categorical)")
+
+    # Explicit attachment-side sectors call wins over inheritance.
+    h9 = pt.chart(data_width=240, data_height=100)
+    h9.sectors({"chr1": 100}, axis="x", column="chr", divider=True, label=True)
+    h9.line(data={"chr": ["chr1"], "x": [50], "y": [1]}, x="x", y="y")
+    top9 = pt.chart(data_height=30)
+    top9.sectors({"chr1": 100}, axis="x", column="chr",
+                 divider=True, label=True)
+    top9.line(data={"chr": ["chr1"], "x": [50], "y": [1]}, x="x", y="y")
+    h9.attach_above(top9)
+    _, states9 = _bpo(h9)
+    _check(states9[id(top9)]["x_sectors"] is not None
+           and states9[id(top9)]["x_sectors"].divider is True,
+           "explicit c.sectors() on attachment overrides inheritance")
+
+    # Idempotence: re-running the pre-pass must not duplicate the inherited entry.
+    pre = sum(1 for c in top7._calls
+              if c[0] == "sectors" and c[2].get("axis", "x") == "x")
+    _bpo(h7)  # second pass
+    post = sum(1 for c in top7._calls
+               if c[0] == "sectors" and c[2].get("axis", "x") == "x")
+    _check(pre == post,
+           f"inherit_sectors is idempotent across re-renders (pre={pre}, post={post})")
+
     if failed:
         print(f"\n{failed} of {checks} attachment invariants FAILED")
     else:

@@ -680,6 +680,10 @@ def _build_panel_opts(root: Chart) -> tuple[dict[int, _PanelOpts], dict[int, dic
     render through their own pipeline (see `legend.py`)."""
     leaves = [l for l in _iter_leaves(root) if l._leaf_kind == "data"]
     _apply_share_scaling(leaves)
+    # Inherit host sectors onto attached leaves before replay so the
+    # propagated `("sectors", ...)` entry sets each attachment's
+    # `st["{axis}_sectors"]`, matching the share invariant on the axis.
+    _attachments.inherit_sectors(leaves)
     # Replay each leaf under its own theme so state defaults (spine
     # visibility, tick direction) and any measurement reads pick up the
     # theme's values. Multi-panel layouts may mix themes; each leaf

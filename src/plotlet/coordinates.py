@@ -246,8 +246,9 @@ class CircularCoordinate:
         share the t-axis with the rings but live in the inner disc.
         The leaves passed via ``(c1 / c2 / ...).coordinate(...)`` still
         tile the annulus exactly as today; this is additive. The inner
-        chart needs its own ``xlim`` (and ``sectors(...)`` if the rings
-        use them) matching the rings — composition doesn't propagate.
+        chart needs its own ``xlim`` matching the rings; sectors declared
+        on the layout auto-propagate to the inner chart (declare
+        ``c.sectors(...)`` on the inner chart explicitly to opt out).
     """
 
     def __init__(self, r_inner: float = 0.30, r_outer: float = 1.0,
@@ -436,6 +437,21 @@ class CircularCoordinate:
                   for i, (leaf, c) in enumerate(zip(leaves, leaf_coords))]
 
         if self.inner is not None:
+            # Inherit the layout's sector partition onto the inner chart
+            # (coord side-leaf — Layout._iter_leaves skips it). Force
+            # divider/label off; outer ring carries the chrome.
+            from ._attachments import _is_sectors_call
+            for _axis in ("x", "y"):
+                if any(_is_sectors_call(c, _axis) for c in self.inner._calls):
+                    continue
+                _outer = next((c for c in leaves[0]._calls
+                               if _is_sectors_call(c, _axis)), None)
+                if _outer is None:
+                    continue
+                _kw = dict(_outer[2])
+                _kw["divider"] = False
+                _kw["label"]   = False
+                self.inner._calls.insert(0, ("sectors", list(_outer[1]), _kw))
             inner_coord = CircularCoordinate(
                 r_inner=0.0, r_outer=self.r_inner,
                 gap=effective_gap, wrap_gap_deg=resolved_wrap_gap_deg,
