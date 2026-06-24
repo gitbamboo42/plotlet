@@ -71,6 +71,11 @@ def attach_with_peer_legend():
 # ---------------------------------------------------------------------------
 
 def _run_invariants() -> int:
+    # These invariants poke layout-engine internals (`_build_panel_opts`,
+    # `_measure`, …) directly. Those expect a materialized tree —
+    # render entry points (`to_svg`) materialize automatically, but
+    # internal pokes must materialize themselves.
+    from plotlet.chart import materialize
     checks = 0
     failed = 0
 
@@ -120,7 +125,9 @@ def _run_invariants() -> int:
     except ValueError:
         _check(True, "attaching parented chart raises")
 
-    # Warning on existing share, but host wins.
+    # Warning on existing share, but host wins. The warning fires at
+    # `attach_left` call time (validation); the field write is done by
+    # `materialize()` at render, so we trigger it explicitly here.
     h4 = pt.chart(); h4.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
     other = pt.chart(); other.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
     side = pt.chart(); side.annotate("s", xy=(0.5, 1.0))
@@ -128,6 +135,7 @@ def _run_invariants() -> int:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         h4.attach_left(side)
+    materialize(h4)
     _check(any("share_y" in str(w.message) for w in caught)
            and side._share_y is h4,
            "existing share warns and host overrides")
@@ -149,6 +157,7 @@ def _run_invariants() -> int:
     left2 = pt.chart(data_width=40)
     left2.annotate("L", xy=(0.5, 2.0))
     h6.attach_left(left2)
+    materialize(h6)
     from plotlet._layout_engine import _build_panel_opts, _measure, _allocate
     po, _ = _build_panel_opts(h6)
     W, H = _measure(h6)
@@ -172,6 +181,7 @@ def _run_invariants() -> int:
     top7 = pt.chart(data_height=30)
     top7.line(data={"chr": ["chr2"], "x": [10], "y": [1]}, x="x", y="y")
     h7.attach_above(top7)
+    materialize(h7)
     _, states7 = _bpo(h7)
     st_top = states7[id(top7)]
     _check(st_top["x_sectors"] is not None,
@@ -195,6 +205,7 @@ def _run_invariants() -> int:
     left8.yscale("category", order=rows7, padding=0)
     left8.line(data={"x": [1, 2, 1, 2], "y": rows7}, x="x", y="y")
     h8.attach_left(left8)
+    materialize(h8)
     _, states8 = _bpo(h8)
     _check(states8[id(left8)]["y_sectors"] is not None,
            "left attachment inherits host's y_sectors (categorical)")
@@ -208,19 +219,22 @@ def _run_invariants() -> int:
                  divider=True, label=True)
     top9.line(data={"chr": ["chr1"], "x": [50], "y": [1]}, x="x", y="y")
     h9.attach_above(top9)
+    materialize(h9)
     _, states9 = _bpo(h9)
     _check(states9[id(top9)]["x_sectors"] is not None
            and states9[id(top9)]["x_sectors"].divider is True,
            "explicit c.sectors() on attachment overrides inheritance")
 
-    # Idempotence: re-running the pre-pass must not duplicate the inherited entry.
-    pre = sum(1 for c in top7._calls
-              if c[0] == "sectors" and c[2].get("axis", "x") == "x")
+    # Non-mutation: attachment sector inheritance now emits a cascade
+    # entry at the call site in `_build_panel_opts` instead of mutating
+    # `top7._calls`. Re-running the pre-pass must not touch the leaf
+    # journal (idempotence is automatic, but pin the no-mutation
+    # property explicitly so a regression resurrecting an insert(0)
+    # path would surface here).
+    snapshot = list(top7._calls)
     _bpo(h7)  # second pass
-    post = sum(1 for c in top7._calls
-               if c[0] == "sectors" and c[2].get("axis", "x") == "x")
-    _check(pre == post,
-           f"inherit_sectors is idempotent across re-renders (pre={pre}, post={post})")
+    _check(top7._calls == snapshot,
+           "attachment sector inheritance does not mutate attached leaf _calls")
 
     if failed:
         print(f"\n{failed} of {checks} attachment invariants FAILED")

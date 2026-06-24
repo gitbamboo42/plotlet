@@ -404,6 +404,19 @@ def _replay(calls):
         "y_sectors": None,
         "y_sector_column": None,
     }
+    # Stable-sort sectors entries to the front. Sectors set the state
+    # `_sector_remap_data` reads while processing artist calls; an
+    # ordering bug would silently no-op the remap (every row stacked into
+    # the first sector). Two-pass dispatch enforces the invariant
+    # independent of recording order, so:
+    #   - `c.coordinate(...).sectors(...)` chained on a Chart (where
+    #     `coordinate` returns self, so the trailing `.sectors()` lands
+    #     after any prior artist) still applies its sectors.
+    #   - Ancestor sector entries prepended by the parent-cascade walk
+    #     (in `_build_panel_opts`) still apply, then a leaf-level
+    #     `c.sectors(...)` later in the list overwrites (last-write-wins).
+    # Sort is stable, so cascade order is preserved among sectors.
+    calls = sorted(calls, key=lambda c: c[0] != "sectors")
     for call in calls:
         # Calls are stored as 3-tuples `(name, args, kw)` from user code
         # or 4-tuples `(name, args, kw, from_default=True)` when emitted by

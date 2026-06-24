@@ -234,6 +234,58 @@ def test_sectors_typo_in_data_raises_clearly():
         c.to_svg()
 
 
+def test_sectors_after_artist_still_remaps():
+    """Regression: `c.coordinate(...).sectors(...)` chained after an artist
+    on a plain Chart used to silently no-op the sector remap — every row's
+    data stacked in the first sector. `Chart.coordinate()` returns self
+    (not a `Layout`), so the trailing `.sectors()` lands at the end of
+    `_calls` after any prior artist. `_replay`'s sectors-to-front pass
+    enforces the sectors-before-artists invariant independent of
+    recording order; this test pins that behavior."""
+    from plotlet.core import _replay
+    c = pt.chart(data_width=200, data_height=80, ylim=(0, 1))
+    c.scatter(
+        data={"chrom": ["chr1", "chr2"], "x": [25, 25], "y": [0.5, 0.5]},
+        x="x", y="y",
+    )
+    c.coordinate(pt.CircularCoordinate()).sectors(
+        {"chr1": 100, "chr2": 100}, column="chrom",
+    )
+    st = _replay(c._calls)
+    assert st["x_sectors"] is not None, "sectors recorded after artist must reach replay state"
+    # Both rows tagged chrom=chr1/chr2 with the same local x=25. After remap,
+    # chr2's x must be offset to 25 + 100 = 125 (chr1's offset is 0).
+    [artist] = st["artists"]
+    assert artist["xs"] == [25.0, 125.0], (
+        f"sector remap must offset chr2's x by chr1's length; got xs={artist['xs']!r}"
+    )
+
+
+def test_layout_sectors_cascade_no_leaf_mutation():
+    """Regression: `Layout.sectors(...)` no longer fans out via insert(0)
+    into each leaf's `_calls`. Instead the entry stays on the Layout's
+    own journal and `_build_panel_opts` prepends it via parent-chain
+    cascade. This test pins that the leaf's journal is not touched, so
+    a Layout-level sectors call composes cleanly with re-renders /
+    fit() / regions() without leaking entries between calls."""
+    t1 = pt.chart(data_width=200, data_height=60)
+    t1.line(data={"phase": ["warmup"], "t": [50], "v": [0.5]}, x="t", y="v")
+    t2 = pt.chart(data_width=200, data_height=60)
+    t2.line(data={"phase": ["training"], "t": [50], "v": [0.5]}, x="t", y="v")
+    snapshot_t1 = list(t1._calls)
+    snapshot_t2 = list(t2._calls)
+    layout = (t1 / t2).sectors(PHASES, column="phase")
+    # After Layout.sectors, leaf journals should be unchanged.
+    assert t1._calls == snapshot_t1, "Layout.sectors must not mutate leaf _calls"
+    assert t2._calls == snapshot_t2, "Layout.sectors must not mutate leaf _calls"
+    # Sector partition still reaches the leaves at render via cascade.
+    layout.to_svg()
+    # And re-renders don't accumulate anything on the leaves either.
+    layout.to_svg()
+    assert t1._calls == snapshot_t1, "re-render must not mutate leaf _calls"
+    assert t2._calls == snapshot_t2, "re-render must not mutate leaf _calls"
+
+
 def test_sectors_passthrough_when_column_absent():
     """Cross-sector reference lines (data without the sector column) must
     silently pass through — they're an intentional shape."""

@@ -373,7 +373,15 @@ class CircularCoordinate:
             gap=effective_gap, wrap_gap_deg=resolved_wrap_gap_deg,
         ).derive_leaf_coords(leaves)
 
-        def _render_leaf(leaf, coord, *, is_outermost=False):
+        def _render_leaf(leaf, coord, *, is_outermost=False, prepend=()):
+            # `prepend` carries inherited entries (today: dampened sectors
+            # for `self.inner`) that need to be replayed before the
+            # leaf's own calls. Inserted at the front of `_calls` and
+            # cleaned up in `finally` so the leaf's journal is untouched
+            # across re-renders — no permanent fan-out / insert(0).
+            n_prepend = len(prepend)
+            if n_prepend:
+                leaf._calls[:0] = list(prepend)
             n0 = len(leaf._calls)
             orig_dw, orig_dh = leaf._data_width, leaf._data_height
             orig_margin = dict(leaf._margin)
@@ -421,7 +429,13 @@ class CircularCoordinate:
                 with active_theme(_theme):
                     svg = _core_render(_st, W, H, _ZERO_MARGIN, outer=None)
             finally:
+                # Strip trailing render-time additions first, then the
+                # prepended entries from the front. Order matters — n0
+                # is computed after the prepend, so leaf._calls[n0:] is
+                # the trailing block.
                 del leaf._calls[n0:]
+                if n_prepend:
+                    del leaf._calls[:n_prepend]
                 leaf._data_width, leaf._data_height = orig_dw, orig_dh
                 leaf._margin = orig_margin
                 leaf._canvas_width  = orig_dw + orig_margin["left"] + orig_margin["right"]
@@ -439,8 +453,14 @@ class CircularCoordinate:
         if self.inner is not None:
             # Inherit the layout's sector partition onto the inner chart
             # (coord side-leaf — Layout._iter_leaves skips it). Force
-            # divider/label off; outer ring carries the chrome.
+            # divider/label off; outer ring carries the chrome. Emitted
+            # as `prepend=` entries to `_render_leaf` so the inner's own
+            # journal stays untouched — no insert(0) into `self.inner._calls`.
+            # Skip per-axis when the inner has its own explicit sectors
+            # call on that axis (last-write-wins would have made the
+            # inherited entry lose anyway, but skipping is cheaper).
             from ._attachments import _is_sectors_call
+            inner_prepend: list = []
             for _axis in ("x", "y"):
                 if any(_is_sectors_call(c, _axis) for c in self.inner._calls):
                     continue
@@ -451,12 +471,13 @@ class CircularCoordinate:
                 _kw = dict(_outer[2])
                 _kw["divider"] = False
                 _kw["label"]   = False
-                self.inner._calls.insert(0, ("sectors", list(_outer[1]), _kw))
+                inner_prepend.append(("sectors", list(_outer[1]), _kw))
             inner_coord = CircularCoordinate(
                 r_inner=0.0, r_outer=self.r_inner,
                 gap=effective_gap, wrap_gap_deg=resolved_wrap_gap_deg,
             )
-            bodies.append(_render_leaf(self.inner, inner_coord))
+            bodies.append(_render_leaf(self.inner, inner_coord,
+                                       prepend=inner_prepend))
 
         return W, H, "".join(bodies)
 

@@ -342,6 +342,52 @@ def _iter_leaves(node: Chart):
         yield from _iter_leaves(c)
 
 
+_CASCADING_NAMES = frozenset({"sectors"})
+
+
+def _ancestor_calls(leaf: Chart) -> list[tuple]:
+    """Collect cascadable `_calls` entries from `leaf`'s ancestors,
+    yielded root-first. Used by `_build_panel_opts` to prepend ancestor
+    state declarations to the leaf's own `_calls` before `_replay`.
+    Cascade replaces the old "Layout pushes into each leaf's _calls at
+    index 0" propagation: Layout never mutates a leaf's journal;
+    leaves read up the parent chain at render time.
+
+    Filtered to `_CASCADING_NAMES` so we don't drag a parent's own
+    artists/frame methods into a leaf's replay. Only entries that
+    inherit *into* leaves cascade — today just `sectors`. Other
+    journaled Layout state (`share_x/y`, `align_x/y`, `coordinate`,
+    `gap`) is consumed at the Layout where it's declared by
+    `materialize()`, not at the leaf. Attached charts have a Chart
+    ancestor (the host) whose `_calls` contains artists — those must
+    not bleed into the attachment's replay; the name filter is the
+    guard.
+
+    Entries returned in root-to-leaf order so they replay first;
+    `_replay`'s sectors-to-front pass orders sectors among themselves
+    by appearance, and a leaf's own sectors entry (later in the
+    combined list) wins via last-write-wins on `st[\"{axis}_sectors\"]`.
+    """
+    # Walk only Layout ancestors. An attached Chart's `_parent` is its
+    # host (a Chart), and an attached chart shares only one axis with
+    # its host — sector cascade through the host would leak the host's
+    # other-axis sectors. Attachment inheritance is handled separately
+    # by `_attachments.attachment_inherited_calls` with axis filtering
+    # and display damping (`divider=False`, `label=False`).
+    chain = []
+    p = getattr(leaf, "_parent", None)
+    while p is not None and getattr(p, "_is_parent", False):
+        chain.append(p)
+        p = getattr(p, "_parent", None)
+    chain.reverse()
+    out: list[tuple] = []
+    for node in chain:
+        for c in getattr(node, "_calls", ()):
+            if c[0] in _CASCADING_NAMES:
+                out.append(c)
+    return out
+
+
 def _allocate(node: Chart, x: float, y: float, w: float, h: float, out: list):
     """Walk the tree, recording (leaf, rect) pairs into `out`. Leaf size hints
     (set via `pt.chart(data_width=, data_height=)` or the canvas_* form)
@@ -677,21 +723,33 @@ def _build_panel_opts(root: Chart) -> tuple[dict[int, _PanelOpts], dict[int, dic
     grown-to-fit dimensions on the first walk.
 
     Legend leaves are skipped — they have no x/y axes, no artists, and
-    render through their own pipeline (see `legend.py`)."""
+    render through their own pipeline (see `legend.py`).
+
+    Assumes `materialize(root)` has already run (e.g. via
+    `_render_layout`). Internal callers (tests, debugging) that
+    bypass `_render_layout` must materialize themselves first — same
+    contract as `_measure`, `_allocate`, `_natural_size`."""
     leaves = [l for l in _iter_leaves(root) if l._leaf_kind == "data"]
     _apply_share_scaling(leaves)
-    # Inherit host sectors onto attached leaves before replay so the
-    # propagated `("sectors", ...)` entry sets each attachment's
-    # `st["{axis}_sectors"]`, matching the share invariant on the axis.
-    _attachments.inherit_sectors(leaves)
     # Replay each leaf under its own theme so state defaults (spine
     # visibility, tick direction) and any measurement reads pick up the
     # theme's values. Multi-panel layouts may mix themes; each leaf
     # carries its own context.
+    #
+    # Effective replay input per leaf: ancestor Layout cascade, then
+    # attachment inheritance from the host (dampened sectors), then the
+    # leaf's own `_calls`. Three sources, concatenated in priority
+    # order — `_replay`'s sectors-to-front pass orders sectors among
+    # themselves by appearance, and the leaf's own entry (last) wins
+    # via last-write on `st["{axis}_sectors"]`. No node ever mutates
+    # another node's journal.
     states = {}
     for l in leaves:
         with active_theme(_extract_theme(l._calls)):
-            st = _replay(l._calls)
+            effective = (_ancestor_calls(l)
+                         + _attachments.attachment_inherited_calls(l)
+                         + l._calls)
+            st = _replay(effective)
             st["insets"] = getattr(l, "_insets", [])
             states[id(l)] = st
     x_desc, y_desc = _build_axis_descriptors(leaves, states)
@@ -908,6 +966,12 @@ def _effective_margin(leaf: Chart, po: _PanelOpts, w: float, h: float) -> dict:
 
 
 def _render_layout(root: Chart, outer=None) -> str:
+    # Materialize first — replay the recorded journals to populate
+    # `_share_x/y`, `_coordinate`, `_gap*`, `_attached_*`, etc. before
+    # anything reads them. User-facing state methods only validate and
+    # record; field writes happen here.
+    from .chart import materialize
+    materialize(root)
     # If the root has a container coord that implements `render_layout`,
     # delegate the entire render to it — the coord owns its strategy
     # (overlay, faceting, etc.). The coord returns `(W, H, body)`; this

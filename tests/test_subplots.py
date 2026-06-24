@@ -324,13 +324,20 @@ def _run_invariants():
     except ValueError:
         pass
 
-    # 6. share cycle detection
+    # 6. share cycle detection — verify the engine validator directly.
+    # The public Layout.share_x/y API can't construct a cycle (charts
+    # in one share class point at a single anchor), and the journal
+    # materializer resets `_share_x`/`_share_y` from recorded entries,
+    # so direct field-poking before to_svg() no longer survives into
+    # render. Drive `_topo_order` with hand-built leaves to confirm
+    # the cycle guard still raises.
+    from plotlet._layout_engine import _topo_order
     f1 = pt.chart(); f1.line(data={"x": [1,2], "y": [1,2]}, x="x", y="y")
     f2 = pt.chart(); f2.line(data={"x": [1,2], "y": [2,1]}, x="x", y="y")
     f1._share_y = f2
-    f2._share_y = f1   # cycle
+    f2._share_y = f1
     try:
-        (f1 | f2).to_svg()
+        _topo_order([f1, f2])
         failures.append("expected ValueError on share_y cycle")
     except ValueError as ex:
         if "cycle" not in str(ex).lower():
@@ -360,6 +367,8 @@ def _run_invariants():
     shr = pt.chart(); shr.line(data={"x": [0, 10], "y": [-5, 5]}, x="x", y="y")
     parent = (src | shr).share_y()
     from plotlet._layout_engine import _build_panel_opts
+    from plotlet.chart import materialize
+    materialize(parent)
     panel_opts, _ = _build_panel_opts(parent)
     src_y = panel_opts[id(src)].y_axis
     shr_y = panel_opts[id(shr)].y_axis
