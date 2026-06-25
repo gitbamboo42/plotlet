@@ -43,8 +43,7 @@ recursed into, so a coord that holds a Chart (e.g.
 `CircularCoordinate(inner=...)`) round-trips with the inner Chart as a
 `$ref` like any other cross-node reference.
 
-Palette objects and `Sectors` objects raise `TypeError` until a codec is
-added; pass dict forms for now.
+Anything outside the envelopes above raises `TypeError` at encode time.
 """
 from __future__ import annotations
 from typing import Any
@@ -234,8 +233,7 @@ def to_json(node) -> dict:
 def from_json(blob: dict):
     """Reconstruct a Chart or Layout from the dict produced by
     `to_json`. The returned root renders to the same SVG as the
-    original (up to any unserialized state like coord objects, which
-    are out of scope for stage 2)."""
+    original."""
     from .chart import Chart, Layout
 
     version = blob.get("version")
@@ -310,8 +308,6 @@ def from_json(blob: dict):
         raise TypeError(f"from_json: unexpected value {value!r}")
 
     # Pass 2: decode args/kwargs, populate `_calls`, wire layout children.
-    # The Chart constructor recorded entries (from convenience kwargs like
-    # data_width-via-init) get overwritten — the JSON is the truth.
     def _decode_call(raw_entry):
         name = raw_entry[0]
         args = [_decode(a) for a in raw_entry[1]]
