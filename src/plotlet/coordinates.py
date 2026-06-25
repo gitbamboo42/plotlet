@@ -120,6 +120,18 @@ class LinearCoordinate:
         self.length     = length     # px along baseline;    None → iw
         self.thickness  = thickness  # px along normal axis; None → ih
 
+    def _to_dict(self) -> dict:
+        return {"angle": self.angle_deg, "origin": self.origin,
+                "length": self.length, "thickness": self.thickness}
+
+    @classmethod
+    def _from_dict(cls, d: dict) -> "LinearCoordinate":
+        origin = d.get("origin")
+        if isinstance(origin, list):
+            origin = tuple(origin)
+        return cls(angle=d.get("angle", 0.0), origin=origin,
+                   length=d.get("length"), thickness=d.get("thickness"))
+
     def __call__(self, artist: dict, iw: float, ih: float):
         a      = math.radians(self.angle_deg)
         cos_a  = math.cos(a)
@@ -259,6 +271,21 @@ class CircularCoordinate:
         self.gap          = gap
         self.wrap_gap_deg = wrap_gap_deg
         self.inner        = inner
+
+    def _to_dict(self) -> dict:
+        # `inner` may be a Chart — encoded as a $ref by the serializer's
+        # recursive value walker, not flattened here.
+        return {"r_inner": self.r_inner, "r_outer": self.r_outer,
+                "gap": self.gap, "wrap_gap_deg": self.wrap_gap_deg,
+                "inner": self.inner}
+
+    @classmethod
+    def _from_dict(cls, d: dict) -> "CircularCoordinate":
+        return cls(r_inner=d.get("r_inner", 0.30),
+                   r_outer=d.get("r_outer", 1.0),
+                   gap=d.get("gap", 0.05),
+                   wrap_gap_deg=d.get("wrap_gap_deg"),
+                   inner=d.get("inner"))
 
     @property
     def _wrap_gap_rad(self) -> float:
