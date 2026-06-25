@@ -75,6 +75,34 @@ class Sectors:
     def kind(self) -> str:
         return "continuous" if self.lengths is not None else "categorical"
 
+    def _to_dict(self) -> dict:
+        # Tuple-of-tuples for `members` round-trips through JSON as
+        # list-of-lists; `_from_dict` re-tuples below to match the
+        # dataclass declaration.
+        return {"names": list(self.names),
+                "lengths":  list(self.lengths)  if self.lengths  is not None else None,
+                "members":  [list(g) for g in self.members] if self.members is not None else None,
+                "divider":  self.divider,
+                "label":    self.label,
+                "gap":      self.gap,
+                "fontsize": self.fontsize,
+                "rotation": self.rotation}
+
+    @classmethod
+    def _from_dict(cls, d: dict) -> "Sectors":
+        lengths = d.get("lengths")
+        members = d.get("members")
+        return cls(
+            names=tuple(d["names"]),
+            lengths=tuple(lengths) if lengths is not None else None,
+            members=tuple(tuple(g) for g in members) if members is not None else None,
+            divider=d.get("divider", True),
+            label=d.get("label", True),
+            gap=d.get("gap"),
+            fontsize=d.get("fontsize"),
+            rotation=d.get("rotation"),
+        )
+
     @classmethod
     def coerce(cls, spec, *, name_col=None, length_col="length",
                divider=_UNSET, label=_UNSET, gap=_UNSET,

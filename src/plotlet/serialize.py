@@ -31,6 +31,7 @@ Value envelopes used inside `data`, `aes`, and `calls`:
                     "dtypes": [...]}}        pandas DataFrame
     {"$coord":     "ClassName",
                           "kwargs": {...}}   Coordinate (Linear, Circular, …)
+    {"$sectors":   {...}}                    Sectors (axis partition)
 
 Primitives, lists/tuples, and dicts pass through directly (tuples come
 back as lists — JSON has no tuple type, and plotlet's recorded args
@@ -48,12 +49,14 @@ added; pass dict forms for now.
 from __future__ import annotations
 from typing import Any
 
+from .coordinates import LinearCoordinate, CircularCoordinate
+from .sectors import Sectors
+
 
 _VERSION = 1
 
-# Coord class registry. Populated by `register_coord_codec`; default
-# entries (LinearCoordinate, CircularCoordinate) registered at the
-# bottom of the module after the class import.
+# Coord class registry. Populated by `register_coord_codec`; LinearCoordinate
+# and CircularCoordinate registered at the bottom of the module.
 _COORD_REGISTRY: dict[str, type] = {}
 
 
@@ -94,6 +97,9 @@ def to_json(node) -> dict:
         if hasattr(value, "_is_parent"):
             _collect(value)
             return
+        # Coords can hold Chart refs (CircularCoordinate.inner); walk
+        # into their `_to_dict` values. Other value-codecs (Sectors etc.)
+        # carry only primitives, so they need no ref walk.
         if type(value).__name__ in _COORD_REGISTRY:
             for v in value._to_dict().values():
                 _collect_refs(v)
@@ -107,22 +113,22 @@ def to_json(node) -> dict:
             for child in n._children:
                 if child is not None:
                     _collect(child)
-            # Layout calls can carry coord objects whose own state
-            # references other Charts (e.g. CircularCoordinate.inner).
-            # Layout journal args are small config values, not data
-            # arrays, so the recursive walk is cheap.
-            for _name, args, kw in n._calls:
-                for a in args:
-                    _collect_refs(a)
-                for v in kw.values():
-                    _collect_refs(v)
-        else:
-            # Charts can reference other charts via `attach_*` entries in
-            # their journal — collect those too so refs resolve.
-            for name, args, _kw in n._calls:
-                if name.startswith("attach_"):
-                    for c in args:
-                        _collect(c)
+        # Walk every recorded call's args / kwargs for embedded
+        # Chart / Layout refs. Covers `attach_*` on charts, `coordinate`
+        # on layouts AND charts (`chart.coordinate(coord_with_inner)`),
+        # and any future entry that carries a node reference.
+        #
+        # Entries are 3-tuples (user calls) or 4-tuples (frame_default-
+        # tagged entries; see chart.py:535 — the trailing bool flag is
+        # consumed by `_replay` at core.py:426). Index with `entry[i]`
+        # so the loop tolerates both shapes.
+        for entry in n._calls:
+            args = entry[1]
+            kw   = entry[2]
+            for a in args:
+                _collect_refs(a)
+            for v in kw.values():
+                _collect_refs(v)
 
     _collect(node)
 
@@ -160,6 +166,8 @@ def to_json(node) -> dict:
         if cls_name in _COORD_REGISTRY:
             return {"$coord": cls_name,
                     "kwargs": _encode(value._to_dict())}
+        if isinstance(value, Sectors):
+            return {"$sectors": _encode(value._to_dict())}
         raise TypeError(
             f"to_json: don't know how to encode {type(value).__name__} "
             f"value {value!r}. Pass a JSON-native form (list/dict of "
@@ -167,11 +175,21 @@ def to_json(node) -> dict:
         )
 
     def _encode_calls(calls):
-        return [
-            [name, [_encode(a) for a in args],
-             {str(k): _encode(v) for k, v in kw.items()}]
-            for name, args, kw in calls
-        ]
+        # Entries are 3-tuples or 4-tuples (frame_default flag). Preserve
+        # whatever trailing element is there so replay behaves the same
+        # after round-trip — `_replay` reads `len(call) == 4` to route
+        # `xscale(order=...)` etc. as a frame default rather than a
+        # user-explicit call.
+        out = []
+        for entry in calls:
+            name = entry[0]
+            args = [_encode(a) for a in entry[1]]
+            kw   = {str(k): _encode(v) for k, v in entry[2].items()}
+            encoded = [name, args, kw]
+            if len(entry) > 3:
+                encoded.extend(entry[3:])
+            out.append(encoded)
+        return out
 
     def _encode_node(n):
         out: dict = {"id": ids[id(n)]}
@@ -286,19 +304,24 @@ def from_json(blob: dict):
                         f"Use `register_coord_codec` to register it."
                     )
                 return cls._from_dict(_decode(value.get("kwargs", {})))
+            if "$sectors" in value:
+                return Sectors._from_dict(_decode(value["$sectors"]))
             return {k: _decode(v) for k, v in value.items()}
         raise TypeError(f"from_json: unexpected value {value!r}")
 
     # Pass 2: decode args/kwargs, populate `_calls`, wire layout children.
     # The Chart constructor recorded entries (from convenience kwargs like
     # data_width-via-init) get overwritten — the JSON is the truth.
+    def _decode_call(raw_entry):
+        name = raw_entry[0]
+        args = [_decode(a) for a in raw_entry[1]]
+        kw   = {k: _decode(v) for k, v in raw_entry[2].items()}
+        if len(raw_entry) > 3:
+            return (name, args, kw, *raw_entry[3:])
+        return (name, args, kw)
     for raw in blob["nodes"]:
         node = nodes_by_id[raw["id"]]
-        node._calls = [
-            (name, [_decode(a) for a in args],
-             {k: _decode(v) for k, v in kw.items()})
-            for name, args, kw in raw["calls"]
-        ]
+        node._calls = [_decode_call(e) for e in raw["calls"]]
         if raw["type"] == "chart":
             data_raw = raw.get("data")
             node._data = _decode(data_raw) if data_raw is not None else None
@@ -319,6 +342,5 @@ def from_json(blob: dict):
 
 # Register the coords that ship with plotlet. New coord classes can call
 # `register_coord_codec(cls)` themselves at definition site.
-from .coordinates import LinearCoordinate, CircularCoordinate
 register_coord_codec(LinearCoordinate)
 register_coord_codec(CircularCoordinate)
