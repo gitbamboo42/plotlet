@@ -786,8 +786,14 @@ class Layout(_Renderable):
         self._children: list = list(children)
         self._parent: "Layout | None" = None
         # Journal of state-method calls (sectors, share_x/y,
-        # align_x/y, coordinate, gap). Compose itself is structural —
-        # the tree shape *is* the compose record, so we don't journal it.
+        # align_x/y, coordinate, gap). Append-only: user calls only ever
+        # add entries here, and `materialize()` is the sole writer to the
+        # derived fields below. Compose isn't journaled here — every
+        # `|` / `/` builds a fresh Layout via `_compose`, never mutating
+        # an existing one, so the tree itself stays append-only: each
+        # `_children` list is written once at construction and never
+        # edited. The engine's flat-row view of `(a|b) | c` comes from
+        # `_effective_children()` at read time, not from in-place flatten.
         # Layout state is resolved by parent-chain cascade at render
         # time: each leaf walks up collecting cascadable entries from
         # ancestors. Layout never mutates a leaf's journal.
@@ -890,6 +896,28 @@ class Layout(_Renderable):
                 yield from child._iter_leaves()
             else:
                 yield child
+
+    def _effective_children(self) -> list:
+        """The engine's view of this Layout's children. `_compose` never
+        flattens at record time — `(a|b) | c` records as a nested 2-2
+        tree, faithful to the AST the user typed. This pass absorbs
+        same-kind child Layouts whose own `_calls` is empty so the
+        engine sees the flat 3-cell row it needs for measurement and
+        gap allocation. A child Layout that recorded its own state (e.g.
+        `inner.share_x("all")`) is opaque: its state scopes to its own
+        children, and it stays as one cell at this level.
+
+        Pure function of `_children` and descendants' `_calls`. No
+        mutation, no caching."""
+        out: list = []
+        for child in self._children:
+            if (child is not None and child._is_parent
+                    and child._layout_kind == self._layout_kind
+                    and not child._calls):
+                out.extend(child._effective_children())
+            else:
+                out.append(child)
+        return out
 
     def align_x(self, mode: bool | str = "col") -> "Layout":
         """Coordinate per-column widths across rows without sharing the
@@ -1053,19 +1081,26 @@ class Layout(_Renderable):
         #   share_y("row") on h-of-v → group by row index across columns.
         # Every child must be a same-kind parent and all must agree on
         # cell count — otherwise the column/row mapping is ambiguous.
+        # `_effective_children()` is the post-flatten engine view; sub-
+        # layouts also expose their flat children so column indexing
+        # honors `(a|b) | c` reading as one row of three.
         inner = "h" if self._layout_kind == "v" else "v"
         axis_word = "x" if mode == "col" else "y"
+        outer_children = self._effective_children()
+        sub_children = []
         counts = []
-        for ch in self._children:
-            if not ch._is_parent or ch._layout_kind != inner:
-                what = (f"{ch._layout_kind!r} layout" if ch._is_parent
+        for ch in outer_children:
+            if ch is None or not ch._is_parent or ch._layout_kind != inner:
+                what = (f"{ch._layout_kind!r} layout" if ch is not None and ch._is_parent
                         else "bare chart")
                 raise ValueError(
                     f"share_{axis_word}({mode!r}) on a {self._layout_kind!r} "
                     f"composition requires every child to be an {inner!r} "
                     f"sub-layout; found a {what}."
                 )
-            counts.append(len(ch._children))
+            flat = ch._effective_children()
+            sub_children.append(flat)
+            counts.append(len(flat))
         if len(set(counts)) != 1:
             raise ValueError(
                 f"share_{axis_word}({mode!r}): every sub-layout must have "
@@ -1073,7 +1108,7 @@ class Layout(_Renderable):
             )
         n = counts[0]
         return [
-            [l for ch in self._children for l in cell_leaves(ch._children[i])]
+            [l for sub in sub_children for l in cell_leaves(sub[i])]
             for i in range(n)
         ]
 
@@ -1193,8 +1228,11 @@ def _normalize_share_mode(axis: str, mode) -> str:
 
 def _compose(left, right, kind: str):
     """Implement `|` / `/`. Either operand may be a `Chart` (leaf) or a
-    `Layout` (parent). Flattens same-direction parents in place on LHS
-    so `a | b | c` is one row of three rather than nested pairs."""
+    `Layout` (parent). Always returns a fresh outer Layout — never
+    mutates either operand. Same-kind nesting is collapsed for the
+    engine by `Layout._effective_children()` at render time; the recorded
+    tree preserves the AST shape the user typed, so the journal stays
+    append-only."""
     if not isinstance(right, (Chart, Layout)):
         return NotImplemented
     if left._parent is not None or right._parent is not None:
@@ -1202,16 +1240,6 @@ def _compose(left, right, kind: str):
             "Each chart can be in at most one parent. "
             "Compose fresh charts, or copy your sub-assembly."
         )
-    # Flatten LHS if it's a same-direction parent.
-    if left._is_parent and left._layout_kind == kind:
-        if right._is_parent and right._layout_kind == kind:
-            for child in right._children:
-                child._parent = left
-            left._children.extend(right._children)
-        else:
-            left._children.append(right)
-            right._parent = left
-        return left
     return Layout(kind, [left, right])
 
 

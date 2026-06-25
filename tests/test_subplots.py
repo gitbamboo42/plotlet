@@ -296,13 +296,16 @@ def _run_invariants():
     except ValueError:
         pass
 
-    # 3. flattening: a | b | c yields one parent with three children
+    # 3. flattening: `a | b | c` records as `(a|b) | c` (the AST Python
+    # parses), preserving append-only journal semantics; the engine's
+    # flat 3-cell view comes from `_effective_children()` at render time.
     p = pt.chart(); p.line(data={"x": [1], "y": [1]}, x="x", y="y")
     q = pt.chart(); q.line(data={"x": [1], "y": [1]}, x="x", y="y")
     r = pt.chart(); r.line(data={"x": [1], "y": [1]}, x="x", y="y")
     row = p | q | r
-    if len(row._children) != 3:
-        failures.append(f"flatten: expected 3 children, got {len(row._children)}")
+    flat = row._effective_children()
+    if flat != [p, q, r]:
+        failures.append(f"flatten: expected [p, q, r] effective children, got {flat}")
 
     # 4. cross-direction nests, doesn't flatten
     s = pt.chart(); s.line(data={"x": [1], "y": [1]}, x="x", y="y")

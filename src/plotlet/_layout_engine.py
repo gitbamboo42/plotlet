@@ -90,18 +90,28 @@ def _resolve_gap(a: Chart | None, b: Chart | None, *, axis: str) -> float:
       3. Per-axis spec default      (`layout.gap_x` / `gap_y`)
       4. Unified spec default       (`layout.gap`)
 
+    Walks up through "absorbed" ancestors — same-kind Layouts with empty
+    `_calls` that `_effective_children()` flattens through. `(a|b) | c`
+    records nested, so `a._parent` is the inner Layout; but the gap
+    setting lives on whichever outer Layout actually scopes a, b, c as
+    siblings. Stop the walk at the first ancestor that recorded its own
+    state — its scope is real, not pass-through.
+
     Both-None happens when an entire grid boundary is empty cells; the
     spec default is the right answer there."""
-    parent = (a._parent if a is not None else None) \
-          or (b._parent if b is not None else None)
     per_axis_attr = "_gap_x" if axis == "h" else "_gap_y"
     spec_per_axis = _LAYOUTSPEC.get("gap_x" if axis == "h" else "gap_y")
-    if parent is not None:
+    parent = (a._parent if a is not None else None) \
+          or (b._parent if b is not None else None)
+    while parent is not None:
         per_axis = getattr(parent, per_axis_attr, None)
         if per_axis is not None:
             return per_axis
         if parent._gap is not None:
             return parent._gap
+        if parent._calls:
+            break
+        parent = parent._parent
     if spec_per_axis is not None:
         return spec_per_axis
     return _GAP
@@ -222,14 +232,16 @@ def _measure(node: Chart) -> tuple[int, int]:
             h += a + b
         return w, h
     if node._layout_kind == "h":
-        sizes = [_measure(c) for c in node._children]
-        gaps = _gaps_h(node._children)
+        eff = node._effective_children()
+        sizes = [_measure(c) for c in eff]
+        gaps = _gaps_h(eff)
         W = sum(w for w, _ in sizes) + sum(gaps)
         H = max(h for _, h in sizes)
         return W, H
     if node._layout_kind == "v":
-        sizes = [_measure(c) for c in node._children]
-        gaps = _gaps_v(node._children)
+        eff = node._effective_children()
+        sizes = [_measure(c) for c in eff]
+        gaps = _gaps_v(eff)
         W = max(w for w, _ in sizes)
         H = sum(h for _, h in sizes) + sum(gaps)
         return W, H
@@ -294,10 +306,10 @@ def _data_total_size(node: Chart) -> tuple[float, float]:
             return float(node._data_width), float(node._data_height)
         return 0.0, 0.0
     if node._layout_kind == "h":
-        sizes = [_data_total_size(c) for c in node._children]
+        sizes = [_data_total_size(c) for c in node._effective_children()]
         return sum(w for w, _ in sizes), max((h for _, h in sizes), default=0.0)
     if node._layout_kind == "v":
-        sizes = [_data_total_size(c) for c in node._children]
+        sizes = [_data_total_size(c) for c in node._effective_children()]
         return max((w for w, _ in sizes), default=0.0), sum(h for _, h in sizes)
     # grid
     rows, cols = node._grid_rows, node._grid_cols
@@ -410,12 +422,13 @@ def _allocate(node: Chart, x: float, y: float, w: float, h: float, out: list):
         out.append((node, (x, y, w, h)))
         return
     if node._layout_kind == "h":
-        gaps = _gaps_h(node._children)
+        eff = node._effective_children()
+        gaps = _gaps_h(eff)
         remaining = w - sum(gaps)
-        sizes = [_measure(c)[0] for c in node._children]
-        ratios = _hint_ratios(sizes, len(node._children))
+        sizes = [_measure(c)[0] for c in eff]
+        ratios = _hint_ratios(sizes, len(eff))
         cx = x
-        for i, c in enumerate(node._children):
+        for i, c in enumerate(eff):
             per = remaining * ratios[i]
             _allocate(c, cx, y, per, h, out)
             cx += per
@@ -423,12 +436,13 @@ def _allocate(node: Chart, x: float, y: float, w: float, h: float, out: list):
                 cx += gaps[i]
         return
     if node._layout_kind == "v":
-        gaps = _gaps_v(node._children)
+        eff = node._effective_children()
+        gaps = _gaps_v(eff)
         remaining = h - sum(gaps)
-        sizes = [_measure(c)[1] for c in node._children]
-        ratios = _hint_ratios(sizes, len(node._children))
+        sizes = [_measure(c)[1] for c in eff]
+        ratios = _hint_ratios(sizes, len(eff))
         cy = y
-        for i, c in enumerate(node._children):
+        for i, c in enumerate(eff):
             per = remaining * ratios[i]
             _allocate(c, x, cy, w, per, out)
             cy += per
@@ -619,10 +633,12 @@ def _mark_joined_pair(a: Chart | None, b: Chart | None, *, axis: str,
         return
     if a._is_parent and b._is_parent:
         inner = "h" if axis == "v" else "v"
-        if (a._layout_kind == inner and b._layout_kind == inner
-                and len(a._children) == len(b._children)):
-            for ac, bc in zip(a._children, b._children):
-                _mark_joined_pair(ac, bc, axis=axis, out=out)
+        if a._layout_kind == inner and b._layout_kind == inner:
+            a_eff = a._effective_children()
+            b_eff = b._effective_children()
+            if len(a_eff) == len(b_eff):
+                for ac, bc in zip(a_eff, b_eff):
+                    _mark_joined_pair(ac, bc, axis=axis, out=out)
         return
     if a._is_parent or b._is_parent:
         return
@@ -654,9 +670,10 @@ def _annotate_collapses(node: Chart, out: dict[int, _PanelOpts]) -> None:
         return
     if node._layout_kind in ("h", "v"):
         axis = node._layout_kind
-        for a, b in zip(node._children, node._children[1:]):
+        eff = node._effective_children()
+        for a, b in zip(eff, eff[1:]):
             _mark_joined_pair(a, b, axis=axis, out=out)
-        for c in node._children:
+        for c in eff:
             _annotate_collapses(c, out)
         return
     rows, cols = node._grid_rows, node._grid_cols
@@ -826,13 +843,13 @@ def _virtual_grid_children(node: Chart, inner_kind: str) -> list[Chart] | None:
     when their per-cell widths happen not to match across rows."""
     if not getattr(node, "_virtual_grid_aligned", False):
         return None
-    kids = node._children
+    kids = node._effective_children()
     if not kids:
         return None
     if not all(c is not None and c._is_parent and c._layout_kind == inner_kind
                for c in kids):
         return None
-    if len(set(len(c._children) for c in kids)) != 1:
+    if len(set(len(c._effective_children()) for c in kids)) != 1:
         return None
     return kids
 
@@ -859,34 +876,38 @@ def _coordinate_margins(node: Chart, panel_opts: dict[int, _PanelOpts]) -> None:
     if not node._is_parent:
         return
     if node._layout_kind == "h":
-        cells = [c for c in node._children if _body_cell(c, panel_opts)]
+        eff = node._effective_children()
+        cells = [c for c in eff if _body_cell(c, panel_opts)]
         _coordinate_pair(cells, panel_opts, ("top", "bottom"))
         _pad_canvases(cells, panel_opts, axis="h")
         v_kids = _virtual_grid_children(node, "v")
         if v_kids is not None:
-            n_rows = len(v_kids[0]._children)
+            v_kid_cells = [col._effective_children() for col in v_kids]
+            n_rows = len(v_kid_cells[0])
             for r in range(n_rows):
-                row_cells = [col._children[r] for col in v_kids]
+                row_cells = [col[r] for col in v_kid_cells]
                 body = [cell for cell in row_cells if _body_cell(cell, panel_opts)]
                 _coordinate_pair(body, panel_opts, ("top", "bottom"))
                 _pad_canvases(body, panel_opts, axis="h")
-        for c in node._children:
+        for c in eff:
             if c is not None:
                 _coordinate_margins(c, panel_opts)
         return
     if node._layout_kind == "v":
-        cells = [c for c in node._children if _body_cell(c, panel_opts)]
+        eff = node._effective_children()
+        cells = [c for c in eff if _body_cell(c, panel_opts)]
         _coordinate_pair(cells, panel_opts, ("left", "right"))
         _pad_canvases(cells, panel_opts, axis="v")
         h_kids = _virtual_grid_children(node, "h")
         if h_kids is not None:
-            n_cols = len(h_kids[0]._children)
+            h_kid_cells = [row._effective_children() for row in h_kids]
+            n_cols = len(h_kid_cells[0])
             for c in range(n_cols):
-                col_cells = [row._children[c] for row in h_kids]
+                col_cells = [row[c] for row in h_kid_cells]
                 body = [cell for cell in col_cells if _body_cell(cell, panel_opts)]
                 _coordinate_pair(body, panel_opts, ("left", "right"))
                 _pad_canvases(body, panel_opts, axis="v")
-        for c in node._children:
+        for c in eff:
             if c is not None:
                 _coordinate_margins(c, panel_opts)
         return
