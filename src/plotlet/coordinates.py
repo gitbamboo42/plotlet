@@ -486,12 +486,23 @@ class CircularCoordinate:
             # Skip per-axis when the inner has its own explicit sectors
             # call on that axis (last-write-wins would have made the
             # inherited entry lose anyway, but skipping is cheaper).
+            #
+            # Read the layout's sectors directly from `root._calls` (the
+            # journal of the Layout where `coordinate()` was declared)
+            # plus any cascadable sectors from ancestors of `root`.
+            # That's the actual source — `.sectors(...)` records on the
+            # Layout it's called on. The previous version read from
+            # `leaves[0]._calls`, which misses Layout-level entries
+            # because cascade only deposits them at replay time, not on
+            # the leaf's own journal.
             from ._attachments import _is_sectors_call
+            from ._layout_engine import _ancestor_calls
+            outer_calls = list(_ancestor_calls(root)) + list(root._calls)
             inner_prepend: list = []
             for _axis in ("x", "y"):
                 if any(_is_sectors_call(c, _axis) for c in self.inner._calls):
                     continue
-                _outer = next((c for c in leaves[0]._calls
+                _outer = next((c for c in outer_calls
                                if _is_sectors_call(c, _axis)), None)
                 if _outer is None:
                     continue
