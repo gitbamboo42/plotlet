@@ -1,32 +1,19 @@
 """Round-trip tests for `pt.to_json` / `pt.from_json`.
 
 The contract: `from_json(to_json(node)).to_svg()` matches `node.to_svg()`
-modulo nondeterministic ids (clip-path identifiers derived from
-`id(obj)`, same as conftest's baseline normalization). Encoder and
-decoder are mirrors; SVG bytes are the only signal that matters. No
-baseline images here — the test fixture itself is the baseline (run
-twice, compare bytes).
+byte-for-byte. Encoder and decoder are mirrors; SVG bytes are the only
+signal that matters. No baseline images here — the test fixture itself
+is the baseline (run twice, compare bytes).
 """
 from __future__ import annotations
 
 import json
-import re
 
 import numpy as np
 import pandas as pd
 import pytest
 
 import plotlet as pt
-
-
-_VOLATILE_RE = re.compile(
-    r' id="pc[0-9a-f]+"'
-    r'| clip-path="url\(#pc[0-9a-f]+\)"'
-)
-
-
-def _norm(svg: str) -> str:
-    return _VOLATILE_RE.sub("", svg)
 
 
 def _roundtrip(node):
@@ -39,11 +26,8 @@ def _roundtrip(node):
 
 
 def _assert_round_trip(node):
-    """Round-trip and compare SVG. Uses the same volatile-id normalizer
-    the baseline conftest applies, since coord-frame clip-path ids embed
-    `id(obj)` and are non-deterministic across renders."""
     revived = _roundtrip(node)
-    assert _norm(revived.to_svg()) == _norm(node.to_svg())
+    assert revived.to_svg() == node.to_svg()
 
 
 def test_leaf_chart_basic():
@@ -197,7 +181,7 @@ def test_chord_links_4tuple_calls():
     )
     revived = _roundtrip(c)
     assert [len(e) for e in revived._calls] == [len(e) for e in c._calls]
-    assert _norm(revived.to_svg()) == _norm(c.to_svg())
+    assert revived.to_svg() == c.to_svg()
 
 
 def test_sectors_codec():

@@ -353,11 +353,16 @@ class CircularCoordinate:
         delegates here.
         """
         import re
+        from itertools import count
         from ._layout_engine import _build_panel_opts
         from ._spec import active_theme
         from .core import _render as _core_render
         _SVG_BODY_RE = re.compile(r'<svg[^>]*>(.*)</svg>\s*$', re.DOTALL)
         _ZERO_MARGIN = {"left": 0, "right": 0, "top": 0, "bottom": 0}
+        # Shared across leaves so coord-clip `<clipPath id>`s don't
+        # collide once the per-leaf `<svg>` wrappers are stripped and
+        # bodies are concatenated into one document.
+        _clip_counter = count()
 
         leaves = list(root._iter_leaves())
         if not leaves:
@@ -454,7 +459,8 @@ class CircularCoordinate:
                 for _c in leaf._calls:
                     if _c[0] == "theme": _theme = _c[1][0] if _c[1] else None
                 with active_theme(_theme):
-                    svg = _core_render(_st, W, H, _ZERO_MARGIN, outer=None)
+                    svg = _core_render(_st, W, H, _ZERO_MARGIN, outer=None,
+                                       clip_counter=_clip_counter)
             finally:
                 # Strip trailing render-time additions first, then the
                 # prepended entries from the front. Order matters — n0

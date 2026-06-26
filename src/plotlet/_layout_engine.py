@@ -37,6 +37,7 @@ See `docs/SUBPLOTS.md` for the design rationale.
 from __future__ import annotations
 
 from graphlib import CycleError, TopologicalSorter
+from itertools import count
 
 from ._spec import SPEC, _LAYOUTSPEC, _FONTSPEC, active_theme
 from .core import (
@@ -1058,6 +1059,9 @@ def _render_layout_rect(root: Chart, outer=None) -> str:
     # path that emits the stored debug SVG verbatim, with no panel
     # decorations.
     data_leaves: list[Chart] = []
+    # Shared across panels so each coord-clip `<clipPath id>` is unique
+    # within this document. Reset per layout render → byte-identical output.
+    clip_counter = count()
     for leaf, (x, y, w, h) in placements:
         if leaf._is_parent:
             # Coord-bearing sub-Layout — `_is_atomic` kept the placement
@@ -1101,7 +1105,8 @@ def _render_layout_rect(root: Chart, outer=None) -> str:
             # outer-SVG coords; matches the `<g transform="translate(ol, ot)">`
             # wrapper on the SVG side.
             with _regions.translate(x + M_eff["left"] + ol, y + M_eff["top"] + ot):
-                parts.append(_render_inner(st, iw, ih, M_eff, po))
+                parts.append(_render_inner(st, iw, ih, M_eff, po,
+                                           clip_counter=clip_counter))
             parts.append('</g>')
         data_leaves.append(leaf)
     for leaf, (x, y, w, h) in placements:

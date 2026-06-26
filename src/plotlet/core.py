@@ -22,6 +22,7 @@ import html
 import json
 import math
 from dataclasses import dataclass, field
+from itertools import count
 from importlib.metadata import version as _pkg_version
 from pathlib import Path
 
@@ -1754,7 +1755,7 @@ def _panel_open(st, panel_opts: _PanelOpts | None, transform: str,
     return f'<g transform="{transform}"{attrs}>{meta}'
 
 
-def _render(st, W, H, M, outer=None):
+def _render(st, W, H, M, outer=None, clip_counter=None):
     """Emit one SVG. (W, H) = canvas dims; M = effective margin already
     resolved by the caller via `layout._build_panel_opts` →
     `_compute_measured_margins`. Single-panel and multi-panel paths
@@ -1765,7 +1766,13 @@ def _render(st, W, H, M, outer=None):
     `outer` is the figure-level breathing-room margin applied only at
     the public root render — passed as `{top, right, bottom, left}` from
     `to_svg()`. Embedded calls (inset, layout cell) pass `None` and the
-    function is a no-op on outer breathing room."""
+    function is a no-op on outer breathing room.
+
+    `clip_counter` lets a caller (e.g. `CircularCoordinate.render_layout`)
+    that strips each leaf's `<svg>` wrapper and concatenates the bodies
+    into one document share clip-path id numbering across leaves — without
+    it, every leaf restarts at `pc0` and the ids collide. `None` is the
+    standalone path; `_render_inner` will fresh-start its own counter."""
     iw = W - M["left"] - M["right"]
     ih = H - M["top"] - M["bottom"]
     ol = outer["left"] if outer else 0
@@ -1778,7 +1785,7 @@ def _render(st, W, H, M, outer=None):
     # Track the panel translate on the region sink so chrome bboxes land
     # in outer-SVG coords. No-op when no sink is active (normal render).
     with _regions.translate(M["left"] + ol, M["top"] + ot):
-        inner = _render_inner(st, iw, ih, M)
+        inner = _render_inner(st, iw, ih, M, clip_counter=clip_counter)
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{Wt}" height="{Ht}" '
         f'viewBox="0 0 {Wt} {Ht}" font-family="{_FONTSPEC["family"]}" font-size="11" '
@@ -1872,13 +1879,19 @@ def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal,
     return ''.join(parts)
 
 
-def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
+def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None,
+                  clip_counter=None):
     """Body fragment for one panel — everything inside the outer `<svg>` and
     the outer translate-by-margin `<g>`. `panel_opts` carries layout-supplied
-    axis descriptors and side flags; `None` is the standalone path."""
+    axis descriptors and side flags; `None` is the standalone path.
+    `clip_counter` is shared across panels in a multi-panel document so each
+    coord-clip `<clipPath id>` is unique within the SVG; `None` starts a
+    fresh sequence for the standalone single-panel path."""
     _prebin_hist(st)
     if panel_opts is None:
         panel_opts = _PanelOpts()
+    if clip_counter is None:
+        clip_counter = count()
 
     x_scale, y_scale, x_is_cat = _build_xy_scales(st, iw, ih, panel_opts)
     # Tick density scales with panel size: 8 looks fine on the 600×400
@@ -2062,7 +2075,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None):
     # so multi-subpath ds (outer + inner ring) describe a hole.
     _clip_id = None
     if (_has_coord_frame or _has_svg_transform) and clip_data:
-        _clip_id = f"pc{id(st):x}"
+        _clip_id = f"pc{next(clip_counter)}"
         if _has_clip_d:
             d = _coord_object.clip_path_d(iw, ih)
             parts.append(f'<defs><clipPath id="{_clip_id}">'
