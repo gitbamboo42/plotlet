@@ -48,7 +48,9 @@ can do `fig.<name>(...)` and it Just Works.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import html
+import inspect
+from dataclasses import MISSING, dataclass, field, fields
 from typing import Any, Callable, Iterable
 
 
@@ -119,11 +121,24 @@ class RenderContext:
 
 
 _REGISTRY: dict[str, ArtistSpec] = {}
+# Parallel to _REGISTRY; auto-stamped by add_artist via stack-frame lookup.
+# Surfaced by artist_table() so users can tell core/extension/user-added apart.
+_ORIGINS: dict[str, str] = {}
 
 
 def add_artist(spec: ArtistSpec) -> None:
     """Register a plot type. Overwrites if the name already exists."""
     _REGISTRY[spec.name] = spec
+    frame = inspect.currentframe()
+    caller = frame.f_back if frame is not None else None
+    mod = caller.f_globals.get("__name__", "") if caller is not None else ""
+    if mod.startswith("plotlet.artists"):
+        origin = "core"
+    elif mod.startswith("plotlet.extensions"):
+        origin = "extension"
+    else:
+        origin = "user"
+    _ORIGINS[spec.name] = origin
 
 
 def get_artist(name: str) -> ArtistSpec | None:
@@ -132,3 +147,97 @@ def get_artist(name: str) -> ArtistSpec | None:
 
 def all_artist_names() -> list[str]:
     return list(_REGISTRY.keys())
+
+
+# Curated quick-scan view. Everything else is derived live from ArtistSpec.
+_DEFAULT_COLUMNS: list[str] = ["name", "origin", "layer", "coord_native"]
+
+
+def _all_columns() -> list[str]:
+    # Derived from ArtistSpec so new fields auto-surface in `columns="all"`.
+    # Skip fields that always render as "fn" (uninformative): required
+    # callables (record/draw) and ones with a callable default
+    # (xdomain/ydomain). Optional callables with `default=None` (e.g.
+    # legend_entries) pass through — their fn/- state varies per artist.
+    cols = ["name", "origin"]
+    for f in fields(ArtistSpec):
+        if f.name == "name":
+            continue
+        if f.default is MISSING and f.default_factory is MISSING:
+            continue
+        if callable(f.default):
+            continue
+        cols.append(f.name)
+    return cols
+
+
+def _cell(value) -> str:
+    if value is None:
+        return "-"
+    if callable(value):
+        return "fn"
+    return str(value)
+
+
+class ArtistTable(list):
+    """Per-artist snapshot of the registry. Iterates as a list of dicts
+    carrying the **full** field set; ``__repr__`` / ``_repr_html_`` only
+    display the columns selected at build time. Build via
+    ``artist_table(columns=...)``."""
+
+    def __init__(self, rows, columns=None):
+        super().__init__(rows)
+        if columns == "all":
+            self._columns = _all_columns()
+        elif columns is None:
+            self._columns = list(_DEFAULT_COLUMNS)
+        else:
+            self._columns = list(columns)
+
+    def __repr__(self) -> str:
+        widths = []
+        for key in self._columns:
+            w = len(key)
+            for row in self:
+                w = max(w, len(_cell(row[key])))
+            widths.append(w)
+        fmt = "  ".join(f"{{:<{w}}}" for w in widths)
+        lines = [fmt.format(*self._columns)]
+        for row in self:
+            lines.append(fmt.format(*(_cell(row[k]) for k in self._columns)))
+        return "\n".join(lines)
+
+    def _repr_html_(self) -> str:
+        head = "".join(f"<th>{html.escape(k)}</th>" for k in self._columns)
+        body_rows = []
+        for row in self:
+            cells = "".join(f"<td>{html.escape(_cell(row[k]))}</td>"
+                            for k in self._columns)
+            body_rows.append(f"<tr>{cells}</tr>")
+        return (f"<table><thead><tr>{head}</tr></thead>"
+                f"<tbody>{''.join(body_rows)}</tbody></table>")
+
+
+def artist_table(columns=None) -> ArtistTable:
+    """Snapshot of currently-registered artists.
+
+    ``columns`` selects display: ``None`` (default) shows
+    ``_DEFAULT_COLUMNS``; ``"all"`` shows every optional ArtistSpec field
+    (skipping the four required plumbing callables); a list picks
+    columns explicitly in the given order. Row dicts carry the **full**
+    field set regardless, so programmatic filtering works on everything::
+
+        [r for r in pt.artist_table() if r['layer'] == 'foreground']
+
+    Origin is ``core`` (``plotlet.artists.*``), ``extension``
+    (``plotlet.extensions.*``), or ``user``, auto-stamped at
+    ``add_artist`` time. Re-built on each call, so artists registered
+    after import are picked up."""
+    rows = []
+    for name in sorted(_REGISTRY.keys()):
+        spec = _REGISTRY[name]
+        row = {"origin": _ORIGINS.get(name, "unknown")}
+        for f in fields(ArtistSpec):
+            row[f.name] = getattr(spec, f.name)
+        rows.append(row)
+    return ArtistTable(rows, columns=columns)
