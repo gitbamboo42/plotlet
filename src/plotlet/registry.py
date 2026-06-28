@@ -79,10 +79,18 @@ class ArtistSpec:
     data_attrs: Callable[[dict], dict | None] | None = None
     flips_y_axis: Callable[[dict], bool] | None = None
     tight_domain: bool = False
-    # Required for any artist drawn under a non-affine coord. Coord-native
-    # artists project every geometry point through `ctx.warp` (Cartesian-pixel
-    # → coord-pixel closure passed to `draw.*` helpers via `project=`).
-    coord_native: bool = False
+    # Coordinate systems this artist's `draw` can render correctly under.
+    # Members are coord class names with the `Coordinate` suffix dropped
+    # (e.g. `"Linear"` for `LinearCoordinate`). Default is `{"Linear"}` —
+    # most artists work there because the renderer wraps them in
+    # `svg_transform` and they draw Cartesian without further changes.
+    # Add `"Circular"` (etc.) when the artist's draw forwards
+    # `project=ctx.warp` to every `draw.*` helper, so segments subdivide
+    # and shapes curve correctly. The renderer raises if the panel's
+    # coord name isn't in this set.
+    coord_systems: set[str] = field(
+        default_factory=lambda: {"Linear"}
+    )
     # When the artist contributes to autoscaling and data lo > 0, push lo to
     # 0 so the visual sits on the baseline; also suppresses the default
     # `expand` on that side. May be a `(artist_dict) -> bool` callable so e.g.
@@ -114,8 +122,9 @@ class RenderContext:
     # for affine coords (handled by svg_transform).
     #   project(t, r)    -> (px, py)  data-space → canvas-pixel
     #   warp(x_px, y_px) -> (px, py)  pre-warp Cartesian pixel → canvas-pixel
-    # `coord_native` artists pass `warp` to `draw.*` helpers via `project=`
-    # so segments subdivide, polygons curve, and markers land correctly.
+    # Artists declaring a non-affine coord in `coord_systems` pass `warp`
+    # to `draw.*` helpers via `project=` so segments subdivide, polygons
+    # curve, and markers land correctly.
     project: Any = None
     warp: Any = None
 
@@ -150,7 +159,7 @@ def all_artist_names() -> list[str]:
 
 
 # Curated quick-scan view. Everything else is derived live from ArtistSpec.
-_DEFAULT_COLUMNS: list[str] = ["name", "origin", "layer", "coord_native"]
+_DEFAULT_COLUMNS: list[str] = ["name", "origin", "layer", "coord_systems"]
 
 
 def _all_columns() -> list[str]:
@@ -172,8 +181,14 @@ def _all_columns() -> list[str]:
 
 
 def _cell(value) -> str:
+    # Callables → "fn" (raw repr is a memory address); None → "-" so the
+    # column doesn't shout "None None None". Sets of strings render as
+    # `{Linear, Circular}` — sorted for stable output, no quotes.
+    # Everything else verbatim so the rendered cell matches the row dict.
     if value is None:
         return "-"
+    if isinstance(value, (set, frozenset)) and value and all(isinstance(v, str) for v in value):
+        return "{" + ", ".join(sorted(value)) + "}"
     if callable(value):
         return "fn"
     return str(value)

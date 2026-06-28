@@ -617,7 +617,7 @@ pt.add_artist(pt.ArtistSpec(
     legend_gradient=annotation_strip_legend_gradient,
     frame_defaults=annotation_strip_frame_defaults,
     uses_color_cycle=False,
-    coord_native=True,
+    coord_systems={"Linear", "Circular"},
     tight_domain=True,
 ))
 

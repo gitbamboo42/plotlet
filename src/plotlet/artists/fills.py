@@ -88,7 +88,7 @@ add_artist(ArtistSpec(
                                               ctx.color, warp=ctx.warp),
     legend_entries=_line_legend_entries,
     data_attrs=_fill_between_data_attrs,
-    coord_native=True,
+    coord_systems={"Linear", "Circular"},
 ))
 
 
@@ -234,5 +234,5 @@ add_artist(ArtistSpec(
     draw=_area_draw,
     legend_entries=_area_legend_entries,
     data_attrs=_area_data_attrs,
-    coord_native=True,
+    coord_systems={"Linear", "Circular"},
 ))

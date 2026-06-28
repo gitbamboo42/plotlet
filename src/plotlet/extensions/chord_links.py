@@ -184,7 +184,7 @@ pt.add_artist(pt.ArtistSpec(
     draw=_chord_links_draw,
     legend_entries=_chord_links_legend_entries,
     frame_defaults=_chord_links_frame_defaults,
-    coord_native=True,
+    coord_systems={"Linear", "Circular"},
     crosses_sectors=True,
     tight_domain=True,
 ))

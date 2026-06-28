@@ -149,7 +149,7 @@ add_artist(ArtistSpec(
     draw=_line_draw,
     legend_entries=_line_legend_entries,
     data_attrs=_line_data_attrs,
-    coord_native=True,
+    coord_systems={"Linear", "Circular"},
 ))
 
 
@@ -175,5 +175,5 @@ add_artist(ArtistSpec(
     draw=_line_draw,
     legend_entries=_line_legend_entries,
     data_attrs=_line_data_attrs,
-    coord_native=True,
+    coord_systems={"Linear", "Circular"},
 ))

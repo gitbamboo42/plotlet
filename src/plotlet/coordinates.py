@@ -50,13 +50,15 @@ Optional methods on the coordinate object unlock additional integration:
     When ``svg_transform`` is present, ``ctx.project`` is not set — artists
     should draw in Cartesian as usual.
 
-Non-affine coords (no ``svg_transform``) require every artist in the panel
-to opt in via ``ArtistSpec.coord_native=True``.  Coord-native artists draw
-through ``ctx.warp`` (a Cartesian-pixel → coord-pixel closure handed to
-``draw.*`` helpers), so edges subdivide and primitives project at draw time
-instead of relying on a post-pass SVG rewrite.  The renderer raises
-``NotImplementedError`` if a non-coord_native artist appears under a
-non-affine coord.
+Every artist declares the coord systems it can render correctly under via
+``ArtistSpec.coord_systems`` — a set of coord names (the class name with
+the ``Coordinate`` suffix dropped, e.g. ``"Linear"`` for
+``LinearCoordinate``).  Default is ``{"Linear"}``.  The renderer raises
+``NotImplementedError`` if the panel's coord name isn't in that set.
+Non-affine coords like ``CircularCoordinate`` aren't covered by
+``svg_transform``; artists supporting them draw through ``ctx.warp`` (a
+Cartesian-pixel → coord-pixel closure handed to ``draw.*`` helpers via
+``project=``), so edges subdivide and primitives project at draw time.
 
 ``clip_path_d(iw, ih) -> str``
     Returns an SVG path-data string used as the data-area clip region.
@@ -213,11 +215,11 @@ class CircularCoordinate:
 
     Maps (t, r) → pixel (x, y) on an annulus.  ``t ∈ [0, 1]`` runs clockwise
     from 12 o'clock; ``r ∈ [0, 1]`` is radial depth (0 = inner edge,
-    1 = outer edge).  Non-affine, so only artists with
-    ``ArtistSpec.coord_native=True`` can render under it — they draw through
-    ``ctx.warp`` so each geometry point projects at draw time.  Today the
-    coord-native set is scatter / line / step / heatmap / hist /
-    numeric_bar / fill_between / area; other artists raise
+    1 = outer edge).  Non-affine, so only artists that include
+    ``"Circular"`` in their ``coord_systems`` can render under it — they
+    draw through ``ctx.warp`` so each geometry point projects at draw
+    time.  Today the supporting set is scatter / line / step / heatmap /
+    hist / numeric_bar / fill_between / area; other artists raise
     ``NotImplementedError`` at render time.
 
     Caveats:

@@ -1960,10 +1960,6 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None,
     _has_x_frame         = _coord_object is not None and hasattr(_coord_object, "draw_x_frame")
     _has_clip_d          = _coord_object is not None and hasattr(_coord_object, "clip_path_d")
     _has_x_sector_chrome = _coord_object is not None and hasattr(_coord_object, "draw_x_sector_chrome")
-    # Non-affine coords project per-point through `ctx.warp` — there's no
-    # SVG post-pass fallback, so every artist in the panel must opt into
-    # the coord-native contract via `ArtistSpec.coord_native=True`.
-    _requires_native = _coord_object is not None and not _has_svg_transform
 
     # A coordinate that owns the x-axis (draw_x_frame) needs a matching
     # `draw_x_sector_chrome` to handle x-sectors; otherwise the Cartesian
@@ -1980,18 +1976,26 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None,
             "c.sectors(axis='y') is not yet supported with a coordinate "
             "that owns the x-axis (e.g. CircularCoordinate)."
         )
-    if _requires_native:
+    # Per-artist gate: each artist declares the coord short-name (class
+    # name minus `Coordinate` suffix) in its `coord_systems`. Default is
+    # `{"Linear"}`, so Linear panels accept every artist out of the box;
+    # CircularCoordinate only accepts artists whose draw forwards
+    # `project=ctx.warp`.
+    if _coord_object is not None:
+        coord_short = type(_coord_object).__name__.removesuffix("Coordinate")
         bad = sorted({a["type"] for a in st["artists"]
                       if (get_artist(a["type"]) is None
-                          or not get_artist(a["type"]).coord_native)})
+                          or coord_short not in get_artist(a["type"]).coord_systems)})
         if bad:
+            coord_name = type(_coord_object).__name__
             supported = sorted(n for n in all_artist_names()
-                               if get_artist(n).coord_native)
+                               if coord_short in get_artist(n).coord_systems)
             raise NotImplementedError(
-                f"{type(_coord_object).__name__} requires coord-native artists; "
-                f"{bad} are not supported. Supported: {supported}.\n"
-                f"To make a custom artist coord-native: set "
-                f"`coord_native=True` on its ArtistSpec and forward "
+                f"{coord_name} ({coord_short!r}) is not in {bad}'s `coord_systems`; "
+                f"these artists won't render correctly under it. "
+                f"Supported under {coord_name}: {supported}.\n"
+                f"To add support: include {coord_short!r} in the artist's "
+                f"`coord_systems` set on its ArtistSpec, and forward "
                 f"`project=ctx.warp` to every `draw.*` helper call in its "
                 f"draw function."
             )
@@ -2041,8 +2045,8 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None,
     # SVG group level; artists draw in Cartesian, so ctx.project stays None.
     # Non-affine coords expose `ctx.warp` (pixel-space convenience closure)
     # that artists pass to `draw.*` helpers; validation upstream guaranteed
-    # every artist here is coord_native, so we always populate `warp` when
-    # the coord is non-affine.
+    # every artist here declares this coord in its `coord_systems`, so we
+    # always populate `warp` when the coord is non-affine.
     def _ctx_for(a):
         if _has_svg_transform or _coord_object is None:
             proj = None
