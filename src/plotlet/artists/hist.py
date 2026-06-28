@@ -194,5 +194,4 @@ add_artist(ArtistSpec(
     data_attrs=_hist_data_attrs,
     force_zero_y=lambda a: not _hist_horizontal(a),
     force_zero_x=_hist_horizontal,
-    coord_systems={"Linear", "Circular"},
 ))

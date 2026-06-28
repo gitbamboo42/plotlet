@@ -440,5 +440,4 @@ add_artist(ArtistSpec(
     legend_entries=_scatter_legend_entries,
     legend_gradient=_scatter_legend_gradient,
     data_attrs=_scatter_data_attrs,
-    coord_systems={"Linear", "Circular"},
 ))

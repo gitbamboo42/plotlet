@@ -42,7 +42,7 @@ from .draw import coord, rect, segment, text_path
 from . import _regions
 from . import _chrome
 from .utils import histogram, collect_categories
-from .registry import RenderContext, get_artist, all_artist_names
+from .registry import RenderContext, get_artist, all_artist_names, _COORD_SUPPORT
 from . import artists  # noqa: F401  — registers built-ins on import
 
 # AI-readable SVG attrs — see docs/AI_ATTRS.md. Every plotlet SVG carries
@@ -1976,26 +1976,25 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None,
             "c.sectors(axis='y') is not yet supported with a coordinate "
             "that owns the x-axis (e.g. CircularCoordinate)."
         )
-    # Per-artist gate: each artist declares the coord short-name (class
-    # name minus `Coordinate` suffix) in its `coord_systems`. Default is
-    # `{"Linear"}`, so Linear panels accept every artist out of the box;
-    # CircularCoordinate only accepts artists whose draw forwards
-    # `project=ctx.warp`.
+    # Per-artist gate: each artist opts in via `declare_coord_support`
+    # under the coord's short name (class name minus `Coordinate` suffix).
+    # Vanilla Cartesian (no coord set) skips this gate entirely; non-affine
+    # coords like CircularCoordinate only accept artists whose draw
+    # forwards `project=ctx.warp`.
     if _coord_object is not None:
         coord_short = type(_coord_object).__name__.removesuffix("Coordinate")
+        supported = _COORD_SUPPORT.get(coord_short, set())
         bad = sorted({a["type"] for a in st["artists"]
-                      if (get_artist(a["type"]) is None
-                          or coord_short not in get_artist(a["type"]).coord_systems)})
+                      if a["type"] not in supported})
         if bad:
             coord_name = type(_coord_object).__name__
-            supported = sorted(n for n in all_artist_names()
-                               if coord_short in get_artist(n).coord_systems)
             raise NotImplementedError(
-                f"{coord_name} ({coord_short!r}) is not in {bad}'s `coord_systems`; "
-                f"these artists won't render correctly under it. "
-                f"Supported under {coord_name}: {supported}.\n"
-                f"To add support: include {coord_short!r} in the artist's "
-                f"`coord_systems` set on its ArtistSpec, and forward "
+                f"{coord_name} ({coord_short!r}) doesn't support {bad}; "
+                f"these artists aren't declared as renderable under it. "
+                f"Supported under {coord_name}: {sorted(supported)}.\n"
+                f"To add support: call "
+                f"`pt.declare_coord_support({coord_short!r}, [...])` "
+                f"listing the artists, and make sure each forwards "
                 f"`project=ctx.warp` to every `draw.*` helper call in its "
                 f"draw function."
             )
@@ -2045,7 +2044,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None,
     # SVG group level; artists draw in Cartesian, so ctx.project stays None.
     # Non-affine coords expose `ctx.warp` (pixel-space convenience closure)
     # that artists pass to `draw.*` helpers; validation upstream guaranteed
-    # every artist here declares this coord in its `coord_systems`, so we
+    # every artist here is declared as a supporter of this coord, so we
     # always populate `warp` when the coord is non-affine.
     def _ctx_for(a):
         if _has_svg_transform or _coord_object is None:

@@ -128,7 +128,6 @@ ArtistSpec(
     force_zero_y: bool | (a) -> bool = False,
     axis_order: (a) -> dict | None = None,
     frame_defaults: (args, kwargs) -> list[tuple] | None = None,
-    coord_systems: set[str] = {"Linear"},
     crosses_sectors: bool = False,
 )
 ```
@@ -147,8 +146,9 @@ ArtistSpec(
 | `force_zero_x` / `force_zero_y` | Anchor that axis to zero: if the artist contributes to autoscaling and data lo > 0, push lo down to 0 (and suppress that side's expand). Built-in `bar` and `hist` set `force_zero_y=True`. May be a callable `(a) -> bool` so e.g. a bar with `orientation='h'` forces zero on x instead. |
 | `axis_order` | Contribute a canonical order for a categorical axis. Returns `{"x": [...]}` / `{"y": [...]}`. Use when ordering is load-bearing (dendrogram leaves). User's explicit `xscale("category", order=...)` still wins. |
 | `frame_defaults` | Return a list of `(call_name, args, kwargs)` recorded *before* your artist. Use for strong defaults (e.g. dendrogram hides all spines). User calls *after* `c.<your_artist>()` still win. |
-| `coord_systems` | Set of coord *names* your `draw` is known to render correctly under — the coord class name minus the `Coordinate` suffix (e.g. `"Linear"` for `LinearCoordinate`). Default `{"Linear"}` — most artists work there for free because the renderer wraps them in `svg_transform` and they draw Cartesian. Add `"Circular"` (etc.) when your `draw` forwards `ctx.warp` to every `draw.*` helper call via `project=`, so segments subdivide and shapes curve. The renderer raises at render time if the panel's coord name isn't in this set. |
 | `crosses_sectors` | Set `True` for artists whose geometry spans sector boundaries (chord_links, chord_ribbon). Suppresses the inter-sector divider walls while the artist is active — walls cutting through a cross-sector curve read as a layering bug. Sector labels still render. |
+
+Coord support lives with the coord — see the "Coordinate classes" section.
 
 ---
 
@@ -165,7 +165,7 @@ render state so call sites stay short.
 | `defaults` | The `spec.json` defaults dict (`linewidth`, `markersize`, `scatter_s`, …). Use these instead of literals. |
 | `dash` | Linestyle codes → SVG `stroke-dasharray` strings. The `draw.*` helpers already accept the codes directly via `dash=`. |
 | `project` | Set by `c.coordinate(...)` for non-affine coords; `None` for Cartesian and affine coords. `project(t, r) -> (px, py)` maps data-space directly to canvas pixels — use it when you want to draw straight in the target coord (e.g. radial line from `r=0` to `r=1` at angle `t`). |
-| `warp` | Set by `c.coordinate(...)` for non-affine coords; `None` for Cartesian and affine coords. `warp(x_px, y_px) -> (px, py)` remaps a pre-warp Cartesian pixel through the coord. Artists declaring a non-affine coord in `coord_systems` pass this to `draw.*` helpers via `project=` so segments subdivide, polygons curve, and markers land correctly. |
+| `warp` | Set by `c.coordinate(...)` for non-affine coords; `None` for Cartesian and affine coords. `warp(x_px, y_px) -> (px, py)` remaps a pre-warp Cartesian pixel through the coord. Artists opted-in via `declare_coord_support` pass this to `draw.*` helpers via `project=` so segments subdivide, polygons curve, and markers land correctly. |
 
 ---
 
@@ -227,8 +227,8 @@ labels=, orient=, clusters=, parent=, ...)`.
 ## Coordinate classes
 
 `c.coordinate(MyCoordinate())` swaps the Cartesian projection for a custom
-one — useful for tilted, polar, or arbitrary non-Cartesian layouts. A
-coordinate is a callable + a couple of optional protocol methods:
+one — useful for circular, polar, or arbitrary non-Cartesian layouts. The
+required surface is tiny:
 
 ```python
 class MyCoordinate:
@@ -239,23 +239,45 @@ class MyCoordinate:
         return project
 ```
 
-That's the required surface. Two optional methods unlock deeper integration:
+That's it — no base class to inherit, just match the protocol. Optional
+methods unlock deeper integration:
 
 | Method | When it kicks in |
 |---|---|
-| `svg_transform(project, iw, ih) -> "matrix(...)"` | Affine coordinates only. The core wraps every artist's output in `<g transform="matrix(...)">`, so existing artists draw in Cartesian and the SVG matrix handles the rest — zero per-artist changes. `LinearCoordinate` uses this. |
-| `draw_frame(project, iw, ih, y_ticks_r, y_labels, frame_opts) -> str` | Replaces the Cartesian y-axis rendering (left spine, y ticks, y labels). The x-axis stays Cartesian. Use when your coordinate has a different "y" geometry (e.g. tilted spine). |
+| `svg_transform(project, iw, ih) -> "matrix(...)"` | Affine coordinates only. The core wraps every artist's output in `<g transform="matrix(...)">`, so existing artists draw in Cartesian and the SVG matrix handles the rest — zero per-artist changes. No coord in core ships this today; the hook is reserved for future affine coords (log-axis layouts, etc.). |
+| `draw_frame(project, iw, ih, y_ticks_r, y_labels, frame_opts) -> str` | Replaces the Cartesian y-axis rendering (left spine, y ticks, y labels). Use when your coordinate has a different "y" geometry. |
+| `draw_x_frame(...)` / `draw_x_sector_chrome(...)` / `clip_path_d(iw, ih)` | Used by non-affine coords like `CircularCoordinate` to draw their own axis chrome and clip region. |
 
-**Non-affine coordinates** (circular, polar, anything that can't be expressed
-as a 2-D matrix) can't use `svg_transform`. Two options:
+For **non-affine** coords (no `svg_transform`), artists draw through
+`ctx.warp` — a Cartesian-pixel → coord-pixel closure passed to `draw.*`
+helpers via `project=` — so edges subdivide and primitives project at
+draw time. The renderer raises at render time when a panel's coord
+doesn't list the artist as supported.
 
-1. **Coordinate-aware artists.** Read `ctx.project` in `draw` instead of
-   `ctx.x_scale` / `ctx.y_scale`. Custom artists work; standard ones don't.
-2. **Post-render SVG coordinate warping.** Render artists into a normalized
-   Cartesian space, then parse and remap each coordinate pair through
-   `project(t, r)`. Works for standard artists with no per-artist code, at
-   the cost of straight segments becoming chords across the warp.
-   [`cookbook/circle/`](../cookbook/circle/) is a worked example.
+List the supported artists in one place next to your coord class, using
+the coord's short name (class name minus the `Coordinate` suffix):
+
+```python
+import plotlet as pt
+
+class MyCoordinate:
+    def __call__(self, artist_dict, iw, ih): ...
+
+pt.declare_coord_support("My", [
+    "scatter", "line",                  # core
+    "numeric_bar",                      # extension (activates when imported)
+])
+```
+
+`declare_coord_support` doesn't validate names at declaration time, so
+extension artist names can be listed up front — they activate when the
+user does `import plotlet.extensions.<name>`. Cookbook coords use the
+same call from their own modules.
+
+Add JSON round-trip support with `_to_dict` / `_from_dict` and call
+`register_coord_codec(MyCoordinate)` once at module import. See
+[`coordinates.py`](../src/plotlet/coordinates.py) and `CircularCoordinate`
+for the full worked example, including chord/sector integration.
 
 One coordinate per panel; use separate panels (composed via `pt.grid` / `|` /
 `/`) for two coordinate systems.

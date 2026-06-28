@@ -79,18 +79,6 @@ class ArtistSpec:
     data_attrs: Callable[[dict], dict | None] | None = None
     flips_y_axis: Callable[[dict], bool] | None = None
     tight_domain: bool = False
-    # Coordinate systems this artist's `draw` can render correctly under.
-    # Members are coord class names with the `Coordinate` suffix dropped
-    # (e.g. `"Linear"` for `LinearCoordinate`). Default is `{"Linear"}` —
-    # most artists work there because the renderer wraps them in
-    # `svg_transform` and they draw Cartesian without further changes.
-    # Add `"Circular"` (etc.) when the artist's draw forwards
-    # `project=ctx.warp` to every `draw.*` helper, so segments subdivide
-    # and shapes curve correctly. The renderer raises if the panel's
-    # coord name isn't in this set.
-    coord_systems: set[str] = field(
-        default_factory=lambda: {"Linear"}
-    )
     # When the artist contributes to autoscaling and data lo > 0, push lo to
     # 0 so the visual sits on the baseline; also suppresses the default
     # `expand` on that side. May be a `(artist_dict) -> bool` callable so e.g.
@@ -122,9 +110,9 @@ class RenderContext:
     # for affine coords (handled by svg_transform).
     #   project(t, r)    -> (px, py)  data-space → canvas-pixel
     #   warp(x_px, y_px) -> (px, py)  pre-warp Cartesian pixel → canvas-pixel
-    # Artists declaring a non-affine coord in `coord_systems` pass `warp`
-    # to `draw.*` helpers via `project=` so segments subdivide, polygons
-    # curve, and markers land correctly.
+    # Artists opted-in to a non-affine coord via `declare_coord_support`
+    # pass `warp` to `draw.*` helpers via `project=` so segments subdivide,
+    # polygons curve, and markers land correctly.
     project: Any = None
     warp: Any = None
 
@@ -133,10 +121,32 @@ _REGISTRY: dict[str, ArtistSpec] = {}
 # Parallel to _REGISTRY; auto-stamped by add_artist via stack-frame lookup.
 # Surfaced by artist_table() so users can tell core/extension/user-added apart.
 _ORIGINS: dict[str, str] = {}
+# Maps coord short-name → set of artist names that render correctly under it.
+# Populated by `declare_coord_support`; the per-coord block typically lives
+# next to the coord class definition (or at the end of an extension module
+# for extension artists). Queried by the renderer's gate and by
+# `artist_table()` to surface the per-artist coord support set.
+_COORD_SUPPORT: dict[str, set[str]] = {}
+
+
+def declare_coord_support(coord_name: str, artist_names) -> None:
+    """Register that `artist_names` render correctly under coord
+    `coord_name` (e.g. `"Circular"` for `CircularCoordinate`).
+
+    No upfront validation of artist names — declarations accumulate at
+    import time and may run before or after the artists' `add_artist`
+    calls. Missing names surface at render time via the normal coord
+    gate error message."""
+    _COORD_SUPPORT.setdefault(coord_name, set()).update(artist_names)
 
 
 def add_artist(spec: ArtistSpec) -> None:
-    """Register a plot type. Overwrites if the name already exists."""
+    """Register a plot type. Overwrites if the name already exists.
+
+    If the artist also renders correctly under a non-affine coord, call
+    ``declare_coord_support(coord_name, [spec.name])`` after this — core
+    artists' opt-in lives next to the coord class definition; extension
+    artists' opt-in lives right after their own ``add_artist`` call."""
     _REGISTRY[spec.name] = spec
     frame = inspect.currentframe()
     caller = frame.f_back if frame is not None else None
@@ -168,6 +178,8 @@ def _all_columns() -> list[str]:
     # callables (record/draw) and ones with a callable default
     # (xdomain/ydomain). Optional callables with `default=None` (e.g.
     # legend_entries) pass through — their fn/- state varies per artist.
+    # `coord_systems` is appended separately because it's not a spec field —
+    # it's derived from `_COORD_SUPPORT` at table-build time.
     cols = ["name", "origin"]
     for f in fields(ArtistSpec):
         if f.name == "name":
@@ -177,18 +189,23 @@ def _all_columns() -> list[str]:
         if callable(f.default):
             continue
         cols.append(f.name)
+    cols.append("coord_systems")
     return cols
 
 
 def _cell(value) -> str:
     # Callables → "fn" (raw repr is a memory address); None → "-" so the
     # column doesn't shout "None None None". Sets of strings render as
-    # `{Linear, Circular}` — sorted for stable output, no quotes.
-    # Everything else verbatim so the rendered cell matches the row dict.
+    # `{Circular}` (sorted, no quotes); empty set → "-" (same nothing-here
+    # placeholder as None). Everything else verbatim so the rendered cell
+    # matches the row dict.
     if value is None:
         return "-"
-    if isinstance(value, (set, frozenset)) and value and all(isinstance(v, str) for v in value):
-        return "{" + ", ".join(sorted(value)) + "}"
+    if isinstance(value, (set, frozenset)):
+        if not value:
+            return "-"
+        if all(isinstance(v, str) for v in value):
+            return "{" + ", ".join(sorted(value)) + "}"
     if callable(value):
         return "fn"
     return str(value)
@@ -254,5 +271,6 @@ def artist_table(columns=None) -> ArtistTable:
         row = {"origin": _ORIGINS.get(name, "unknown")}
         for f in fields(ArtistSpec):
             row[f.name] = getattr(spec, f.name)
+        row["coord_systems"] = {c for c, a in _COORD_SUPPORT.items() if name in a}
         rows.append(row)
     return ArtistTable(rows, columns=columns)

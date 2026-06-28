@@ -433,5 +433,4 @@ add_artist(ArtistSpec(
     uses_color_cycle=False,
     data_attrs=_heatmap_data_attrs,
     tight_domain=True,
-    coord_systems={"Linear", "Circular"},
 ))

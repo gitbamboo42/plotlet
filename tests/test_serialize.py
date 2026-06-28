@@ -102,13 +102,6 @@ def test_attach_all_sides():
     _assert_round_trip(host)
 
 
-def test_linear_coordinate():
-    c = pt.chart(data_width=200, data_height=160)
-    c.coordinate(pt.LinearCoordinate(angle=30))
-    c.line(data={"x": [0, 1, 2], "y": [0, 1, 0]}, x="x", y="y")
-    _assert_round_trip(c)
-
-
 def test_circular_coordinate_on_layout():
     a = pt.chart(data_width=120, data_height=120)
     a.line(data={"x": [0, 1, 2], "y": [1, 2, 1]}, x="x", y="y")

@@ -89,8 +89,8 @@ pt.add_artist(pt.ArtistSpec(
     draw=numeric_bar_draw,
     legend_entries=numeric_bar_legend_entries,
     force_zero_y=True,
-    coord_systems={"Linear", "Circular"},
 ))
+pt.declare_coord_support("Circular", ["numeric_bar"])
 
 
 def demo():

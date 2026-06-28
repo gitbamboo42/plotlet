@@ -7,9 +7,9 @@ input arrives through the explicit keyword arguments — no module globals,
 no implicit state.
 
 Holds the *default* Cartesian chrome. Non-default coordinates own their
-chrome in dedicated sibling modules — see ``_chrome_linear.py``,
-``_chrome_circular.py`` — and ``emit_chrome`` dispatches to them via the
-coord object's optional ``draw_frame`` / ``draw_x_frame`` hooks.
+chrome in dedicated sibling modules — see ``_chrome_circular.py`` — and
+``emit_chrome`` dispatches to them via the coord object's optional
+``draw_frame`` / ``draw_x_frame`` hooks.
 """
 from __future__ import annotations
 

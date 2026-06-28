@@ -6,7 +6,7 @@ A coordinate is a callable ``(artist_dict, iw, ih) -> project(t, r) -> (px, py)`
 
 Registration
 ------------
-``c.coordinate(LinearCoordinate(angle=30))`` called once on a chart.  All
+``c.coordinate(CircularCoordinate(...))`` called once on a chart.  All
 artists in the panel inherit it.  One coordinate per panel is enforced —
 use separate panels for different coordinate systems.
 
@@ -50,13 +50,14 @@ Optional methods on the coordinate object unlock additional integration:
     When ``svg_transform`` is present, ``ctx.project`` is not set — artists
     should draw in Cartesian as usual.
 
-Every artist declares the coord systems it can render correctly under via
-``ArtistSpec.coord_systems`` — a set of coord names (the class name with
-the ``Coordinate`` suffix dropped, e.g. ``"Linear"`` for
-``LinearCoordinate``).  Default is ``{"Linear"}``.  The renderer raises
-``NotImplementedError`` if the panel's coord name isn't in that set.
+Each coord opts in the artists that render correctly under it via one
+``declare_coord_support(coord_short_name, [artist_names...])`` call —
+typically next to the coord's class definition.  ``coord_short_name`` is
+the class name minus the ``Coordinate`` suffix (e.g. ``"Circular"`` for
+``CircularCoordinate``).  The renderer raises ``NotImplementedError`` if
+an artist appearing under a coord wasn't declared as a supporter.
 Non-affine coords like ``CircularCoordinate`` aren't covered by
-``svg_transform``; artists supporting them draw through ``ctx.warp`` (a
+``svg_transform``; supporting artists draw through ``ctx.warp`` (a
 Cartesian-pixel → coord-pixel closure handed to ``draw.*`` helpers via
 ``project=``), so edges subdivide and primitives project at draw time.
 
@@ -67,100 +68,18 @@ Cartesian-pixel → coord-pixel closure handed to ``draw.*`` helpers via
     returns an annulus; the renderer applies ``clip-rule="evenodd"`` so
     two concentric subpaths describe the ring.
 
-``LinearCoordinate`` is the affine reference implementation (x-axis horizontal,
-y-axis tilts).  ``CircularCoordinate`` is the non-affine reference (ring with
-inner/outer radii), demonstrating the coord-native draw contract and the
-``draw_x_frame`` / ``clip_path_d`` hooks.
+``CircularCoordinate`` is the reference non-affine implementation (ring with
+inner/outer radii), demonstrating the warp draw contract and the
+``draw_x_frame`` / ``clip_path_d`` hooks.  See ``docs/EXTENDING.md`` for a
+minimal-coord example covering the protocol's bare requirements.
 """
 from __future__ import annotations
 
 import math
 
-from . import _chrome_linear as _cl
 from . import _chrome_circular as _cc
+from .registry import declare_coord_support
 
-
-
-class LinearCoordinate:
-    """Coordinate transform: x-axis stays horizontal, y-axis tilts.
-
-    At ``angle=0`` (default) this is identical to a standard Cartesian chart.
-    ``angle`` is the degrees the y-axis (r-axis) tilts clockwise from vertical:
-    positive values tilt the y-axis to the right, negative to the left.
-    The x-axis (t-axis) is always horizontal regardless of angle.
-
-    ``origin`` is the pixel position of the (t=0, r=0) corner; defaults to
-    the canvas bottom-left ``(0, ih)``.  ``length`` and ``thickness`` are the
-    pixel extents along the x-axis and y-axis; they default to ``iw`` and
-    ``ih`` so the coordinate fills the canvas at angle=0.
-    Pass explicit values when placing a stub at an arbitrary position on a
-    larger canvas.
-
-    Panel-level usage (standard artists in a tilted frame)::
-
-        c = pt.chart(...)
-        c.coordinate(LinearCoordinate(angle=30))
-        c.line(...)   # works unchanged via svg_transform
-
-    ArtistSpec-level usage (intrinsically non-Cartesian artist)::
-
-        spec = ArtistSpec(
-            name="my_spine",
-            record=..., draw=...,
-            xdomain=lambda a: [0.0, 1.0],
-            ydomain=lambda a: [0.0, 1.0],
-            coordinate=LinearCoordinate(angle=30),
-        )
-    """
-
-    def __init__(self, angle: float = 0.0,
-                 origin=None,
-                 length=None,
-                 thickness=None):
-        self.angle_deg  = angle
-        self.origin     = origin     # (x, y) of (t=0, r=0); None → (0, ih)
-        self.length     = length     # px along baseline;    None → iw
-        self.thickness  = thickness  # px along normal axis; None → ih
-
-    def _to_dict(self) -> dict:
-        return {"angle": self.angle_deg, "origin": self.origin,
-                "length": self.length, "thickness": self.thickness}
-
-    @classmethod
-    def _from_dict(cls, d: dict) -> "LinearCoordinate":
-        origin = d.get("origin")
-        if isinstance(origin, list):
-            origin = tuple(origin)
-        return cls(angle=d.get("angle", 0.0), origin=origin,
-                   length=d.get("length"), thickness=d.get("thickness"))
-
-    def __call__(self, artist: dict, iw: float, ih: float):
-        a      = math.radians(self.angle_deg)
-        cos_a  = math.cos(a)
-        sin_a  = math.sin(a)
-        ox, oy = self.origin    if self.origin    is not None else (0.0, float(ih))
-        L      = self.length    if self.length    is not None else float(iw)
-        T      = self.thickness if self.thickness is not None else float(ih)
-
-        def project(t: float, r: float):
-            # x-axis (t) is always horizontal; y-axis (r) tilts at `angle` from vertical
-            #   r-direction = (sin_a, -cos_a) in SVG coords (y increases down)
-            #   angle=0  → (0, -1) = straight up ✓
-            #   angle=30 → (0.5, -0.866): up-and-right tilt ✓
-            return (ox + t * L + r * T * sin_a,
-                    oy          - r * T * cos_a)
-
-        return project
-
-    # Each hook is a thin delegate to its counterpart in `_chrome_linear`.
-    # Bodies live there so this module stays focused on the protocol +
-    # small coord parameters.
-
-    def svg_transform(self, project, iw: float, ih: float) -> str:
-        return _cl.svg_transform(project, iw, ih)
-
-    def draw_frame(self, project, iw, ih, y_ticks_r, y_labels, frame_opts) -> str:
-        return _cl.draw_y_chrome(project, iw, ih, y_ticks_r, y_labels, frame_opts)
 
 
 def _circular_chrome_pad(st) -> float:
@@ -215,11 +134,10 @@ class CircularCoordinate:
 
     Maps (t, r) → pixel (x, y) on an annulus.  ``t ∈ [0, 1]`` runs clockwise
     from 12 o'clock; ``r ∈ [0, 1]`` is radial depth (0 = inner edge,
-    1 = outer edge).  Non-affine, so only artists that include
-    ``"Circular"`` in their ``coord_systems`` can render under it — they
-    draw through ``ctx.warp`` so each geometry point projects at draw
-    time.  Today the supporting set is scatter / line / step / heatmap /
-    hist / numeric_bar / fill_between / area; other artists raise
+    1 = outer edge).  Non-affine, so only artists listed in the
+    ``declare_coord_support("Circular", [...])`` block at the bottom of
+    this module render under it — they draw through ``ctx.warp`` so each
+    geometry point projects at draw time.  Other artists raise
     ``NotImplementedError`` at render time.
 
     Caveats:
@@ -547,3 +465,11 @@ class CircularCoordinate:
             self._wrap_gap_rad,
             sector_ts, label_ts, names, sec_opts,
         )
+
+
+# Which core artists render correctly under CircularCoordinate.
+# Extension artists self-register from their own modules — see
+# `extensions/<name>.py` for each `declare_coord_support` call.
+declare_coord_support("Circular", [
+    "scatter", "line", "step", "hist", "heatmap", "fill_between", "area",
+])

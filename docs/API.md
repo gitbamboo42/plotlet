@@ -39,16 +39,17 @@ paint over tick labels.
 
 ### Coordinates
 
-`c.coordinate(pt.LinearCoordinate(angle=30))` rotates the y-axis so artists
-draw on a sheared coordinate frame — useful for waterfall layouts and
-small tilted insets. One coordinate per panel; for two coordinate systems,
-use two panels (composed via `pt.grid` / `|` / `/`).
+`c.coordinate(pt.CircularCoordinate(...))` switches a panel to a non-Cartesian
+coord system. One coordinate per panel; for two coordinate systems, use two
+panels (composed via `pt.grid` / `|` / `/`).
 
-`LinearCoordinate` is the only coordinate shipped in core. It's affine, so
-all standard artists work unchanged. For non-affine coordinates (circular
-rings, polar, etc.), see [`cookbook/circle/`](../cookbook/circle/) for a
-worked example using post-render SVG coordinate warping, and the protocol
-notes at the top of [`src/plotlet/coordinates.py`](../src/plotlet/coordinates.py).
+`CircularCoordinate` is the only coordinate shipped in core today (ring /
+annulus geometry; set `r_inner=0` for a full polar disc). Each coord opts
+in its supporting artists via `pt.declare_coord_support(name, [...])`;
+the renderer raises if you mix a coord with an artist not in that list.
+See [`cookbook/circle/`](../cookbook/circle/) for a worked example and the
+protocol notes at the top of
+[`src/plotlet/coordinates.py`](../src/plotlet/coordinates.py).
 
 ### Scales
 

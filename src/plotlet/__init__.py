@@ -18,8 +18,8 @@ from .draw import TAB10, colors
 from .draw import colormap, list_colormaps
 from .chart import Chart, Layout, chart, grid
 from .legend import legend
-from .registry import ArtistSpec, add_artist, artist_table
-from .coordinates import LinearCoordinate, CircularCoordinate
+from .registry import ArtistSpec, add_artist, artist_table, declare_coord_support
+from .coordinates import CircularCoordinate
 from .sectors import Sectors
 from .layout_diagram import layout_diagram
 from .themes import load_theme, available_themes, register_theme
@@ -31,8 +31,8 @@ from . import draw, utils
 
 __all__ = ["chart", "Chart", "Layout", "SPEC", "TAB10", "colors",
            "colormap", "list_colormaps", "grid", "legend",
-           "ArtistSpec", "add_artist", "artist_table",
-           "LinearCoordinate", "CircularCoordinate", "Sectors",
+           "ArtistSpec", "add_artist", "artist_table", "declare_coord_support",
+           "CircularCoordinate", "Sectors",
            "layout_diagram",
            "load_theme", "available_themes", "register_theme",
            "facet", "FacetGrid",

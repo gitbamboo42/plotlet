@@ -48,14 +48,14 @@ Anything outside the envelopes above raises `TypeError` at encode time.
 from __future__ import annotations
 from typing import Any
 
-from .coordinates import LinearCoordinate, CircularCoordinate
+from .coordinates import CircularCoordinate
 from .sectors import Sectors
 
 
 _VERSION = 1
 
-# Coord class registry. Populated by `register_coord_codec`; LinearCoordinate
-# and CircularCoordinate registered at the bottom of the module.
+# Coord class registry. Populated by `register_coord_codec`;
+# CircularCoordinate registered at the bottom of the module.
 _COORD_REGISTRY: dict[str, type] = {}
 
 
@@ -338,5 +338,4 @@ def from_json(blob: dict):
 
 # Register the coords that ship with plotlet. New coord classes can call
 # `register_coord_codec(cls)` themselves at definition site.
-register_coord_codec(LinearCoordinate)
 register_coord_codec(CircularCoordinate)
