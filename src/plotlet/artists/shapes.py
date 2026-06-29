@@ -44,7 +44,7 @@ def _fill_stroke_params(a, ctx_color):
             "alpha": alpha if do_fill else 1}
 
 
-def _artist_rect(a, xs_, ys_, col):
+def _artist_rect(a, xs_, ys_, col, warp=None):
     """Scale-aware axis-aligned rectangles. `xs`, `ys`, `ws`, `hs` are
     pre-broadcast to a common length in `record`. Each rect spans
     `(x, y) -> (x + w, y + h)` in data coords; pixel-space sign is fixed
@@ -60,16 +60,16 @@ def _artist_rect(a, xs_, ys_, col):
         pw = abs(px1 - px0); ph = abs(py1 - py0)
         if pw <= 0 or ph <= 0:
             continue
-        out.append(draw_rect(x_l, y_t, pw, ph, **params))
+        out.append(draw_rect(x_l, y_t, pw, ph, project=warp, **params))
     return "".join(out)
 
 
-def _artist_polygon(a, xs_, ys_, col):
+def _artist_polygon(a, xs_, ys_, col, warp=None):
     """Closed polygon from `(xs, ys)` vertices. Always emits a closed
     path (trailing `Z`) so callers don't need to repeat the first point."""
     pts = [(xs_(x), ys_(y)) for x, y in zip(a["xs"], a["ys"])]
     pts = [(px, py) for px, py in pts if math.isfinite(px) and math.isfinite(py)]
-    return draw_polygon(pts, **_fill_stroke_params(a, col))
+    return draw_polygon(pts, project=warp, **_fill_stroke_params(a, col))
 
 
 # --- rect ---
@@ -102,7 +102,7 @@ add_artist(ArtistSpec(
     record=_rect_record,
     xdomain=_rect_xdomain,
     ydomain=_rect_ydomain,
-    draw=lambda a, ctx: _artist_rect(a, ctx.x_scale, ctx.y_scale, ctx.color),
+    draw=lambda a, ctx: _artist_rect(a, ctx.x_scale, ctx.y_scale, ctx.color, ctx.warp),
     legend_entries=_bar_legend_entries,
     data_attrs=_rect_data_attrs,
 ))
@@ -124,7 +124,7 @@ add_artist(ArtistSpec(
                               "opts": kw},
     xdomain=lambda a: a["xs"],
     ydomain=lambda a: a["ys"],
-    draw=lambda a, ctx: _artist_polygon(a, ctx.x_scale, ctx.y_scale, ctx.color),
+    draw=lambda a, ctx: _artist_polygon(a, ctx.x_scale, ctx.y_scale, ctx.color, ctx.warp),
     legend_entries=_bar_legend_entries,
     data_attrs=_polygon_data_attrs,
 ))
@@ -132,7 +132,7 @@ add_artist(ArtistSpec(
 
 # --- polyline ---
 
-def _artist_polyline(a, xs_, ys_, col):
+def _artist_polyline(a, xs_, ys_, col, warp=None):
     opts = a["opts"]
     pts = [(xs_(x), ys_(y)) for x, y in zip(a["xs"], a["ys"])]
     pts = [(px, py) for px, py in pts if math.isfinite(px) and math.isfinite(py)]
@@ -141,7 +141,7 @@ def _artist_polyline(a, xs_, ys_, col):
     dash = opts.get("linestyle")
     alpha = opts.get("alpha", 1)
     return draw_polyline(pts, color=resolve_color(color), width=width,
-                          dash=dash, alpha=alpha)
+                          dash=dash, alpha=alpha, project=warp)
 
 
 add_artist(ArtistSpec(
@@ -152,6 +152,6 @@ add_artist(ArtistSpec(
                               "opts": kw},
     xdomain=lambda a: a["xs"],
     ydomain=lambda a: a["ys"],
-    draw=lambda a, ctx: _artist_polyline(a, ctx.x_scale, ctx.y_scale, ctx.color),
+    draw=lambda a, ctx: _artist_polyline(a, ctx.x_scale, ctx.y_scale, ctx.color, ctx.warp),
     data_attrs=_polygon_data_attrs,
 ))

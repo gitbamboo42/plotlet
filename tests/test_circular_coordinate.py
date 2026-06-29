@@ -157,6 +157,37 @@ def ring_inner_outer():
     return c
 
 
+def ring_references():
+    # Reference primitives under Circular: axhline → concentric ring,
+    # axvline → radial spoke, hlines/vlines → bounded arc / spoke
+    # segments, axhspan → ring band, axvspan → angular wedge.
+    c = _ring_chart("references — ring")
+    c.axhspan(0.65, 0.85, color="#9CC3D5", alpha=0.4)   # outer ring band
+    c.axvspan(0.10, 0.30, color="#F2C57C", alpha=0.4)   # angular wedge
+    c.axhline(0.50, color="#444", linewidth=1)          # mid ring
+    c.axvline(0.50, color="#888", linestyle="--",
+              linewidth=0.8)                            # half-turn spoke
+    c.hlines([0.25, 0.75], [0.05, 0.55], [0.45, 0.95],
+             color="#1D9E75", linewidth=1.2)
+    c.vlines([0.20, 0.80], [0.10, 0.10], [0.60, 0.60],
+             color="#D9534F", linewidth=1.2)
+    return c
+
+
+def ring_shapes():
+    # Shape primitives under Circular: rect → annular sector, polygon →
+    # warped closed contour, polyline → warped open stroke.
+    c = _ring_chart("shapes — ring")
+    c.rect(0.10, 0.20, 0.25, 0.40, color="#A0C4E2", alpha=0.5)
+    poly_x = [0.55, 0.75, 0.85, 0.70, 0.55]
+    poly_y = [0.30, 0.30, 0.55, 0.70, 0.55]
+    c.polygon(poly_x, poly_y, color="#F2C57C", alpha=0.6)
+    line_x = [0.05, 0.20, 0.40, 0.60, 0.80, 0.95]
+    line_y = [0.90, 0.70, 0.85, 0.65, 0.80, 0.60]
+    c.polyline(line_x, line_y, color="#534AB7", linewidth=1.5)
+    return c
+
+
 # ---------------------------------------------------------------------------
 # Sector × CircularCoordinate guard
 # ---------------------------------------------------------------------------
@@ -184,6 +215,8 @@ PLOTS = {
     "ring_line_band":    ring_line_band,
     "ring_numeric_bar":  ring_numeric_bar,
     "ring_inner_outer":  ring_inner_outer,
+    "ring_references":   ring_references,
+    "ring_shapes":       ring_shapes,
     "ring_x_sectors":    ring_x_sectors,
 }
 

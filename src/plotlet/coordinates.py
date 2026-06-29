@@ -472,4 +472,6 @@ class CircularCoordinate:
 # `extensions/<name>.py` for each `declare_coord_support` call.
 declare_coord_support("Circular", [
     "scatter", "line", "step", "hist", "heatmap", "fill_between", "area",
+    "axhline", "axvline", "axhspan", "axvspan", "hlines", "vlines",
+    "rect", "polygon", "polyline",
 ])
