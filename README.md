@@ -13,6 +13,7 @@ Reference docs in [`docs/`](docs/):
 - [API reference](docs/API.md) — mark methods, frame options, scales, tick overrides
 - [Philosophy](docs/PHILOSOPHY.md) — what's in core, what's not, and why
 - [Subplots](docs/SUBPLOTS.md) — multi-panel composition, shared scales
+- [Coordinates](docs/COORDINATES.md) — Circular, custom non-Cartesian projections
 - [Extending](docs/EXTENDING.md) — write your own plot type
 - [Themes](docs/THEMES.md) — visual presets
 - [AI attributes](docs/AI_ATTRS.md) — `data-plotlet-*` schema for automation

@@ -33,6 +33,7 @@ and why-not-X live in [README.md](README.md) and [docs/PHILOSOPHY.md](docs/PHILO
 ## Deep dives
 
 - Custom plot types → [docs/EXTENDING.md](docs/EXTENDING.md)
+- Coordinate systems (Circular, custom projections) → [docs/COORDINATES.md](docs/COORDINATES.md)
 - Multi-panel layouts, `share_x` / `share_y` → [docs/SUBPLOTS.md](docs/SUBPLOTS.md)
 - Themes → [docs/THEMES.md](docs/THEMES.md)
 - AI-readable SVG attrs → [docs/AI_ATTRS.md](docs/AI_ATTRS.md)

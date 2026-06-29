@@ -8,6 +8,9 @@
   c.line(data=df, ..., linestyle="--")                 # literal dash
   c.line(data=df, ..., linestyle="cohort")             # dash cycle per level
   c.line(data=df, ..., alpha="cohort", alphas=(.3, 1)) # opacity per level
+  c.line(data=df, ..., arc=False)                      # straight chords under
+                                                        #   CircularCoordinate
+                                                        #   (no-op in Cartesian)
 
 `linestyle=` dispatches on the value:
   * not-a-column string (`"--"`, `":"`, `"6,3,1,3"`) → literal dash
@@ -31,6 +34,7 @@ def _artist_line(a, xs_, ys_, col, xs, ys, warp=None):
     out = []
     opts = a["opts"]
     alpha = opts.get("alpha", 1)
+    arc = opts.get("arc", True)
     curve = opts.get("curve", "linear")
     if curve not in _CURVE_VALUES:
         raise ValueError(
@@ -62,18 +66,26 @@ def _artist_line(a, xs_, ys_, col, xs, ys, warp=None):
             # Coord-native: emit one polyline per contiguous run so each
             # edge subdivides through warp into a smooth arc. Broken lines
             # become separate <path> elements (the visual break is the same).
+            # `arc=False` skips per-edge subdivision: pre-project the data
+            # points themselves (endpoints still warp to the correct angle
+            # and ring), then connect them with literal straight chords.
+            def _emit(run):
+                if arc:
+                    return polyline(run, color=col, width=lw, dash=ls,
+                                     alpha=alpha, project=warp)
+                pts = [warp(*pt) for pt in run]
+                return polyline(pts, color=col, width=lw, dash=ls,
+                                 alpha=alpha, project=None)
             run = []
             for p in path_pts:
                 if p is None:
                     if run:
-                        out.append(polyline(run, color=col, width=lw, dash=ls,
-                                             alpha=alpha, project=warp))
+                        out.append(_emit(run))
                         run = []
                 else:
                     run.append(p)
             if run:
-                out.append(polyline(run, color=col, width=lw, dash=ls,
-                                     alpha=alpha, project=warp))
+                out.append(_emit(run))
     if opts.get("marker"):
         sz = opts.get("size", _D["markersize"])
         for x, y in zip(xs, ys):
@@ -133,6 +145,7 @@ def _line_data_attrs(a):
     if opts.get("marker"): out["marker"] = opts["marker"]
     curve = opts.get("curve")
     if curve and curve != "linear": out["curve"] = curve
+    if opts.get("arc") is False: out["arc"] = False
     return out
 
 

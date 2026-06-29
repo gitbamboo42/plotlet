@@ -226,58 +226,6 @@ labels=, orient=, clusters=, parent=, ...)`.
 
 ## Coordinate classes
 
-`c.coordinate(MyCoordinate())` swaps the Cartesian projection for a custom
-one — useful for circular, polar, or arbitrary non-Cartesian layouts. The
-required surface is tiny:
-
-```python
-class MyCoordinate:
-    def __call__(self, artist_dict, iw, ih):
-        def project(t, r):       # (t, r) in [0, 1] → pixel (px, py)
-            ...
-            return px, py
-        return project
-```
-
-That's it — no base class to inherit, just match the protocol. Optional
-methods unlock deeper integration:
-
-| Method | When it kicks in |
-|---|---|
-| `svg_transform(project, iw, ih) -> "matrix(...)"` | Affine coordinates only. The core wraps every artist's output in `<g transform="matrix(...)">`, so existing artists draw in Cartesian and the SVG matrix handles the rest — zero per-artist changes. No coord in core ships this today; the hook is reserved for future affine coords (log-axis layouts, etc.). |
-| `draw_frame(project, iw, ih, y_ticks_r, y_labels, frame_opts) -> str` | Replaces the Cartesian y-axis rendering (left spine, y ticks, y labels). Use when your coordinate has a different "y" geometry. |
-| `draw_x_frame(...)` / `draw_x_sector_chrome(...)` / `clip_path_d(iw, ih)` | Used by non-affine coords like `CircularCoordinate` to draw their own axis chrome and clip region. |
-
-For **non-affine** coords (no `svg_transform`), artists draw through
-`ctx.warp` — a Cartesian-pixel → coord-pixel closure passed to `draw.*`
-helpers via `project=` — so edges subdivide and primitives project at
-draw time. The renderer raises at render time when a panel's coord
-doesn't list the artist as supported.
-
-List the supported artists in one place next to your coord class, using
-the coord's short name (class name minus the `Coordinate` suffix):
-
-```python
-import plotlet as pt
-
-class MyCoordinate:
-    def __call__(self, artist_dict, iw, ih): ...
-
-pt.declare_coord_support("My", [
-    "scatter", "line",                  # core
-    "numeric_bar",                      # extension (activates when imported)
-])
-```
-
-`declare_coord_support` doesn't validate names at declaration time, so
-extension artist names can be listed up front — they activate when the
-user does `import plotlet.extensions.<name>`. Cookbook coords use the
-same call from their own modules.
-
-Add JSON round-trip support with `_to_dict` / `_from_dict` and call
-`register_coord_codec(MyCoordinate)` once at module import. See
-[`coordinates.py`](../src/plotlet/coordinates.py) and `CircularCoordinate`
-for the full worked example, including chord/sector integration.
-
-One coordinate per panel; use separate panels (composed via `pt.grid` / `|` /
-`/`) for two coordinate systems.
+Custom (t, r) → pixel projections — rings, polar discs, future spirals —
+live under their own protocol. See [`COORDINATES.md`](COORDINATES.md) for
+the model, the hook table, and a minimal worked example.

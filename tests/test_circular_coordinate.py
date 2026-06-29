@@ -28,7 +28,7 @@ def _clamp01(v):
 
 _RNG = random.Random(11)
 
-_N_LINE = 80
+_N_LINE = 12
 _LINE_TS = [i / _N_LINE for i in range(_N_LINE + 1)]
 _LINE_V  = [_clamp01(0.5 + 0.35 * math.sin(2 * math.pi * t)) for t in _LINE_TS]
 _BAND_LO = [_clamp01(v - 0.08) for v in _LINE_V]
@@ -68,6 +68,17 @@ def ring_line():
     c = _ring_chart("line — ring")
     c.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
            color="#1D9E75", width=1.5)
+    return c
+
+
+def ring_line_chords():
+    # `arc=False` — endpoints still warp to the right angle/ring, but
+    # connecting segments are literal Cartesian chords (no per-edge
+    # subdivision). Same data as `ring_line` so the two baselines are a
+    # direct visual pair: same sample points, arc on vs off.
+    c = _ring_chart("line — chords (arc=False)")
+    c.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
+           color="#1D9E75", width=1.5, arc=False)
     return c
 
 
@@ -169,6 +180,7 @@ def test_circular_with_y_sectors_raises():
 PLOTS = {
     "ring_scatter":      ring_scatter,
     "ring_line":         ring_line,
+    "ring_line_chords":  ring_line_chords,
     "ring_line_band":    ring_line_band,
     "ring_numeric_bar":  ring_numeric_bar,
     "ring_inner_outer":  ring_inner_outer,
