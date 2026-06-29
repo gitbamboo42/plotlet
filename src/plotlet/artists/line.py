@@ -1,4 +1,4 @@
-"""Line — connected xy points, single-series per record.
+"""Line / step — connected xy points, single-series per record.
 
   c.line(data=df, x="col_x", y="col_y")                # long-form
   c.line(data=df, x="col_x", y="col_y", color="g")     # one line per color level
@@ -11,6 +11,8 @@
   c.line(data=df, ..., arc=False)                      # straight chords under
                                                         #   CircularCoordinate
                                                         #   (no-op in Cartesian)
+  c.step(data=df, x="col_x", y="col_y", where="post")  # step variant; where=
+                                                        #   "pre" | "post" | "mid"
 
 `linestyle=` dispatches on the value:
   * not-a-column string (`"--"`, `":"`, `"6,3,1,3"`) → literal dash

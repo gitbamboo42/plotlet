@@ -135,6 +135,12 @@ pt.grid([[t1], [t2], [t3]]).share_x("col").sectors(PHASES, column="phase")
 
 ## Mark methods
 
+The tables below give a cross-artist at-a-glance comparison. For each
+artist's full docstring (usage examples, special behaviors, coord-specific
+kwargs like `arc=False`), read it directly via `help(c.line)` or `c.line?`
+in Jupyter — `Chart.__getattr__` surfaces each artist's module docstring
+on the recorder.
+
 Every data mark is long-form: a `data` source plus column-name
 aesthetics. Three equivalent call shapes — pick whichever reads
 cleanest at the call site:

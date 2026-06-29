@@ -36,6 +36,7 @@ Invariants:
 """
 from __future__ import annotations
 
+import inspect
 import re
 from pathlib import Path
 
@@ -535,6 +536,14 @@ class Chart(_Renderable):
                         self._calls.append((*call, True))
                 self._calls.append((name, list(args), dict(kwargs)))
                 return self
+            # Surface the artist's module docstring on the recorder so
+            # `c.line?` / `help(c.line)` / `c.line.__doc__` reach it —
+            # __getattr__ dispatch otherwise blocks Python's standard
+            # help path. Frame methods (no spec) keep the empty default.
+            if spec is not None:
+                mod = inspect.getmodule(spec.record)
+                recorder.__doc__ = (mod.__doc__ if mod is not None else None) or ""
+                recorder.__name__ = name
             return recorder
         ext_file = Path(__file__).parent / "extensions" / f"{name}.py"
         if ext_file.is_file():
