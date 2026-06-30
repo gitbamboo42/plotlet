@@ -618,13 +618,16 @@ def _build_axis_descriptors(leaves: list[Chart],
 # ---------------------------------------------------------------------------
 
 def _mark_joined_pair(a: Chart | None, b: Chart | None, *, axis: str,
+                      states: dict[int, dict],
                       out: dict[int, _PanelOpts]) -> None:
     """If `a` and `b` are joined along `axis` (i.e., share-equivalent on the
     orthogonal axis), set `hide_*` on both sides of the joint and
     `suppress_*_labels` on the side whose tick labels would duplicate the
-    neighbor's. h-axis: y-tick labels live on the left, so the right panel
-    suppresses. v-axis: x-tick labels live on the bottom, so the top panel
-    suppresses.
+    neighbor's — or render unanchored over the joint when that panel's
+    axis sits ON the joint edge. The suppression target follows each
+    panel's ``x_side`` / ``y_side``, so an `xticks(side="top")` panel in
+    a v-stack drops its top-edge labels at the joint rather than the
+    bottom-edge ones (which wouldn't render anyway).
 
     Recurses on parent-vs-parent pairs of the orthogonal direction with
     equal cell counts (e.g., two h-rows in a v-stack pair column-by-column),
@@ -639,7 +642,8 @@ def _mark_joined_pair(a: Chart | None, b: Chart | None, *, axis: str,
             b_eff = b._effective_children()
             if len(a_eff) == len(b_eff):
                 for ac, bc in zip(a_eff, b_eff):
-                    _mark_joined_pair(ac, bc, axis=axis, out=out)
+                    _mark_joined_pair(ac, bc, axis=axis,
+                                      states=states, out=out)
         return
     if a._is_parent or b._is_parent:
         return
@@ -655,16 +659,27 @@ def _mark_joined_pair(a: Chart | None, b: Chart | None, *, axis: str,
     if not (getattr(a, hide_attr, True) and getattr(b, hide_attr, True)):
         return
     if axis == "h":
+        # h-stack: a (left) joins b (right) along their shared y-axis.
+        # The panel whose y-axis sits AT the joined edge gets its tick
+        # labels suppressed — the spine is already gone via hide_*.
         out[id(a)].hide_right = True
         out[id(b)].hide_left = True
-        out[id(b)].suppress_left_labels = True
+        if states[id(a)]["y_side"] == "right":
+            out[id(a)].suppress_right_labels = True
+        if states[id(b)]["y_side"] == "left":
+            out[id(b)].suppress_left_labels = True
     else:
+        # v-stack: a (top) joins b (bottom) along their shared x-axis.
         out[id(a)].hide_bottom = True
-        out[id(a)].suppress_bottom_labels = True
         out[id(b)].hide_top = True
+        if states[id(a)]["x_side"] == "bottom":
+            out[id(a)].suppress_bottom_labels = True
+        if states[id(b)]["x_side"] == "top":
+            out[id(b)].suppress_top_labels = True
 
 
-def _annotate_collapses(node: Chart, out: dict[int, _PanelOpts]) -> None:
+def _annotate_collapses(node: Chart, states: dict[int, dict],
+                         out: dict[int, _PanelOpts]) -> None:
     """Walk the tree, marking joined-pair flags on every adjacent pair of
     leaves that share an axis (orthogonal to the layout direction)."""
     if not node._is_parent:
@@ -673,23 +688,25 @@ def _annotate_collapses(node: Chart, out: dict[int, _PanelOpts]) -> None:
         axis = node._layout_kind
         eff = node._effective_children()
         for a, b in zip(eff, eff[1:]):
-            _mark_joined_pair(a, b, axis=axis, out=out)
+            _mark_joined_pair(a, b, axis=axis, states=states, out=out)
         for c in eff:
-            _annotate_collapses(c, out)
+            _annotate_collapses(c, states, out)
         return
     rows, cols = node._grid_rows, node._grid_cols
     children = node._children
     for r in range(rows):
         for c in range(cols - 1):
             _mark_joined_pair(children[r * cols + c],
-                              children[r * cols + c + 1], axis="h", out=out)
+                              children[r * cols + c + 1], axis="h",
+                              states=states, out=out)
     for c in range(cols):
         for r in range(rows - 1):
             _mark_joined_pair(children[r * cols + c],
-                              children[(r + 1) * cols + c], axis="v", out=out)
+                              children[(r + 1) * cols + c], axis="v",
+                              states=states, out=out)
     for cell in children:
         if cell is not None:
-            _annotate_collapses(cell, out)
+            _annotate_collapses(cell, states, out)
 
 
 def _propagate_grid_joins(node: Chart, out: dict[int, _PanelOpts]) -> None:
@@ -775,8 +792,8 @@ def _build_panel_opts(root: Chart) -> tuple[dict[int, _PanelOpts], dict[int, dic
         id(l): _PanelOpts(x_axis=x_desc[id(l)], y_axis=y_desc[id(l)])
         for l in leaves
     }
-    _annotate_collapses(root, panel_opts)
-    _attachments.annotate_joined_pairs(leaves, panel_opts)
+    _annotate_collapses(root, states, panel_opts)
+    _attachments.annotate_joined_pairs(leaves, states, panel_opts)
     _propagate_grid_joins(root, panel_opts)
     _attachments.promote_titles(leaves, states)
     _compute_measured_margins(leaves, states, panel_opts)

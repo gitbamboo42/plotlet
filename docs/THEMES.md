@@ -52,7 +52,7 @@ The full set of keys a theme can override:
   "frame":    { "color": "#000000", "width": 0.8,
                 "tick_length": 3.5, "tick_pad": 4,
                 "tick_direction": "out",
-                "tick_top": false, "tick_right": false,
+                "x_side": "bottom", "y_side": "left",
                 "spine_top": true, "spine_right": true,
                 "spine_bottom": true, "spine_left": true },
   "grid":     { "color": "#b0b0b0", "width": 0.5,

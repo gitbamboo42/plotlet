@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import math
 
-from ._spec import SPEC, _FRAME, _FONTSPEC
+from ._spec import SPEC, _FRAME, _FONTSPEC, _PADSPEC
 from .draw import (resolve_color, text_path, segment,
                    measure_text, cap_height, descender, tick_band_height,
                    rotated_label_bbox)
@@ -24,64 +24,252 @@ from . import _regions
 _SECTORSPEC = SPEC["sectors"]
 
 
-def chrome_stack_extents(st, *,
-                          x_ticks, x_labels, x_size, x_rot, suppress_xt,
-                          y_ticks, y_labels, y_size, y_rot, suppress_yt,
-                          hide_t, hide_b, hide_l, hide_r):
+def chrome_stack_extents(st, inp):
     """Inside-out walks through the chrome stack on each side of the
     data area. Returns ``{"top", "bottom", "left", "right"}`` — pixels
     of chrome past the data edge on that side, up to BUT NOT INCLUDING
     the outermost frame label (title / xlabel / ylabel).
 
-    Stack on each side (inside → outside):
-
-    - ``top``    : top tick marks  (title positions independently above)
-    - ``bottom`` : marks → tick band → sector band
-    - ``left``   : marks → tick band → sector band
-    - ``right``  : right tick marks
+    The x-axis band sits on whichever side ``inp.x_side`` names
+    (``"bottom"`` default or ``"top"``); the y-axis band on
+    ``inp.y_side`` (``"left"`` default or ``"right"``). Stack from data
+    edge outward on the axis side: marks → tick band → sector band.
 
     One formula, used by both ``_required_margin`` (to reserve the band)
     and ``_render_inner`` (to position the outermost label past it).
     Keeps the two in lockstep without a DRY violation.
     """
     out_x = (_FRAME["tick_length"]
-             if (st["x_marks"] and x_ticks and st["x_direction"] != "in")
+             if (st["x_marks"] and inp.x_ticks and st["x_direction"] != "in")
              else 0)
     out_y = (_FRAME["tick_length"]
-             if (st["y_marks"] and y_ticks and st["y_direction"] != "in")
+             if (st["y_marks"] and inp.y_ticks and st["y_direction"] != "in")
              else 0)
 
-    bottom = out_x if not hide_b else 0
-    has_xtl = (not suppress_xt) and any(str(l) for l in x_labels)
+    hide_x = inp.hide_b if inp.x_side == "bottom" else inp.hide_t
+    hide_y = inp.hide_l if inp.y_side == "left"   else inp.hide_r
+
+    x_band = out_x if not hide_x else 0
+    has_xtl = (not inp.suppress_xt) and any(str(l) for l in inp.x_labels)
     if has_xtl:
-        bottom += _FRAME["tick_pad"] + tick_band_height(x_labels, x_size, x_rot)
+        x_band += _FRAME["tick_pad"] + tick_band_height(inp.x_labels, inp.x_size, inp.x_rot)
     x_sec = st["x_sectors"]
-    if x_sec is not None and x_sec.label and not hide_b:
+    if x_sec is not None and x_sec.label and not hide_x:
         _sec_x_size = x_sec.fontsize if x_sec.fontsize is not None else _SECTORSPEC["label_size"]
         _sec_x_rot  = x_sec.rotation if x_sec.rotation is not None else 0
         _max_sec_w  = max((measure_text(str(n), _sec_x_size) for n in x_sec.names), default=_sec_x_size)
         _, _sec_h   = rotated_label_bbox(_max_sec_w, _sec_x_size, _sec_x_rot)
         top_gap = _SECTORSPEC["label_pad"] if has_xtl else _FRAME["tick_pad"]
-        bottom += top_gap + _sec_h
+        x_band += top_gap + _sec_h
 
-    left = out_y if not hide_l else 0
-    has_ytl = (not suppress_yt) and any(str(l) for l in y_labels)
+    y_band = out_y if not hide_y else 0
+    has_ytl = (not inp.suppress_yt) and any(str(l) for l in inp.y_labels)
     if has_ytl:
-        max_ytl_w = max((measure_text(str(l), y_size) for l in y_labels),
+        max_ytl_w = max((measure_text(str(l), inp.y_size) for l in inp.y_labels),
                         default=0.0)
-        ytl_bbox_w, _ = rotated_label_bbox(max_ytl_w, y_size, y_rot)
-        left += _FRAME["tick_pad"] + ytl_bbox_w
+        ytl_bbox_w, _ = rotated_label_bbox(max_ytl_w, inp.y_size, inp.y_rot)
+        y_band += _FRAME["tick_pad"] + ytl_bbox_w
     y_sec = st["y_sectors"]
-    if y_sec is not None and y_sec.label and not hide_l:
+    if y_sec is not None and y_sec.label and not hide_y:
         _sec_y_size = y_sec.fontsize if y_sec.fontsize is not None else _SECTORSPEC["label_size"]
         sec_lbl_w = max((measure_text(str(n), _sec_y_size) for n in y_sec.names),
                         default=0.0)
         top_gap = _SECTORSPEC["label_pad"] if has_ytl else _FRAME["tick_pad"]
-        left += top_gap + sec_lbl_w
+        y_band += top_gap + sec_lbl_w
 
-    top = out_x if (st["x_top"] and not hide_t) else 0
-    right = out_y if (st["y_right"] and not hide_r) else 0
-    return {"top": top, "bottom": bottom, "left": left, "right": right}
+    return {
+        "top":    x_band if inp.x_side == "top"    else 0,
+        "bottom": x_band if inp.x_side == "bottom" else 0,
+        "left":   y_band if inp.y_side == "left"   else 0,
+        "right":  y_band if inp.y_side == "right"  else 0,
+    }
+
+
+def label_band_sizes(st, inp, dw, dh):
+    """Per-side space (float px) for the axis-attached elements only —
+    tick marks, tick labels, and the side-anchored label (xlabel /
+    ylabel / title). Used by `_render_inner` to position those labels
+    and the inline legend just outside the axis band, and by
+    `_required_margin` to feed the layout engine.
+
+    Returns ``(bands, chrome)``:
+
+    - ``bands`` — ``{"top","right","bottom","left", *_xtl_overhang,
+      *_ytl_overhang}``. The four side keys include axis band +
+      xlabel/ylabel/title block; the overhang keys carry cross-side
+      tick-label spillover that ``_required_margin`` maxes in.
+    - ``chrome`` — the raw ``chrome_stack_extents`` dict (no
+      label/title blocks). ``_render_inner`` hands it to
+      ``emit_frame_labels`` so chrome geometry is computed once per
+      render rather than twice.
+
+    Cross-side overhang (centered title wider than ``dw``, rotated
+    ylabel taller than ``dh``) is not in the side keys — those would
+    displace axis-attached labels and outside legends from their natural
+    slots. ``_required_margin`` recomputes the title/xlabel/ylabel
+    overhang inline.
+
+    ``inp`` is the resolved panel inputs from ``core._resolve_panel_inputs``
+    — keeps the reservation and render passes walking identical numbers.
+    """
+    label_size = _FONTSPEC["label_size"]
+    title_size = _FONTSPEC["title_size"]
+
+    # Cross-axis spillover: per-tick label AABB widths/positions used to
+    # compute the leftmost/rightmost x-tick label overhang past the data
+    # area edges. The chrome stack itself is handled by `chrome_stack_extents`
+    # below; here we just measure the bits `_required_margin` needs for
+    # cross-axis reservation.
+    has_xtl = (not inp.suppress_xt) and any(str(l) for l in inp.x_labels)
+    if has_xtl:
+        n_x = min(len(inp.x_ticks), len(inp.x_labels))
+        x_tick_px = [inp.x_scale(t) for t in inp.x_ticks[:n_x]]
+        if x_tick_px:
+            i_left  = min(range(n_x), key=lambda i: x_tick_px[i])
+            i_right = max(range(n_x), key=lambda i: x_tick_px[i])
+            left_lbl_w,  _ = rotated_label_bbox(measure_text(str(inp.x_labels[i_left]),  inp.x_size), inp.x_size, inp.x_rot)
+            right_lbl_w, _ = rotated_label_bbox(measure_text(str(inp.x_labels[i_right]), inp.x_size), inp.x_size, inp.x_rot)
+            left_inset  = x_tick_px[i_left]
+            right_inset = dw - x_tick_px[i_right]
+        else:
+            left_lbl_w = right_lbl_w = 0.0
+            left_inset = right_inset = 0.0
+    else:
+        left_lbl_w = right_lbl_w = 0.0
+        left_inset = right_inset = 0.0
+
+    # y-axis cross-axis spillover (asymmetric for rot=0: cap/2 above,
+    # cap/2 + descender below — rotated labels use the rotated AABB).
+    has_ytl = (not inp.suppress_yt) and any(str(l) for l in inp.y_labels)
+    if has_ytl:
+        n_y = min(len(inp.y_ticks), len(inp.y_labels))
+        y_tick_px = [inp.y_scale(t) for t in inp.y_ticks[:n_y]]
+        if y_tick_px:
+            i_top = min(range(n_y), key=lambda i: y_tick_px[i])
+            i_bot = max(range(n_y), key=lambda i: y_tick_px[i])
+            if inp.y_rot == 0:
+                top_half_h    = cap_height(inp.y_size) / 2
+                bottom_half_h = cap_height(inp.y_size) / 2 + descender(inp.y_size)
+            else:
+                _, top_h = rotated_label_bbox(measure_text(str(inp.y_labels[i_top]), inp.y_size), inp.y_size, inp.y_rot)
+                _, bot_h = rotated_label_bbox(measure_text(str(inp.y_labels[i_bot]), inp.y_size), inp.y_size, inp.y_rot)
+                top_half_h    = top_h / 2
+                bottom_half_h = bot_h / 2
+            top_inset    = y_tick_px[i_top]
+            bottom_inset = dh - y_tick_px[i_bot]
+        else:
+            top_half_h = bottom_half_h = 0.0
+            top_inset = bottom_inset = 0.0
+    else:
+        top_half_h = bottom_half_h = 0.0
+        top_inset = bottom_inset = 0.0
+
+    chrome = chrome_stack_extents(st, inp)
+
+    # xlabel block: full glyph height (≈ label_size) + 2px gap + pad.xlabel.
+    # Lives on whichever side x_side names; the title is its own block above
+    # the xlabel when they share the top edge.
+    xlabel_band = (2 + label_size + _PADSPEC["xlabel"]
+                   if st["xlabel"] and not inp.hide_xlabel else 0)
+    ylabel_band = (2 + label_size + _PADSPEC["ylabel"]
+                   if st["ylabel"] and not inp.hide_ylabel else 0)
+
+    # Title sits past the top chrome band + any top-side xlabel block,
+    # then adds `pad.title + title_size` for its own block — mirrors the
+    # inside-out walk in `emit_frame_labels` so reservation matches positioning.
+    title_top = _PADSPEC["title"] + title_size if (st["title"] and not inp.hide_t) else 0
+    top    = chrome["top"]    + (xlabel_band if inp.x_side == "top"    else 0) + title_top
+    bottom = chrome["bottom"] + (xlabel_band if inp.x_side == "bottom" else 0)
+    left   = chrome["left"]   + (ylabel_band if inp.y_side == "left"   else 0)
+    right  = chrome["right"]  + (ylabel_band if inp.y_side == "right"  else 0)
+
+    # Cross-axis tick-label spillover past the data edges. The x-tick labels
+    # overhang the LEFT / RIGHT of the panel regardless of which edge they
+    # sit on. The share of the rotated AABB that lands past the spine
+    # depends on the anchor (see `_tick_label`):
+    #   rot == 0  → anchor="middle"  → bbox extends w/2 each side
+    #   rot >  0  → anchor="end"     → bbox extends fully LEFT  (0 right)
+    #   rot <  0  → anchor="start"   → bbox extends fully RIGHT (0 left)
+    # Top-side x ticks reverse end/start, which flips left/right_share.
+    if inp.x_rot == 0:
+        left_share, right_share = 0.5, 0.5
+    elif inp.x_rot > 0:
+        left_share, right_share = 1.0, 0.0
+    else:
+        left_share, right_share = 0.0, 1.0
+    if inp.x_side == "top":
+        left_share, right_share = right_share, left_share
+    left_xtl_overhang  = (0.0 if inp.hide_l
+                          else max(0.0, left_lbl_w  * left_share  - left_inset))
+    right_xtl_overhang = (0.0 if inp.hide_r
+                          else max(0.0, right_lbl_w * right_share - right_inset))
+
+    # Vertical cross-axis spillover from horizontal y-tick labels.
+    top_ytl_overhang    = (0.0 if inp.hide_t
+                           else max(0.0, top_half_h    - top_inset))
+    bottom_ytl_overhang = (0.0 if inp.hide_b
+                           else max(0.0, bottom_half_h - bottom_inset))
+
+    bands = {"top": top, "right": right, "bottom": bottom, "left": left,
+             "left_xtl_overhang": left_xtl_overhang,
+             "right_xtl_overhang": right_xtl_overhang,
+             "top_ytl_overhang": top_ytl_overhang,
+             "bottom_ytl_overhang": bottom_ytl_overhang}
+    return bands, chrome
+
+
+def emit_frame_labels(st, inp, iw, ih, chrome, *, top_legend_outset=0):
+    """Emit xlabel / ylabel / title as SVG fragments. Walks inside-out
+    from the data area: past the chrome band on the active side, past
+    the label's own (2-px gap + label_size) block, then the title's
+    (pad.title + title_size) block above the top-side xlabel (when
+    ``inp.x_side == "top"``).
+
+    ``top_legend_outset`` is the extra strip the title must hop over
+    when a top-position inline legend sits between title and data
+    (``leg_lh + legend_gap``); 0 otherwise.
+    """
+    label_size = _FONTSPEC["label_size"]
+    title_size = _FONTSPEC["title_size"]
+    text_color = _FONTSPEC["color"]
+    parts = []
+    xlabel_band = (2 + label_size + _PADSPEC["xlabel"]
+                   if st["xlabel"] and not inp.hide_xlabel else 0)
+
+    if st["xlabel"] and not inp.hide_xlabel:
+        # Walk past the chrome stack + 2-px gap + full label_size, then back
+        # up by descender to land on the baseline. Bottom: y positive past
+        # ih. Top: y negative past 0 — same descender adjustment lands the
+        # visible glyph bottom at the band's inner edge.
+        if inp.x_side == "bottom":
+            xlabel_baseline = ih + chrome["bottom"] + 2 + label_size - descender(label_size)
+        else:
+            xlabel_baseline = -(chrome["top"] + 2 + descender(label_size))
+        parts.append(text_path(st["xlabel"], iw / 2, xlabel_baseline,
+                                label_size, anchor="middle", color=text_color,
+                                tag="xlabel"))
+
+    if st["ylabel"] and not inp.hide_ylabel:
+        # Walk past the chrome stack + 2-px gap, then half label_size to
+        # land on the rotated text's center. Left: cx negative (outside
+        # panel on left). Right: cx positive past iw.
+        if inp.y_side == "left":
+            ylabel_cx = -(chrome["left"] + 2 + label_size / 2)
+        else:
+            ylabel_cx = iw + chrome["right"] + 2 + label_size / 2
+        parts.append(text_path(st["ylabel"], ylabel_cx, ih / 2,
+                                label_size, anchor="middle",
+                                color=text_color, rotate=90, tag="ylabel"))
+
+    if st["title"] and not inp.hide_t:
+        top_xlabel = xlabel_band if inp.x_side == "top" else 0
+        outer = chrome["top"] + top_xlabel + top_legend_outset + _PADSPEC["title"]
+        title_y = -(outer + descender(title_size))
+        parts.append(text_path(st["title"], iw / 2, title_y, title_size,
+                                anchor="middle", color=text_color,
+                                tag="title"))
+
+    return parts
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +277,7 @@ def chrome_stack_extents(st, *,
 # (moved verbatim from core.py — only the chrome block uses these)
 # ---------------------------------------------------------------------------
 
-def _tick_label(s, x, y, size, angle, axis,
+def _tick_label(s, x, y, size, angle, axis, side,
                 fontstyle="normal", decoration="none", tag=None):
     """Render a single tick label as text-as-paths.
 
@@ -100,11 +288,11 @@ def _tick_label(s, x, y, size, angle, axis,
     `angle` argument uses the convention positive = CCW on screen;
     SVG's native rotation is CW, so we negate at emission.
 
-    Anchor direction depends on axis + rotation sign so the rotated text
-    always grows AWAY from the data area: for bottom x-tick labels,
-    positive rotation (CCW) uses anchor="end" (text extends downward);
-    negative rotation (CW) uses anchor="start" (also extends downward —
-    without this, CW rotation would push labels into the chart body).
+    `side` is the axis edge the label sits on: ``"bottom"|"top"`` for
+    axis="x", ``"left"|"right"`` for axis="y". Anchor direction is
+    chosen so the rotated text grows AWAY from the data area on every
+    side; for the bottom edge, positive rotation (CCW) uses anchor="end"
+    (text extends downward), and the other three sides mirror that rule.
 
     `fontstyle="italic"` propagates through `text_path` for synthesized
     oblique tick labels (common bio convention for gene names).
@@ -112,14 +300,24 @@ def _tick_label(s, x, y, size, angle, axis,
     at the conventional offset."""
     color = _FONTSPEC["color"]
     if not angle:
-        anchor = "middle" if axis == "x" else "end"
+        if axis == "x":
+            anchor = "middle"
+        else:
+            anchor = "end" if side == "left" else "start"
         return text_path(s, x, y, size, anchor=anchor, color=color,
                          fontstyle=fontstyle, decoration=decoration,
                          tag=tag)
     if axis == "x":
-        anchor = "end" if angle > 0 else "start"
+        # On bottom: positive angle → anchor=end (text grows down-left
+        # from anchor). On top: flipped — positive angle → anchor=start
+        # so the text grows up-right, still away from the data area.
+        if side == "bottom":
+            anchor = "end" if angle > 0 else "start"
+        else:
+            anchor = "start" if angle > 0 else "end"
     else:
-        anchor = "end"
+        # Right-side y-tick labels grow rightward; left-side grow left.
+        anchor = "end" if side == "left" else "start"
     # Rotate via `text_path(..., rotate=angle)` so its bbox recording
     # captures the post-rotation hull. SVG-wise, rotating around the
     # anchor point (x, y) is equivalent to translating + rotating
@@ -128,9 +326,11 @@ def _tick_label(s, x, y, size, angle, axis,
     # baseline endpoint sits at the anchor, but rotated text's visible
     # bbox is offset by `(cap - descender) / 2 * sin(angle)` away from
     # the anchor in the rotation direction. Shift the anchor x by the
-    # opposite to land the label's visible center on the tick.
+    # opposite to land the label's visible center on the tick. The shift
+    # direction inverts on top side because the anchor choice did too.
     if axis == "x" and angle:
-        x = x + (cap_height(size) - descender(size)) / 2 * math.sin(math.radians(angle))
+        shift_sign = 1 if side == "bottom" else -1
+        x = x + shift_sign * (cap_height(size) - descender(size)) / 2 * math.sin(math.radians(angle))
     return text_path(s, x, y, size, anchor=anchor, color=color,
                      fontstyle=fontstyle, decoration=decoration,
                      rotate=angle, tag=tag)
@@ -228,38 +428,34 @@ def _spine_segments(side, iw, ih, x_ranges, y_ranges):
 # Chrome entry point
 # ---------------------------------------------------------------------------
 
-def emit_chrome(*,
-                st, iw, ih,
-                x_scale, y_scale,
-                x_ticks, x_labels, y_ticks, y_labels,
-                panel_opts,
+def emit_chrome(*, st, inp, iw, ih,
                 coord_object, coord_project,
                 has_coord_frame, has_x_frame, has_x_sector_chrome,
-                x_sec, y_sec,
-                suppress_xt, suppress_yt):
+                x_sec, y_sec):
     """Emit all panel chrome — spines, ticks, minor ticks, sector chrome,
     and (when present) the coordinate-owned ``draw_frame`` / ``draw_x_frame``
     hooks. Returns a list of SVG-fragment strings; caller extends its own
     ``parts``.
 
-    Keyword-only — font / style / direction locals are derived from ``st``
-    inside this function (none of them are referenced after the chrome pass
-    so there's no value in plumbing them through the call site).
+    ``inp`` carries the resolved per-panel axis context (scales, ticks,
+    labels, sizes, rotations, suppress / hide flags, side routing);
+    everything else here is pure render state pulled from ``st`` or
+    the coord descriptor args.
     """
-    tick_size = _FONTSPEC["tick_size"]
-    x_size = st["x_fontsize"] if st["x_fontsize"] is not None else tick_size
-    y_size = st["y_fontsize"] if st["y_fontsize"] is not None else tick_size
-    x_rot = st["x_rotation"] or 0
-    y_rot = st["y_rotation"] or 0
+    x_scale, y_scale = inp.x_scale, inp.y_scale
+    x_ticks, x_labels = inp.x_ticks, inp.x_labels
+    y_ticks, y_labels = inp.y_ticks, inp.y_labels
+    x_size, y_size = inp.x_size, inp.y_size
+    x_rot, y_rot = inp.x_rot, inp.y_rot
+    suppress_xt, suppress_yt = inp.suppress_xt, inp.suppress_yt
+    hide_t, hide_b = inp.hide_t, inp.hide_b
+    hide_l, hide_r = inp.hide_l, inp.hide_r
     x_style = st.get("x_fontstyle") or "normal"
     y_style = st.get("y_fontstyle") or "normal"
     x_decor = st.get("x_decoration") or "none"
     y_decor = st.get("y_decoration") or "none"
     x_dir, y_dir = st["x_direction"], st["y_direction"]
     x_marks, y_marks = st["x_marks"], st["y_marks"]
-
-    hide_l, hide_r = panel_opts.hide_left, panel_opts.hide_right
-    hide_t, hide_b = panel_opts.hide_top, panel_opts.hide_bottom
 
     # Spines — toggleable per side via `c.spines(top=False, right=False, ...)`,
     # restylable via `c.spines(top={"color": "red", "width": 1.5})`.
@@ -349,36 +545,48 @@ def emit_chrome(*,
             }
         ))
     else:
-        # x-ticks + labels — always Cartesian
+        # x-ticks + labels — always Cartesian. Whole block flips wholesale
+        # by `x_side`: spine attachment, tick-mark endpoints, label anchor.
+        x_side = inp.x_side
+        if x_side == "bottom":
+            x_spine_side, x_hide_axis = "bottom", hide_b
+            x_endpoints = x_bot_endpoints
+            y_band_edge_sign = 1   # band grows downward from y=ih
+            x_band_y0 = ih
+        else:
+            x_spine_side, x_hide_axis = "top", hide_t
+            x_endpoints = x_top_endpoints
+            y_band_edge_sign = -1  # band grows upward from y=0
+            x_band_y0 = 0
+        x_label_dy = (_FRAME["tick_pad"] if (x_dir == "in" or not x_marks)
+                      else _FRAME["tick_length"] + _FRAME["tick_pad"])
+
         for t, lbl in zip(x_ticks, x_labels):
             x = x_scale(t)
             if x_marks:
                 # Hidden sides (joined share-pair) drop tick marks too — marks
                 # bleeding into the inter-panel gap read as visual clutter
                 # when the two panels are meant to merge.
-                if st["spine_bottom"] and not hide_b:
-                    y1, y2 = x_bot_endpoints
-                    col, sw = _side_stroke("bottom")
-                    parts.append(segment(x, y1, x, y2, color=col, width=sw))
-                if st["spine_top"] and st["x_top"] and not hide_t:
-                    y1, y2 = x_top_endpoints
-                    col, sw = _side_stroke("top")
+                if st[f"spine_{x_spine_side}"] and not x_hide_axis:
+                    y1, y2 = x_endpoints
+                    col, sw = _side_stroke(x_spine_side)
                     parts.append(segment(x, y1, x, y2, color=col, width=sw))
             # Drop only labels redundant with a sharing sibling. A small label
             # overflow into a joined neighbor's collapsed margin is acceptable.
             if not suppress_xt:
-                # Visible top of the label band sits at `ih + x_label_dy`
-                # (flush with `tick_pad` past the visible mark, or the spine
-                # when the mark is inward / suppressed). The anchor's y
-                # needs to be `cap_height * cos(angle)` past that, because
-                # rotating the label rect around the anchor pulls the
-                # top-right corner up by `cap * cos`. Covers rot=0 (cap),
-                # rot=±90 (0), and intermediate angles smoothly.
-                x_label_dy = (_FRAME["tick_pad"] if (x_dir == "in" or not x_marks)
-                              else _FRAME["tick_length"] + _FRAME["tick_pad"])
-                y_lbl = ih + x_label_dy + cap_height(x_size) * math.cos(math.radians(x_rot))
+                # Visible edge of the label band sits `x_label_dy` past the
+                # spine (flush with `tick_pad` past the visible mark, or the
+                # spine itself when the mark is inward / suppressed). Anchor
+                # offset uses `cap*cos` past that on bottom (rotating the
+                # rect around the anchor pulls the top corner up by cap*cos),
+                # and `-descender*cos` on top — mirror symmetry. Covers
+                # rot=0 (full offset), rot=±90 (0), and intermediate angles.
+                if x_side == "bottom":
+                    y_lbl = ih + x_label_dy + cap_height(x_size) * math.cos(math.radians(x_rot))
+                else:
+                    y_lbl = -x_label_dy - descender(x_size) * math.cos(math.radians(x_rot))
                 parts.append(_tick_label(str(lbl), x, y_lbl,
-                                         x_size, x_rot, axis="x",
+                                         x_size, x_rot, axis="x", side=x_side,
                                          fontstyle=x_style, decoration=x_decor,
                                          tag="tick-x"))
 
@@ -386,24 +594,22 @@ def emit_chrome(*,
         # labels. Emit only when the user opted in via xticks(minor=True) or
         # xticks(minor=[...]).
         x_minor = _resolve_minor_ticks(st["x_minor"], x_scale, x_ticks)
-        if x_minor and x_marks:
+        if x_minor and x_marks and st[f"spine_{x_spine_side}"] and not x_hide_axis:
             minor_len = _FRAME["tick_length"] * _FRAME["minor_tick_ratio"]
+            col, sw = _side_stroke(x_spine_side)
             for t in x_minor:
                 x = x_scale(t)
                 if not math.isfinite(x):
                     continue
-                if st["spine_bottom"] and not hide_b:
-                    col, sw = _side_stroke("bottom")
-                    if x_dir == "in":      y1, y2 = ih, ih - minor_len
-                    elif x_dir == "out":   y1, y2 = ih, ih + minor_len
-                    else:                  y1, y2 = ih + minor_len, ih - minor_len
-                    parts.append(segment(x, y1, x, y2, color=col, width=sw))
-                if st["spine_top"] and st["x_top"] and not hide_t:
-                    col, sw = _side_stroke("top")
-                    if x_dir == "in":      y1, y2 = 0, minor_len
-                    elif x_dir == "out":   y1, y2 = 0, -minor_len
-                    else:                  y1, y2 = -minor_len, minor_len
-                    parts.append(segment(x, y1, x, y2, color=col, width=sw))
+                # Endpoint pair on the active spine, signed by side: minor
+                # tick lengths fan inside/outside the same way as majors.
+                if x_dir == "in":
+                    y1, y2 = x_band_y0, x_band_y0 - y_band_edge_sign * minor_len
+                elif x_dir == "out":
+                    y1, y2 = x_band_y0, x_band_y0 + y_band_edge_sign * minor_len
+                else:
+                    y1, y2 = x_band_y0 + y_band_edge_sign * minor_len, x_band_y0 - y_band_edge_sign * minor_len
+                parts.append(segment(x, y1, x, y2, color=col, width=sw))
 
     # Sector chrome — internal walls + sector-name labels along the sectored
     # axis. Walls are conceptually side spines, so style resolves through
@@ -517,6 +723,7 @@ def emit_chrome(*,
                 for name, cx in zip(sec.names, label_xs):
                     parts.append(_tick_label(str(name), cx, sec_baseline,
                                              _sec_x_size, _sec_x_rot, axis="x",
+                                             side="bottom",
                                              fontstyle=x_style, decoration=x_decor,
                                              tag="sector-label"))
     if y_sec is not None and (y_sec.divider or y_sec.label):
@@ -563,6 +770,7 @@ def emit_chrome(*,
                 parts.append(_tick_label(str(name), y_label_x,
                                          cy + cap_height(_sec_y_size) / 2,
                                          _sec_y_size, 0, axis="y",
+                                         side="left",
                                          fontstyle=y_style, decoration=y_decor,
                                          tag="sector-label"))
 
@@ -608,44 +816,53 @@ def emit_chrome(*,
             }
         ))
     else:
-        y_label_x = -_FRAME["tick_pad"] if (y_dir == "in" or not y_marks) else -(_FRAME["tick_length"] + _FRAME["tick_pad"])
+        # y-ticks + labels — Cartesian. Like the x-block above, flip wholesale
+        # by `y_side`: spine attachment, tick-mark endpoints, label anchor.
+        y_side = inp.y_side
+        y_label_dx = (_FRAME["tick_pad"] if (y_dir == "in" or not y_marks)
+                      else _FRAME["tick_length"] + _FRAME["tick_pad"])
+        if y_side == "left":
+            y_spine_side, y_hide_axis = "left", hide_l
+            y_endpoints = y_left_endpoints
+            x_band_edge_sign = -1  # band grows leftward from x=0
+            y_band_x0 = 0
+            y_label_x = -y_label_dx
+        else:
+            y_spine_side, y_hide_axis = "right", hide_r
+            y_endpoints = y_right_endpoints
+            x_band_edge_sign = 1   # band grows rightward from x=iw
+            y_band_x0 = iw
+            y_label_x = iw + y_label_dx
+
         for t, lbl in zip(y_ticks, y_labels):
             y = y_scale(t)
             if y_marks:
-                if st["spine_left"] and not hide_l:
-                    x1, x2 = y_left_endpoints
-                    col, sw = _side_stroke("left")
-                    parts.append(segment(x1, y, x2, y, color=col, width=sw))
-                if st["spine_right"] and st["y_right"] and not hide_r:
-                    x1, x2 = y_right_endpoints
-                    col, sw = _side_stroke("right")
+                if st[f"spine_{y_spine_side}"] and not y_hide_axis:
+                    x1, x2 = y_endpoints
+                    col, sw = _side_stroke(y_spine_side)
                     parts.append(segment(x1, y, x2, y, color=col, width=sw))
             if not suppress_yt:
                 # `y + cap_height/2` places the baseline so the cap is vertically
                 # centered on the tick line (cap top at y - cap/2, cap bottom at y + cap/2).
                 parts.append(_tick_label(str(lbl), y_label_x, y + cap_height(y_size) / 2,
-                                         y_size, y_rot, axis="y",
+                                         y_size, y_rot, axis="y", side=y_side,
                                          fontstyle=y_style, decoration=y_decor,
                                          tag="tick-y"))
 
         y_minor = _resolve_minor_ticks(st["y_minor"], y_scale, y_ticks)
-        if y_minor and y_marks:
+        if y_minor and y_marks and st[f"spine_{y_spine_side}"] and not y_hide_axis:
             minor_len = _FRAME["tick_length"] * _FRAME["minor_tick_ratio"]
+            col, sw = _side_stroke(y_spine_side)
             for t in y_minor:
                 y = y_scale(t)
                 if not math.isfinite(y):
                     continue
-                if st["spine_left"] and not hide_l:
-                    col, sw = _side_stroke("left")
-                    if y_dir == "in":      x1, x2 = 0, minor_len
-                    elif y_dir == "out":   x1, x2 = 0, -minor_len
-                    else:                  x1, x2 = -minor_len, minor_len
-                    parts.append(segment(x1, y, x2, y, color=col, width=sw))
-                if st["spine_right"] and st["y_right"] and not hide_r:
-                    col, sw = _side_stroke("right")
-                    if y_dir == "in":      x1, x2 = iw, iw - minor_len
-                    elif y_dir == "out":   x1, x2 = iw, iw + minor_len
-                    else:                  x1, x2 = iw + minor_len, iw - minor_len
-                    parts.append(segment(x1, y, x2, y, color=col, width=sw))
+                if y_dir == "in":
+                    x1, x2 = y_band_x0, y_band_x0 - x_band_edge_sign * minor_len
+                elif y_dir == "out":
+                    x1, x2 = y_band_x0, y_band_x0 + x_band_edge_sign * minor_len
+                else:
+                    x1, x2 = y_band_x0 + x_band_edge_sign * minor_len, y_band_x0 - x_band_edge_sign * minor_len
+                parts.append(segment(x1, y, x2, y, color=col, width=sw))
 
     return parts

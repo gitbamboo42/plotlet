@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "plotlet"
-version = "0.5.4"
+version = "0.5.5"
 description = "Python library for reproducible, multi-panel scientific figures, with byte-identical output across machines and an extension API for custom plot types."
 readme = "README.md"
 license = "MIT"

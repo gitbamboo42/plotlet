@@ -245,16 +245,45 @@ def chart_xticks_rotation():
     return c
 
 
-def chart_xticks_inward_full_frame():
-    # Opt back into the legacy matplotlib look: inward ticks plus top/right
-    # ticks enabled. Default is outward + bottom/left only.
+def chart_xticks_top_share_x():
+    # share_x="col" v-stack where the BOTTOM panel flips x-axis to top.
+    # Without joined-pair routing of top-label suppression, the bottom
+    # panel's tick label glyphs would render unanchored at the joint
+    # between the two panels. With the fix, those labels suppress and
+    # only the upper panel's bottom-edge labels remain at the shared
+    # edge (which here is the default bottom side of the upper panel).
     xs = [i * 0.1 for i in range(64)]
     df = {"x": xs, "y": [math.sin(t) for t in xs]}
-    c = pt.chart(df, title="inward ticks, full frame (legacy look)",
+    df2 = {"x": xs, "y": [math.cos(t) for t in xs]}
+    top = pt.chart(df, ylabel="sin").line(x="x", y="y")
+    bot = pt.chart(df2, xlabel="x", ylabel="cos").line(x="x", y="y")
+    bot.xticks(side="top")
+    return pt.grid([[top], [bot]]).share_x("col")
+
+
+def chart_xticks_flipped_sides():
+    # x-axis on top, y-axis on right — matches ggplot2 `position="top"` /
+    # plotly `side="top"`. Margins, xlabel/ylabel and title all follow.
+    xs = [i * 0.1 for i in range(64)]
+    df = {"x": xs, "y": [math.sin(t) for t in xs]}
+    c = pt.chart(df, title="x on top, y on right",
                  xlabel="x", ylabel="y")
     c.line(x="x", y="y")
-    c.xticks(direction="in", top=True)
-    c.yticks(direction="in", right=True)
+    c.xticks(side="top")
+    c.yticks(side="right")
+    return c
+
+
+def chart_xticks_inward():
+    # Inward tick direction — matplotlib-style ticks pointing into the data
+    # area. Just covers `direction="in"`; default outward look is in every
+    # other test.
+    xs = [i * 0.1 for i in range(64)]
+    df = {"x": xs, "y": [math.sin(t) for t in xs]}
+    c = pt.chart(df, title="inward ticks", xlabel="x", ylabel="y")
+    c.line(x="x", y="y")
+    c.xticks(direction="in")
+    c.yticks(direction="in")
     return c
 
 
@@ -1871,7 +1900,9 @@ PLOTS = {
     "category_y_order":    chart_category_y_order,
     "hide_yticks":         chart_hide_yticks,
     "xticks_rotation":     chart_xticks_rotation,
-    "xticks_inward_full":  chart_xticks_inward_full_frame,
+    "xticks_flipped_sides": chart_xticks_flipped_sides,
+    "xticks_top_share_x":  chart_xticks_top_share_x,
+    "xticks_inward":       chart_xticks_inward,
     "xticks_marks_off":    chart_xticks_marks_off,
     "xticks_explicit":     chart_xticks_explicit,
     "category_padding_0":  chart_category_padding_zero,

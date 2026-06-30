@@ -217,6 +217,7 @@ def attachment_inherited_calls(leaf: Chart) -> list[tuple]:
 
 
 def annotate_joined_pairs(leaves: list[Chart],
+                          states: dict[int, dict],
                           panel_opts: dict[int, _PanelOpts]) -> None:
     """For each host with attachments, mark the inner-facing edge of each
     host-attachment pair (and each adjacent pair along a chain of
@@ -234,16 +235,16 @@ def annotate_joined_pairs(leaves: list[Chart],
             continue
         if host._attached_left:
             _mark_joined_pair(host._attached_left[0], host,
-                              axis="h", out=panel_opts)
+                              axis="h", states=states, out=panel_opts)
         if host._attached_right:
             _mark_joined_pair(host, host._attached_right[0],
-                              axis="h", out=panel_opts)
+                              axis="h", states=states, out=panel_opts)
         if host._attached_above:
             _mark_joined_pair(host._attached_above[0], host,
-                              axis="v", out=panel_opts)
+                              axis="v", states=states, out=panel_opts)
         if host._attached_below:
             _mark_joined_pair(host, host._attached_below[0],
-                              axis="v", out=panel_opts)
+                              axis="v", states=states, out=panel_opts)
         # Chained attachments on the same side: each adjacent pair is a
         # joint. Index 0 is innermost; higher indices extend outward.
         for chain, axis, outward in (
@@ -255,9 +256,11 @@ def annotate_joined_pairs(leaves: list[Chart],
             for i in range(len(chain) - 1):
                 inner, outer = chain[i], chain[i + 1]
                 if outward in ("left", "above"):
-                    _mark_joined_pair(outer, inner, axis=axis, out=panel_opts)
+                    _mark_joined_pair(outer, inner, axis=axis,
+                                      states=states, out=panel_opts)
                 else:
-                    _mark_joined_pair(inner, outer, axis=axis, out=panel_opts)
+                    _mark_joined_pair(inner, outer, axis=axis,
+                                      states=states, out=panel_opts)
 
 
 def promote_titles(leaves: list[Chart], states: dict[int, dict]) -> None:
