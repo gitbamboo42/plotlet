@@ -2,18 +2,19 @@
 
 The deferred-render pipeline:
   1. A `Chart` (defined in `chart.py`) records user calls into `_calls`.
-  2. `Chart.to_svg()` calls `_render(_replay(calls), W, H, margin)`.
-  3. `_render` does: pre-process → domain → scales → grid → artists →
-     spines/ticks → labels/title → legend.
+  2. `Chart.to_svg()` delegates to `_layout_engine._render_layout`.
+  3. That runs the layout pre-pass (`_build_panel_opts`, share
+     coordination, margin resolution) then, per placement, opens a
+     panel `<g>` via `_panel_open` and fills it via `_render_inner`.
+  4. `_render_inner` does: pre-process → domain → scales → grid →
+     artists → spines/ticks → labels/title → legend.
+
+A lone chart runs the exact same pipeline as a 1x1 grid — there is no
+separate standalone path.
 
 Every function here takes its state explicitly — there's no class to
 hold it. Adding a new plot type means calling `add_artist(...)` from
 outside; no monkey-patching, no editing this file.
-
-`_render_inner` accepts an optional `_PanelOpts` so the layout pre-pass
-in `layout.py` can supply pre-computed axis descriptors (for
-share_x/share_y) and side-suppression flags. Standalone single-panel
-rendering passes None and behaves as before.
 """
 from __future__ import annotations
 
@@ -22,14 +23,12 @@ import html
 import json
 import math
 from dataclasses import dataclass, field
-from itertools import count
 from importlib.metadata import version as _pkg_version
-from pathlib import Path
 from types import SimpleNamespace
 
 from ._spec import (
     SPEC, _MARGIN_FLOOR, _FRAME, _GRIDSPEC, _FONTSPEC, _LEGSPEC,
-    _LAYOUTSPEC, _PADSPEC, _D, _DASH,
+    _LAYOUTSPEC, _D, _DASH,
 )
 _SECTORSPEC = SPEC["sectors"]
 from .draw import resolve_color, TAB10
@@ -37,14 +36,12 @@ from .scales import (_LinearScale, _LogScale, _CategoryScale, _SymlogScale,
                       _SectoredLinearScale, SectoredValue,
                       _PowerScale, _TimeScale, _nice_domain, _fmt_tick,
                       _to_epoch, _coerce_time_lim)
-from .draw import (measure_text, cap_height, descender, tick_band_height,
-                   rotated_label_bbox)
+from .draw import measure_text
 from .draw import coord, rect, segment, text_path
 from . import _regions
 from . import _chrome
 from .utils import histogram, collect_categories
-from .registry import RenderContext, get_artist, all_artist_names, _COORD_SUPPORT
-from . import artists  # noqa: F401  — registers built-ins on import
+from .registry import RenderContext, get_artist, _COORD_SUPPORT
 
 # AI-readable SVG attrs — see docs/AI_ATTRS.md. Every plotlet SVG carries
 # `data-plotlet-*` attributes describing plot type, axes, scales, ranges,
@@ -59,8 +56,8 @@ _PLOTLET_VERSION = _pkg_version("plotlet")
 # Frame metadata methods (title, xlabel, etc.) — these aren't artists,
 # they're just state setters. Kept as a fixed set. `theme` joins the set
 # so a chart's theme can be recorded and replayed like any other frame
-# attribute; `_render` reads it before drawing and wraps the rest of the
-# pipeline in an `active_theme(...)` context.
+# attribute; the layout engine reads it per leaf and wraps that leaf's
+# emit in an `active_theme(...)` context.
 # Inline legend position tokens that overlay the data area (vs reserve
 # margin space outside it). Used to drive both placement and the "draw a
 # readability background?" decision — outside positions skip the rect
@@ -126,10 +123,10 @@ class _PanelOpts:
     `suppress_*_labels` drops tick labels on a side whose axis is shared
     with a neighbor that already labels it; set only on the panel that
     actually shares, never propagated by grid alignment.
-    `M_eff`, when set, is the layout-pre-pass-resolved effective margin
-    for a data leaf — it has already incorporated measure-driven growth
-    and per-column/row coordination. Non-data leaves (legend, diagram)
-    leave this `None` and use their own render paths.
+    `M_eff` is the layout-pre-pass-resolved effective margin — it has
+    already incorporated measure-driven growth and per-column/row
+    coordination. Populated by `_compute_measured_margins` for every
+    data leaf; only data leaves get a `_PanelOpts` entry.
     """
     x_axis: _AxisDescriptor | None = None
     y_axis: _AxisDescriptor | None = None
@@ -1320,10 +1317,10 @@ def _resolve_panel_inputs(st, *, x_scale, y_scale, dw, dh, po):
             y_labels if st["y_ticks"] is not None else [])
 
     # Joined-side hide flags — drop reservations the renderer skips.
-    hide_t = po is not None and po.hide_top
-    hide_b = po is not None and po.hide_bottom
-    hide_l = po is not None and po.hide_left
-    hide_r = po is not None and po.hide_right
+    hide_t = po.hide_top
+    hide_b = po.hide_bottom
+    hide_l = po.hide_left
+    hide_r = po.hide_right
 
     # `xticks(labels=False)` joins forces with the share-pair label
     # suppression — either one drops tick labels on the corresponding
@@ -1331,10 +1328,8 @@ def _resolve_panel_inputs(st, *, x_scale, y_scale, dw, dh, po):
     # the matching joined edge (top edge for x_side="top", etc.).
     x_side = st["x_side"]
     y_side = st["y_side"]
-    suppress_xt = ((po is not None and getattr(po, f"suppress_{x_side}_labels"))
-                   or not st["x_show_labels"])
-    suppress_yt = ((po is not None and getattr(po, f"suppress_{y_side}_labels"))
-                   or not st["y_show_labels"])
+    suppress_xt = getattr(po, f"suppress_{x_side}_labels") or not st["x_show_labels"]
+    suppress_yt = getattr(po, f"suppress_{y_side}_labels") or not st["y_show_labels"]
 
     return SimpleNamespace(
         x_scale=x_scale, y_scale=y_scale,
@@ -1356,7 +1351,7 @@ def _resolve_panel_inputs(st, *, x_scale, y_scale, dw, dh, po):
 # ---------------------------------------------------------------------------
 # Margin pipeline — how a side's final margin gets built.
 # ---------------------------------------------------------------------------
-# The number `_render` receives as `M[side]` (and the panel transform uses)
+# The number the panel transform uses as `M[side]`
 # is composed in four pieces, each from a different function:
 #
 #   M[side] = floor + axis_band + text_overhang + outside_legend_reservation
@@ -1389,7 +1384,7 @@ def _resolve_panel_inputs(st, *, x_scale, y_scale, dw, dh, po):
 # ---------------------------------------------------------------------------
 
 
-def _required_margin(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
+def _required_margin(st, dw, dh, po: "_PanelOpts") -> dict:
     """Margin a body-first leaf actually needs to fit its title, axis
     labels, tick labels, and any outside-positioned in-frame legend.
 
@@ -1398,10 +1393,9 @@ def _required_margin(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
     are fixed, so tick density and labels are deterministic and the
     computation is a single pass (no chicken-and-egg with margin).
 
-    `po` (optional) lets the formula drop reservations for content the
-    renderer is going to suppress (joined share-pair sides): tick labels
-    via `suppress_*_labels`, xlabel/ylabel/title via `hide_*`. Solo and
-    non-joined renders can pass `None` — no suppression applied.
+    `po` lets the formula drop reservations for content the renderer is
+    going to suppress (joined share-pair sides): tick labels via
+    `suppress_*_labels`, xlabel/ylabel/title via `hide_*`.
 
     The geometry mirrors `_render_inner`'s placement formulas — keep them
     in sync if either changes."""
@@ -1505,11 +1499,11 @@ def _required_margin(st, dw, dh, po: "_PanelOpts | None" = None) -> dict:
 
 def _build_xy_scales(st, iw, ih, panel_opts: _PanelOpts):
     """Instantiate pixel-bound scales. `panel_opts.x_axis` / `y_axis` come
-    from the layout pre-pass when set; otherwise we compute them from the
-    panel's own state. y-category runs top-to-bottom (cats on rows);
-    y-linear/log runs cartesian unless the descriptor requested a flip."""
-    x_axis = panel_opts.x_axis or _x_descriptor(st)
-    y_axis = panel_opts.y_axis or _y_descriptor(st)
+    from the layout pre-pass (share-equivalence class descriptor). y-category
+    runs top-to-bottom (cats on rows); y-linear/log runs cartesian unless
+    the descriptor requested a flip."""
+    x_axis = panel_opts.x_axis
+    y_axis = panel_opts.y_axis
     if x_axis.kind == "category" or not x_axis.flip:
         x_scale = x_axis.build(0, iw)
     else:
@@ -1564,13 +1558,14 @@ def _category_metadata(name: str, cats) -> str:
             f'<![CDATA[{body}]]></metadata>')
 
 
-def _figure_root_attrs(kind: str) -> str:
-    """Attrs for the outer `<svg>`. `kind` is "figure" (single panel) or
-    "layout" (multi-panel composition)."""
+def _figure_root_attrs() -> str:
+    """Attrs for the outer `<svg>`. Every plotlet SVG carries `kind="layout"`
+    — a lone chart is just a 1x1 layout, so there's no separate figure
+    kind anymore."""
     return _attrs_str({
         "version": _PLOTLET_VERSION,
         "schema":  _SCHEMA_VERSION,
-        "kind":    kind,
+        "kind":    "layout",
     })
 
 
@@ -1643,62 +1638,17 @@ def _wrap_artist(a, idx: int, body: str) -> str:
 # render orchestrator — now generic over the registry
 # ---------------------------------------------------------------------------
 
-def _panel_open(st, panel_opts: _PanelOpts | None, transform: str,
+def _panel_open(st, panel_opts: _PanelOpts, transform: str,
                 M: dict, iw: float, ih: float,
                 panel_bbox: tuple[float, float, float, float]) -> str:
     """Open a panel `<g>` with transform + structural data attrs, and emit
     any panel-level `<metadata>` children (currently x/y category lists).
-    Used by both standalone `_render` and layout's `_render_layout` so the
-    two paths stay in sync. Returns a string ending mid-element — the
-    caller appends `_render_inner(...)` then `</g>`."""
-    x_axis = (panel_opts.x_axis if panel_opts and panel_opts.x_axis
-              else _x_descriptor(st))
-    y_axis = (panel_opts.y_axis if panel_opts and panel_opts.y_axis
-              else _y_descriptor(st))
+    Returns a string ending mid-element — the caller appends
+    `_render_inner(...)` then `</g>`."""
+    x_axis = panel_opts.x_axis
+    y_axis = panel_opts.y_axis
     attrs, meta = _panel_attrs_and_meta(st, M, iw, ih, x_axis, y_axis, panel_bbox)
     return f'<g transform="{transform}"{attrs}>{meta}'
-
-
-def _render(st, W, H, M, outer=None, clip_counter=None):
-    """Emit one SVG. (W, H) = canvas dims; M = effective margin already
-    resolved by the caller via `layout._build_panel_opts` →
-    `_compute_measured_margins`. Single-panel and multi-panel paths
-    share that pre-pass; this function just paints one panel into its
-    own outer `<svg>`. Splitting margin resolution out of `_render` is
-    what lets the data-path skip canvas-based scaling.
-
-    `outer` is the figure-level breathing-room margin applied only at
-    the public root render — passed as `{top, right, bottom, left}` from
-    `to_svg()`. Embedded calls (inset, layout cell) pass `None` and the
-    function is a no-op on outer breathing room.
-
-    `clip_counter` lets a caller (e.g. `CircularCoordinate.render_layout`)
-    that strips each leaf's `<svg>` wrapper and concatenates the bodies
-    into one document share clip-path id numbering across leaves — without
-    it, every leaf restarts at `pc0` and the ids collide. `None` is the
-    standalone path; `_render_inner` will fresh-start its own counter."""
-    iw = W - M["left"] - M["right"]
-    ih = H - M["top"] - M["bottom"]
-    ol = outer["left"] if outer else 0
-    ot = outer["top"]  if outer else 0
-    or_ = outer["right"]  if outer else 0
-    ob = outer["bottom"] if outer else 0
-    Wt = W + ol + or_
-    Ht = H + ot + ob
-    transform = f'translate({M["left"] + ol},{M["top"] + ot})'
-    # Track the panel translate on the region sink so chrome bboxes land
-    # in outer-SVG coords. No-op when no sink is active (normal render).
-    with _regions.translate(M["left"] + ol, M["top"] + ot):
-        inner = _render_inner(st, iw, ih, M, clip_counter=clip_counter)
-    return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{Wt}" height="{Ht}" '
-        f'viewBox="0 0 {Wt} {Ht}" font-family="{_FONTSPEC["family"]}" font-size="11" '
-        f'style="background:{SPEC["figure"]["background"]}"'
-        f'{_figure_root_attrs("figure")}>'
-        + _panel_open(st, None, transform, M, iw, ih, (ol, ot, W, H))
-        + inner
-        + '</g></svg>'
-    )
 
 
 def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal,
@@ -1783,19 +1733,13 @@ def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal,
     return ''.join(parts)
 
 
-def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts | None = None,
-                  clip_counter=None):
-    """Body fragment for one panel — everything inside the outer `<svg>` and
-    the outer translate-by-margin `<g>`. `panel_opts` carries layout-supplied
-    axis descriptors and side flags; `None` is the standalone path.
-    `clip_counter` is shared across panels in a multi-panel document so each
-    coord-clip `<clipPath id>` is unique within the SVG; `None` starts a
-    fresh sequence for the standalone single-panel path."""
+def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
+    """Body fragment for one panel — the string appended inside the panel
+    `<g>` opened by `_panel_open`. Coordinates are panel-local: data area
+    at `(0,0)`→`(iw,ih)`, chrome placed relative to `M`. `panel_opts`
+    supplies axis descriptors and joined-side flags. `clip_counter` is
+    shared across panels so coord-clip ids stay unique in the SVG."""
     _prebin_hist(st)
-    if panel_opts is None:
-        panel_opts = _PanelOpts()
-    if clip_counter is None:
-        clip_counter = count()
 
     x_scale, y_scale, x_is_cat = _build_xy_scales(st, iw, ih, panel_opts)
     inp = _resolve_panel_inputs(st, x_scale=x_scale, y_scale=y_scale,

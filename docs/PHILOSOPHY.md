@@ -54,8 +54,8 @@ borrow elegance where it doesn't fight the core.
 A `Chart` is a journal, not a state machine. `c.xlim(1, 10)` doesn't set a
 limit — it appends `("xlim", (1, 10), {})` to `Chart._calls`. The renderer
 never sees user method calls directly; it sees the list. `_replay` is a
-pure fold of `(calls, artist registry) → state dict`, which `_render` then
-turns into SVG.
+pure fold of `(calls, artist registry) → state dict`, which the layout
+engine then turns into SVG.
 
 Several features fall out of this rather than being designed separately:
 

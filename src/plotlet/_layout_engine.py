@@ -981,10 +981,7 @@ def _update_canvases_for_margins(leaves: list[Chart],
     the canvas, so this is what makes max-per-column/row see the
     grown-to-fit dimensions."""
     for leaf in leaves:
-        po = panel_opts[id(leaf)]
-        if po.M_eff is None:
-            continue
-        M = po.M_eff
+        M = panel_opts[id(leaf)].M_eff
         leaf._canvas_width  = leaf._data_width  + M["left"] + M["right"]
         leaf._canvas_height = leaf._data_height + M["top"]  + M["bottom"]
         # Cache the effective margin on the leaf so `_attachments.allocate`
@@ -996,12 +993,8 @@ def _update_canvases_for_margins(leaves: list[Chart],
 def _effective_margin(leaf: Chart, po: _PanelOpts, w: float, h: float) -> dict:
     """Margin used at render time. Data leaves read the coordinated margin
     from `po.M_eff` (computed by `_compute_measured_margins` with hide-
-    aware `_required_margin`). The fallback path (`M_eff is None`) is
-    reachable only if a leaf slipped through the pre-pass; falls back to
-    the floor alone."""
-    if po.M_eff is not None:
-        return dict(po.M_eff)
-    return _enforce_floors(leaf._margin)
+    aware `_required_margin`)."""
+    return dict(po.M_eff)
 
 
 def _render_layout(root: Chart, outer=None) -> str:
@@ -1061,12 +1054,19 @@ def _render_layout_rect(root: Chart, outer=None) -> str:
     Wt = W + ol + or_
     Ht = H + ot + ob
 
-    parts = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{Wt}" height="{Ht}" '
-        f'viewBox="0 0 {Wt} {Ht}" font-family="{_FONTSPEC["family"]}" font-size="11" '
-        f'style="background:{SPEC["figure"]["background"]}"'
-        f'{_figure_root_attrs("layout")}>'
-    ]
+    # Root theme scopes the outer <svg> emit — for a single-leaf root
+    # (Chart with `theme=`), this puts the figure background under the
+    # leaf's theme so a dark chart gets a dark canvas. Real multi-panel
+    # Layout roots don't carry a theme, so this is a passthrough there
+    # and each leaf's own `active_theme` block below still owns its chrome.
+    root_theme = _extract_theme(root._calls)
+    with active_theme(root_theme):
+        parts = [
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{Wt}" height="{Ht}" '
+            f'viewBox="0 0 {Wt} {Ht}" font-family="{_FONTSPEC["family"]}" font-size="11" '
+            f'style="background:{SPEC["figure"]["background"]}"'
+            f'{_figure_root_attrs()}>'
+        ]
     if ol or ot:
         parts.append(f'<g transform="translate({ol},{ot})">')
     # Two passes so legends can read color-cycle assignments off data

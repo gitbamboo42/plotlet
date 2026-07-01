@@ -40,9 +40,8 @@ import inspect
 import re
 from pathlib import Path
 
-from ._spec import _SIZESPEC, _MARGIN_FLOOR, _OUTER_MARGIN, _LAYOUTSPEC, active_theme
-from .core import _replay, _render
-from .utils import _to_px, to_list_2d
+from ._spec import _SIZESPEC, _MARGIN_FLOOR, _OUTER_MARGIN, _LAYOUTSPEC
+from .utils import _to_px
 from .registry import get_artist, all_artist_names
 
 
@@ -311,7 +310,7 @@ class Chart(_Renderable):
         if kwargs:
             raise TypeError(f"Chart() got unexpected keyword arguments: {list(kwargs)!r}")
 
-        # ---- Render-state init (leaf-only fields used by core._render) ----
+        # ---- Render-state init (leaf-only fields used by core._render_inner) ----
         # Resolve unit-suffixed strings (`"4in"`, `"10cm"`, …) once at the
         # boundary so internal math stays in pixels.
         data_width  = _to_px(data_width)
@@ -733,38 +732,16 @@ class Chart(_Renderable):
         """Render path that skips the root check — used by parents
         embedding this chart (insets, layout panels). `outer` is the
         figure-level breathing-room margin; only the public `to_svg()`
-        passes it. Embedded callers (insets) leave it None."""
-        if self._leaf_kind == "legend":
-            from .legend import _render_standalone_legend
-            return _render_standalone_legend(self)
-        if self._leaf_kind == "diagram":
-            from .layout_diagram import _render_standalone_diagram
-            return _render_standalone_diagram(self)
-        # Chart with attachments behaves as a mini-layout — route through
-        # the full layout engine so attachments get measured, allocated,
-        # and rendered as siblings. Routing inspects the journal directly
-        # so we don't have to materialize just to read `_attached_*` (the
-        # full layout pipeline materializes downstream).
-        if any(c[0].startswith("attach_") for c in self._calls):
-            from ._layout_engine import _render_layout
-            return _render_layout(self, outer=outer)
-        # Data leaf. Route through the same pre-pass parents use — single
-        # leaf is a degenerate single-cell case; share-scaling, collapse
-        # annotation, and margin coordination all no-op for it, leaving
-        # just the measure-driven margin computation. One pipeline means
-        # outside-legend reservation and similar layout-level concerns can
-        # live in one place. `_build_panel_opts` applies theme per leaf
-        # during replay; the final `_render` call is themed again because
-        # `_render` reads `_FONTSPEC` / `SPEC` inline.
-        from ._layout_engine import _build_panel_opts
-        panel_opts, states = _build_panel_opts(self)
-        po = panel_opts[id(self)]
-        M_eff = po.M_eff
-        self._last_M_eff = M_eff
-        W = self._data_width  + M_eff["left"] + M_eff["right"]
-        H = self._data_height + M_eff["top"]  + M_eff["bottom"]
-        with active_theme(_extract_theme(self._calls)):
-            return _render(states[id(self)], W, H, M_eff, outer=outer)
+        passes it. Embedded callers (insets) leave it None.
+
+        Every leaf — data, legend, diagram, and data-with-attachments —
+        goes through the same layout engine `pt.grid([[...]])` uses. A
+        lone chart is just a 1x1 composition. One path means standalone
+        behavior stays in sync with multi-panel behavior by construction,
+        so the class of "works in a grid, breaks standalone" bugs
+        disappears."""
+        from ._layout_engine import _render_layout
+        return _render_layout(self, outer=outer)
 
     def _require_render_root(self):
         super()._require_render_root()

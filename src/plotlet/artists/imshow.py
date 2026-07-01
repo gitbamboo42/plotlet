@@ -1,5 +1,5 @@
 """imshow needs a preprocessing step (2-D-ify, autocompute vmin/vmax) before
-domain can be computed. We do that in record() rather than _render.
+domain can be computed. We do that in record() rather than draw().
 """
 import base64
 

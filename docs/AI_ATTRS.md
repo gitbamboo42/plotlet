@@ -16,7 +16,7 @@ on the root.
 |------------------------|------------------------|--------------------------------------------|
 | `data-plotlet-version` | `"0.5.0"`              | the plotlet release that emitted this SVG  |
 | `data-plotlet-schema`  | `"2"`                  | bumped only when names change incompatibly |
-| `data-plotlet-kind`    | `"figure"` / `"layout"` | single panel vs. multi-panel composition  |
+| `data-plotlet-kind`    | `"layout"`             | always `"layout"` — a lone chart is a 1x1 layout |
 
 ### Panel `<g>` (one per chart leaf)
 
@@ -129,7 +129,7 @@ print(c.to_svg())
 What an AI sees, semantically:
 
 ```
-SVG kind=figure plotlet=0.5.0 schema=2
+SVG kind=layout plotlet=0.5.6 schema=2
   PANEL title="Daily revenue" xlabel=day ylabel=USD
         xscale=linear xlim=1.0,4.0  yscale=linear ylim=10.0,15.0
     ARTIST 0 type=line label=actual color=#1f77b4

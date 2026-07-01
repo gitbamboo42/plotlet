@@ -26,7 +26,7 @@ from .draw import measure_text
 from .draw import coord, rect, segment, text_path
 from . import _regions
 from .scales import _fmt_tick
-from ._spec import _D, _DASH, _FIGSPEC, _FONTSPEC, _FRAME, _LEGSPEC
+from ._spec import _D, _DASH, _FONTSPEC, _FRAME, _LEGSPEC
 
 
 def _adaptive_n_ticks(strip_h: float) -> int:
@@ -496,16 +496,3 @@ def _render_legend(leaf: Chart, w: float, h: float,
         if dy > 0:
             body = f'<g transform="translate(0,{coord(dy)})">{body}</g>'
     return body
-
-
-def _render_standalone_legend(leaf: Chart) -> str:
-    """Render a legend not part of any parent — wraps the leaf render in
-    an outer <svg>. Standalone with explicit sources requires replaying
-    + color-assigning those sources, which lands when grouping does
-    (commit 5). For now this draws an empty placeholder rect."""
-    w, h = leaf._canvas_width, leaf._canvas_height
-    inner = rect(0.5, 0.5, w - 1, h - 1,
-                 stroke="#bbb", dash="4,3")
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '
-            f'viewBox="0 0 {w} {h}" font-family="{_FONTSPEC["family"]}" font-size="11" '
-            f'style="background:{_FIGSPEC["background"]}">{inner}</svg>')

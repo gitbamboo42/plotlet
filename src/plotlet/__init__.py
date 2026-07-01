@@ -16,6 +16,7 @@ Chart methods chain for incremental composition:
 from ._spec import SPEC
 from .draw import TAB10, colors
 from .draw import colormap, list_colormaps
+from . import artists  # noqa: F401  — registers built-in artists on import
 from .chart import Chart, Layout, chart, grid
 from .legend import legend
 from .registry import ArtistSpec, add_artist, artist_table, declare_coord_support

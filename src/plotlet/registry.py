@@ -1,7 +1,7 @@
 """Artist registry — the extension point.
 
 Every plot type (built-in or user-added) is an `ArtistSpec` registered here.
-A spec bundles the four things `_render` needs to know about a plot type:
+A spec bundles the four things `_render_inner` needs to know about a plot type:
 
   - `record(args, kwargs) -> dict`
         Convert positional/keyword args from the recorder into the artist
@@ -50,7 +50,7 @@ from __future__ import annotations
 
 import html
 import inspect
-from dataclasses import MISSING, dataclass, field, fields
+from dataclasses import MISSING, dataclass, fields
 from typing import Any, Callable, Iterable
 
 

@@ -311,16 +311,14 @@ class CircularCoordinate:
         dispatcher in `_layout_engine.py` is coord-agnostic and just
         delegates here.
         """
-        import re
         from itertools import count
         from ._layout_engine import _build_panel_opts
         from ._spec import active_theme
-        from .core import _render as _core_render
-        _SVG_BODY_RE = re.compile(r'<svg[^>]*>(.*)</svg>\s*$', re.DOTALL)
+        from .core import _panel_open, _render_inner
+        from . import _regions
         _ZERO_MARGIN = {"left": 0, "right": 0, "top": 0, "bottom": 0}
         # Shared across leaves so coord-clip `<clipPath id>`s don't
-        # collide once the per-leaf `<svg>` wrappers are stripped and
-        # bodies are concatenated into one document.
+        # collide once each leaf's body is concatenated into one document.
         _clip_counter = count()
 
         leaves = list(root._iter_leaves())
@@ -405,19 +403,26 @@ class CircularCoordinate:
                 leaf._canvas_width  = W
                 leaf._canvas_height = H
                 # Circular chrome places labels at angular positions inside
-                # the gap zone — no Cartesian margin band needed. Calling
-                # _build_panel_opts + _render with zero margin bypasses the
-                # margin recomputation that _to_svg_unchecked would do,
-                # which avoids a translate(N,0) offset that would misalign
-                # this leaf with others rendered onto the same canvas.
+                # the gap zone — no Cartesian margin band needed. Zero margin
+                # + a fresh `_build_panel_opts` bypasses margin recomputation,
+                # avoiding a translate(N,0) offset that would misalign this
+                # leaf with others rendered onto the same canvas.
                 _panel_opts, _states = _build_panel_opts(leaf)
                 _st = _states[id(leaf)]
+                _po = _panel_opts[id(leaf)]
                 _theme = None
                 for _c in leaf._calls:
                     if _c[0] == "theme": _theme = _c[1][0] if _c[1] else None
                 with active_theme(_theme):
-                    svg = _core_render(_st, W, H, _ZERO_MARGIN, outer=None,
-                                       clip_counter=_clip_counter)
+                    # Emit just the panel body (no <svg> wrapper) — the
+                    # caller concatenates each leaf's body into the shared
+                    # overlay canvas.
+                    with _regions.translate(0, 0):
+                        inner = _render_inner(_st, W, H, _ZERO_MARGIN, _po,
+                                              clip_counter=_clip_counter)
+                    body = (_panel_open(_st, _po, "translate(0,0)",
+                                        _ZERO_MARGIN, W, H, (0, 0, W, H))
+                            + inner + '</g>')
             finally:
                 # Strip trailing render-time additions first, then the
                 # prepended entries from the front. Order matters — n0
@@ -430,12 +435,7 @@ class CircularCoordinate:
                 leaf._margin = orig_margin
                 leaf._canvas_width  = orig_dw + orig_margin["left"] + orig_margin["right"]
                 leaf._canvas_height = orig_dh + orig_margin["top"]  + orig_margin["bottom"]
-            m = _SVG_BODY_RE.match(svg)
-            if m is None:
-                raise RuntimeError(
-                    "CircularCoordinate.render_layout: leaf produced no <svg> wrapper"
-                )
-            return m.group(1)
+            return body
 
         bodies = [_render_leaf(leaf, c, is_outermost=(i == 0))
                   for i, (leaf, c) in enumerate(zip(leaves, leaf_coords))]

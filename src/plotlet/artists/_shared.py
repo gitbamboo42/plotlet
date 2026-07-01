@@ -1,7 +1,7 @@
 """Helpers shared across 2+ per-artist files.
 
 Each built-in artist registers one of the `*_legend_entries` functions so
-the legend dispatch in `_render` can stay generic — no type-string matching.
+the legend dispatch in `_render_inner` can stay generic — no type-string matching.
 Paint logic is a nested closure; there are no shared swatch helpers.
 """
 from .._spec import _LEGSPEC
