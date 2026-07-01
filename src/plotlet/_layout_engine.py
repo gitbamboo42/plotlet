@@ -1021,11 +1021,16 @@ def _render_layout(root: Chart, outer=None) -> str:
         Wt, Ht = W + ol + or_, H + ot + ob
         wrap = f'<g transform="translate({ol},{ot})">' if (ol or ot) else ""
         close = "</g>" if (ol or ot) else ""
-        bg = SPEC["figure"]["background"]
-        return (f'<svg xmlns="http://www.w3.org/2000/svg" '
-                f'width="{Wt}" height="{Ht}" viewBox="0 0 {Wt} {Ht}" '
-                f'font-family="{_FONTSPEC["family"]}" font-size="11" '
-                f'style="background:{bg}">{wrap}{body}{close}</svg>')
+        # Match `_render_layout_rect`: root theme scopes the outer <svg>
+        # (so a themed root gets the right figure background), and
+        # `_figure_root_attrs()` carries the standard plotlet schema
+        # attrs so downstream tools can identify the SVG.
+        with active_theme(_extract_theme(root._calls)):
+            return (f'<svg xmlns="http://www.w3.org/2000/svg" '
+                    f'width="{Wt}" height="{Ht}" viewBox="0 0 {Wt} {Ht}" '
+                    f'font-family="{_FONTSPEC["family"]}" font-size="11" '
+                    f'style="background:{SPEC["figure"]["background"]}"'
+                    f'{_figure_root_attrs()}>{wrap}{body}{close}</svg>')
     # Default: rectangular stack. Coord-bearing sub-Layouts are treated as
     # atomic blocks by `_measure` / `_allocate` (see `_is_atomic`) and
     # rendered through their coord's own strategy at placement time —
