@@ -508,7 +508,14 @@ def _replay(calls):
                 st["legend_position"] = kw["position"]
         elif name == "clip":   st["clip"] = bool(args[0]) if args else True
         elif name == "facecolor": st["facecolor"] = args[0] if args else None
-        elif name == "coordinate": st["coordinate"] = args[0]
+        elif name == "coordinate":
+            st["coordinate"] = args[0]
+            # Coord-supplied `y_ticks` default (Cartesian: no attribute →
+            # skipped). `is None` check respects any user-set value
+            # regardless of call order.
+            _cyt = getattr(args[0], "y_ticks", None)
+            if _cyt is not None and st.get("y_ticks") is None:
+                st["y_ticks"] = _cyt
         elif name == "sectors":
             from .sectors import Sectors
             col  = kw.get("column")

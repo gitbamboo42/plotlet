@@ -49,7 +49,6 @@ def _ring_chart(title):
                  data_width=300, data_height=300)
     c.coordinate(pt.CircularCoordinate())
     c.xticks([0.0, 0.25, 0.5, 0.75])
-    c.yticks([0.0, 0.5, 1.0])
     return c
 
 
@@ -127,7 +126,6 @@ def ring_x_sectors():
         pt.Sectors(names=tuple(sec_names), lengths=tuple(sec_lens), gap=12),
         axis="x", column="sec",
     )
-    c.yticks([0.0, 0.5, 1.0])
     # Per-sector line calls — a single polyline through all 90 points
     # would draw chords across the gap whitespace where consecutive
     # points span sectors. One call per sector keeps each wedge's line
@@ -151,7 +149,6 @@ def ring_inner_outer():
                  data_width=300, data_height=300)
     c.coordinate(pt.CircularCoordinate(r_inner=0.55, gap=0.08))
     c.xticks([0.0, 0.5])
-    c.yticks([0.0, 1.0])
     c.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
            color="#534AB7", width=1.5)
     return c
@@ -236,7 +233,6 @@ def ring_partial_arc_sectors():
     c.coordinate(pt.CircularCoordinate(start_deg=90, end_deg=360))
     c.sectors(pt.Sectors(names=tuple(sec_names), lengths=tuple(sec_lens),
                           gap=8), axis="x", column="sec")
-    c.yticks([0.0, 0.5, 1.0])
     for sname in sec_names:
         xs = [x for x, s in zip(pts_x, pts_sec) if s == sname]
         ys = [y for y, s in zip(pts_y, pts_sec) if s == sname]

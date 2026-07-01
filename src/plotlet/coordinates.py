@@ -205,6 +205,8 @@ class CircularCoordinate:
         self.inner        = inner
         self.start_deg    = start_deg
         self.end_deg      = end_deg
+        # Circular default: no y-ticks. Override per chart via `c.yticks(...)`.
+        self.y_ticks      = []
 
     def _to_dict(self) -> dict:
         # `inner` may be a Chart — encoded as a $ref by the serializer's
@@ -391,15 +393,12 @@ class CircularCoordinate:
                 # labels (Circos convention: labels outside the outermost
                 # track). Inner rings suppress unless the user explicitly
                 # called xticks(...) on that leaf.
-                # y-axis: marks and labels off by default for all rings —
-                # the radial scale reads from the data, not from tick marks.
-                # Users can opt in with an explicit yticks(...) call.
+                # y-axis suppression comes from the leaf coord's own
+                # `y_ticks=[]` default (`CircularCoordinate.__init__`);
+                # opt in per leaf with an explicit `c.yticks(...)`.
                 has_xticks = any(c[0] == "xticks" for c in leaf._calls[:n0])
-                has_yticks = any(c[0] == "yticks" for c in leaf._calls[:n0])
                 if not is_outermost and not has_xticks:
                     leaf._calls.append(("xticks", [[]], {"labels": False}))
-                if not has_yticks:
-                    leaf._calls.append(("yticks", [[]], {}))
                 leaf._data_width  = W
                 leaf._data_height = H
                 leaf._margin = {"left": 0, "right": 0, "top": 0, "bottom": 0}
