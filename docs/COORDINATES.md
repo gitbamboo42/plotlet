@@ -45,12 +45,26 @@ c.coordinate(pt.CircularCoordinate(
     gap=0.05,           # padding between outer ring and canvas edge
     wrap_gap_deg=None,  # angular gap at 12 o'clock; auto-derives
     inner=None,         # optional inner-disc Chart (chord artists)
+    start_deg=0,        # t=0 angle (clockwise from 12 o'clock)
+    end_deg=360,        # t=1 angle; pair with start_deg for a partial arc
 ))
 ```
 
+**Partial arc.** `start_deg` and `end_deg` carve out a sub-arc instead of
+a closed ring — `start_deg=90, end_deg=360` sweeps 270° from 3 o'clock
+clockwise around to 12 o'clock. The open ends get radial cap spines so
+the arc reads as a bounded annular sector. Y-tick labels move to the
+`t=0` open edge by default (`start_rad`); use `c.yticks(side="right")`
+to put them on the `t=1` edge instead — same `side=` kwarg you'd use in
+linear, just remapped to the partial arc's geometry. For an arc that
+crosses 12 o'clock, use `start_deg=270, end_deg=450`. `wrap_gap_deg`
+is ignored when the arc is partial.
+
 **Sectors.** `c.sectors({"A": [...], "B": [...]}, axis="x")` partitions
 the ring into Circos-style wedges with radial dividers and tangential
-labels. `axis="y"` (concentric bands) is not yet supported.
+labels. Under a partial arc, sector walls are acyclic — no wrap walls
+at the arc's open ends (the cap spines handle the boundary). `axis="y"`
+(concentric bands) is not yet supported.
 
 **Inner sub-coord.** Pass `inner=pt.chart(...)` to render a separate
 chart into the central disc (`r ∈ [0, r_inner]`). Used to host chord /

@@ -37,17 +37,22 @@ def geometry(r_inner: float, gap: float, iw: float, ih: float,
     return cx, cy, R, ri
 
 
-def t_to_angle(t: float, wrap_gap_rad: float) -> float:
-    """Map ``t ∈ [0, 1]`` to a clockwise angle on the ring.
+def t_to_angle(t: float, start_rad: float, end_rad: float) -> float:
+    """Map ``t ∈ [0, 1]`` linearly between two ring angles.
 
-    When ``wrap_gap_rad == 0`` this collapses to ``π/2 − 2πt`` (the closed
-    ring with t=0 = t=1 = 12 o'clock). When > 0 the data range covers
-    ``(2π − wrap_gap_rad)`` of the circle, leaving a symmetric gap straddling
-    12 o'clock: ``t=0`` lands just past 12 o'clock clockwise, ``t=1`` just
-    before it. The wrap-around boundary (visually centered at 12 o'clock)
-    is at angle ``π/2`` exactly.
+    ``start_rad`` is the math-convention angle at t=0; ``end_rad`` at t=1.
+    Both are in standard math angles (0 = 3 o'clock, π/2 = 12 o'clock,
+    increasing counter-clockwise) — the clockwise sweep on screen comes
+    from ``end_rad < start_rad`` (the usual case for a CW ring).
+
+    For the today-default full ring with optional wrap gap, the caller
+    sets ``start_rad = π/2 − wrap_gap_rad/2``, ``end_rad = start_rad −
+    (2π − wrap_gap_rad)`` — so the formula collapses to the previous
+    ``π/2 − wrap_gap_rad/2 − t·(2π − wrap_gap_rad)``. For a partial arc
+    from clockwise-degrees ``[A, B]``, ``start_rad = π/2 − radians(A)``
+    and ``end_rad = π/2 − radians(B)``.
     """
-    return math.pi / 2 - wrap_gap_rad / 2 - t * (2 * math.pi - wrap_gap_rad)
+    return start_rad + t * (end_rad - start_rad)
 
 
 # ---------------------------------------------------------------------------
@@ -74,17 +79,23 @@ def clip_path_d(cx, cy, R, ri) -> str:
 # Y-axis chrome — inner+outer ring spines + intermediate tick rings
 # ---------------------------------------------------------------------------
 
-def draw_y_chrome(cx, cy, R, ri, wrap_gap_rad,
+def draw_y_chrome(cx, cy, R, ri, start_rad, end_rad, is_full_ring,
                   y_ticks_r, y_labels,
                   frame_opts) -> str:
-    """Inner+outer ring spines + concentric y-tick marks + labels.
+    """Inner+outer ring spines + radial y-tick marks + labels.
 
-    Spines: outline circles at r=0 (inner) and r=1 (outer). When
-    ``frame_opts["sector_ts"]`` is supplied (Circos with x-sectors), each
-    ring is broken into per-sector arc segments so the ring doesn't bleed
-    through the gap whitespace — each sector reads as a bounded arc.
-    Intermediate y-ticks: short radial marks at 12 o'clock with labels
-    stacked outward along the +y axis.
+    ``is_full_ring`` is user intent (start_deg/end_deg at defaults) and
+    distinguishes a closed ring — possibly with a `wrap_gap_deg` gap at
+    12 o'clock — from a partial arc.
+
+    Spines: closed circles when full ring + no sectors; per-sector arcs
+    when sectors are set; a single open arc (start_rad → end_rad) for
+    partial arc + no sectors.
+
+    Y-label placement follows ``frame_opts["y_side"]``: ``"left"`` →
+    12 o'clock (full) / ``start_rad`` (partial); ``"right"`` →
+    6 o'clock (full) / ``end_rad`` (partial). Tick marks point outward
+    along the radial direction; labels stack outward along the same axis.
     """
     spine_col = frame_opts["spine_color"]
     spine_w   = frame_opts["spine_width"]
@@ -97,6 +108,7 @@ def draw_y_chrome(cx, cy, R, ri, wrap_gap_rad,
     y_style   = frame_opts.get("y_fontstyle", "normal")
     y_decor   = frame_opts.get("y_decoration", "none")
     sector_ts = frame_opts.get("sector_ts")
+    y_side    = frame_opts.get("y_side", "left")
 
     spine_top    = frame_opts.get("spine_top",    True)
     spine_bottom = frame_opts.get("spine_bottom", True)
@@ -104,24 +116,42 @@ def draw_y_chrome(cx, cy, R, ri, wrap_gap_rad,
     parts = []
 
     if sector_ts is None:
-        # Closed rings — no sectors, draw as full circles.
-        # top → outer arc (R), bottom → inner arc (ri).
-        for radius, show in ((ri, spine_bottom), (R, spine_top)):
-            if show:
-                parts.append(circle(cx, cy, radius,
-                                    stroke=spine_col, stroke_width=spine_w,
-                                    tag="spine"))
+        if is_full_ring:
+            # Closed rings — draw as full circles.
+            for radius, show in ((ri, spine_bottom), (R, spine_top)):
+                if show:
+                    parts.append(circle(cx, cy, radius,
+                                        stroke=spine_col, stroke_width=spine_w,
+                                        tag="spine"))
+        else:
+            # Partial arc, no sectors — one open arc per spine. SVG
+            # sweep=1 renders CW on a y-down canvas; the typical case
+            # `end_rad < start_rad` (math angle decreasing = screen CW)
+            # is therefore sweep=1.
+            span = abs(end_rad - start_rad)
+            large = 1 if span > math.pi else 0
+            sweep = 1 if end_rad < start_rad else 0
+            for radius, show in ((ri, spine_bottom), (R, spine_top)):
+                if not show:
+                    continue
+                x1 = cx + radius * math.cos(start_rad)
+                y1 = cy - radius * math.sin(start_rad)
+                x2 = cx + radius * math.cos(end_rad)
+                y2 = cy - radius * math.sin(end_rad)
+                d = (f"M {coord(x1)},{coord(y1)} "
+                     f"A {coord(radius)},{coord(radius)} 0 {large},{sweep} "
+                     f"{coord(x2)},{coord(y2)}")
+                parts.append(path(d, stroke=spine_col, stroke_width=spine_w,
+                                  fill="none"))
     else:
-        # Sectored — each ring is a sequence of arc segments, one per
-        # sector. The arcs run clockwise from start_t to end_t (SVG sweep=1
-        # in y-down means clockwise on screen). Large-arc flag is set when
-        # the angular extent exceeds 180°.
+        # Sectored — per-sector arcs (same as today for full ring;
+        # works for partial because the projection clamps t∈[0,1]).
         for radius, show in ((ri, spine_bottom), (R, spine_top)):
             if not show:
                 continue
             for start_t, end_t in sector_ts:
-                ang_s = t_to_angle(start_t, wrap_gap_rad)
-                ang_e = t_to_angle(end_t,   wrap_gap_rad)
+                ang_s = t_to_angle(start_t, start_rad, end_rad)
+                ang_e = t_to_angle(end_t,   start_rad, end_rad)
                 x1 = cx + radius * math.cos(ang_s)
                 y1 = cy - radius * math.sin(ang_s)
                 x2 = cx + radius * math.cos(ang_e)
@@ -132,19 +162,43 @@ def draw_y_chrome(cx, cy, R, ri, wrap_gap_rad,
                 parts.append(path(d, stroke=spine_col,
                                   stroke_width=spine_w))
 
-    # Intermediate y-ticks: skip exact 0/1 (they're the rings).
+    if not is_full_ring:
+        # Radial caps at the two open ends — connect inner ring to outer
+        # ring at start_rad and end_rad so the partial arc reads as a
+        # bounded annular sector rather than an open horseshoe. Skipped
+        # for full ring (no open edges).
+        for ang in (start_rad, end_rad):
+            ux, uy = math.cos(ang), -math.sin(ang)
+            parts.append(segment(cx + ri * ux, cy + ri * uy,
+                                 cx + R  * ux, cy + R  * uy,
+                                 color=spine_col, width=spine_w))
+
+    # Y-tick / label radial axis.
+    if is_full_ring:
+        label_ang = math.pi / 2 if y_side == "left" else -math.pi / 2
+    else:
+        label_ang = start_rad if y_side == "left" else end_rad
+    ux, uy = math.cos(label_ang), -math.sin(label_ang)
+    # Skip exact 0/1 (they're the rings themselves).
     for r_f, lbl in zip(y_ticks_r, y_labels):
         if r_f <= 1e-9 or r_f >= 1.0 - 1e-9:
             continue
         radius = ri + r_f * (R - ri)
-        tx, ty = cx, cy - radius   # 12 o'clock position
+        tx, ty = cx + radius * ux, cy + radius * uy
         if y_marks:
-            parts.append(segment(tx, ty, tx, ty - tl,
+            parts.append(segment(tx, ty,
+                                 tx + tl * ux, ty + tl * uy,
                                  color=spine_col, width=spine_w))
         if show_yl:
             off = tl + tp + cap_height(y_size)
-            parts.append(text_path(str(lbl), tx, ty - off,
-                                   y_size, anchor="middle", color=font_col,
+            lx, ly = cx + (radius + off) * ux, cy + (radius + off) * uy
+            # Horizontal text; anchor follows the radial direction so the
+            # label extends OUTWARD from the tick (not back into data).
+            if ux > 0.1:    anchor = "start"
+            elif ux < -0.1: anchor = "end"
+            else:            anchor = "middle"
+            parts.append(text_path(str(lbl), lx, ly,
+                                   y_size, anchor=anchor, color=font_col,
                                    fontstyle=y_style, decoration=y_decor,
                                    tag="tick-y"))
 
@@ -155,7 +209,7 @@ def draw_y_chrome(cx, cy, R, ri, wrap_gap_rad,
 # X-axis chrome — angular tick marks + tangentially-oriented labels
 # ---------------------------------------------------------------------------
 
-def draw_x_sector_chrome(cx, cy, R, ri, wrap_gap_rad,
+def draw_x_sector_chrome(cx, cy, R, ri, start_rad, end_rad, is_full_ring,
                          sector_ts, label_ts, names,
                          sec_opts) -> str:
     """Radial walls at each sector's edges + tangential sector-name labels.
@@ -163,10 +217,10 @@ def draw_x_sector_chrome(cx, cy, R, ri, wrap_gap_rad,
     ``sector_ts`` is a list of ``(start_t, end_t)`` for each sector in
     t-space.  Each sector gets TWO radial walls — one at its start, one
     at its end — so the gap whitespace between adjacent sectors sits
-    between two parallel walls (Circos style).  The wrap-around at 12
-    o'clock is handled by the same mechanism: the first sector's start
-    and the last sector's end map to opposite sides of the wrap gap when
-    ``wrap_gap_rad > 0``, giving two walls bracketing the wrap gap too.
+    between two parallel walls (Circos style).  ``is_full_ring=True``
+    treats sector boundaries as cyclic so the wrap boundary at the
+    start/end of the data range gets walls bracketing it; partial arc
+    is acyclic (open ends, no wrap walls).
     """
     div_col   = sec_opts["divider_color"]
     div_w     = sec_opts["divider_width"]
@@ -183,13 +237,14 @@ def draw_x_sector_chrome(cx, cy, R, ri, wrap_gap_rad,
 
     if draw_div:
         # Paired radial walls at each internal boundary (and the wrap
-        # boundary) — same `_sector_walls` helper used by the linear
-        # chrome, just on cyclic t-space. At gap=0 / wrap_gap_deg=0
-        # paired walls coincide and stack; semi-transparent strokes
-        # compensate via alpha.
+        # boundary when full ring) — same `_sector_walls` helper used
+        # by the linear chrome, on cyclic t-space for a closed ring or
+        # acyclic for a partial arc. At gap=0 / wrap_gap_deg=0 paired
+        # walls coincide and stack; semi-transparent strokes compensate
+        # via alpha.
         from ._chrome import _sector_walls
-        for t in _sector_walls(sector_ts, cyclic=True):
-            ang = t_to_angle(t, wrap_gap_rad)
+        for t in _sector_walls(sector_ts, cyclic=is_full_ring):
+            ang = t_to_angle(t, start_rad, end_rad)
             ux, uy = math.cos(ang), -math.sin(ang)
             parts.append(segment(cx + ri * ux, cy + ri * uy,
                                  cx + R  * ux, cy + R  * uy,
@@ -214,7 +269,7 @@ def draw_x_sector_chrome(cx, cy, R, ri, wrap_gap_rad,
         off_natural = base_off + cap / 2
         off_flipped = base_off + cap / 2 + cap
         for name, t in zip(names, label_ts):
-            ang = t_to_angle(t, wrap_gap_rad)
+            ang = t_to_angle(t, start_rad, end_rad)
             # Tangent (CW around ring) — text tops point outward on the top
             # half; antiflip clamp keeps bottom-half labels upright (their
             # tops then point inward, but reading direction stays natural).
@@ -234,7 +289,7 @@ def draw_x_sector_chrome(cx, cy, R, ri, wrap_gap_rad,
     return "".join(parts)
 
 
-def draw_x_chrome(cx, cy, R, wrap_gap_rad,
+def draw_x_chrome(cx, cy, R, start_rad, end_rad,
                   x_ticks_t, x_labels,
                   frame_opts) -> str:
     """Radial tick marks just outside the outer ring + tangential labels.
@@ -257,7 +312,7 @@ def draw_x_chrome(cx, cy, R, wrap_gap_rad,
     parts = []
 
     for t, lbl in zip(x_ticks_t, x_labels):
-        ang = t_to_angle(t, wrap_gap_rad)
+        ang = t_to_angle(t, start_rad, end_rad)
         # Outward radial unit vector (SVG y-down).
         ux, uy = math.cos(ang), -math.sin(ang)
         ox, oy = cx + R * ux, cy + R * uy

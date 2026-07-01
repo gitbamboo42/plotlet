@@ -170,7 +170,18 @@ class CircularCoordinate:
         ``None`` (default) auto-derives the angle from the x-sector gap so
         the wrap boundary is visually indistinguishable from any other
         inter-sector gap. Pass an explicit float to override. Works without
-        sectors too: produces an open arc instead of a closed ring.
+        sectors too: produces an open arc instead of a closed ring. Ignored
+        when ``start_deg`` / ``end_deg`` are set explicitly (partial arc).
+    start_deg : float, default 0.0
+        Angle (degrees, clockwise from 12 o'clock) at which ``t=0`` lands.
+        Default 0 = top.
+    end_deg : float, default 360.0
+        Angle (degrees, clockwise from 12 o'clock) at which ``t=1`` lands.
+        Default 360 = back to top (closed ring). Pair with ``start_deg``
+        for a partial arc. Convention:
+        ``0 ≤ start_deg < end_deg ≤ start_deg + 360``. For an arc that
+        crosses 12 o'clock (e.g. 9 → 3 o'clock through 12), pass values
+        like ``start_deg=270, end_deg=450``.
     inner : Chart, optional
         A separate ``pt.chart(...)`` rendered into the central disc
         ``r ∈ [0, r_inner]`` — the area no ring claims. Used to host
@@ -185,19 +196,23 @@ class CircularCoordinate:
 
     def __init__(self, r_inner: float = 0.30, r_outer: float = 1.0,
                  gap: float = 0.05, wrap_gap_deg=None,
-                 inner=None):
+                 inner=None,
+                 start_deg: float = 0.0, end_deg: float = 360.0):
         self.r_inner      = r_inner
         self.r_outer      = r_outer
         self.gap          = gap
         self.wrap_gap_deg = wrap_gap_deg
         self.inner        = inner
+        self.start_deg    = start_deg
+        self.end_deg      = end_deg
 
     def _to_dict(self) -> dict:
         # `inner` may be a Chart — encoded as a $ref by the serializer's
         # recursive value walker, not flattened here.
         return {"r_inner": self.r_inner, "r_outer": self.r_outer,
                 "gap": self.gap, "wrap_gap_deg": self.wrap_gap_deg,
-                "inner": self.inner}
+                "inner": self.inner,
+                "start_deg": self.start_deg, "end_deg": self.end_deg}
 
     @classmethod
     def _from_dict(cls, d: dict) -> "CircularCoordinate":
@@ -205,19 +220,40 @@ class CircularCoordinate:
                    r_outer=d.get("r_outer", 1.0),
                    gap=d.get("gap", 0.05),
                    wrap_gap_deg=d.get("wrap_gap_deg"),
-                   inner=d.get("inner"))
+                   inner=d.get("inner"),
+                   start_deg=d.get("start_deg", 0.0),
+                   end_deg=d.get("end_deg", 360.0))
 
     @property
-    def _wrap_gap_rad(self) -> float:
-        return math.radians(self.wrap_gap_deg) if self.wrap_gap_deg is not None else 0.0
+    def _is_full_ring(self) -> bool:
+        # User intent — a full ring (possibly with a wrap_gap_deg at top)
+        # is "start/end at defaults"; anything else is a partial arc.
+        # `wrap_gap_deg > 0` still counts as a full ring (sectors cyclic,
+        # labels at 12 o'clock, today's behavior).
+        return self.start_deg == 0.0 and self.end_deg == 360.0
+
+    @property
+    def _start_rad(self) -> float:
+        # Full ring + wrap_gap_deg shifts inward by gap/2 from 12 o'clock.
+        # Partial arc maps start_deg directly (clockwise from 12 → math).
+        if self._is_full_ring and self.wrap_gap_deg is not None:
+            return math.pi / 2 - math.radians(self.wrap_gap_deg / 2)
+        return math.pi / 2 - math.radians(self.start_deg)
+
+    @property
+    def _end_rad(self) -> float:
+        if self._is_full_ring and self.wrap_gap_deg is not None:
+            return math.pi / 2 - math.radians(360.0 - self.wrap_gap_deg / 2)
+        return math.pi / 2 - math.radians(self.end_deg)
 
     def __call__(self, artist: dict, iw: float, ih: float):
         cx, cy, r_hi_px, r_lo_px = _cc.geometry(
             self.r_inner, self.gap, iw, ih, self.r_outer)
-        wrap = self._wrap_gap_rad
+        start_rad = self._start_rad
+        end_rad   = self._end_rad
 
         def project(t: float, r: float):
-            ang    = _cc.t_to_angle(t, wrap)
+            ang    = _cc.t_to_angle(t, start_rad, end_rad)
             radius = r_lo_px + r * (r_hi_px - r_lo_px)
             return cx + radius * math.cos(ang), cy - radius * math.sin(ang)
 
@@ -231,8 +267,8 @@ class CircularCoordinate:
         """`Layout.coordinate(...)` overlay hook: produce a per-leaf
         coord that claims a sub-band of this annulus proportional to
         each leaf's ``data_height``. First leaf gets the outermost
-        band; later leaves nest inward. Inherits this coord's ``gap``
-        and ``wrap_gap_deg``."""
+        band; later leaves nest inward. Inherits this coord's ``gap``,
+        ``wrap_gap_deg``, and arc range (``start_deg`` / ``end_deg``)."""
         c_lo, c_hi = self.r_inner, self.r_outer
         span = c_hi - c_lo
         total_h = sum(leaf._data_height for leaf in leaves) or 1.0
@@ -246,6 +282,7 @@ class CircularCoordinate:
             result.append(CircularCoordinate(
                 r_inner=r_lo, r_outer=r_hi,
                 gap=self.gap, wrap_gap_deg=self.wrap_gap_deg,
+                start_deg=self.start_deg, end_deg=self.end_deg,
             ))
         return result
 
@@ -323,6 +360,7 @@ class CircularCoordinate:
         leaf_coords = CircularCoordinate(
             r_inner=self.r_inner, r_outer=self.r_outer,
             gap=effective_gap, wrap_gap_deg=resolved_wrap_gap_deg,
+            start_deg=self.start_deg, end_deg=self.end_deg,
         ).derive_leaf_coords(leaves)
 
         def _render_leaf(leaf, coord, *, is_outermost=False, prepend=()):
@@ -439,6 +477,7 @@ class CircularCoordinate:
             inner_coord = CircularCoordinate(
                 r_inner=0.0, r_outer=self.r_inner,
                 gap=effective_gap, wrap_gap_deg=resolved_wrap_gap_deg,
+                start_deg=self.start_deg, end_deg=self.end_deg,
             )
             bodies.append(_render_leaf(self.inner, inner_coord,
                                        prepend=inner_prepend))
@@ -448,21 +487,22 @@ class CircularCoordinate:
     def draw_frame(self, project, iw, ih, y_ticks_r, y_labels, frame_opts) -> str:
         return _cc.draw_y_chrome(
             *_cc.geometry(self.r_inner, self.gap, iw, ih, self.r_outer),
-            self._wrap_gap_rad,
+            self._start_rad, self._end_rad, self._is_full_ring,
             y_ticks_r, y_labels, frame_opts,
         )
 
     def draw_x_frame(self, project, iw, ih, x_ticks_t, x_labels, frame_opts) -> str:
         cx, cy, R, _ri = _cc.geometry(self.r_inner, self.gap, iw, ih,
                                       self.r_outer)
-        return _cc.draw_x_chrome(cx, cy, R, self._wrap_gap_rad,
+        return _cc.draw_x_chrome(cx, cy, R,
+                                 self._start_rad, self._end_rad,
                                  x_ticks_t, x_labels, frame_opts)
 
     def draw_x_sector_chrome(self, project, iw, ih,
                              sector_ts, label_ts, names, sec_opts) -> str:
         return _cc.draw_x_sector_chrome(
             *_cc.geometry(self.r_inner, self.gap, iw, ih, self.r_outer),
-            self._wrap_gap_rad,
+            self._start_rad, self._end_rad, self._is_full_ring,
             sector_ts, label_ts, names, sec_opts,
         )
 

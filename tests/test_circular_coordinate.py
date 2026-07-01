@@ -188,6 +188,64 @@ def ring_shapes():
     return c
 
 
+def ring_partial_arc():
+    # Partial arc — `start_deg=90, end_deg=360` sweeps 270° clockwise
+    # from 3 o'clock around through 6 / 9 / 12. Exercises the open-arc
+    # spine path (no sectors) and y-tick placement along start_rad
+    # (3 o'clock, the t=0 open edge).
+    c = pt.chart(title="partial arc — 90°→360°", xlim=(0, 1), ylim=(0, 1),
+                 data_width=320, data_height=320)
+    c.coordinate(pt.CircularCoordinate(start_deg=90, end_deg=360))
+    c.xticks([0.0, 0.25, 0.5, 0.75, 1.0])
+    c.yticks([0.0, 0.5, 1.0])
+    c.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
+           color="#1D9E75", width=1.5)
+    return c
+
+
+def ring_partial_arc_right_side():
+    # Same partial arc with `yticks(side="right")` — labels move to
+    # `end_rad` (the t=1 open edge) instead of `start_rad`.
+    c = pt.chart(title="partial arc — side=right", xlim=(0, 1), ylim=(0, 1),
+                 data_width=320, data_height=320)
+    c.coordinate(pt.CircularCoordinate(start_deg=90, end_deg=360))
+    c.xticks([0.0, 0.5, 1.0])
+    c.yticks([0.0, 0.5, 1.0], side="right")
+    c.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
+           color="#534AB7", width=1.5)
+    return c
+
+
+def ring_partial_arc_sectors():
+    # Partial arc + x-sectors — exercises non-cyclic sector walls
+    # (no wrap-around walls at the open ends) and the per-sector arc
+    # spine path.
+    sec_names = ["A", "B", "C"]
+    sec_lens  = [0.40, 0.35, 0.25]
+    ts_per    = 24
+    pts_x, pts_y, pts_sec = [], [], []
+    for sname, slen in zip(sec_names, sec_lens):
+        for i in range(ts_per):
+            t_in = (i + 0.5) / ts_per
+            pts_x.append(t_in * slen)
+            pts_y.append(_clamp01(0.5 + 0.30 * math.sin(3 * math.pi * t_in)))
+            pts_sec.append(sname)
+    c = pt.chart(title="partial arc — A/B/C sectors",
+                 xlim=(0, 1), ylim=(0, 1),
+                 data_width=340, data_height=340)
+    c.coordinate(pt.CircularCoordinate(start_deg=90, end_deg=360))
+    c.sectors(pt.Sectors(names=tuple(sec_names), lengths=tuple(sec_lens),
+                          gap=8), axis="x", column="sec")
+    c.yticks([0.0, 0.5, 1.0])
+    for sname in sec_names:
+        xs = [x for x, s in zip(pts_x, pts_sec) if s == sname]
+        ys = [y for y, s in zip(pts_y, pts_sec) if s == sname]
+        ss = [sname] * len(xs)
+        c.line(data={"x": xs, "y": ys, "sec": ss},
+               x="x", y="y", color="#D9534F", width=1.2)
+    return c
+
+
 # ---------------------------------------------------------------------------
 # Sector × CircularCoordinate guard
 # ---------------------------------------------------------------------------
@@ -209,15 +267,18 @@ def test_circular_with_y_sectors_raises():
 # ---------------------------------------------------------------------------
 
 PLOTS = {
-    "ring_scatter":      ring_scatter,
-    "ring_line":         ring_line,
-    "ring_line_chords":  ring_line_chords,
-    "ring_line_band":    ring_line_band,
-    "ring_numeric_bar":  ring_numeric_bar,
-    "ring_inner_outer":  ring_inner_outer,
-    "ring_references":   ring_references,
-    "ring_shapes":       ring_shapes,
-    "ring_x_sectors":    ring_x_sectors,
+    "ring_scatter":                ring_scatter,
+    "ring_line":                   ring_line,
+    "ring_line_chords":            ring_line_chords,
+    "ring_line_band":              ring_line_band,
+    "ring_numeric_bar":            ring_numeric_bar,
+    "ring_inner_outer":            ring_inner_outer,
+    "ring_references":             ring_references,
+    "ring_shapes":                 ring_shapes,
+    "ring_x_sectors":              ring_x_sectors,
+    "ring_partial_arc":            ring_partial_arc,
+    "ring_partial_arc_right_side": ring_partial_arc_right_side,
+    "ring_partial_arc_sectors":    ring_partial_arc_sectors,
 }
 
 
