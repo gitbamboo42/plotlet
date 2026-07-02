@@ -67,7 +67,8 @@ examples/index.html
 src/plotlet/extensions/*.svg
 src/plotlet/extensions/index.html
 
-# AI assistant guidance (local-only; CLAUDE.md itself is committed)
+# AI assistant guidance moved to skills/
+CLAUDE.md
 CLAUDE.local.md
 .claude/
 

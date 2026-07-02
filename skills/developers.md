@@ -1,7 +1,11 @@
-# CLAUDE.md
+# plotlet developer guide
+
+AI-oriented onboarding for working on the plotlet codebase. Vendor-neutral
+— symlink to it as `CLAUDE.md`, `.cursorrules`, `AGENTS.md`, or whatever
+your tool expects. Human contributors can read it directly.
 
 > **Docs in this repo help us make decisions — they are not textbooks.**
-> This applies to every Markdown file: `CLAUDE.md`, `README.md`, `docs/*.md`.
+> This applies to every Markdown file: `skills/developers.md`, `README.md`, `docs/*.md`.
 > If a fact is derivable from `ls src/plotlet/` or reading a well-named module,
 > it doesn't belong in any of them. Policies, non-obvious whys, project
 > direction, and reference tables that need to be explicit do.

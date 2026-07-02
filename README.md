@@ -20,6 +20,13 @@ Reference docs in [`docs/`](docs/):
 
 Reference plot types beyond the standard vocabulary live in [`src/plotlet/extensions/`](src/plotlet/extensions/) (single-file) and [`cookbook/`](cookbook/) (multi-file projects).
 
+## For AI assistants
+
+Compact, vendor-neutral onboarding docs live in [`skills/`](skills/):
+
+- [`skills/users.md`](skills/users.md) — for AI tools generating plotlet code on a user's behalf.
+- [`skills/developers.md`](skills/developers.md) — for AI (or human) contributors working on plotlet itself. Symlink as `CLAUDE.md` / `.cursorrules` / `AGENTS.md` as your tool expects.
+
 ## Dependencies
 
 plotlet supports Python 3.8+ (CI tests 3.9+).
