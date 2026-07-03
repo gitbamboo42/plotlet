@@ -134,8 +134,8 @@ class FacetGrid:
             layout.share_y(self._share_y)
         return layout
 
-    def to_svg(self) -> str:
-        return self._materialize().to_svg()
+    def to_svg(self, *, clean: bool = False) -> str:
+        return self._materialize().to_svg(clean=clean)
 
     def to_html(self, full_page: bool = False) -> str:
         return self._materialize().to_html(full_page=full_page)

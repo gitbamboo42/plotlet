@@ -78,6 +78,7 @@ from __future__ import annotations
 import math
 
 from . import _chrome_circular as _cc
+from ._coord_registry import register_coord_codec
 from .registry import declare_coord_support
 
 
@@ -514,3 +515,5 @@ declare_coord_support("Circular", [
     "axhline", "axvline", "axhspan", "axvspan", "hlines", "vlines",
     "rect", "polygon", "polyline",
 ])
+
+register_coord_codec(CircularCoordinate)

@@ -436,7 +436,7 @@ def _render_legend(leaf: Chart, w: float, h: float,
     sources = leaf._legend_sources or data_leaves
     names = getattr(leaf, "_legend_names", {}) or {}
     group_by_chart = getattr(leaf, "_legend_group_by_chart", True)
-    valign = getattr(leaf, "_legend_valign", "middle")
+    valign = leaf._legend_valign
 
     groups = _build_groups(sources, states, names, group_by_chart)
     if not groups:

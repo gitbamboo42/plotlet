@@ -27,7 +27,9 @@ from .themes import load_theme, available_themes, register_theme
 from .facet import facet, FacetGrid
 from .datasets import load, list_datasets
 from .cluster import cluster, cluster_split, SplitTree
-from .serialize import to_json, from_json, register_coord_codec
+from ._coord_registry import register_coord_codec
+from ._journal import (to_journal, from_journal, to_json, from_json,
+                       JournalNode, Journal)
 from . import draw, utils
 
 __all__ = ["chart", "Chart", "Layout", "SPEC", "TAB10", "colors",
@@ -40,6 +42,7 @@ __all__ = ["chart", "Chart", "Layout", "SPEC", "TAB10", "colors",
            "load", "list_datasets",
            "cluster", "cluster_split", "SplitTree",
            "to_json", "from_json", "register_coord_codec",
+           "to_journal", "from_journal", "JournalNode", "Journal",
            "draw", "utils"]
 
 # Single source of truth: pyproject.toml. importlib.metadata reads it at

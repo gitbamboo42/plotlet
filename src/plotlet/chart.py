@@ -290,16 +290,6 @@ class Chart(_Renderable):
                  data_width: int | float | str | None = None,
                  data_height: int | float | str | None = None,
                  margin: dict | None = None,
-                 title: str | None = None,
-                 xlabel: str | None = None, ylabel: str | None = None,
-                 xlim: tuple | None = None, ylim: tuple | None = None,
-                 xscale: str | None = None, yscale: str | None = None,
-                 x_expand: float | tuple | None = None,
-                 y_expand: float | tuple | None = None,
-                 legend: bool | None = None, grid: bool | None = None,
-                 clip: bool | None = None,
-                 facecolor: str | None = None,
-                 theme: str | None = None,
                  x: str | None = None, y: str | None = None,
                  fill: str | None = None,
                  color: str | None = None,
@@ -307,6 +297,12 @@ class Chart(_Renderable):
                  linestyle: str | None = None,
                  palette=None,
                  **kwargs):
+        # Constructor accepts only field-state kwargs (structural dims,
+        # margin, data, aes). Everything else (title, xlim, xscale,
+        # legend, grid, theme, …) is a method call — chain them after
+        # construction. Kept minimal so the journal event `new_chart`
+        # can carry exactly the kwargs Chart() accepts, no whitelist
+        # needed at replay.
         if kwargs:
             raise TypeError(f"Chart() got unexpected keyword arguments: {list(kwargs)!r}")
 
@@ -396,25 +392,6 @@ class Chart(_Renderable):
         # region, not its canvas.
         self._last_M_eff: dict | None = None
 
-        # Apply convenience constructor kwargs by recording. `self.title(...)`
-        # etc. fall through __getattr__ → recorder; `self.legend(...)` hits
-        # the special method below (which dispatches leaf vs parent).
-        if title  is not None: self.title(title)
-        if xlabel is not None: self.xlabel(xlabel)
-        if ylabel is not None: self.ylabel(ylabel)
-        if xlim   is not None: self.xlim(*xlim)
-        if ylim   is not None: self.ylim(*ylim)
-        if xscale is not None: self.xscale(xscale)
-        if yscale is not None: self.yscale(yscale)
-        if x_expand is not None:
-            self.x_expand(*(x_expand if isinstance(x_expand, (tuple, list)) else (x_expand,)))
-        if y_expand is not None:
-            self.y_expand(*(y_expand if isinstance(y_expand, (tuple, list)) else (y_expand,)))
-        if legend is not None: self.legend(legend)
-        if grid   is not None: self.grid(grid)
-        if clip   is not None: self.clip(clip)
-        if facecolor is not None: self.facecolor(facecolor)
-        if theme  is not None: self.theme(theme)
 
     # ---------- composition ----------
 
@@ -447,6 +424,10 @@ class Chart(_Renderable):
         leaf._legend_sources = []
         leaf._legend_names = {}
         leaf._legend_group_by_chart = True
+        leaf._legend_valign = "middle"
+        leaf._legend_user_width = None
+        leaf._legend_user_height = None
+        leaf._legend_gap = None
         leaf._insets = []
         leaf._inset_owner = None
         leaf._last_M_eff = None
@@ -594,10 +575,18 @@ class Chart(_Renderable):
         # Inherits the global floor (zero by default) — content-fit
         # margins only, no pre-reserved breathing room. Small canvas: no
         # room for long axis labels unless the user sizes it bigger.
-        inset = Chart(data_width=dw, data_height=dh, **chart_opts)
-        inset._inset_owner = self
-        self._insets.append((tuple(rect), inset))
+        # Route through the `chart()` factory so sugar kwargs (title,
+        # xlim, ...) work here the same as at top level.
+        inset = chart(data_width=dw, data_height=dh, **chart_opts)
+        self._attach_inset(rect, inset)
         return inset
+
+    def _attach_inset(self, rect, inset_chart: "Chart") -> None:
+        """Register an already-constructed Chart as an inset of this leaf.
+        Shared between `.inset()` (creates the chart, then registers) and
+        journal replay (chart already exists, needs registering)."""
+        inset_chart._inset_owner = self
+        self._insets.append((tuple(rect), inset_chart))
 
     # ---------- attachments ----------
 
@@ -1105,9 +1094,46 @@ class Layout(_Renderable):
         return _render_layout(self, outer=outer)
 
 
-def chart(data=None, **opts) -> Chart:
-    """Construct a table-bound Chart. See `Chart` for keyword arguments."""
-    return Chart(data, **opts)
+def chart(data=None, *,
+          data_width=None, data_height=None, margin=None,
+          x=None, y=None, fill=None, color=None, group=None,
+          linestyle=None, palette=None,
+          # Method-sugar kwargs. Each maps to a chained method call
+          # after construction. Kept on the factory (not on
+          # `Chart.__init__`) so the class stays pure field-state and
+          # the journal event `new_chart` can carry exactly what the
+          # constructor accepts with no whitelist at replay.
+          title=None, xlabel=None, ylabel=None,
+          xlim=None, ylim=None, xscale=None, yscale=None,
+          x_expand=None, y_expand=None,
+          legend=None, grid=None, clip=None,
+          facecolor=None, theme=None) -> Chart:
+    """Construct a table-bound Chart. Structural kwargs (`data_width`,
+    `data_height`, `margin`) and aes kwargs (`x`, `y`, `fill`, `color`,
+    `group`, `linestyle`, `palette`) go to the Chart constructor.
+    Everything else is a convenience for the equivalent chained method
+    call — e.g. `pt.chart(df, title="foo", xlim=(0, 10))` is
+    `pt.chart(df).title("foo").xlim(0, 10)`."""
+    c = Chart(data, data_width=data_width, data_height=data_height,
+              margin=margin, x=x, y=y, fill=fill, color=color,
+              group=group, linestyle=linestyle, palette=palette)
+    if title    is not None: c.title(title)
+    if xlabel   is not None: c.xlabel(xlabel)
+    if ylabel   is not None: c.ylabel(ylabel)
+    if xlim     is not None: c.xlim(*xlim)
+    if ylim     is not None: c.ylim(*ylim)
+    if xscale   is not None: c.xscale(xscale)
+    if yscale   is not None: c.yscale(yscale)
+    if x_expand is not None:
+        c.x_expand(*(x_expand if isinstance(x_expand, (tuple, list)) else (x_expand,)))
+    if y_expand is not None:
+        c.y_expand(*(y_expand if isinstance(y_expand, (tuple, list)) else (y_expand,)))
+    if legend    is not None: c.legend(legend)
+    if grid      is not None: c.grid(grid)
+    if clip      is not None: c.clip(clip)
+    if facecolor is not None: c.facecolor(facecolor)
+    if theme     is not None: c.theme(theme)
+    return c
 
 
 def grid(cells: list[list], **kwargs) -> "Layout":
