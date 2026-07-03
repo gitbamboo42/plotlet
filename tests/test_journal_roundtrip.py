@@ -32,9 +32,9 @@ def _collect_plots():
     def add(source, name, fn):
         plots.append((f"{source}::{name}", fn))
 
-    from tests import test_chart, test_layout_diagram, test_sectors
-    from tests import test_subplots, test_legend, test_attachments
-    from tests import test_circular_coordinate, test_themes
+    import test_chart, test_layout_diagram, test_sectors
+    import test_subplots, test_legend, test_attachments
+    import test_circular_coordinate, test_themes
     for mod, source in [
         (test_chart, "chart"),
         (test_layout_diagram, "layout_diagram"),
@@ -50,7 +50,7 @@ def _collect_plots():
 
     # Extension demos — every `plotlet/extensions/<name>.py` exposes
     # `demo() -> Chart|Layout` (per test_extensions.py smoke test).
-    from tests.test_extensions import _ALL_EXTENSIONS
+    from test_extensions import _ALL_EXTENSIONS
     import importlib
     for name in _ALL_EXTENSIONS:
         mod = importlib.import_module(f"plotlet.extensions.{name}")
