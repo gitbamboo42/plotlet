@@ -35,7 +35,7 @@ from .draw import resolve_color, TAB10
 from .scales import (_LinearScale, _LogScale, _CategoryScale, _SymlogScale,
                       _SectoredLinearScale, SectoredValue,
                       _PowerScale, _TimeScale, _nice_domain, _fmt_tick,
-                      _to_epoch, _coerce_time_lim)
+                      _to_epoch, _coerce_time_lim, _AxisDescriptor)
 from .draw import measure_text
 from .draw import coord, rect, segment, text_path
 from . import _regions
@@ -69,49 +69,9 @@ _INSIDE_POSITIONS = frozenset({
 # ---------------------------------------------------------------------------
 # Scale-share types — used by the layout pre-pass.
 # ---------------------------------------------------------------------------
-
-@dataclass
-class _AxisDescriptor:
-    """Domain for one axis, decoupled from any pixel range. The layout
-    pre-pass builds one per share-equivalence class; each panel calls
-    `build(r0, r1)` with its own pixel range to instantiate a scale.
-
-    `flip=True` means the panel renderer swaps `(r0, r1)` when calling
-    `build()`, inverting the axis."""
-    kind: str           # "linear" | "log" | "category" | "symlog" | "power" | "sqrt" | "time"
-    lo: float = 0.0
-    hi: float = 1.0
-    cats: list | None = None
-    padding: float = field(default_factory=lambda: _D["category_padding"])  # category only; 0 = contiguous bands
-    flip: bool = False
-    linthresh: float = 1.0  # symlog only
-    exponent: float = 1.0   # power only
-    splits: list | None = None   # category only: band indices that begin a block
-    split_gap: float = 0.0       # category only: px reserved before each split
-    groups: dict | None = None   # category only: cat -> group label; scale derives splits
-    sector_lengths: tuple | None = None   # continuous only: per-sector lengths
-    sector_gap_px: float = 0.0            # continuous only: px reserved between sectors
-
-    def build(self, r0, r1):
-        if self.kind == "log":
-            return _LogScale(self.lo, self.hi, r0, r1)
-        if self.kind == "category":
-            return _CategoryScale(self.cats or [], r0, r1, padding=self.padding,
-                                  splits=self.splits, gap=self.split_gap,
-                                  groups=self.groups)
-        if self.kind == "symlog":
-            return _SymlogScale(self.lo, self.hi, r0, r1, linthresh=self.linthresh)
-        if self.kind == "power":
-            return _PowerScale(self.lo, self.hi, r0, r1, exponent=self.exponent)
-        if self.kind == "sqrt":
-            return _PowerScale(self.lo, self.hi, r0, r1, exponent=0.5)
-        if self.kind == "time":
-            return _TimeScale(self.lo, self.hi, r0, r1)
-        if self.sector_lengths and self.sector_gap_px > 0:
-            return _SectoredLinearScale(self.lo, self.hi, r0, r1,
-                                        self.sector_lengths,
-                                        self.sector_gap_px)
-        return _LinearScale(self.lo, self.hi, r0, r1)
+# `_AxisDescriptor` is the pre-pixel axis type; it lives in `scales.py`
+# next to the scale classes it builds. Re-exported above for callers that
+# still import it from `.core`.
 
 
 @dataclass
@@ -188,8 +148,8 @@ def _record_ticks(st, axis, args, kw):
             # Symmetric counterpart to `marks=False` — keep auto tick
             # positions + tick marks, suppress the labels. Useful when
             # tick marks are meant as visual cues but their numeric
-            # labels would crowd a different label (e.g. chrom name as
-            # xlabel under per-chrom tick marks).
+            # labels would crowd a different label (e.g. a sector name
+            # as xlabel under per-sector tick marks).
             st[f"{axis}_show_labels"] = False
         else:
             st[f"{axis}_labels"] = list(v) if v is not None else None

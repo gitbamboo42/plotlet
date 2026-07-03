@@ -13,6 +13,9 @@ resolution.
 """
 import datetime
 import math
+from dataclasses import dataclass, field
+
+from ._spec import _D
 
 
 # ---------------------------------------------------------------------------
@@ -239,8 +242,8 @@ class _SymlogScale:
     The forward map is
     `t(x) = sign(x) * (linthresh + log10(|x|/linthresh) * linthresh)` for
     `|x| > linthresh`, and `x` itself inside the linear region. Useful for
-    fold-change axes (volcano / MA plots) where both signs matter and the
-    range spans several orders of magnitude.
+    signed axes where both signs matter and the range spans several
+    orders of magnitude.
     """
 
     def __init__(self, d0, d1, r0, r1, linthresh=1.0):
@@ -531,3 +534,51 @@ def _fmt_tick(t):
     if a >= 1e4 or a < 1e-3:
         return f"{t:.0e}".replace("e+0", "e").replace("e-0", "e-").replace("e+", "e")
     return f"{t:g}"
+
+
+# ---------------------------------------------------------------------------
+# Axis descriptor — resolved axis spec, pre-pixel
+# ---------------------------------------------------------------------------
+
+@dataclass
+class _AxisDescriptor:
+    """Domain for one axis, decoupled from any pixel range. The layout
+    pre-pass builds one per share-equivalence class; each panel calls
+    `build(r0, r1)` with its own pixel range to instantiate a scale.
+
+    `flip=True` means the panel renderer swaps `(r0, r1)` when calling
+    `build()`, inverting the axis."""
+    kind: str           # "linear" | "log" | "category" | "symlog" | "power" | "sqrt" | "time"
+    lo: float = 0.0
+    hi: float = 1.0
+    cats: list | None = None
+    padding: float = field(default_factory=lambda: _D["category_padding"])  # category only; 0 = contiguous bands
+    flip: bool = False
+    linthresh: float = 1.0  # symlog only
+    exponent: float = 1.0   # power only
+    splits: list | None = None   # category only: band indices that begin a block
+    split_gap: float = 0.0       # category only: px reserved before each split
+    groups: dict | None = None   # category only: cat -> group label; scale derives splits
+    sector_lengths: tuple | None = None   # continuous only: per-sector lengths
+    sector_gap_px: float = 0.0            # continuous only: px reserved between sectors
+
+    def build(self, r0, r1):
+        if self.kind == "log":
+            return _LogScale(self.lo, self.hi, r0, r1)
+        if self.kind == "category":
+            return _CategoryScale(self.cats or [], r0, r1, padding=self.padding,
+                                  splits=self.splits, gap=self.split_gap,
+                                  groups=self.groups)
+        if self.kind == "symlog":
+            return _SymlogScale(self.lo, self.hi, r0, r1, linthresh=self.linthresh)
+        if self.kind == "power":
+            return _PowerScale(self.lo, self.hi, r0, r1, exponent=self.exponent)
+        if self.kind == "sqrt":
+            return _PowerScale(self.lo, self.hi, r0, r1, exponent=0.5)
+        if self.kind == "time":
+            return _TimeScale(self.lo, self.hi, r0, r1)
+        if self.sector_lengths and self.sector_gap_px > 0:
+            return _SectoredLinearScale(self.lo, self.hi, r0, r1,
+                                        self.sector_lengths,
+                                        self.sector_gap_px)
+        return _LinearScale(self.lo, self.hi, r0, r1)

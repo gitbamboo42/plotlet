@@ -137,7 +137,7 @@ def cluster_split(data, split, labels=None,
 
 # ---------------------------------------------------------------------------
 # Layout helpers — turn a SplitTree into drawable coords. Useful for any
-# tree renderer (dendrogram, fancy variants in cookbook / extensions): a
+# tree renderer (dendrogram, fancy variants in extensions): a
 # custom artist can `pt.cluster.layout_tree(tree)` and skip reimplementing
 # the scipy.dendrogram call + per-block walk.
 # ---------------------------------------------------------------------------
@@ -233,7 +233,7 @@ def layout_parent(tree):
 # ---------------------------------------------------------------------------
 # Leaf-axis positioning — pixel lookup for a leaf at float position `disp`.
 # Lives here (not the dendrogram artist) so any tree renderer in
-# extensions/cookbook can call it without reaching into private modules.
+# extensions can call it without reaching into private modules.
 # ---------------------------------------------------------------------------
 
 def leaf_position(scale, labels, disp):
@@ -352,7 +352,7 @@ def fit_parent(blocks, parent_layout, parent_frac, gap_frac=0.10):
 
 # ---------------------------------------------------------------------------
 # Artist-side helpers — shared by any tree renderer following plotlet's
-# {leaf axis, height axis} convention. Extracted so cookbook / extension
+# {leaf axis, height axis} convention. Extracted so extension
 # authors writing a new tree variant get the standard input dispatch +
 # frame-defaults wiring without copy-pasting from dendrogram.py.
 # ---------------------------------------------------------------------------

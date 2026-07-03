@@ -295,7 +295,7 @@ def _tick_label(s, x, y, size, angle, axis, side,
     (text extends downward), and the other three sides mirror that rule.
 
     `fontstyle="italic"` propagates through `text_path` for synthesized
-    oblique tick labels (common bio convention for gene names).
+    oblique tick labels.
     `decoration="underline"|"overline"|"line-through"` adds a stroke line
     at the conventional offset."""
     color = _FONTSPEC["color"]
@@ -782,7 +782,7 @@ def emit_chrome(*, st, inp, iw, ih,
         _y_ticks_r = [(ih - y_scale(t)) / ih for t in y_ticks]
         # When the coord also owns the x-sector chrome, hand the y-axis the
         # same sector_ts so it can break its spines at gap boundaries
-        # (Circos: each sector is a bounded arc, the rings don't bleed
+        # (each sector is a bounded arc, so the rings don't bleed
         # through gap whitespace). Cartesian / non-sector renders ignore it.
         _y_sector_ts = None
         if has_x_sector_chrome and x_sec is not None:

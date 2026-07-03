@@ -34,10 +34,12 @@ Ops:
 Node ids: opaque monotonic ints from a process-global counter. Two
 journals never share ids by construction.
 
-Phase 1 semantics: `from_journal` replays the journal by constructing
-the same Chart / Layout objects the tree path would; JournalNode
-delegates rendering to those. Round-trip proves the journal is complete.
-Later phases can replace the replay with a journal-native renderer.
+Rendering goes journal → IR → plot: at render time the journal is
+lowered to the figure IR (`_ir.py`) — the per-node compiled form —
+which materializes the same Chart / Layout objects the tree path would
+build and renders through the existing pipeline. Round-trip proves the
+journal is complete; the IR is the surface for inspection and
+programmatic transformation (`to_ir` / `from_ir`).
 """
 from __future__ import annotations
 
@@ -100,9 +102,9 @@ _JOURNAL_VERSION = 1
 
 
 class JournalNode:
-    """Handle wrapping (journal, root_nid). `to_svg()` replays the
-    journal to reconstruct the render tree, then renders through the
-    existing pipeline.
+    """Handle wrapping (journal, root_nid). `to_svg()` lowers the
+    journal to the figure IR (`_ir.py`), which materializes the render
+    tree and renders through the existing pipeline.
 
     Users don't build JournalNodes directly — they come from
     `from_journal(...)`."""
@@ -111,13 +113,15 @@ class JournalNode:
         self._journal = journal
         self._root_nid = root_nid
 
+    def _to_ir(self):
+        from ._ir import journal_to_ir
+        return journal_to_ir(self._journal, root_nid=self._root_nid)
+
     def to_svg(self, *, clean: bool = False) -> str:
-        root = _replay_to_tree(self._journal, self._root_nid)
-        return root.to_svg(clean=clean)
+        return self._to_ir().to_svg(clean=clean)
 
     def to_html(self, full_page: bool = False) -> str:
-        root = _replay_to_tree(self._journal, self._root_nid)
-        return root.to_html(full_page=full_page)
+        return self._to_ir().to_html(full_page=full_page)
 
     def __repr__(self) -> str:
         return (f"<JournalNode nid={self._root_nid} "
@@ -355,110 +359,5 @@ def from_json(blob: dict) -> JournalNode:
     return from_journal(Journal.from_dict(blob))
 
 
-# ---------------------------------------------------------------------------
-# Replay — reconstruct a Chart/Layout tree from the journal
-# ---------------------------------------------------------------------------
-
-
-def _replay_to_tree(journal: Journal, root_nid: int):
-    """Iterate journal events in order, constructing Chart/Layout
-    objects. Cross-node references (`{"$node": nid}` envelopes and
-    encoded coords) resolve back to real objects on demand."""
-    from .chart import Chart, Layout
-
-    nid_to_node: dict[int, object] = {}
-
-    def _decode(value: Any) -> Any:
-        if isinstance(value, dict):
-            if "$node" in value and len(value) == 1:
-                return nid_to_node[value["$node"]]
-            if "$coord" in value:
-                cls_name = value["$coord"]
-                from ._coord_registry import _COORD_REGISTRY
-                cls = _COORD_REGISTRY[cls_name]
-                return cls._from_dict(_decode(value.get("kwargs", {})))
-            if "$sectors" in value:
-                from .sectors import Sectors
-                return Sectors._from_dict(_decode(value["$sectors"]))
-            return {k: _decode(v) for k, v in value.items()}
-        if isinstance(value, list):
-            return [_decode(v) for v in value]
-        if isinstance(value, tuple):
-            return tuple(_decode(v) for v in value)
-        return value
-
-    for entry in journal.entries:
-        op = entry["op"]
-        nid = entry["nid"]
-        args = [_decode(a) for a in entry.get("args", [])]
-        kwargs = {k: _decode(v) for k, v in entry.get("kwargs", {}).items()}
-
-        if op == "new_chart":
-            # `Chart.__init__` accepts only field-state kwargs (see
-            # chart.py). `new_chart` carries exactly those, so blindly
-            # forwarding is correct — method-sugar kwargs live on the
-            # `chart()` factory and are journaled as their method
-            # events, not as construction state.
-            nid_to_node[nid] = Chart(**kwargs)
-        elif op == "new_leaf":
-            nid_to_node[nid] = _replay_leaf(kwargs, nid_to_node)
-        elif op == "new_layout":
-            layout_kind = kwargs["layout_kind"]
-            child_nids = kwargs["children"]
-            children = [nid_to_node[c] if c is not None else None
-                       for c in child_nids]
-            layout = Layout(layout_kind, children)
-            if kwargs.get("grid_rows") is not None:
-                layout._grid_rows = kwargs["grid_rows"]
-            if kwargs.get("grid_cols") is not None:
-                layout._grid_cols = kwargs["grid_cols"]
-            nid_to_node[nid] = layout
-        elif op == "new_facet_grid":
-            from .facet import FacetGrid
-            nid_to_node[nid] = FacetGrid(
-                kwargs["data"], kwargs["by"],
-                col_wrap=kwargs["col_wrap"],
-                share_x=kwargs["share_x"],
-                share_y=kwargs["share_y"],
-                chart_opts=kwargs["chart_opts"],
-            )
-        elif op == "_inset_add":
-            # Inset chart already exists in `nid_to_node` from a prior
-            # `new_chart` event. Route through `_attach_inset` so any
-            # host-side setup lives in one place, not two.
-            host = nid_to_node[nid]
-            inset_chart = nid_to_node[kwargs["inset_nid"]]
-            host._attach_inset(tuple(kwargs["rect"]), inset_chart)
-        else:
-            # Method call on nid — go through the normal recorder path.
-            # Any frame_defaults an artist injects will be regenerated
-            # here, so the journal deliberately doesn't carry them.
-            node = nid_to_node[nid]
-            method = getattr(node, op)
-            method(*args, **kwargs)
-
-    return nid_to_node[root_nid]
-
-
-def _replay_leaf(kwargs: dict, nid_to_node: dict):
-    """Recreate a legend or diagram leaf. Non-data leaves go through
-    `Chart._new_sized_leaf`, then per-kind state gets restored."""
-    from .chart import Chart
-    leaf_kind = kwargs["leaf_kind"]
-    leaf = Chart._new_sized_leaf(
-        canvas_width=kwargs["canvas_width"],
-        canvas_height=kwargs["canvas_height"],
-        leaf_kind=leaf_kind,
-        margin=kwargs.get("margin"),
-    )
-    if leaf_kind == "legend":
-        leaf._legend_sources = [nid_to_node[n] for n in kwargs.get("legend_sources", [])]
-        leaf._legend_names = dict(kwargs.get("legend_names_pairs", []))
-        leaf._legend_group_by_chart = kwargs.get("legend_group_by_chart", True)
-        leaf._legend_valign = kwargs.get("legend_valign")
-        leaf._legend_user_width = kwargs.get("legend_user_width")
-        leaf._legend_user_height = kwargs.get("legend_user_height")
-        leaf._legend_gap = kwargs.get("legend_gap")
-    if leaf_kind == "diagram":
-        leaf._diagram_inner = kwargs.get("diagram_inner")
-    return leaf
+# Replay lives in `_ir.py`: the journal lowers to the figure IR
+# (`journal_to_ir`), and the IR materializes the Chart/Layout tree.

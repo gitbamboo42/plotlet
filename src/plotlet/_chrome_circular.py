@@ -217,7 +217,7 @@ def draw_x_sector_chrome(cx, cy, R, ri, start_rad, end_rad, is_full_ring,
     ``sector_ts`` is a list of ``(start_t, end_t)`` for each sector in
     t-space.  Each sector gets TWO radial walls — one at its start, one
     at its end — so the gap whitespace between adjacent sectors sits
-    between two parallel walls (Circos style).  ``is_full_ring=True``
+    between two parallel walls.  ``is_full_ring=True``
     treats sector boundaries as cyclic so the wrap boundary at the
     start/end of the data range gets walls bracketing it; partial arc
     is acyclic (open ends, no wrap walls).

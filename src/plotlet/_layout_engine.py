@@ -43,9 +43,10 @@ from ._spec import SPEC, _LAYOUTSPEC, _FONTSPEC, active_theme
 from .core import (
     _render_inner, _replay, _enforce_floors, _required_margin,
     _x_descriptor_multi, _y_descriptor_multi,
-    _AxisDescriptor, _PanelOpts,
+    _PanelOpts,
     _figure_root_attrs, _panel_open,
 )
+from .scales import _AxisDescriptor
 from .chart import Chart, _extract_theme
 from . import _attachments
 from . import _regions

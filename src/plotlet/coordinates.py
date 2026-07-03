@@ -147,8 +147,8 @@ class CircularCoordinate:
       the glyph shape stays Cartesian.  Frame-level text (titles, x/y tick
       labels via ``draw_x_frame`` / ``draw_frame``) is positioned in the
       coordinate directly and renders correctly.
-    - ``c.sectors(axis="x")`` is supported (Circos-style wedges with
-      radial dividers and tangential labels).  ``c.sectors(axis="y")``
+    - ``c.sectors(axis="x")`` is supported (wedges with radial
+      dividers and tangential labels).  ``c.sectors(axis="y")``
       (concentric bands) is not yet supported and raises at render time.
 
     Parameters
@@ -186,7 +186,7 @@ class CircularCoordinate:
     inner : Chart, optional
         A separate ``pt.chart(...)`` rendered into the central disc
         ``r ∈ [0, r_inner]`` — the area no ring claims. Used to host
-        Circos-style chord/link artists (e.g. ``c.chord_links``) that
+        circular chord/link artists (e.g. ``c.chord_links``) that
         share the t-axis with the rings but live in the inner disc.
         The leaves passed via ``(c1 / c2 / ...).coordinate(...)`` still
         tile the annulus exactly as today; this is additive. The inner
@@ -389,8 +389,8 @@ class CircularCoordinate:
                     ("ylabel", [""], {}),
                 ])
                 # x-axis: only the outermost ring shows ticks/labels/sector
-                # labels (Circos convention: labels outside the outermost
-                # track). Inner rings suppress unless the user explicitly
+                # labels (conventionally, labels sit outside the
+                # outermost track). Inner rings suppress unless the user explicitly
                 # called xticks(...) on that leaf.
                 # y-axis suppression comes from the leaf coord's own
                 # `y_ticks=[]` default (`CircularCoordinate.__init__`);
