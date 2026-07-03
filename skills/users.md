@@ -18,14 +18,17 @@ Chart methods chain. Charts compose with `|` (horizontal), `/`
 
 **Never assume a signature — read a working example first.**
 
-- `cookbook/*/` — worked multi-file recipes (annotated heatmaps,
-  circular / genomic plots, ...).
+- [`plotlet-cookbook`](https://github.com/gitbamboo42/plotlet-cookbook) repo —
+  worked multi-file recipes (annotated heatmaps, circular / ring plots, ...).
 - `tests/test_*.py` — ~150 small self-contained fixtures named
   `def chart_<what>()` / `def diag_<what>()`. Highly grep-friendly:
-  `grep -l "keyword" tests/test_*.py cookbook/*/*.py`.
-- `src/plotlet/extensions/*.py` — ~50 domain-specific artists (volcano,
-  manhattan, sankey, upset_plot, km_curve, ...). Each file's top
-  docstring shows usage. `import plotlet.extensions.<name>` registers it.
+  `grep -l "keyword" tests/test_*.py`.
+- `plotlet-extensions` package — ~45 domain-specific artists (sankey,
+  alluvial, raincloud, mosaic, upset_plot, ...) in a separate install
+  (`pip install plotlet-extensions`). A few (`numeric_bar`, `curved_tree`,
+  `annotation_strip`, `chord_links`, `chord_ribbon`) ship in core under
+  `src/plotlet/extensions/*.py`. Either way, each file's top docstring shows
+  usage and `import plotlet.extensions.<name>` registers it.
 
 Copy the pattern, adapt the data.
 

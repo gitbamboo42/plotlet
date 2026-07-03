@@ -350,7 +350,7 @@ def chart_long_ylabel():
     # the title from its natural slot above the data area.
     c = pt.chart(data_width=200, data_height=120,
                  title="long ylabel + title",
-                 ylabel="Gene expression (log10 normalized counts per million)",
+                 ylabel="Signal intensity (log10 normalized units per sample)",
                  xlabel="time")
     c.line(data={"x": [0, 1, 2, 3], "y": [3.2, 4.1, 4.9, 5.5]}, x="x", y="y")
     return c
@@ -423,7 +423,7 @@ def chart_errorbar_category_x():
     df = {"cat":  ["control", "low", "mid", "high"],
           "mean": [2.1, 3.4, 4.6, 5.2],
           "sd":   [0.3, 0.4, 0.5, 0.6]}
-    c = pt.chart(title="dose response", xlabel="dose", ylabel="response")
+    c = pt.chart(title="response by level", xlabel="level", ylabel="response")
     c.bar(data=df, x="cat", y="mean", fill="#cccccc")
     c.errorbar(data=df, x="cat", y="mean", yerr="sd")
     return c
@@ -497,25 +497,25 @@ def chart_heatmap_annot():
 
 
 def chart_heatmap_categorical():
-    genes   = ["TP53", "KRAS", "EGFR", "BRAF", "PIK3CA"]
+    rows    = ["R1", "R2", "R3", "R4", "R5"]
     samples = ["S1", "S2", "S3", "S4", "S5", "S6"]
     matrix = [
-        ["Missense", "WT",        "Frameshift", "WT",        "Missense", None      ],
-        ["WT",       "Nonsense",  "WT",          "Missense",  "WT",       "CNV"     ],
-        ["CNV",      "WT",        "WT",          "CNV",       "Nonsense", "WT"      ],
-        ["WT",       "Missense",  "CNV",         None,        "WT",       "Missense"],
-        ["Nonsense", "CNV",       "Missense",    "Frameshift","WT",       "WT"      ],
+        ["Alpha", "None",   "Gamma", "None",   "Alpha", None    ],
+        ["None",  "Beta",   "None",  "Alpha",  "None",  "Delta" ],
+        ["Delta", "None",   "None",  "Delta",  "Beta",  "None"  ],
+        ["None",  "Alpha",  "Delta", None,     "None",  "Alpha" ],
+        ["Beta",  "Delta",  "Alpha", "Gamma",  "None",  "None"  ],
     ]
     palette = {
-        "WT":         "#e8e8e8",
-        "Missense":   "#3a6dbf",
-        "Nonsense":   "#c0392b",
-        "Frameshift": "#e67e22",
-        "CNV":        "#27ae60",
+        "None":   "#e8e8e8",
+        "Alpha":  "#3a6dbf",
+        "Beta":   "#c0392b",
+        "Gamma":  "#e67e22",
+        "Delta":  "#27ae60",
     }
     c = pt.chart(title="heatmap (categorical palette, absent=grey)",
-                 xlabel="sample", ylabel="gene")
-    c.heatmap(matrix, xticklabels=samples, yticklabels=genes,
+                 xlabel="sample", ylabel="row")
+    c.heatmap(matrix, xticklabels=samples, yticklabels=rows,
               palette=palette, absent_fill="#dddddd")
     c.xticks(rotation=45)
     c.legend()
@@ -940,8 +940,8 @@ def chart_curve_fills():
 
 
 def chart_rect():
-    # Mixed scalar / list inputs — broadcast covers the genome-track,
-    # gantt-style, and gene-model use cases that motivated adding rect.
+    # Mixed scalar / list inputs — broadcast covers the multi-track,
+    # gantt-style, and interval-model use cases that motivated adding rect.
     # Also exercises edgecolor + linewidth so the outline path is covered.
     c = pt.chart(title="rect (broadcast + edgecolor)",
                  xlabel="x", ylabel="y", legend=True)
@@ -1033,14 +1033,14 @@ def chart_long_rotated_xticks():
 
 
 def chart_xticks_fontstyle_italic():
-    # Common bio convention: gene names rendered in italics. DejaVu Sans
+    # Italic axis-tick labels via fontstyle. DejaVu Sans
     # ships no real italic, so plotlet synthesizes a -12° oblique skew at
     # render time (same approach matplotlib uses).
-    df = {"gene": ["TP53", "KRAS", "BRAF", "PIK3CA", "EGFR"],
-          "mut_rate": [0.42, 0.35, 0.28, 0.21, 0.18]}
+    df = {"label": ["alpha", "beta", "gamma", "delta", "epsilon"],
+          "rate": [0.42, 0.35, 0.28, 0.21, 0.18]}
     c = pt.chart(data_width=320, data_height=200,
-                 title="italic gene names", ylabel="mut rate")
-    c.bar(data=df, x="gene", y="mut_rate", fill="#5599aa")
+                 title="italic labels", ylabel="rate")
+    c.bar(data=df, x="label", y="rate", fill="#5599aa")
     c.xticks(fontstyle="italic")
     return c
 
@@ -1218,7 +1218,7 @@ def chart_sqrt_y():
 
 def chart_symlog_x():
     # Symlog on x: spans both signs across many orders of magnitude, with
-    # a linear band around 0. Volcano-style domains.
+    # a linear band around 0. Signed-magnitude domains.
     xs = [-2000, -250, -25, -2, -0.5, 0, 0.5, 2, 25, 250, 2000]
     ys = [abs(x) ** 0.5 for x in xs]
     c = pt.chart(data_width=400, data_height=180,
@@ -1363,19 +1363,19 @@ def chart_boxplot():
 def chart_violin():
     rng = random.Random(1)
     rows = []
-    for genotype in ("wt", "+drug", "ko", "rescue"):
+    for group in ("ctrl", "+drug", "low", "high"):
         for trt, shift in (("A", 0.0), ("B", 1.2)):
-            mu = {"wt": 5, "+drug": 4, "ko": 7, "rescue": 5.5}[genotype] + shift
-            sd = {"wt": 1, "+drug": 0.8, "ko": 1.4, "rescue": 1.0}[genotype]
+            mu = {"ctrl": 5, "+drug": 4, "low": 7, "high": 5.5}[group] + shift
+            sd = {"ctrl": 1, "+drug": 0.8, "low": 1.4, "high": 1.0}[group]
             for _ in range(80):
-                rows.append({"geno": genotype, "trt": trt,
-                             "expr": rng.gauss(mu, sd)})
+                rows.append({"grp": group, "trt": trt,
+                             "value": rng.gauss(mu, sd)})
     data = {k: [r[k] for r in rows] for k in rows[0]}
     c = pt.chart(data_width=380, data_height=220,
-                 title="violin fill", xlabel="genotype", ylabel="expression",
+                 title="violin fill", xlabel="group", ylabel="value",
                  legend=True)
-    c.xscale("category", order=["wt", "+drug", "ko", "rescue"])
-    c.violin(data=data, x="geno", y="expr", fill="trt",
+    c.xscale("category", order=["ctrl", "+drug", "low", "high"])
+    c.violin(data=data, x="grp", y="value", fill="trt",
              palette={"A": "#3F97C5", "B": "#F99917"}, inner="box")
     c.legend()
     return c
@@ -1385,19 +1385,19 @@ def chart_swarm():
     rng = random.Random(2)
     rows = []
     for group in ("A", "B", "C", "D"):
-        for trt, shift in (("ctrl", 0.0), ("dose", 0.8)):
+        for series, shift in (("a", 0.0), ("b", 0.8)):
             mu = {"A": 3.0, "B": 4.5, "C": 5.2, "D": 6.0}[group] + shift
             sd = {"A": 0.6, "B": 0.7, "C": 0.5, "D": 0.9}[group]
             for _ in range(20):
-                rows.append({"group": group, "trt": trt,
+                rows.append({"group": group, "series": series,
                              "value": rng.gauss(mu, sd)})
     data = {k: [r[k] for r in rows] for k in rows[0]}
     c = pt.chart(data_width=360, data_height=220,
                  title="swarm fill", xlabel="group", ylabel="value",
                  legend=True)
     c.xscale("category", order=["A", "B", "C", "D"])
-    c.swarm(data=data, x="group", y="value", fill="trt",
-            palette={"ctrl": "#3F97C5", "dose": "#F99917"})
+    c.swarm(data=data, x="group", y="value", fill="series",
+            palette={"a": "#3F97C5", "b": "#F99917"})
     c.legend()
     return c
 
@@ -1406,19 +1406,19 @@ def chart_strip():
     rng = random.Random(3)
     rows = []
     for cond in ("A", "B", "C", "D"):
-        for trt, shift in (("ctrl", 0.0), ("dose", 0.8)):
+        for series, shift in (("a", 0.0), ("b", 0.8)):
             mu = {"A": 3.0, "B": 4.5, "C": 5.2, "D": 6.1}[cond] + shift
             sd = {"A": 0.8, "B": 1.0, "C": 0.6, "D": 1.2}[cond]
             for _ in range(25):
-                rows.append({"cond": cond, "trt": trt,
+                rows.append({"cond": cond, "series": series,
                              "value": rng.gauss(mu, sd)})
     data = {k: [r[k] for r in rows] for k in rows[0]}
     c = pt.chart(data_width=360, data_height=220,
                  title="strip fill", xlabel="condition", ylabel="value",
                  legend=True)
     c.xscale("category", order=["A", "B", "C", "D"])
-    c.strip(data=data, x="cond", y="value", fill="trt",
-            palette={"ctrl": "#3F97C5", "dose": "#F99917"})
+    c.strip(data=data, x="cond", y="value", fill="series",
+            palette={"a": "#3F97C5", "b": "#F99917"})
     c.legend()
     return c
 

@@ -182,6 +182,6 @@ table above is a navigation aid.
 
 ## See also
 
-- [`cookbook/circle/`](../cookbook/circle/) — Circos-style genome diagram using `CircularCoordinate` + sectors + chord artists.
+- [`plotlet-cookbook/circle/`](https://github.com/gitbamboo42/plotlet-cookbook/tree/main/circle) — circular ring diagram using `CircularCoordinate` + sectors + chord artists.
 - [`docs/EXTENDING.md`](EXTENDING.md) — adding custom artists (the other half of the extension story).
 - [`docs/SUBPLOTS.md`](SUBPLOTS.md) — composing multi-panel layouts for the "two coords side by side" pattern.

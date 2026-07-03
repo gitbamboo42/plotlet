@@ -36,6 +36,7 @@ Invariants:
 """
 from __future__ import annotations
 
+import importlib.util
 import inspect
 import re
 from pathlib import Path
@@ -537,8 +538,10 @@ class Chart(_Renderable):
                 recorder.__doc__ = (mod.__doc__ if mod is not None else None) or ""
                 recorder.__name__ = name
             return recorder
-        ext_file = Path(__file__).parent / "extensions" / f"{name}.py"
-        if ext_file.is_file():
+        # An installed-but-not-imported extension (from core or the
+        # plotlet-extensions package — `plotlet.extensions` is a shared
+        # namespace) registers its artist only on import; hint at that.
+        if importlib.util.find_spec(f"plotlet.extensions.{name}") is not None:
             raise AttributeError(
                 f"Chart has no method {name!r}. "
                 f"Did you forget `import plotlet.extensions.{name}`? "

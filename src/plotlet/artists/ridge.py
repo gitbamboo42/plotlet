@@ -2,8 +2,8 @@
 
 Seaborn's deprecated `kdeplot(..., multiple="stack")` and R's
 `ggridges::geom_density_ridges`. Each series gets its own baseline on y;
-densities are KDE-shaped via a Gaussian kernel. Common in bioinformatics
-for showing distributions across many groups.
+densities are KDE-shaped via a Gaussian kernel. Handy for showing
+distributions across many groups.
 
 The whole stack is rendered as one artist so it owns its own y-baselines.
 Categories are placed at integer y; densities are scaled to a fraction of

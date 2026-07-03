@@ -10,7 +10,8 @@ type (numpy / pandas / tuple / set / date / datetime / non-string-keyed
 dict) must survive `json.dumps` and rehydrate identically.
 
 Reuses every `PLOTS` registry the codebase already has for baseline
-comparison, plus the extension demos.
+comparison. (Extension demos are round-tripped in the plotlet-extensions
+repo's own copy of this test.)
 """
 from __future__ import annotations
 
@@ -24,9 +25,8 @@ import plotlet as pt
 def _collect_plots():
     """Gather (label, factory) pairs from every baseline test module.
 
-    Modules keep a `PLOTS = {name: fn}` registry; the extensions test
-    walks a directory of modules with a `demo()` function. Pull them
-    all so the round-trip runs across the same surface as baselines."""
+    Modules keep a `PLOTS = {name: fn}` registry. Pull them all so the
+    round-trip runs across the same surface as baselines."""
     plots: list[tuple[str, callable]] = []
 
     def add(source, name, fn):
@@ -47,15 +47,6 @@ def _collect_plots():
     ]:
         for name, fn in getattr(mod, "PLOTS", {}).items():
             add(source, name, fn)
-
-    # Extension demos — every `plotlet/extensions/<name>.py` exposes
-    # `demo() -> Chart|Layout` (per test_extensions.py smoke test).
-    from test_extensions import _ALL_EXTENSIONS
-    import importlib
-    for name in _ALL_EXTENSIONS:
-        mod = importlib.import_module(f"plotlet.extensions.{name}")
-        if hasattr(mod, "demo"):
-            add("extensions", name, mod.demo)
 
     return plots
 

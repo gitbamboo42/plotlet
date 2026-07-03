@@ -14,8 +14,8 @@ per-extension cost low.
   either continuous (length-weighted) or categorical (grouped members).
   Peer of scales: any artist works inside a sectored axis without
   modification, since the partition lives on the panel and reshapes
-  `x_scale`/`y_scale`. Unifies multi-track layouts (e.g. genomic
-  position) and heatmap row / column clusters under one concept.
+  `x_scale`/`y_scale`. Unifies multi-track layouts and heatmap row /
+  column clusters under one concept.
 - Long-form input (`data=df, x=, y=, color=`/`fill=`) for table-shaped
   marks across the standard vocabulary — a data frame plus column
   names is the primary entry point. Matrix and shape marks (heatmap,
@@ -34,18 +34,17 @@ per-extension cost low.
 
 ## What's *not* in the core
 
-- **Domain-specific plot types** — genome tracks, Manhattan plots,
-  phylogenetic trees, sankey, alluvial, networks, maps, ROC/PR curves,
-  Kaplan–Meier, joint plots, pair plots, raincloud, mosaic, upset,
-  calendar heatmap, MA / volcano / forest / funnel, parallel coordinates,
-  PCA biplot, … . The standard vocabulary stops where the literature
-  becomes domain-specific.
+- **Domain-specific plot types** — sankey, alluvial, networks, maps,
+  ROC/PR curves, joint plots, pair plots, raincloud, mosaic, upset,
+  calendar heatmap, funnel, parallel coordinates, … . The standard
+  vocabulary stops where the literature becomes domain-specific.
 - Specialty scales beyond the basics
 - Interactivity, animation, dashboarding
 
 These belong in **your project**. Reference implementations to copy and adapt
-live in [`src/plotlet/extensions/`](../src/plotlet/extensions/) (single-file artists)
-and [`cookbook/`](../cookbook/) (multi-file projects like annotated heatmaps).
+live in the separate [`plotlet-extensions`](https://github.com/gitbamboo42/plotlet-extensions)
+package (single-file artists) and the [`plotlet-cookbook`](https://github.com/gitbamboo42/plotlet-cookbook)
+repo (multi-file projects like annotated heatmaps).
 The line is "standard vocabulary in core, domain idioms in extensions" —
 borrow elegance where it doesn't fight the core.
 
@@ -84,8 +83,9 @@ Three claims:
    `attach_above`/`attach_left`, `|`/`/` are core, not glue.
 
 3. **Focused core, clear extension surface.** Standard vocabulary lives in
-   core; domain idioms live in [`extensions/`](../src/plotlet/extensions/)
-   and [`cookbook/`](../cookbook/) as copy-and-adapt examples. The
+   core; domain idioms live in the separate
+   [`plotlet-extensions`](https://github.com/gitbamboo42/plotlet-extensions)
+   package and [`plotlet-cookbook`](https://github.com/gitbamboo42/plotlet-cookbook) as copy-and-adapt examples. The
    boundary is explicit ("What's *not* in the core" above), the
    extension API is `ArtistSpec` + three callbacks, and the replay model
    means custom artists compose like built-in ones.
@@ -98,7 +98,8 @@ plotlet will never:
 
 - Be interactive (no hover, zoom, pan, animation, ever)
 - Accept domain-specific plot types into the core (they belong in
-  [`extensions/`](../src/plotlet/extensions/) or user projects — see the
+  [`plotlet-extensions`](https://github.com/gitbamboo42/plotlet-extensions)
+  or user projects — see the
   list above)
 
 Tools that try to do everything age into legacy weight. We're not doing that.

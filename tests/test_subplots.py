@@ -232,10 +232,10 @@ def fit_width_only():
 
 def share_x_col_v_of_h():
     # v-of-h composition with cross-row column-wise x-sharing — the
-    # canonical "stacked tracks across a genome" shape. Each row uses
+    # canonical "stacked tracks across a domain" shape. Each row uses
     # share_y().gap(0) to collapse inner spines within the row; the
     # outer `share_x("col")` aligns the same column across rows (column
-    # widths differ on purpose to match the genome-tracks use case).
+    # widths differ on purpose to match the multi-track use case).
     def row(name):
         a = pt.chart(title=f"{name}-c1", data_width=160, data_height=70)
         b = pt.chart(title=f"{name}-c2", data_width=110, data_height=70)

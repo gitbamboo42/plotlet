@@ -64,6 +64,7 @@ Issues = "https://github.com/gitbamboo42/plotlet/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+namespaces = true
 
 [tool.setuptools.package-data]
 plotlet = ["spec.json", "themes/*.json", "draw/fonts/*.ttf", "_datasets/*.csv"]

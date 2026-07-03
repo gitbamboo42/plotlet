@@ -18,7 +18,7 @@ Reference docs in [`docs/`](docs/):
 - [Themes](docs/THEMES.md) — visual presets
 - [AI attributes](docs/AI_ATTRS.md) — `data-plotlet-*` schema for automation
 
-Reference plot types beyond the standard vocabulary live in [`src/plotlet/extensions/`](src/plotlet/extensions/) (single-file) and [`cookbook/`](cookbook/) (multi-file projects).
+Reference plot types beyond the standard vocabulary ship in the separate [`plotlet-extensions`](https://github.com/gitbamboo42/plotlet-extensions) package (single-file artists — sankey, alluvial, raincloud, upset_plot, …; `pip install plotlet-extensions`, then `import plotlet.extensions.<name>`) and in the [`plotlet-cookbook`](https://github.com/gitbamboo42/plotlet-cookbook) repo (multi-file, domain-specific projects). A few extensions the core tests depend on still ship in core under [`src/plotlet/extensions/`](src/plotlet/extensions/).
 
 ## For AI assistants
 

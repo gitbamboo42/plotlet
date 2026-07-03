@@ -95,15 +95,15 @@ def sectors_categorical_x():
                  data_width=440, data_height=200,
                  ylabel="value")
     c.sectors(
-        {"pathwayA": ["g1", "g2", "g3"],
-         "pathwayB": ["g4", "g5"],
-         "pathwayC": ["g6", "g7", "g8", "g9"]},
+        {"groupA": ["c1", "c2", "c3"],
+         "groupB": ["c4", "c5"],
+         "groupC": ["c6", "c7", "c8", "c9"]},
         axis="x", divider=False,
     )
     c.bar(
-        data={"gene": ["g1","g2","g3","g4","g5","g6","g7","g8","g9"],
-              "v":    [3,    5,    2,    8,    6,    4,    7,    5,    3]},
-        x="gene", y="v",
+        data={"cat": ["c1","c2","c3","c4","c5","c6","c7","c8","c9"],
+              "v":   [3,    5,    2,    8,    6,    4,    7,    5,    3]},
+        x="cat", y="v",
     )
     return c
 
@@ -245,19 +245,19 @@ def test_sectors_after_artist_still_remaps():
     from plotlet.core import _replay
     c = pt.chart(data_width=200, data_height=80, ylim=(0, 1))
     c.scatter(
-        data={"chrom": ["chr1", "chr2"], "x": [25, 25], "y": [0.5, 0.5]},
+        data={"grp": ["g1", "g2"], "x": [25, 25], "y": [0.5, 0.5]},
         x="x", y="y",
     )
     c.coordinate(pt.CircularCoordinate()).sectors(
-        {"chr1": 100, "chr2": 100}, column="chrom",
+        {"g1": 100, "g2": 100}, column="grp",
     )
     st = _replay(c._calls)
     assert st["x_sectors"] is not None, "sectors recorded after artist must reach replay state"
-    # Both rows tagged chrom=chr1/chr2 with the same local x=25. After remap,
-    # chr2's x must be offset to 25 + 100 = 125 (chr1's offset is 0).
+    # Both rows tagged grp=g1/g2 with the same local x=25. After remap,
+    # g2's x must be offset to 25 + 100 = 125 (g1's offset is 0).
     [artist] = st["artists"]
     assert artist["xs"] == [25.0, 125.0], (
-        f"sector remap must offset chr2's x by chr1's length; got xs={artist['xs']!r}"
+        f"sector remap must offset g2's x by g1's length; got xs={artist['xs']!r}"
     )
 
 

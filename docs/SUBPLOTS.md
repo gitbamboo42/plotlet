@@ -24,8 +24,8 @@ fig = pt.grid([[a, b], [c, d]])
 # Annotated heatmap — attach trees + strips to a clustered heatmap.
 # `c.sectors({cluster: [members]}, axis=...)` declares the cluster
 # partition; `attach_*` auto-shares the relevant axis so the gaps + leaf
-# order propagate to every panel on the same scale. See cookbook/heatmaps/
-# for the worked examples.
+# order propagate to every panel on the same scale. See the plotlet-cookbook
+# repo (heatmaps/) for the worked examples.
 hm.sectors(col_clusters, axis="x", divider=False, label=False)
 hm.sectors(row_clusters, axis="y", divider=False, label=False)
 hm.heatmap(matrix, xticklabels=samples, yticklabels=genes, ...)
@@ -117,4 +117,4 @@ If you need a chart in two places, build two separate charts. Children can't `.s
 - **Dendrograms use the category scale.** A dendrogram on the left of a heatmap uses the heatmap's row category scale via `share_y` (or `attach_left`, which auto-shares). With `c.sectors(...)` on the panel and a matching parallel-vector `clusters=` on the dendrogram, the dendrogram's two-level cluster exposes its leaf order via `axis_order` — the heatmap on the same shared scale picks it up automatically (artist `axis_order` beats artist `frame_defaults` order in core's precedence rule, while user-explicit `c.xscale(order=...)` still wins over both).
 - **Sectors follow the share class.** `c.sectors(...)` declared on a host (or via `Layout.sectors`) propagates to attached charts and to `CircularCoordinate(inner=)` side-leaves on the matching axis — anything sharing the partitioned axis inherits the partition without redeclaring. Declare `c.sectors(...)` on the side-leaf to opt out.
 - **No `share_color=`.** Color isn't position-critical the way axes are; for shared gradients across heatmaps, pass matching `cmap` / `vmin` / `vmax` to each `imshow` and point one legend at any one of them.
-- **Coordinated artists that span panels** (brackets, etc.) are out of scope; would land as a cookbook recipe.
+- **Coordinated artists that span panels** (brackets, etc.) are out of scope; would land as a plotlet-cookbook recipe.
