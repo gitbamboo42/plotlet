@@ -1306,16 +1306,12 @@ def chart_tick_format_string():
     return c
 
 
-def chart_tick_format_callable():
-    # Callable format: turn dollars into compact K/M suffixed labels.
-    def _money(v):
-        if v >= 1_000_000: return f"${v/1_000_000:.1f}M"
-        if v >= 1_000:     return f"${v/1_000:.0f}K"
-        return f"${v:.0f}"
+def chart_tick_format_named():
+    # Named formatter: `pt.formatters.money` handles the K/M compaction.
     c = pt.chart(data_width=320, data_height=180,
                  title="revenue", xlabel="month", ylabel="revenue")
     c.line(data={"x": list(range(8)), "y": [1200, 4500, 8300, 18000, 45000, 92000, 410000, 1_250_000]}, x="x", y="y")
-    c.yticks(format=_money)
+    c.yticks(format="money")
     return c
 
 
@@ -1943,7 +1939,7 @@ PLOTS = {
     "dendrogram_styled":   chart_dendrogram_styled,
     "dendrogram_labeled":  chart_dendrogram_labeled,
     "tick_format_string":  chart_tick_format_string,
-    "tick_format_callable": chart_tick_format_callable,
+    "tick_format_named":    chart_tick_format_named,
     "time_axis_dates":     chart_time_axis_dates,
     "time_axis_hours":     chart_time_axis_hours,
     "scatter_size":        chart_scatter_size,

@@ -80,6 +80,89 @@ def to_list(obj):
     return list(obj)
 
 
+class DataFrameLite:
+    """Canonical in-memory form for DataFrame-shaped inputs.
+
+    Any pandas / polars / duck-typed DataFrame the user passes goes
+    through `_normalize_data` at the recorder boundary and lands here.
+    The class supports the two access patterns plotlet artists actually
+    use: attributes (`.values`, `.columns`, `.index` — heatmap) and
+    column indexing (`df[col]` returns a plain list — line, scatter,
+    bar, etc.). Everything is plain Python so the journal never holds
+    a library-specific object and JSON serialization is trivial."""
+    __slots__ = ("values", "columns", "index", "_col_index")
+
+    def __init__(self, values, columns, index):
+        self.values = values
+        self.columns = list(columns)
+        self.index = list(index)
+        self._col_index = {c: i for i, c in enumerate(self.columns)}
+
+    def __getitem__(self, key):
+        return [row[self._col_index[key]] for row in self.values]
+
+    def __contains__(self, key):
+        return key in self._col_index
+
+    def __iter__(self):
+        return iter(self.columns)
+
+    def __len__(self):
+        return len(self.values)
+
+
+def _normalize_data(data):
+    """Coerce DataFrame-shaped and numpy inputs to plain Python at the
+    boundary. After this, no library-specific value ever enters the
+    journal — the JSON layer only sees plain Python and DataFrameLite.
+
+    Idempotent: already-normalized values pass through unchanged.
+
+      - pandas / polars / duck-typed DataFrame  → DataFrameLite
+      - numpy scalar                             → Python scalar
+      - numpy array (any dim) / pandas Series    → nested list via .tolist()
+      - dict                                     → recurse over values
+      - list / tuple                             → recurse over elements
+      - everything else                          → passthrough
+
+    Column and index labels are coerced to `str` — uniform label type
+    simplifies downstream code and keeps JSON round-trip deterministic.
+    Pass strings if you rely on `df[42]`-style integer-column lookups;
+    after normalization the column would be named `"42"`."""
+    if data is None or isinstance(data, DataFrameLite):
+        return data
+    # DataFrame-shaped duck type. Excludes plain dicts (which have
+    # `.values` as a method but no `.columns` / `.index`).
+    if (hasattr(data, "values") and hasattr(data, "columns")
+            and hasattr(data, "index")
+            and not isinstance(data, dict)):
+        return DataFrameLite(
+            values=[list(row) for row in data.values],
+            columns=[str(c) for c in data.columns],
+            index=[str(i) for i in data.index],
+        )
+    # numpy scalar → Python scalar. `np.generic` covers int64/float64/etc.
+    try:
+        import numpy as np
+    except ImportError:
+        np = None
+    if np is not None and isinstance(data, np.generic):
+        return data.item()
+    # numpy array / pandas Series / anything with .tolist()
+    if hasattr(data, "tolist"):
+        out = data.tolist()
+        # Recurse: 2-D arrays produce list-of-lists; inner elements may
+        # still be numpy scalars if they slipped through `tolist`.
+        return _normalize_data(out) if isinstance(out, (list, dict)) else out
+    if isinstance(data, dict):
+        return {k: _normalize_data(v) for k, v in data.items()}
+    if isinstance(data, list):
+        return [_normalize_data(v) for v in data]
+    if isinstance(data, tuple):
+        return tuple(_normalize_data(v) for v in data)
+    return data
+
+
 def to_list_2d(obj):
     """Convert a 2-D input (list-of-lists, numpy 2-D, DataFrame) to nested lists."""
     if hasattr(obj, "values") and not hasattr(obj, "tolist"):

@@ -72,9 +72,10 @@ class Journal:
         })
 
     def to_dict(self) -> dict:
-        """JSON-safe dict form. Walks entries via the JSON layer so
-        pandas / numpy values get enveloped; plotlet envelopes ($node
-        etc.) were already added at `to_journal` time."""
+        """JSON-safe dict form. Walks entries via the JSON layer to
+        envelope the remaining non-JSON-native types (tuple, set,
+        date, datetime, DataFrameLite); plotlet envelopes ($node etc.)
+        were already added at `to_journal` time."""
         from ._json_layer import json_safe
         return {
             "version": _JOURNAL_VERSION,
@@ -155,9 +156,9 @@ def to_journal(root) -> Journal:
           - Chart / Layout / FacetGrid  → {"$node": nid}
           - Sectors                     → {"$sectors": ...}
           - Registered coord            → {"$coord": name, "kwargs": ...}
-        Everything else (primitives, pandas / numpy, user dicts / lists)
-        is passed through unchanged — value libraries are the JSON
-        layer's concern, not the journal's."""
+        Everything else (primitives, DataFrameLite, user dicts / lists)
+        is passed through unchanged — pandas / numpy have already been
+        normalized at the recorder boundary."""
         # Late import to avoid a cycle with chart.py at module load.
         from .chart import _Renderable
         from .sectors import Sectors

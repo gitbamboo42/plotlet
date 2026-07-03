@@ -41,7 +41,7 @@ import re
 from pathlib import Path
 
 from ._spec import _SIZESPEC, _MARGIN_FLOOR, _OUTER_MARGIN, _LAYOUTSPEC
-from .utils import _to_px
+from .utils import _to_px, _normalize_data
 from .registry import get_artist, all_artist_names
 
 
@@ -336,7 +336,10 @@ class Chart(_Renderable):
         self._orig_data_height = self._data_height
 
         # ---- Composition state ---------------------------------------------
-        self._data = data
+        # Normalize DataFrame-shaped and numpy inputs to plain Python at
+        # the boundary. The journal never holds a library-specific object,
+        # so JSON serialization has nothing to envelope.
+        self._data = _normalize_data(data)
         # Chart-level aesthetic defaults inherited by artist calls — set
         # once at chart construction, overridden by per-artist kwargs.
         self._aes = {"x": x, "y": y,
@@ -505,6 +508,15 @@ class Chart(_Renderable):
                                     for v in kwargs.values()
                                     if isinstance(v, str))):
                         kwargs["data"] = self._data
+                    # Normalize any user-passed `data=` (chart._data is
+                    # already normalized in __init__; idempotent no-op
+                    # for that path). Positional args get the same
+                    # treatment — `c.heatmap(df, ...)` passes df
+                    # positionally, and the artist expects a normalized
+                    # value regardless of position.
+                    if "data" in kwargs:
+                        kwargs["data"] = _normalize_data(kwargs["data"])
+                    args = tuple(_normalize_data(a) for a in args)
                 if spec is not None and spec.frame_defaults is not None:
                     for call in spec.frame_defaults(list(args), dict(kwargs)) or ():
                         # Tag with a 4th element so `_replay` can route

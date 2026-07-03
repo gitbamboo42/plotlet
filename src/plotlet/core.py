@@ -609,17 +609,26 @@ def _resolve_tick_formatter(user_fmt, scale):
     """Pick the formatter for tick labels on `scale`.
 
     Precedence: user-supplied `format=` (from `xticks(format=...)`) >
-    scale's own `format_tick` > the package default `_fmt_tick`. A user
-    format-string is wrapped in a callable; a callable is used directly."""
+    scale's own `format_tick` > the package default `_fmt_tick`.
+
+    `format=` accepts a string only. If the string names a registered
+    formatter (see `pt.list_formatters()`), that formatter is used;
+    otherwise the string is treated as a Python format spec (wrapped
+    via `str.format`). Callables aren't accepted — pass a registered
+    formatter name, a format spec, or explicit `labels=[...]`."""
     if user_fmt is None:
         return getattr(scale, "format_tick", _fmt_tick)
-    if callable(user_fmt):
-        return user_fmt
     if isinstance(user_fmt, str):
+        from .formatters import get_formatter
+        named = get_formatter(user_fmt)
+        if named is not None:
+            return named
         return user_fmt.format
     raise TypeError(
-        f"xticks/yticks(format=) expects a format string or a callable; "
-        f"got {type(user_fmt).__name__}"
+        f"xticks/yticks(format=) expects a string (registered formatter "
+        f"name or Python format spec); got {type(user_fmt).__name__}. "
+        f"See pt.list_formatters() for registered names, or use "
+        f"labels=[...] for explicit tick labels."
     )
 
 

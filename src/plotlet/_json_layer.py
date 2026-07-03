@@ -1,61 +1,94 @@
 """JSON layer for Journal.
 
-Envelopes numpy / pandas values so a Journal can be dumped through
-`json.dumps` and rehydrated. Kept out of `_journal.py` so the journal
-core has no coupling to any specific data library — the journal is
-an event log; pandas / numpy support is a JSON concern.
+Envelopes Python values that aren't JSON-native (tuple, set, date,
+datetime, dicts with non-string keys, DataFrameLite) so a Journal can
+be dumped through `json.dumps` and rehydrated. Kept out of `_journal.py`
+so the journal core has no coupling — the journal is an event log; JSON
+support is a separate concern.
+
+DataFrame-shaped and numpy inputs never reach this layer: they're
+normalized to `DataFrameLite` / plain lists at the recorder boundary
+in `chart.py` (via `utils._normalize_data`). So the JSON layer is
+data-library-neutral by construction — it never imports pandas or
+numpy, never grows a branch per data library.
+
+Envelope keys used here:
+    $dataframe    utils.DataFrameLite (canonical DataFrame form)
+    $tuple        tuple (JSON has no tuple type; without this every
+                  tuple would silently degrade to list, breaking
+                  isinstance dispatch inside artist code)
+    $set          set
+    $date         datetime.date
+    $datetime     datetime.datetime
+    $dict_pairs   dict whose keys aren't all JSON-native strings
 """
 from __future__ import annotations
 from typing import Any
 
+from .utils import DataFrameLite
+
 
 def json_safe(value: Any) -> Any:
-    """Walk `value`, replace numpy arrays and pandas DataFrames with
-    JSON-native envelopes. Plotlet envelopes ($node / $coord / $sectors)
-    are pre-existing dicts and pass through unchanged (their inner
-    values still get recursed)."""
+    """Walk `value`, replace non-JSON types with envelopes. Plotlet
+    envelopes ($node / $coord / $sectors) already added at `to_journal`
+    time pass through as regular dicts — their inner values still get
+    recursed."""
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
-    try:
-        import numpy as np
-    except ImportError:
-        np = None
-    if np is not None and isinstance(value, np.ndarray):
-        return {"$ndarray": value.tolist(),
-                "dtype": str(value.dtype),
-                "shape": list(value.shape)}
-    try:
-        import pandas as pd
-    except ImportError:
-        pd = None
-    if pd is not None and isinstance(value, pd.DataFrame):
+    # datetime.datetime is a subclass of datetime.date — check the more
+    # specific type first so datetimes get $datetime, not $date.
+    import datetime as _dt
+    if isinstance(value, _dt.datetime):
+        return {"$datetime": value.isoformat()}
+    if isinstance(value, _dt.date):
+        return {"$date": value.isoformat()}
+    if isinstance(value, DataFrameLite):
         return {"$dataframe": {
-            "columns": [str(c) for c in value.columns],
-            "data": [list(row) for row in value.itertuples(index=False, name=None)],
-            "dtypes": [str(value[c].dtype) for c in value.columns],
+            "columns": value.columns,
+            "index":   value.index,
+            "values":  value.values,
         }}
+    if isinstance(value, tuple):
+        return {"$tuple": [json_safe(v) for v in value]}
+    if isinstance(value, (set, frozenset)):
+        return {"$set": [json_safe(v) for v in value]}
     if isinstance(value, dict):
-        return {k: json_safe(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
+        if all(isinstance(k, str) for k in value):
+            return {k: json_safe(v) for k, v in value.items()}
+        # Non-string key means the whole dict can't be a JSON object;
+        # emit as a list of [key, value] pairs.
+        return {"$dict_pairs": [[json_safe(k), json_safe(v)]
+                                for k, v in value.items()]}
+    if isinstance(value, list):
         return [json_safe(v) for v in value]
     return value
 
 
 def json_hydrate(value: Any) -> Any:
-    """Inverse of `json_safe`. Plotlet envelopes are left alone — the
-    journal's own `_decode` handles them at replay time."""
+    """Inverse of `json_safe`. Plotlet envelopes ($node / $coord /
+    $sectors) are left as dicts — the journal's own `_decode` handles
+    them at replay time."""
     if isinstance(value, dict):
-        if "$ndarray" in value:
-            import numpy as np
-            arr = np.array(value["$ndarray"], dtype=value["dtype"])
-            return arr.reshape(value["shape"])
         if "$dataframe" in value:
-            import pandas as pd
             d = value["$dataframe"]
-            df = pd.DataFrame(d["data"], columns=d["columns"])
-            for col, dt in zip(d["columns"], d.get("dtypes", [])):
-                df[col] = df[col].astype(dt)
-            return df
+            return DataFrameLite(
+                values=d["values"],
+                columns=d["columns"],
+                index=d["index"],
+            )
+        if "$tuple" in value:
+            return tuple(json_hydrate(v) for v in value["$tuple"])
+        if "$set" in value:
+            return {json_hydrate(v) for v in value["$set"]}
+        if "$date" in value:
+            import datetime as _dt
+            return _dt.date.fromisoformat(value["$date"])
+        if "$datetime" in value:
+            import datetime as _dt
+            return _dt.datetime.fromisoformat(value["$datetime"])
+        if "$dict_pairs" in value:
+            return {json_hydrate(k): json_hydrate(v)
+                    for k, v in value["$dict_pairs"]}
         return {k: json_hydrate(v) for k, v in value.items()}
     if isinstance(value, list):
         return [json_hydrate(v) for v in value]

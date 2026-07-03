@@ -27,6 +27,7 @@ from .themes import load_theme, available_themes, register_theme
 from .facet import facet, FacetGrid
 from .datasets import load, list_datasets
 from .cluster import cluster, cluster_split, SplitTree
+from .formatters import register_formatter, list_formatters
 from ._coord_registry import register_coord_codec
 from ._journal import (to_journal, from_journal, to_json, from_json,
                        JournalNode, Journal)
@@ -41,6 +42,7 @@ __all__ = ["chart", "Chart", "Layout", "SPEC", "TAB10", "colors",
            "facet", "FacetGrid",
            "load", "list_datasets",
            "cluster", "cluster_split", "SplitTree",
+           "register_formatter", "list_formatters",
            "to_json", "from_json", "register_coord_codec",
            "to_journal", "from_journal", "JournalNode", "Journal",
            "draw", "utils"]
