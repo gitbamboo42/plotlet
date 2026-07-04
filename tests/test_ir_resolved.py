@@ -18,13 +18,13 @@ import math
 import pytest
 
 import plotlet as pt
+from plotlet import resolve_ir
 from plotlet.render.resolved import (
     IRArtist,
     IRCoord,
     IRLayout,
     IRPanel,
     IRScale,
-    resolve_ir,
 )
 from plotlet._json_layer import json_safe
 

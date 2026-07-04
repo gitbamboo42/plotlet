@@ -104,19 +104,18 @@ class IRLayout:
 # ---------------------------------------------------------------------------
 
 
-def resolve_ir(node):
-    """Lower a plot to its resolved IR. Accepts anything `to_ir` does —
-    a `Chart` / `Layout` / `FacetGrid`, a `Journal`, a `JournalNode`,
-    or a `FigureIR`.
+def resolve_ir(ir):
+    """Lower a `FigureIR` to its resolved IR. (The public
+    `plotlet.resolve_ir` wraps this with `to_ir` coercion, so users can
+    hand it a `Chart` / `Layout` / journal directly — this render-side
+    entry takes the IR only, like everything behind the seam.)
 
     The round-trip contract lives with the journal and the figure IR;
     the resolved IR sits below them and is a projection, not a
     round-trip peer. Same journal → same resolved IR."""
-    from .._ir import to_ir
     from ._layout_engine import _build_panel_opts
     from ._nodes import hydrate, materialize
 
-    ir = to_ir(node)
     root = hydrate(ir)
     materialize(root)
     panel_opts, states = _build_panel_opts(root)

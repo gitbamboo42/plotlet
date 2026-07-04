@@ -27,3 +27,24 @@ def register_coord_codec(cls: type) -> type:
         )
     _COORD_REGISTRY[cls.__name__] = cls
     return cls
+
+
+def resolve_coord(name: str) -> type:
+    """Look up a coord class by registered name, importing the built-in
+    coord module on first miss — built-ins register at their definition
+    site, and nothing else guarantees that module has been imported when
+    a `{"$coord": ...}` envelope arrives from JSON in a fresh process."""
+    try:
+        return _COORD_REGISTRY[name]
+    except KeyError:
+        pass
+    from .render import coordinates  # noqa: F401 — registers built-ins
+    try:
+        return _COORD_REGISTRY[name]
+    except KeyError:
+        raise KeyError(
+            f"unknown coordinate {name!r}. Registered coords: "
+            f"{sorted(_COORD_REGISTRY)}. Custom coord classes must be "
+            f"imported (and registered via `register_coord_codec`) before "
+            f"a figure referencing them is decoded."
+        ) from None

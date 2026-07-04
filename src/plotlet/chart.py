@@ -14,7 +14,7 @@ This module owns plotlet's user-facing classes:
 
 `Chart` and `Layout` share a private `_Renderable` base that owns the
 composition operators (`|`, `/`), output methods (`to_svg`, `show`,
-`save_*`), and `fit()`. Subclasses just implement `_to_svg_unchecked`.
+`save_*`), and `fit()`.
 
 Composition operators:
 
@@ -25,10 +25,9 @@ Composition operators:
   * `a / b` → vertical `Layout`. Same flattening rule.
 
 Rendering goes journal → IR → plot: `to_svg()` lowers the tree to the
-figure IR (`_ir.py`) and renders the materialized result — the IR path
-is the only render path. The pipeline itself (margin coordination,
-share-pre-pass, allocation, SVG emission) lives in the private
-`_layout_engine.py`.
+figure IR (`_ir.py`, contract in `docs/IR.md`) and hands it to the
+render half through the `render` package's seam — the IR path is the
+only render path, and this half never sees the pipeline internals.
 
 Invariants:
 
@@ -42,7 +41,7 @@ import importlib.util
 import inspect
 from pathlib import Path
 
-from ._spec import _SIZESPEC, _MARGIN_FLOOR, _OUTER_MARGIN
+from ._spec import _SIZESPEC, _MARGIN_FLOOR
 from ._tree import compute_share_classes, normalize_share_mode
 from .utils import _to_px, _normalize_data
 from .registry import get_artist, all_artist_names
@@ -73,8 +72,7 @@ def _has_column(data, name):
 class _Renderable:
     """Private base for `Chart` and `Layout` — owns the shared rendering
     glue (composition operators, output methods, `fit()`,
-    `_require_render_root`). The one variant piece is
-    `_to_svg_unchecked`, which each subclass implements.
+    `_require_render_root`).
 
     Lives behind an underscore on purpose: users only ever see `Chart`
     and `Layout`. The base is here to remove copy-paste, not to grow a
@@ -130,16 +128,10 @@ class _Renderable:
         (overlap, clipping), not data inspection. Re-renders under a
         region-collecting sink and discards the SVG: cheap,
         deterministic, no chart state change."""
-        from . import _regions
         self._require_render_root()
-        root = self._render_root()
-        with _regions.collecting() as sink:
-            root._to_svg_unchecked(outer=dict(_OUTER_MARGIN))
-        return [{"kind": r.kind, "bbox": r.bbox, "name": r.name, "meta": r.meta}
-                for r in sink.regions]
-
-    def _to_svg_unchecked(self, *, outer=None) -> str:
-        raise NotImplementedError
+        from ._ir import to_ir
+        from .render import regions
+        return regions(to_ir(self))
 
     def to_html(self, full_page: bool = False) -> str:
         svg = self.to_svg()
@@ -209,7 +201,8 @@ class _Renderable:
 
         Returns a fresh copy; the original is unchanged."""
         from copy import deepcopy
-        from .render._layout_engine import _natural_size, _data_total_size
+        from ._ir import to_ir
+        from .render import data_total_size, natural_size
         cls_name = type(self).__name__
         W = _to_px(canvas_width)
         H = _to_px(canvas_height)
@@ -228,15 +221,13 @@ class _Renderable:
         # label growth). Iterating absorbs that residual; in practice
         # 2–3 passes converge to within a pixel.
         #
-        # Measurement runs on a hydrated render tree, rebuilt each pass:
-        # `_natural_size` mutates the tree it measures, and
-        # `_scale_data_dims` updates the recorder copy between passes.
-        from .render import materialize as _derive_render_state
+        # Measurement goes through the seam, re-lowering per pass —
+        # `_scale_data_dims` updates the recorder copy between passes,
+        # so each pass measures a fresh IR.
         for _ in range(6):
-            rroot = node._render_root()
-            _derive_render_state(rroot)
-            W_nat, H_nat = _natural_size(rroot)
-            D_w, D_h = _data_total_size(rroot)
+            ir = to_ir(node)
+            W_nat, H_nat = natural_size(ir)
+            D_w, D_h = data_total_size(ir)
             ratios = []
             if W is not None and D_w > 0:
                 overhead_w = W_nat - D_w
@@ -671,21 +662,6 @@ class Chart(_Renderable):
 
     # ---------- render ----------
 
-    def _to_svg_unchecked(self, *, outer=None) -> str:
-        """Render path that skips the root check — used by parents
-        embedding this chart (insets, layout panels). `outer` is the
-        figure-level breathing-room margin; only the public `to_svg()`
-        passes it. Embedded callers (insets) leave it None.
-
-        Every leaf — data, legend, diagram, and data-with-attachments —
-        goes through the same layout engine `pt.grid([[...]])` uses. A
-        lone chart is just a 1x1 composition. One path means standalone
-        behavior stays in sync with multi-panel behavior by construction,
-        so the class of "works in a grid, breaks standalone" bugs
-        disappears."""
-        from .render._layout_engine import _render_layout
-        return _render_layout(self, outer=outer)
-
     def _require_render_root(self):
         super()._require_render_root()
         if self._inset_owner is not None:
@@ -942,13 +918,6 @@ class Layout(_Renderable):
                     f"{'h' if norm == 'col' else 'v'}-sub-layouts; got "
                     f"{self._layout_kind!r}."
                 )
-
-    # ---------- render ----------
-
-    def _to_svg_unchecked(self, *, outer=None) -> str:
-        from .render._layout_engine import _render_layout
-        return _render_layout(self, outer=outer)
-
 
 def chart(data=None, *,
           data_width=None, data_height=None, margin=None,

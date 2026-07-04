@@ -173,9 +173,15 @@ def hydrate(ir):
     over the dependency-ordered node table. Ops copy verbatim into
     `_calls` (values decoded back to live objects); insets bind
     directly. Derived field state is NOT wired here — `materialize`
-    does that, and every engine entry point calls it first."""
-    from .._ir import _decode
+    does that, and every engine entry point calls it first.
 
+    Validates first: the IR may be hand-authored or JSON-loaded, so
+    hydration can't assume the recorder's guarantees. Every render path
+    enters through here, so validating here covers them all."""
+    from .._json_layer import _decode
+    from ._validate import validate
+
+    validate(ir)
     nid_to_node: dict[int, object] = {}
     for n in ir.nodes:
         init = _decode(n.init, nid_to_node)
@@ -420,11 +426,14 @@ def _strip_plotlet_attrs(svg: str) -> str:
     return svg
 
 
-def render_svg(ir, *, clean: bool = False) -> str:
+def render_svg(ir, *, clean: bool = False, outer: bool = True) -> str:
     """Render a `FigureIR` to the standalone SVG string — hydrate the
     render tree and hand it to the layout engine (which derives field
-    state via `materialize` at entry)."""
-    svg = hydrate(ir)._to_svg_unchecked(outer=dict(_OUTER_MARGIN))
+    state via `materialize` at entry). `outer=False` drops the
+    figure-level breathing-room margin — the inner render tools embed
+    (`layout_diagram`) or measure against."""
+    svg = hydrate(ir)._to_svg_unchecked(
+        outer=dict(_OUTER_MARGIN) if outer else None)
     if clean:
         svg = _strip_plotlet_attrs(svg)
     return svg

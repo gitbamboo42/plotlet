@@ -22,7 +22,7 @@ import datetime
 import html
 import json
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from importlib.metadata import version as _pkg_version
 from types import SimpleNamespace
 
@@ -32,10 +32,8 @@ from .._spec import (
 )
 _SECTORSPEC = SPEC["sectors"]
 from ..draw import resolve_color, TAB10
-from ..scales import (_LinearScale, _LogScale, _CategoryScale, _SymlogScale,
-                      _SectoredLinearScale,
-                      _PowerScale, _TimeScale, _nice_domain, _fmt_tick,
-                      _to_epoch, _coerce_time_lim, _AxisDescriptor)
+from ..scales import (_nice_domain, _fmt_tick, _to_epoch,
+                      _coerce_time_lim, _AxisDescriptor)
 from ..sectors import SectoredValue
 from ..draw import measure_text
 from ..draw import coord, rect, segment, text_path
@@ -309,6 +307,21 @@ def _expand_frame_defaults(calls):
     return out
 
 
+# Frame-method op names `_replay` dispatches below. Mirrors the elif
+# chain one-to-one — adding a branch there means adding the name here
+# (and to `_FRAME_METHODS` in chart.py, the recorder's gate), or
+# `render.validate` rejects the op before replay ever sees it. The full
+# baseline corpus renders through validate, so a missed name fails the
+# suite immediately.
+_FRAME_OPS = frozenset({
+    "title", "xlabel", "ylabel", "xlim", "ylim",
+    "xscale", "yscale", "grid", "legend",
+    "xticks", "yticks", "spines", "theme",
+    "x_expand", "y_expand", "clip", "facecolor",
+    "coordinate", "sectors",
+})
+
+
 def _replay(calls):
     """Walk a Chart's recorded calls into a state dict consumed by the
     renderer. Pure function of `calls` and the artist registry — same input
@@ -527,9 +540,10 @@ def _replay(calls):
             st[f"{axis}_sectors"] = sec
             st[f"{axis}_sector_column"] = col
         elif name == "theme":
-            # `theme` is applied outside replay (by `active_theme(...)` in
-            # `Chart.to_svg`) so the spec dicts are already on the right
-            # values by the time we get here. No state to record.
+            # `theme` is applied outside replay (`_render_layout` wraps
+            # the whole render in `active_theme(...)`) so the spec dicts
+            # are already on the right values by the time we get here.
+            # No state to record.
             pass
     # When continuous sectors are active and the user didn't supply an
     # explicit lim, span the full sector range so every partition is

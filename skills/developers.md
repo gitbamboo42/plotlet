@@ -15,9 +15,14 @@ your tool expects. Human contributors can read it directly.
 
 ## What plotlet is
 
-Deferred-rendering SVG plot library — artist calls record into a list,
-`show()` walks it and emits one self-contained SVG. Product positioning
-and why-not-X live in [README.md](README.md) and [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md).
+Deferred-rendering SVG plot library — artist calls record into a
+journal, and rendering lowers it journal → `FigureIR` → SVG. The
+recording half (`chart.py`, `_journal.py`, `_ir.py`, …) never imports
+the render half at module level; the [`render/`](src/plotlet/render/)
+package never imports the recording half at all — the `FigureIR` is the
+one contract between them ([docs/IR.md](docs/IR.md), enforced by
+`tests/test_import_boundary.py`). Product positioning and why-not-X
+live in [README.md](README.md) and [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md).
 
 ## Load-bearing policies (not derivable from code)
 
@@ -36,6 +41,7 @@ and why-not-X live in [README.md](README.md) and [docs/PHILOSOPHY.md](docs/PHILO
 
 ## Deep dives
 
+- The journal → IR → render contract → [docs/IR.md](docs/IR.md)
 - Custom plot types → [docs/EXTENDING.md](docs/EXTENDING.md)
 - Coordinate systems (Circular, custom projections) → [docs/COORDINATES.md](docs/COORDINATES.md)
 - Multi-panel layouts, `share_x` / `share_y` → [docs/SUBPLOTS.md](docs/SUBPLOTS.md)

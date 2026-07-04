@@ -104,8 +104,8 @@ _JOURNAL_VERSION = 1
 
 class JournalNode:
     """Handle wrapping (journal, root_nid). `to_svg()` lowers the
-    journal to the figure IR (`_ir.py`), which materializes the render
-    tree and renders through the existing pipeline.
+    journal to the figure IR (`_ir.py`) and renders it through the
+    render half's seam.
 
     Users don't build JournalNodes directly — they come from
     `from_journal(...)`."""
@@ -356,5 +356,6 @@ def from_json(blob: dict) -> JournalNode:
     return from_journal(Journal.from_dict(blob))
 
 
-# Replay lives in `_ir.py`: the journal lowers to the figure IR
-# (`journal_to_ir`), and the IR materializes the Chart/Layout tree.
+# Rendering lives behind the render half's seam: the journal lowers to
+# the figure IR (`journal_to_ir` in `_ir.py`), and `render.render_svg`
+# hydrates its private node tree from the IR. Contract: `docs/IR.md`.

@@ -45,17 +45,23 @@ walk from the root, so two IRs of the same figure list nodes identically.
 
 Value envelopes (`{"$node": nid}`, `{"$coord": ...}`, `{"$sectors": ...}`)
 are shared with the journal — the IR stores values exactly as
-`to_journal` encoded them, and `_decode` here resolves them back at
-hydration time.
+`to_journal` encoded them, and `_json_layer._decode` resolves them back
+at hydration time.
 
 A second lowering stage lives in `render/resolved.py`: `FigureIR.resolve()`
 projects the figure into a pre-layout render plan (resolved scales,
 baked palettes, effective margins) for inspection and tooling.
+
+The full contract — node kinds, init keys, op normalization, envelope
+forms, ordering — is written down in `docs/IR.md`; `render.validate`
+enforces it at every render entry.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
+
+from ._json_layer import _decode
 
 _IR_VERSION = 1
 
@@ -109,8 +115,17 @@ class FigureIR:
         — a pre-layout render plan with resolved scales, baked
         palettes, and effective margins. A projection for inspection
         and tooling, not a round-trip peer."""
-        from .render.resolved import resolve_ir
-        return resolve_ir(self)
+        from .render import resolve
+        return resolve(self)
+
+    def validate(self) -> "FigureIR":
+        """Check this IR against the render contract (`docs/IR.md`)
+        without rendering — useful when hand-authoring or transforming
+        IRs. Raises `ValueError` on the first violation; returns `self`
+        so calls chain. Rendering validates implicitly."""
+        from .render import validate
+        validate(self)
+        return self
 
     def to_dict(self) -> dict:
         """JSON-safe dict form — `json.dumps(...)` produces the string
@@ -325,36 +340,6 @@ def ir_to_journal(ir: FigureIR):
 
 
 # ---------------------------------------------------------------------------
-# Value envelopes — decode journal envelopes back to live objects. Used by
-# the render tree's hydrator (`render.hydrate`) and by the facet
-# expansion above.
-# ---------------------------------------------------------------------------
-
-
-def _decode(value: Any, nid_to_node: dict) -> Any:
-    """Resolve journal value envelopes back to live objects —
-    `{"$node"}` via `nid_to_node`, `{"$coord"}` via the coord registry,
-    `{"$sectors"}` via `Sectors`. Containers recurse; everything else
-    passes through."""
-    if isinstance(value, dict):
-        if "$node" in value and len(value) == 1:
-            return nid_to_node[value["$node"]]
-        if "$coord" in value:
-            from ._coord_registry import _COORD_REGISTRY
-            cls = _COORD_REGISTRY[value["$coord"]]
-            return cls._from_dict(_decode(value.get("kwargs", {}), nid_to_node))
-        if "$sectors" in value:
-            from .sectors import Sectors
-            return Sectors._from_dict(_decode(value["$sectors"], nid_to_node))
-        return {k: _decode(v, nid_to_node) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_decode(v, nid_to_node) for v in value]
-    if isinstance(value, tuple):
-        return tuple(_decode(v, nid_to_node) for v in value)
-    return value
-
-
-# ---------------------------------------------------------------------------
 # Public entry points
 # ---------------------------------------------------------------------------
 
@@ -379,3 +364,11 @@ def from_ir(blob) -> FigureIR:
     if isinstance(blob, FigureIR):
         return blob
     return FigureIR.from_dict(blob)
+
+
+def resolve_ir(node):
+    """Lower a plot to its resolved IR — the pre-layout render plan
+    (`render/resolved.py`). Accepts anything `to_ir` does: a `Chart` /
+    `Layout` / `FacetGrid`, a `Journal`, a `JournalNode`, or a
+    `FigureIR`."""
+    return to_ir(node).resolve()

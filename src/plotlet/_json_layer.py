@@ -21,6 +21,12 @@ Envelope keys used here:
     $date         datetime.date
     $datetime     datetime.datetime
     $dict_pairs   dict whose keys aren't all JSON-native strings
+
+`_decode` at the bottom handles the other envelope family — the
+*reference* envelopes ($node / $coord / $sectors) that journals and IRs
+carry whether or not they ever touch JSON. It lives here because both
+halves need it (the render tree's hydrator and the front half's facet
+expansion) and it resolves only against shared vocabulary.
 """
 from __future__ import annotations
 from typing import Any
@@ -92,4 +98,34 @@ def json_hydrate(value: Any) -> Any:
         return {k: json_hydrate(v) for k, v in value.items()}
     if isinstance(value, list):
         return [json_hydrate(v) for v in value]
+    return value
+
+
+def _decode(value: Any, nid_to_node: dict) -> Any:
+    """Resolve plotlet's *reference* envelopes back to live objects —
+    `{"$node"}` via `nid_to_node`, `{"$coord"}` via the coord registry,
+    `{"$sectors"}` via `Sectors`. Containers recurse; everything else
+    passes through.
+
+    Distinct from `json_hydrate` above: that undoes the JSON-native
+    envelopes at the JSON boundary, while these three envelopes live in
+    journals and IRs whether or not they ever touch JSON, and decode at
+    hydration time. Shared vocabulary — used by the render tree's
+    hydrator (`render.hydrate`) and by the facet expansion in
+    `_ir.py`."""
+    if isinstance(value, dict):
+        if "$node" in value and len(value) == 1:
+            return nid_to_node[value["$node"]]
+        if "$coord" in value:
+            from ._coord_registry import resolve_coord
+            cls = resolve_coord(value["$coord"])
+            return cls._from_dict(_decode(value.get("kwargs", {}), nid_to_node))
+        if "$sectors" in value:
+            from .sectors import Sectors
+            return Sectors._from_dict(_decode(value["$sectors"], nid_to_node))
+        return {k: _decode(v, nid_to_node) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_decode(v, nid_to_node) for v in value]
+    if isinstance(value, tuple):
+        return tuple(_decode(v, nid_to_node) for v in value)
     return value

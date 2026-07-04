@@ -62,17 +62,17 @@ def _materialize(chart):
 
 
 def _collect(chart) -> tuple[list[dict], float, float]:
-    """Single render that returns (regions, W, H)."""
+    """Regions plus figure (W, H) for one chart. Two seam calls, two
+    renders — rendering is deterministic, so the regions and the parsed
+    size describe the same figure."""
     chart = _materialize(chart)
-    from . import _regions
-    from ._spec import _OUTER_MARGIN
-    root = chart._render_root()
-    with _regions.collecting() as sink:
-        svg = root._to_svg_unchecked(outer=dict(_OUTER_MARGIN))
-    regions = [{"kind": r.kind, "bbox": r.bbox, "name": r.name, "meta": r.meta}
-               for r in sink.regions]
+    from ._ir import to_ir
+    from .render import regions, render_svg
+    ir = to_ir(chart)
+    regs = regions(ir)
+    svg = render_svg(ir)
     m = re.search(r'<svg[^>]*\bwidth="([0-9.]+)"\s+height="([0-9.]+)"', svg)
-    return regions, float(m.group(1)), float(m.group(2))
+    return regs, float(m.group(1)), float(m.group(2))
 
 
 def _vertices(r: dict) -> list[tuple[float, float]]:

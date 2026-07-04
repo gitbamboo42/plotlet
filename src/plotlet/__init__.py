@@ -20,7 +20,6 @@ from . import artists  # noqa: F401  — registers built-in artists on import
 from .chart import Chart, Layout, chart, grid
 from .legend import legend
 from .registry import ArtistSpec, add_artist, artist_table, declare_coord_support
-from .render.coordinates import CircularCoordinate
 from .sectors import Sectors
 from .layout_diagram import layout_diagram
 from .themes import load_theme, available_themes, register_theme
@@ -31,9 +30,19 @@ from .formatters import register_formatter, list_formatters
 from ._coord_registry import register_coord_codec
 from ._journal import (to_journal, from_journal, to_json, from_json,
                        JournalNode, Journal)
-from ._ir import to_ir, from_ir, FigureIR, IRNode
-from .render.resolved import resolve_ir
+from ._ir import to_ir, from_ir, resolve_ir, FigureIR, IRNode
 from . import draw, utils
+
+
+def __getattr__(name):
+    # The one render-half class in the top-level namespace stays a lazy
+    # import so that `import plotlet` loads only the recording half —
+    # the render half loads on first render (or first touch of this
+    # name). Enforced by tests/test_import_boundary.py.
+    if name == "CircularCoordinate":
+        from .render.coordinates import CircularCoordinate
+        return CircularCoordinate
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = ["chart", "Chart", "Layout", "SPEC", "TAB10", "colors",
            "colormap", "list_colormaps", "grid", "legend",

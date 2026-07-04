@@ -84,13 +84,14 @@ def layout_diagram(chart: Chart) -> Chart:
     # `to_svg()` would include the figure-level outer_margin that only
     # the public root render adds, and that 8-px-each-axis padding
     # would force `chart` to grow when re-composed via `|` or `grid`.
+    # Two seam calls, two renders — deterministic, so the regions match
+    # the parsed SVG exactly.
     chart._require_render_root()
-    from . import _regions
-    root = chart._render_root()
-    with _regions.collecting() as sink:
-        src_svg = root._to_svg_unchecked()
-    regions_data = [{"kind": r.kind, "bbox": r.bbox, "name": r.name,
-                     "meta": r.meta} for r in sink.regions]
+    from ._ir import to_ir
+    from .render import regions, render_svg
+    ir = to_ir(chart)
+    src_svg = render_svg(ir, outer=False)
+    regions_data = regions(ir, outer=False)
     W, H = _figure_size(src_svg)
     inner = _render_diagram_inner(src_svg, W, H, regions_data)
 
