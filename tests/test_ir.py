@@ -145,3 +145,23 @@ def test_from_ir_version_check():
 def test_journal_to_ir_requires_root():
     with pytest.raises(ValueError, match="root_nid"):
         journal_to_ir(pt.Journal(entries=[]))
+
+
+def test_facet_lowers_to_core_kinds():
+    """A FacetGrid journals as one `new_facet_grid` event (provenance);
+    lowering expands it, so the IR carries only core node kinds and
+    renders byte-identical to the recorder's own render."""
+    df = {"x": [1, 2, 3, 4, 5, 6], "y": [2, 1, 3, 2, 4, 3],
+          "g": ["a", "a", "b", "b", "c", "c"]}
+    g = pt.facet(df, by="g", col_wrap=2)
+    g.scatter(x="x", y="y")
+    svg_direct = g.to_svg()
+
+    journal = pt.to_journal(g)
+    assert any(e["op"] == "new_facet_grid" for e in journal.entries), (
+        "journal keeps facet provenance"
+    )
+    ir = pt.to_ir(g)
+    kinds = {n.kind for n in ir.nodes}
+    assert kinds <= {"chart", "legend", "diagram", "layout"}, kinds
+    assert ir.to_svg() == svg_direct

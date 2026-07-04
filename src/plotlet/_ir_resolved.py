@@ -114,14 +114,9 @@ def resolve_ir(node):
     from ._ir import to_ir, _materialize
     from ._layout_engine import _build_panel_opts
     from .chart import materialize
-    from .facet import FacetGrid
 
     ir = to_ir(node)
     root = _materialize(ir, ir.root_nid)
-    # FacetGrid is a recorder — expand to a Chart/Layout tree before the
-    # rest of the pipeline (materialize / panel-opts pre-pass) walks it.
-    if isinstance(root, FacetGrid):
-        root = root._materialize()
     materialize(root)
     panel_opts, states = _build_panel_opts(root)
     return _node_to_ir(root, panel_opts, states)

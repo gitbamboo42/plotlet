@@ -20,13 +20,16 @@ order, creation ops normalized into a `kind` + `init` pair. Tools that
 want to inspect or transform a figure (diffing, validation, programmatic
 edits) work on the IR; tools that want provenance work on the journal.
 Lowering is loss-free both ways: `ir_to_journal(journal_to_ir(j))`
-replays to the same SVG as `j`.
+replays to the same SVG as `j`. One normalization: a FacetGrid journals
+as a single `new_facet_grid` event (provenance — "what the user did"),
+and lowering expands it to the grid of charts it denotes, so the IR and
+everything downstream see only the four core node kinds.
 
 IR node shape:
 
     IRNode(
         nid,      # the journal's node id, kept for cross-referencing
-        kind,     # "chart" | "legend" | "diagram" | "layout" | "facet_grid"
+        kind,     # "chart" | "legend" | "diagram" | "layout"
         init,     # construction kwargs (the new_* event's payload;
                   # `leaf_kind` is lifted into `kind`)
         ops,      # [{"op": name, "args": [...], "kwargs": {...}}, ...]
@@ -56,11 +59,12 @@ from typing import Any
 
 _IR_VERSION = 1
 
-# new_* journal op → IR node kind (new_leaf splits by its leaf_kind).
+# new_* journal op → IR node kind (new_leaf splits by its leaf_kind;
+# new_facet_grid never reaches the node table — `journal_to_ir` expands
+# it before grouping).
 _CREATE_OPS = {
     "new_chart": "chart",
     "new_layout": "layout",
-    "new_facet_grid": "facet_grid",
 }
 _KIND_TO_CREATE = {v: k for k, v in _CREATE_OPS.items()}
 
@@ -155,6 +159,9 @@ def journal_to_ir(journal, root_nid: int | None = None) -> FigureIR:
     `to_journal` already emits each node's events as one contiguous run
     relative to anything that references it (children before parents,
     attachments and legend sources before the entry that names them).
+
+    A `new_facet_grid` root is expanded before grouping — facets are
+    recording-side sugar, and the IR carries only core node kinds.
     """
     if root_nid is None:
         root_nid = journal.root_nid
@@ -164,10 +171,25 @@ def journal_to_ir(journal, root_nid: int | None = None) -> FigureIR:
             "Set Journal.root_nid explicitly, or pass a Journal from to_journal()."
         )
 
+    # Facet lowering — rebuild the FacetGrid recorder from its events,
+    # expand it to the grid-of-charts tree it denotes, and lower that.
+    # Expansion is deterministic (first-seen group order), so the
+    # rendered SVG is unchanged.
+    if any(e["nid"] == root_nid and e["op"] == "new_facet_grid"
+           for e in journal.entries):
+        from ._journal import to_journal
+        return journal_to_ir(to_journal(_expand_facet(journal, root_nid)))
+
     nodes: dict[int, IRNode] = {}
     for entry in journal.entries:
         op = entry["op"]
         nid = entry["nid"]
+        if op == "new_facet_grid":
+            raise ValueError(
+                "journal_to_ir: new_facet_grid may only appear as the "
+                "journal root — facets are recording-side sugar, expanded "
+                "to a grid of charts at lowering."
+            )
         if op in _CREATE_OPS:
             nodes[nid] = IRNode(nid, _CREATE_OPS[op], dict(entry["kwargs"]))
         elif op == "new_leaf":
@@ -244,6 +266,29 @@ def _node_refs(node: IRNode) -> list[int]:
     return refs
 
 
+def _expand_facet(journal, root_nid: int):
+    """Rebuild the `FacetGrid` recorder from its journal events and
+    expand it to the Chart tree it denotes. A facet op can't
+    meaningfully reference another node, so envelopes decode with an
+    empty nid table."""
+    from .facet import FacetGrid
+    fg = None
+    for entry in journal.entries:
+        if entry["nid"] != root_nid:
+            continue
+        if entry["op"] == "new_facet_grid":
+            kw = {k: _decode(v, {}) for k, v in entry["kwargs"].items()}
+            fg = FacetGrid(kw["data"], kw["by"], col_wrap=kw["col_wrap"],
+                           share_x=kw["share_x"], share_y=kw["share_y"],
+                           chart_opts=kw["chart_opts"])
+        else:
+            getattr(fg, entry["op"])(
+                *[_decode(a, {}) for a in entry.get("args", [])],
+                **{k: _decode(v, {})
+                   for k, v in entry.get("kwargs", {}).items()})
+    return fg._materialize()
+
+
 # ---------------------------------------------------------------------------
 # IR → journal (flatten back — lowering is loss-free both ways)
 # ---------------------------------------------------------------------------
@@ -278,6 +323,29 @@ def ir_to_journal(ir: FigureIR):
 # ---------------------------------------------------------------------------
 
 
+def _decode(value: Any, nid_to_node: dict) -> Any:
+    """Resolve journal value envelopes back to live objects —
+    `{"$node"}` via `nid_to_node`, `{"$coord"}` via the coord registry,
+    `{"$sectors"}` via `Sectors`. Containers recurse; everything else
+    passes through."""
+    if isinstance(value, dict):
+        if "$node" in value and len(value) == 1:
+            return nid_to_node[value["$node"]]
+        if "$coord" in value:
+            from ._coord_registry import _COORD_REGISTRY
+            cls = _COORD_REGISTRY[value["$coord"]]
+            return cls._from_dict(_decode(value.get("kwargs", {}), nid_to_node))
+        if "$sectors" in value:
+            from .sectors import Sectors
+            return Sectors._from_dict(_decode(value["$sectors"], nid_to_node))
+        return {k: _decode(v, nid_to_node) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_decode(v, nid_to_node) for v in value]
+    if isinstance(value, tuple):
+        return tuple(_decode(v, nid_to_node) for v in value)
+    return value
+
+
 def _materialize(ir: FigureIR, root_nid: int):
     """Single forward pass over the dependency-ordered node table:
     construct each node, apply its ops in order, bind its insets.
@@ -286,26 +354,11 @@ def _materialize(ir: FigureIR, root_nid: int):
 
     nid_to_node: dict[int, object] = {}
 
-    def _decode(value: Any) -> Any:
-        if isinstance(value, dict):
-            if "$node" in value and len(value) == 1:
-                return nid_to_node[value["$node"]]
-            if "$coord" in value:
-                from ._coord_registry import _COORD_REGISTRY
-                cls = _COORD_REGISTRY[value["$coord"]]
-                return cls._from_dict(_decode(value.get("kwargs", {})))
-            if "$sectors" in value:
-                from .sectors import Sectors
-                return Sectors._from_dict(_decode(value["$sectors"]))
-            return {k: _decode(v) for k, v in value.items()}
-        if isinstance(value, list):
-            return [_decode(v) for v in value]
-        if isinstance(value, tuple):
-            return tuple(_decode(v) for v in value)
-        return value
+    def _dec(value: Any) -> Any:
+        return _decode(value, nid_to_node)
 
     for n in ir.nodes:
-        kwargs = {k: _decode(v) for k, v in n.init.items()}
+        kwargs = {k: _dec(v) for k, v in n.init.items()}
 
         if n.kind == "chart":
             # `Chart.__init__` accepts only field-state kwargs (see
@@ -324,15 +377,6 @@ def _materialize(ir: FigureIR, root_nid: int):
             if kwargs.get("grid_cols") is not None:
                 layout._grid_cols = kwargs["grid_cols"]
             nid_to_node[n.nid] = layout
-        elif n.kind == "facet_grid":
-            from .facet import FacetGrid
-            nid_to_node[n.nid] = FacetGrid(
-                kwargs["data"], kwargs["by"],
-                col_wrap=kwargs["col_wrap"],
-                share_x=kwargs["share_x"],
-                share_y=kwargs["share_y"],
-                chart_opts=kwargs["chart_opts"],
-            )
         else:
             raise ValueError(f"FigureIR: unknown node kind {n.kind!r}")
 
@@ -344,8 +388,8 @@ def _materialize(ir: FigureIR, root_nid: int):
         # `_replay` regenerates them at render time.
         for op in n.ops:
             method = getattr(obj, op["op"])
-            method(*[_decode(a) for a in op["args"]],
-                   **{k: _decode(v) for k, v in op["kwargs"].items()})
+            method(*[_dec(a) for a in op["args"]],
+                   **{k: _dec(v) for k, v in op["kwargs"].items()})
 
         # Insets bind after the host's ops, matching journal order
         # (`to_journal` emits `_inset_add` after all method events).

@@ -22,9 +22,10 @@ Ops:
     "new_layout"   Layout node. kwargs: layout_kind ("h"/"v"/"grid"),
                    children (list of nids or None for empty grid cells),
                    grid_rows, grid_cols.
-    "new_facet_grid" FacetGrid — a top-level recorder that materializes
-                   into a Chart tree at render time. kwargs: data, by,
-                   col_wrap, share_x, share_y, chart_opts.
+    "new_facet_grid" FacetGrid — a top-level recorder, expanded to the
+                   grid-of-charts tree it denotes when the journal
+                   lowers to the IR (`journal_to_ir`). kwargs: data,
+                   by, col_wrap, share_x, share_y, chart_opts.
     <method>       Method call on the target node. `args` and `kwargs`
                    go straight to the method. Cross-node references
                    (attach_left(other), CircularCoordinate(inner=other),
