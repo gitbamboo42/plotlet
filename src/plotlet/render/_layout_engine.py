@@ -1,9 +1,12 @@
-"""Private render engine — walks a tree of `Chart` / `Layout` nodes,
-coordinates margins, allocates pixel rects, and emits the SVG.
+"""Private render engine — walks the render tree (`RenderNode` /
+`RenderLayout`, hydrated from a `FigureIR`), coordinates margins,
+allocates pixel rects, and emits the SVG. Duck-typed over the node
+field protocol, so tests can poke engine functions with any tree that
+mirrors those fields.
 
-Used by both single-chart and multi-panel renders: a single `Chart` is
+Used by both single-chart and multi-panel renders: a lone leaf is
 treated as a degenerate single-cell tree by `_build_panel_opts`, sharing
-the same coordination pipeline that multi-panel `Layout`s use. This is
+the same coordination pipeline that multi-panel layouts use. This is
 what makes the outside-legend reservation and the per-leaf theme scoping
 have one source of truth.
 
@@ -76,7 +79,7 @@ _LEGEND_GAP = _LAYOUTSPEC["legend_gap"]
 # the gap between them collapses to 0.
 # ---------------------------------------------------------------------------
 
-def _share_root(leaf: Chart, axis: str) -> Chart:
+def _share_root(leaf, axis: str):
     """Walk the share chain on `axis` ("x" or "y") to its root — the
     topmost leaf in the chain that shares with no one. Two leaves are in
     the same share-equivalence class on `axis` iff their roots are the
@@ -93,7 +96,7 @@ def _share_root(leaf: Chart, axis: str) -> Chart:
         cur = nxt
 
 
-def _resolve_gap(a: Chart | None, b: Chart | None, *, axis: str) -> float:
+def _resolve_gap(a, b, *, axis: str) -> float:
     """Resolve the inter-panel gap for a boundary on `axis` ("h" between
     columns / "v" between rows). Falls back in this order, most-specific
     first:
@@ -130,7 +133,7 @@ def _resolve_gap(a: Chart | None, b: Chart | None, *, axis: str) -> float:
     return _GAP
 
 
-def _pair_gap(a: Chart | None, b: Chart | None, *, axis: str) -> float:
+def _pair_gap(a, b, *, axis: str) -> float:
     """Gap between two adjacent cells.
 
     Two regimes:
@@ -159,17 +162,17 @@ def _pair_gap(a: Chart | None, b: Chart | None, *, axis: str) -> float:
     return default_gap
 
 
-def _gaps_h(children: list[Chart | None]) -> list[float]:
+def _gaps_h(children: list) -> list[float]:
     return [_pair_gap(children[i], children[i + 1], axis="h")
             for i in range(len(children) - 1)]
 
 
-def _gaps_v(children: list[Chart | None]) -> list[float]:
+def _gaps_v(children: list) -> list[float]:
     return [_pair_gap(children[i], children[i + 1], axis="v")
             for i in range(len(children) - 1)]
 
 
-def _grid_col_gap(children: list[Chart | None], rows: int, cols: int, c: int) -> float:
+def _grid_col_gap(children: list, rows: int, cols: int, c: int) -> float:
     """Gap between grid columns c and c+1: min over all rows. If any row
     has a joined pair across this column boundary, the whole boundary
     collapses — otherwise the default gap."""
@@ -179,7 +182,7 @@ def _grid_col_gap(children: list[Chart | None], rows: int, cols: int, c: int) ->
     )
 
 
-def _grid_row_gap(children: list[Chart | None], rows: int, cols: int, r: int) -> float:
+def _grid_row_gap(children: list, rows: int, cols: int, r: int) -> float:
     return min(
         _pair_gap(children[r * cols + c], children[(r + 1) * cols + c], axis="v")
         for c in range(cols)
@@ -190,7 +193,7 @@ def _grid_row_gap(children: list[Chart | None], rows: int, cols: int, r: int) ->
 # Measurement — recursive (W, H) for a node, honoring leaf size hints.
 # ---------------------------------------------------------------------------
 
-def _leaf_rect_size(leaf: Chart) -> tuple[int, int]:
+def _leaf_rect_size(leaf) -> tuple[int, int]:
     """The leaf's intrinsic canvas size. For data leaves: data region
     + measure-driven margin (set by the layout pre-pass). For legend
     and diagram leaves: the explicit canvas dims set at construction.
@@ -198,7 +201,7 @@ def _leaf_rect_size(leaf: Chart) -> tuple[int, int]:
     return leaf._canvas_width, leaf._canvas_height
 
 
-def _is_atomic(node: Chart) -> bool:
+def _is_atomic(node) -> bool:
     """A node the placement system treats as a single opaque block.
 
     Leaves are atomic by definition. Coord-bearing Layouts are too —
@@ -214,7 +217,7 @@ def _is_atomic(node: Chart) -> bool:
     return coord is not None and hasattr(coord, "render_layout")
 
 
-def _atomic_size(node: Chart) -> tuple[int, int]:
+def _atomic_size(node) -> tuple[int, int]:
     """Canvas size for an atomic node. Leaves use their declared
     `_canvas_*`; coord-bearing Layouts match the (W, H) their coord's
     `render_layout` will claim — max of inner data-leaf dims, the same
@@ -228,7 +231,7 @@ def _atomic_size(node: Chart) -> tuple[int, int]:
             max(l._data_height for l in leaves))
 
 
-def _measure(node: Chart) -> tuple[int, int]:
+def _measure(node) -> tuple[int, int]:
     """The pixel (W, H) the node wants.
 
     Component-first: a leaf reports its declared size; a parent reports
@@ -279,7 +282,7 @@ def _measure(node: Chart) -> tuple[int, int]:
     return W, H
 
 
-def _natural_size(root: Chart) -> tuple[int, int]:
+def _natural_size(root) -> tuple[int, int]:
     """The figure's natural (W, H), including measure-driven margin growth
     and any share-scaling coordination between leaves. Runs the pre-pass
     so every data leaf's `_canvas_*` reflects the final body+margin total,
@@ -300,7 +303,7 @@ def _natural_size(root: Chart) -> tuple[int, int]:
     return _measure(root)
 
 
-def _data_total_size(node: Chart) -> tuple[float, float]:
+def _data_total_size(node) -> tuple[float, float]:
     """Sum of `_data_width` / `_data_height` across all data leaves in
     the node's tree, combined the same way `_measure` combines canvases
     (sum along layout direction, max orthogonally). Non-data leaves
@@ -360,7 +363,7 @@ def _hint_ratios(sizes: list[float], n: int) -> list[float]:
 _CASCADING_NAMES = frozenset({"sectors"})
 
 
-def _ancestor_calls(leaf: Chart) -> list[tuple]:
+def _ancestor_calls(leaf) -> list[tuple]:
     """Collect cascadable `_calls` entries from `leaf`'s ancestors,
     yielded root-first. Used by `_build_panel_opts` to prepend ancestor
     state declarations to the leaf's own `_calls` before `_replay`.
@@ -373,7 +376,7 @@ def _ancestor_calls(leaf: Chart) -> list[tuple]:
     inherit *into* leaves cascade — today just `sectors`. Other
     journaled Layout state (`share_x/y`, `align_x/y`, `coordinate`,
     `gap`) is consumed at the Layout where it's declared by
-    `materialize()`, not at the leaf. Attached charts have a Chart
+    `materialize()`, not at the leaf. Attached charts have a leaf
     ancestor (the host) whose `_calls` contains artists — those must
     not bleed into the attachment's replay; the name filter is the
     guard.
@@ -383,8 +386,8 @@ def _ancestor_calls(leaf: Chart) -> list[tuple]:
     by appearance, and a leaf's own sectors entry (later in the
     combined list) wins via last-write-wins on `st[\"{axis}_sectors\"]`.
     """
-    # Walk only Layout ancestors. An attached Chart's `_parent` is its
-    # host (a Chart), and an attached chart shares only one axis with
+    # Walk only layout ancestors. An attached chart's `_parent` is its
+    # host (a leaf), and an attached chart shares only one axis with
     # its host — sector cascade through the host would leak the host's
     # other-axis sectors. Attachment inheritance is handled separately
     # by `_attachments.attachment_inherited_calls` with axis filtering
@@ -403,7 +406,7 @@ def _ancestor_calls(leaf: Chart) -> list[tuple]:
     return out
 
 
-def _allocate(node: Chart, x: float, y: float, w: float, h: float, out: list):
+def _allocate(node, x: float, y: float, w: float, h: float, out: list):
     """Walk the tree, recording (leaf, rect) pairs into `out`. Leaf size hints
     (set via `pt.chart(data_width=, data_height=)` or the canvas_* form)
     act as relative ratios — so a narrow colorbar leaf in
@@ -490,7 +493,7 @@ def _allocate(node: Chart, x: float, y: float, w: float, h: float, out: list):
 # or is forced to the orthogonal anchor's (both-axes case).
 # ---------------------------------------------------------------------------
 
-def _apply_share_scaling(leaves: list[Chart]) -> None:
+def _apply_share_scaling(leaves: list) -> None:
     """Mutate non-anchor leaves' `_data_width` / `_data_height` to
     coordinate with their share anchors. Reads from `_orig_data_*`
     each call so the operation is idempotent across re-renders."""
@@ -541,7 +544,7 @@ def _apply_share_scaling(leaves: list[Chart]) -> None:
 # one axis descriptor per share-equivalence class.
 # ---------------------------------------------------------------------------
 
-def _validate_share_targets(leaves: list[Chart]) -> None:
+def _validate_share_targets(leaves: list) -> None:
     """Every share target must itself be a leaf in the same composition."""
     leaf_ids = {id(l) for l in leaves}
     for leaf in leaves:
@@ -562,7 +565,7 @@ def _validate_share_targets(leaves: list[Chart]) -> None:
                 )
 
 
-def _topo_order(leaves: list[Chart]) -> list[Chart]:
+def _topo_order(leaves: list) -> list:
     """Topo-sort leaves so each one's share source is visited first. Cycles
     raise with a friendly message."""
     ts = TopologicalSorter()
@@ -578,7 +581,7 @@ def _topo_order(leaves: list[Chart]) -> list[Chart]:
         ) from exc
 
 
-def _build_axis_descriptors(leaves: list[Chart],
+def _build_axis_descriptors(leaves: list,
                             states: dict[int, dict]
                             ) -> tuple[dict[int, _AxisDescriptor],
                                        dict[int, _AxisDescriptor]]:
@@ -594,7 +597,7 @@ def _build_axis_descriptors(leaves: list[Chart],
         ("x", "_share_x", _x_descriptor_multi, x_desc),
         ("y", "_share_y", _y_descriptor_multi, y_desc),
     ):
-        classes: dict[int, list[Chart]] = {}
+        classes: dict[int, list] = {}
         for leaf in leaves:
             root = _share_root(leaf, axis)
             classes.setdefault(id(root), []).append(leaf)
@@ -617,7 +620,7 @@ def _build_axis_descriptors(leaves: list[Chart],
 # content the renderer will skip).
 # ---------------------------------------------------------------------------
 
-def _mark_joined_pair(a: Chart | None, b: Chart | None, *, axis: str,
+def _mark_joined_pair(a, b, *, axis: str,
                       states: dict[int, dict],
                       out: dict[int, _PanelOpts]) -> None:
     """If `a` and `b` are joined along `axis` (i.e., share-equivalent on the
@@ -678,7 +681,7 @@ def _mark_joined_pair(a: Chart | None, b: Chart | None, *, axis: str,
             out[id(b)].suppress_top_labels = True
 
 
-def _annotate_collapses(node: Chart, states: dict[int, dict],
+def _annotate_collapses(node, states: dict[int, dict],
                          out: dict[int, _PanelOpts]) -> None:
     """Walk the tree, marking joined-pair flags on every adjacent pair of
     leaves that share an axis (orthogonal to the layout direction)."""
@@ -709,7 +712,7 @@ def _annotate_collapses(node: Chart, states: dict[int, dict],
             _annotate_collapses(cell, states, out)
 
 
-def _propagate_grid_joins(node: Chart, out: dict[int, _PanelOpts]) -> None:
+def _propagate_grid_joins(node, out: dict[int, _PanelOpts]) -> None:
     """Within a grid, propagate `hide_*` (margin) flags column-wise and
     row-wise so panels in the same column/row share effective margins and
     their data areas stay aligned. `suppress_*_labels` does NOT propagate
@@ -747,7 +750,7 @@ def _propagate_grid_joins(node: Chart, out: dict[int, _PanelOpts]) -> None:
             _propagate_grid_joins(cell, out)
 
 
-def _build_panel_opts(root: Chart) -> tuple[dict[int, _PanelOpts], dict[int, dict]]:
+def _build_panel_opts(root) -> tuple[dict[int, _PanelOpts], dict[int, dict]]:
     """One pass over the tree that produces (panel_opts, replayed states).
 
     For body-first leaves, also computes a measure-driven effective
@@ -802,7 +805,7 @@ def _build_panel_opts(root: Chart) -> tuple[dict[int, _PanelOpts], dict[int, dic
     return panel_opts, states
 
 
-def _compute_measured_margins(leaves: list[Chart],
+def _compute_measured_margins(leaves: list,
                               states: dict[int, dict],
                               panel_opts: dict[int, _PanelOpts]) -> None:
     """Per-leaf preliminary effective margin = floor + content-required.
@@ -827,7 +830,7 @@ def _compute_measured_margins(leaves: list[Chart],
         po.M_eff = {side: M_floor[side] + M_req[side] for side in M_floor}
 
 
-def _body_cell(cell: Chart | None, panel_opts: dict[int, _PanelOpts]) -> bool:
+def _body_cell(cell, panel_opts: dict[int, _PanelOpts]) -> bool:
     """Cells eligible for per-column/row margin coordination — data
     leaves whose preliminary margin has been computed."""
     return (cell is not None
@@ -837,7 +840,7 @@ def _body_cell(cell: Chart | None, panel_opts: dict[int, _PanelOpts]) -> bool:
             and panel_opts[id(cell)].M_eff is not None)
 
 
-def _coordinate_pair(cells: list[Chart], panel_opts: dict[int, _PanelOpts],
+def _coordinate_pair(cells: list, panel_opts: dict[int, _PanelOpts],
                      sides: tuple[str, str]) -> None:
     """Take max per side across `cells`, write back to each cell's M_eff.
     `sides` is e.g. ("left", "right") for column-coordination or
@@ -852,7 +855,7 @@ def _coordinate_pair(cells: list[Chart], panel_opts: dict[int, _PanelOpts],
         po.M_eff = {**po.M_eff, s1: m1, s2: m2}
 
 
-def _virtual_grid_children(node: Chart, inner_kind: str) -> list[Chart] | None:
+def _virtual_grid_children(node, inner_kind: str) -> list | None:
     """If `node` has been marked as a virtual grid (via `share_x("col")`
     or `share_y("row")`) and every child is a same-kind parent with
     equal cell count, return the children. Otherwise None — composition
@@ -872,7 +875,7 @@ def _virtual_grid_children(node: Chart, inner_kind: str) -> list[Chart] | None:
     return kids
 
 
-def _coordinate_margins(node: Chart, panel_opts: dict[int, _PanelOpts]) -> None:
+def _coordinate_margins(node, panel_opts: dict[int, _PanelOpts]) -> None:
     """Walk the tree; at each parent, push body-first cells in the same
     column/row to share the wider margin so their data regions align.
 
@@ -947,7 +950,7 @@ def _coordinate_margins(node: Chart, panel_opts: dict[int, _PanelOpts]) -> None:
             _coordinate_margins(cell, panel_opts)
 
 
-def _pad_canvases(cells: list[Chart], panel_opts: dict[int, _PanelOpts],
+def _pad_canvases(cells: list, panel_opts: dict[int, _PanelOpts],
                   *, axis: str) -> None:
     """Equalize canvases across `cells` by padding the slack onto one
     margin side, so every cell ends up with the same canvas dimension
@@ -974,7 +977,7 @@ def _pad_canvases(cells: list[Chart], panel_opts: dict[int, _PanelOpts],
             panel_opts[id(c)].M_eff = {**m, side: m[side] + slack}
 
 
-def _update_canvases_for_margins(leaves: list[Chart],
+def _update_canvases_for_margins(leaves: list,
                                  panel_opts: dict[int, _PanelOpts]) -> None:
     """Mutate each data leaf's `_canvas_width` / `_canvas_height` to
     match the coordinated effective margin. Layout's `_measure` reads
@@ -990,7 +993,7 @@ def _update_canvases_for_margins(leaves: list[Chart],
         leaf._last_M_eff = dict(M)
 
 
-def _effective_margin(leaf: Chart, po: _PanelOpts, w: float, h: float) -> dict:
+def _effective_margin(leaf, po: _PanelOpts, w: float, h: float) -> dict:
     """Margin used at render time. Data leaves read the coordinated margin
     from `po.M_eff` (computed by `_compute_measured_margins` with hide-
     aware `_required_margin`)."""
@@ -1039,7 +1042,7 @@ def _render_layout(root, outer=None) -> str:
     return _render_layout_rect(root, outer=outer)
 
 
-def _render_layout_rect(root: Chart, outer=None) -> str:
+def _render_layout_rect(root, outer=None) -> str:
     panel_opts, states = _build_panel_opts(root)
     # Override each legend leaf's intrinsic _fig size with its
     # content-driven size before measure runs.
@@ -1081,7 +1084,7 @@ def _render_layout_rect(root: Chart, outer=None) -> str:
     # pass 1 (no dependency on data artists' colors) but via a separate
     # path that emits the stored debug SVG verbatim, with no panel
     # decorations.
-    data_leaves: list[Chart] = []
+    data_leaves: list = []
     # Shared across panels so each coord-clip `<clipPath id>` is unique
     # within this document. Reset per layout render → byte-identical output.
     clip_counter = count()

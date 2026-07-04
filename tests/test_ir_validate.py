@@ -206,6 +206,53 @@ def test_inset_unknown_chart():
     _expect(ir, "chart_nid references node 4242")
 
 
+def test_layout_cannot_carry_insets():
+    # The recorder can't produce this (Layout has no `.inset()`), but a
+    # hand-authored IR could — and hydration would die with a raw
+    # AttributeError (RenderLayout has no `_insets`) instead of the
+    # promised contract error.
+    ir = _layout_ir()
+    chart_nid = _node(ir, "chart").nid
+    _node(ir, "layout").insets.append(
+        {"rect": [0.5, 0.5, 0.4, 0.4], "chart_nid": chart_nid})
+    _expect(ir, "layout nodes cannot carry insets")
+
+
+def test_inset_target_must_be_chart_kind():
+    # Host must come after the target in the table for the kind check
+    # (not the earlier-reference check) to be what fires — a legend leaf
+    # composed before the chart gives that ordering.
+    ir = _legend_kind_target_ir()
+    legend_nid = _node(ir, "legend").nid
+    _node(ir, "chart").insets.append(
+        {"rect": [0.1, 0.1, 0.3, 0.3], "chart_nid": legend_nid})
+    _expect(ir, "chart_nid must reference a chart node")
+
+
+def test_legend_sources_must_be_leaves():
+    # An inner layout (kept un-flattened by its share_y call) precedes
+    # the legend in dependency order, so pointing legend_sources at it
+    # exercises the kind check, not the earlier-reference check.
+    a = pt.chart({"x": [1, 2], "y": [3, 4]})
+    a.scatter(x="x", y="y")
+    b = pt.chart({"x": [1, 2], "y": [4, 3]})
+    b.line(x="x", y="y")
+    inner = (a | b).share_y()
+    ir = pt.to_ir(inner | pt.legend(a))
+    inner_nid = next(n.nid for n in ir.nodes
+                     if n.kind == "layout" and n.nid != ir.root_nid)
+    _node(ir, "legend").init["legend_sources"] = [inner_nid]
+    _expect(ir, "sources must be leaf nodes")
+
+
+def _legend_kind_target_ir():
+    """`pt.legend() | chart` — the legend leaf lands *before* the chart
+    in the node table."""
+    c = pt.chart({"x": [1, 2], "y": [3, 4]})
+    c.scatter(x="x", y="y")
+    return pt.to_ir(pt.legend() | c)
+
+
 # ---------------------------------------------------------------------------
 # Enforcement at the render entry
 # ---------------------------------------------------------------------------

@@ -38,7 +38,8 @@ IRNode(nid, kind, init, ops, insets)
 - `ops` — `[{"op": <name>, "args": [...], "kwargs": {...}}, ...]` in
   original per-node order.
 - `insets` — `[{"rect": [x, y, w, h], "chart_nid": <nid>}, ...]`
-  (fractional rect in the host's data area).
+  (fractional rect in the host's data area). Insets live on leaf
+  nodes — never on a layout — and `chart_nid` must name a chart node.
 
 **Dependency order.** `nodes` is ordered so that every nid a node
 references — layout children, legend sources, inset charts, `$node`
@@ -57,8 +58,9 @@ render half ignores: `data` and chart-level aes (`x`, `y`, `color`,
 **`legend`** — standalone legend leaf. Required: `canvas_width`,
 `canvas_height` (the canvas is the dimensional primitive; data dims are
 zero). Optional: `margin`, `legend_sources` (list of nids — positional
-reference form), `legend_names_pairs` (pairs, not a dict — keys may be
-`$node` envelopes), `legend_group_by_chart`, `legend_valign`,
+reference form; each must name a leaf node, not a layout),
+`legend_names_pairs` (pairs, not a dict — keys may be `$node`
+envelopes), `legend_group_by_chart`, `legend_valign`,
 `legend_user_width`, `legend_user_height`, `legend_gap`.
 
 **`diagram`** — pre-rendered SVG leaf. Required: `canvas_width`,
@@ -97,7 +99,8 @@ registering it. That's the same rule as rendering — determinism is
 ## Value envelopes
 
 Three envelopes, shared verbatim with the journal, may appear anywhere
-in init or op values; `_decode` (`_ir.py`) resolves them at hydration:
+in init or op values; `_decode` (`_json_layer.py`) resolves them at
+hydration:
 
     {"$node": <nid>}                     cross-node reference (attachments,
                                          coord inners, legend name keys)

@@ -41,7 +41,7 @@ def _swatch_ctx(a: dict) -> RenderContext:
     )
 
 
-def _build_groups(sources: list[Chart], states: dict[int, dict],
+def _build_groups(sources: list, states: dict[int, dict],
                   names: dict, group_by_chart: bool) -> list[dict]:
     """Collect entries per source and decide each section's header.
 
@@ -271,7 +271,7 @@ def _inline_gradient_block_size(cont_entries: list[dict]) -> tuple[float, float]
     return max_w, total_h
 
 
-def _legend_content_size(leaf: Chart, sources: list[Chart],
+def _legend_content_size(leaf, sources: list,
                          states: dict[int, dict]) -> tuple[float, float]:
     """Compute the legend leaf's content-driven (width, height).
 
@@ -335,7 +335,7 @@ def _legend_content_size(leaf: Chart, sources: list[Chart],
     return max_w + 2 * pad_x, total_h
 
 
-def _size_legends(root: Chart, states: dict[int, dict]) -> None:
+def _size_legends(root, states: dict[int, dict]) -> None:
     """Pre-render pass: override each legend leaf's intrinsic _fig canvas
     size with its content-driven size, except where the user passed
     explicit `canvas_width=` / `canvas_height=` to `pt.legend(...)`."""
@@ -352,9 +352,9 @@ def _size_legends(root: Chart, states: dict[int, dict]) -> None:
             leaf._canvas_height = max(1, int(round(ch)))
 
 
-def _render_legend(leaf: Chart, w: float, h: float,
+def _render_legend(leaf, w: float, h: float,
                    states: dict[int, dict],
-                   data_leaves: list[Chart]) -> str:
+                   data_leaves: list) -> str:
     """Render the legend leaf's content into its allocated rect.
 
     Sources default to all data leaves in the layout; explicit
