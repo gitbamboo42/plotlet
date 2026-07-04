@@ -47,10 +47,21 @@ from .core import (
     _figure_root_attrs, _panel_open,
 )
 from .scales import _AxisDescriptor
-from .chart import Chart, _extract_theme
+from ._tree import iter_leaves as _iter_leaves
 from . import _attachments
 from . import _regions
 from .draw import coord
+
+
+def _extract_theme(calls) -> str | None:
+    """Last-call-wins scan for the active theme. Returns `None` when the
+    chart never set a theme — `active_theme(None)` is a passthrough that
+    leaves the spec dicts on their current values."""
+    name = None
+    for call_name, args, _kw in calls:
+        if call_name == "theme":
+            name = args[0] if args else None
+    return name
 
 
 # Layout gaps stay captured — they're parent-level positional, not
@@ -342,18 +353,8 @@ def _hint_ratios(sizes: list[float], n: int) -> list[float]:
 # Allocation — assigns a pixel rect to each leaf.
 # ---------------------------------------------------------------------------
 
-def _iter_leaves(node: Chart):
-    if not node._is_parent:
-        yield node
-        # Attached charts are leaves of the composition too — they
-        # participate in share validation, descriptor building, etc.
-        for c in _attachments.all_attachments(node):
-            yield from _iter_leaves(c)
-        return
-    for c in node._children:
-        if c is None:
-            continue
-        yield from _iter_leaves(c)
+# `_iter_leaves` is `_tree.iter_leaves` (imported above) — the shared
+# attachment-aware walk, also used by the share-class computation.
 
 
 _CASCADING_NAMES = frozenset({"sectors"})
@@ -548,11 +549,9 @@ def _validate_share_targets(leaves: list[Chart]) -> None:
             src = getattr(leaf, attr)
             if src is None:
                 continue
-            if not isinstance(src, Chart):
-                raise TypeError(
-                    f"share_{axis}= must be a Chart; got {type(src).__name__}."
-                )
-            if src._is_parent:
+            if getattr(src, "_is_parent", True):
+                # Also catches non-node garbage: anything without the
+                # node protocol can't be a share target.
                 raise ValueError(
                     f"share_{axis}= target must be a leaf chart, not a composed parent."
                 )
@@ -998,12 +997,13 @@ def _effective_margin(leaf: Chart, po: _PanelOpts, w: float, h: float) -> dict:
     return dict(po.M_eff)
 
 
-def _render_layout(root: Chart, outer=None) -> str:
+def _render_layout(root, outer=None) -> str:
     # Materialize first — replay the recorded journals to populate
     # `_share_x/y`, `_coordinate`, `_gap*`, `_attached_*`, etc. before
-    # anything reads them. User-facing state methods only validate and
-    # record; field writes happen here.
-    from .chart import materialize
+    # anything reads them. Normally `root` is the hydrated render tree
+    # (`_render_nodes.hydrate`); the pass is duck-typed, so internal
+    # callers may hand it a recorder tree too.
+    from ._render_nodes import materialize
     materialize(root)
     # If the root has a container coord that implements `render_layout`,
     # delegate the entire render to it — the coord owns its strategy

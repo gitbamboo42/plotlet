@@ -370,7 +370,7 @@ def _run_invariants():
     shr = pt.chart(); shr.line(data={"x": [0, 10], "y": [-5, 5]}, x="x", y="y")
     parent = (src | shr).share_y()
     from plotlet._layout_engine import _build_panel_opts
-    from plotlet.chart import materialize
+    from plotlet._render_nodes import materialize
     materialize(parent)
     panel_opts, _ = _build_panel_opts(parent)
     src_y = panel_opts[id(src)].y_axis

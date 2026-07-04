@@ -26,9 +26,10 @@ inspection, linting, and tooling, and deliberately drops the
 information needed to rebuild the journal. Same journal → same
 resolved IR.
 
-Implementation reuses the figure IR's materializer, then the layout
-engine's panel-opts pre-pass. The Chart/Layout tree is a private
-staging area; the resolved IR is the artifact.
+Implementation reuses the render half's node tree (`_render_nodes.py`:
+hydrate + materialize), then the layout engine's panel-opts pre-pass.
+The render tree is a private staging area; the resolved IR is the
+artifact.
 """
 from __future__ import annotations
 
@@ -111,12 +112,12 @@ def resolve_ir(node):
     The round-trip contract lives with the journal and the figure IR;
     the resolved IR sits below them and is a projection, not a
     round-trip peer. Same journal → same resolved IR."""
-    from ._ir import to_ir, _materialize
+    from ._ir import to_ir
     from ._layout_engine import _build_panel_opts
-    from .chart import materialize
+    from ._render_nodes import hydrate, materialize
 
     ir = to_ir(node)
-    root = _materialize(ir, ir.root_nid)
+    root = hydrate(ir)
     materialize(root)
     panel_opts, states = _build_panel_opts(root)
     return _node_to_ir(root, panel_opts, states)
@@ -251,9 +252,10 @@ def _coord_to_ir(coord, panel_opts=None, states=None):
 
 
 def _coerce_param(v, panel_opts, states):
-    """Recursively wrap Chart-typed coord params as IRPanel."""
-    from .chart import Chart
-    if isinstance(v, Chart):
+    """Recursively wrap node-typed coord params (e.g.
+    `CircularCoordinate.inner`) as IRPanel."""
+    from ._render_nodes import RenderNode
+    if isinstance(v, RenderNode):
         return _chart_to_ir(v, panel_opts or {}, states or {})
     if isinstance(v, dict):
         return {k: _coerce_param(x, panel_opts, states) for k, x in v.items()}

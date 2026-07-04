@@ -367,80 +367,66 @@ class CircularCoordinate:
         def _render_leaf(leaf, coord, *, is_outermost=False, prepend=()):
             # `prepend` carries inherited entries (today: dampened sectors
             # for `self.inner`) that need to be replayed before the
-            # leaf's own calls. Inserted at the front of `_calls` and
-            # cleaned up in `finally` so the leaf's journal is untouched
-            # across re-renders — no permanent fan-out / insert(0).
+            # leaf's own calls. The leaves here are renderer-private nodes,
+            # rebuilt fresh for every figure render and rendered exactly
+            # once per render — so the splices and dimension overrides
+            # below mutate freely, with nothing to restore.
             n_prepend = len(prepend)
             if n_prepend:
                 leaf._calls[:0] = list(prepend)
             n0 = len(leaf._calls)
-            orig_dw, orig_dh = leaf._data_width, leaf._data_height
-            orig_margin = dict(leaf._margin)
-            try:
-                has_own_coord = any(c[0] == "coordinate" for c in leaf._calls)
-                if not has_own_coord:
-                    leaf._calls.append(("coordinate", [coord], {}))
-                # title / x|y label are layout-level — suppress per leaf so
-                # they don't stack. Spines flow through to draw_frame so
-                # top/bottom drive the outer/inner arcs.
-                leaf._calls.extend([
-                    ("title",  [""], {}),
-                    ("xlabel", [""], {}),
-                    ("ylabel", [""], {}),
-                ])
-                # x-axis: only the outermost ring shows ticks/labels/sector
-                # labels (conventionally, labels sit outside the
-                # outermost track). Inner rings suppress unless the leaf's
-                # replay input already carries an xticks entry — user-
-                # explicit, or an artist frame-default (chord / heatmap
-                # rings set their own tick treatment), hence checking the
-                # expanded list, which is exactly what `_replay` will see.
-                # y-axis suppression comes from the leaf coord's own
-                # `y_ticks=[]` default (`CircularCoordinate.__init__`);
-                # opt in per leaf with an explicit `c.yticks(...)`.
-                has_xticks = any(
-                    c[0] == "xticks"
-                    for c in _expand_frame_defaults(leaf._calls[:n0]))
-                if not is_outermost and not has_xticks:
-                    leaf._calls.append(("xticks", [[]], {"labels": False}))
-                leaf._data_width  = W
-                leaf._data_height = H
-                leaf._margin = {"left": 0, "right": 0, "top": 0, "bottom": 0}
-                leaf._canvas_width  = W
-                leaf._canvas_height = H
-                # Circular chrome places labels at angular positions inside
-                # the gap zone — no Cartesian margin band needed. Zero margin
-                # + a fresh `_build_panel_opts` bypasses margin recomputation,
-                # avoiding a translate(N,0) offset that would misalign this
-                # leaf with others rendered onto the same canvas.
-                _panel_opts, _states = _build_panel_opts(leaf)
-                _st = _states[id(leaf)]
-                _po = _panel_opts[id(leaf)]
-                _theme = None
-                for _c in leaf._calls:
-                    if _c[0] == "theme": _theme = _c[1][0] if _c[1] else None
-                with active_theme(_theme):
-                    # Emit just the panel body (no <svg> wrapper) — the
-                    # caller concatenates each leaf's body into the shared
-                    # overlay canvas.
-                    with _regions.translate(0, 0):
-                        inner = _render_inner(_st, W, H, _ZERO_MARGIN, _po,
-                                              clip_counter=_clip_counter)
-                    body = (_panel_open(_st, _po, "translate(0,0)",
-                                        _ZERO_MARGIN, W, H, (0, 0, W, H))
-                            + inner + '</g>')
-            finally:
-                # Strip trailing render-time additions first, then the
-                # prepended entries from the front. Order matters — n0
-                # is computed after the prepend, so leaf._calls[n0:] is
-                # the trailing block.
-                del leaf._calls[n0:]
-                if n_prepend:
-                    del leaf._calls[:n_prepend]
-                leaf._data_width, leaf._data_height = orig_dw, orig_dh
-                leaf._margin = orig_margin
-                leaf._canvas_width  = orig_dw + orig_margin["left"] + orig_margin["right"]
-                leaf._canvas_height = orig_dh + orig_margin["top"]  + orig_margin["bottom"]
+            has_own_coord = any(c[0] == "coordinate" for c in leaf._calls)
+            if not has_own_coord:
+                leaf._calls.append(("coordinate", [coord], {}))
+            # title / x|y label are layout-level — suppress per leaf so
+            # they don't stack. Spines flow through to draw_frame so
+            # top/bottom drive the outer/inner arcs.
+            leaf._calls.extend([
+                ("title",  [""], {}),
+                ("xlabel", [""], {}),
+                ("ylabel", [""], {}),
+            ])
+            # x-axis: only the outermost ring shows ticks/labels/sector
+            # labels (conventionally, labels sit outside the
+            # outermost track). Inner rings suppress unless the leaf's
+            # replay input already carries an xticks entry — user-
+            # explicit, or an artist frame-default (chord / heatmap
+            # rings set their own tick treatment), hence checking the
+            # expanded list, which is exactly what `_replay` will see.
+            # y-axis suppression comes from the leaf coord's own
+            # `y_ticks=[]` default (`CircularCoordinate.__init__`);
+            # opt in per leaf with an explicit `c.yticks(...)`.
+            has_xticks = any(
+                c[0] == "xticks"
+                for c in _expand_frame_defaults(leaf._calls[:n0]))
+            if not is_outermost and not has_xticks:
+                leaf._calls.append(("xticks", [[]], {"labels": False}))
+            leaf._data_width  = W
+            leaf._data_height = H
+            leaf._margin = {"left": 0, "right": 0, "top": 0, "bottom": 0}
+            leaf._canvas_width  = W
+            leaf._canvas_height = H
+            # Circular chrome places labels at angular positions inside
+            # the gap zone — no Cartesian margin band needed. Zero margin
+            # + a fresh `_build_panel_opts` bypasses margin recomputation,
+            # avoiding a translate(N,0) offset that would misalign this
+            # leaf with others rendered onto the same canvas.
+            _panel_opts, _states = _build_panel_opts(leaf)
+            _st = _states[id(leaf)]
+            _po = _panel_opts[id(leaf)]
+            _theme = None
+            for _c in leaf._calls:
+                if _c[0] == "theme": _theme = _c[1][0] if _c[1] else None
+            with active_theme(_theme):
+                # Emit just the panel body (no <svg> wrapper) — the
+                # caller concatenates each leaf's body into the shared
+                # overlay canvas.
+                with _regions.translate(0, 0):
+                    inner = _render_inner(_st, W, H, _ZERO_MARGIN, _po,
+                                          clip_counter=_clip_counter)
+                body = (_panel_open(_st, _po, "translate(0,0)",
+                                    _ZERO_MARGIN, W, H, (0, 0, W, H))
+                        + inner + '</g>')
             return body
 
         bodies = [_render_leaf(leaf, c, is_outermost=(i == 0))

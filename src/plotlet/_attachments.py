@@ -20,39 +20,38 @@ attachments, attachments imports engine only at call time.
 """
 from __future__ import annotations
 
-from .chart import Chart
 from .core import _PanelOpts
 
 
 _DEFAULT_M = {"left": 0, "right": 0, "top": 0, "bottom": 0}
 
 
-def _M_eff(leaf: Chart) -> dict:
+def _M_eff(leaf) -> dict:
     """Per-side margin for a leaf, defaulting to zeros before the
     pre-pass has run. Returns a fresh dict-shaped value so callers can
     treat the four sides uniformly."""
     return leaf._last_M_eff or _DEFAULT_M
 
 
-def has_attachments(chart: Chart) -> bool:
+def has_attachments(chart) -> bool:
     """True if `chart` is a host with any side attachments."""
     return bool(chart._attached_left or chart._attached_right
                 or chart._attached_above or chart._attached_below)
 
 
-def all_attachments(chart: Chart) -> list[Chart]:
+def all_attachments(chart) -> list:
     return (chart._attached_left + chart._attached_right
             + chart._attached_above + chart._attached_below)
 
 
-def _gap(c: Chart) -> float:
+def _gap(c) -> float:
     """Per-attachment gap to inward neighbor (host or previous attachment).
     Returns 0 for unattached charts (defensive — placement only iterates
     over already-attached lists)."""
     return getattr(c, "_attachment_gap", 0.0)
 
 
-def attached_size_h(host: Chart) -> tuple[float, float]:
+def attached_size_h(host) -> tuple[float, float]:
     """Extra horizontal space the figure needs beyond `host`'s own canvas
     to fit left/right attachments AND any perpendicular-margin overflow
     from above/below attachments. Left/right attachments occupy the
@@ -75,7 +74,7 @@ def attached_size_h(host: Chart) -> tuple[float, float]:
             max(sum_right - M["right"], max_right_overflow, 0.0))
 
 
-def attached_size_v(host: Chart) -> tuple[float, float]:
+def attached_size_v(host) -> tuple[float, float]:
     """Extra vertical space beyond `host`'s canvas needed for above/below
     attachments AND for left/right attachments whose own top/bottom
     margins overflow the host's. Returns (above_extra, below_extra)."""
@@ -91,7 +90,7 @@ def attached_size_v(host: Chart) -> tuple[float, float]:
             max(sum_below - M["bottom"], max_bottom_overflow, 0.0))
 
 
-def allocate(host: Chart, host_x: float, host_y: float,
+def allocate(host, host_x: float, host_y: float,
              host_w: float, host_h: float, out: list) -> None:
     """Place each attachment so its DATA area aligns with the host's data
     area on the shared axis; the attachment's own margins are independent
@@ -171,7 +170,7 @@ def _is_sectors_call(call, axis: str) -> bool:
     return name == "sectors" and kw.get("axis", "x") == axis
 
 
-def attachment_inherited_calls(leaf: Chart) -> list[tuple]:
+def attachment_inherited_calls(leaf) -> list[tuple]:
     """Sector entries that an attached leaf inherits from its host —
     returned as a list of journal entries, *not* inserted into the
     leaf's `_calls`. Callers in the render path (`_build_panel_opts`)
@@ -215,7 +214,7 @@ def attachment_inherited_calls(leaf: Chart) -> list[tuple]:
     return out
 
 
-def annotate_joined_pairs(leaves: list[Chart],
+def annotate_joined_pairs(leaves: list,
                           states: dict[int, dict],
                           panel_opts: dict[int, _PanelOpts]) -> None:
     """For each host with attachments, mark the inner-facing edge of each
@@ -262,7 +261,7 @@ def annotate_joined_pairs(leaves: list[Chart],
                                       states=states, out=panel_opts)
 
 
-def promote_titles(leaves: list[Chart], states: dict[int, dict]) -> None:
+def promote_titles(leaves: list, states: dict[int, dict]) -> None:
     """`c.title("...")` is a figure-title gesture: it should render above
     everything stacked on top of `c`, not buried inside `c`'s own title
     margin under the attached panels. When `c` has `_attached_above` and

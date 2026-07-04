@@ -7,11 +7,11 @@ Three representations of one plot, ordered by distance from the user:
     IR        per-node structured form: a table of nodes in dependency
               order, each carrying its construction state, its method
               ops, and its insets. "What the figure is."
-    plot      the rendered SVG. The IR materializes Chart / Layout
-              objects and renders them through the pipeline. This is
-              the only render path — `Chart.to_svg()` itself lowers
-              through the IR — so output is byte-identical however a
-              figure reaches the renderer.
+    plot      the rendered SVG. The render half hydrates its private
+              node tree from the IR (`_render_nodes.hydrate`) and runs
+              the pipeline over it. This is the only render path —
+              `Chart.to_svg()` itself lowers through the IR — so output
+              is byte-identical however a figure reaches the renderer.
 
 The journal is the recording format — append-only, interleaved, one
 entry per action. The IR is the *compiled* form: events grouped by the
@@ -39,14 +39,14 @@ IR node shape:
 
 `FigureIR.nodes` is dependency-ordered: every nid a node references —
 layout children, legend sources, `{"$node": nid}` envelopes in op args,
-inset charts — appears earlier in the list. Materialization is therefore
-a single forward pass. The order is derived by depth-first walk from the
-root, so two IRs of the same figure list nodes identically.
+inset charts — appears earlier in the list. Hydrating the render tree is
+therefore a single forward pass. The order is derived by depth-first
+walk from the root, so two IRs of the same figure list nodes identically.
 
 Value envelopes (`{"$node": nid}`, `{"$coord": ...}`, `{"$sectors": ...}`)
 are shared with the journal — the IR stores values exactly as
 `to_journal` encoded them, and `_decode` here resolves them back at
-materialization time.
+hydration time.
 
 A second lowering stage lives in `_ir_resolved.py`: `FigureIR.resolve()`
 projects the figure into a pre-layout render plan (resolved scales,
@@ -84,8 +84,8 @@ class IRNode:
 class FigureIR:
     """Compiled figure: dependency-ordered node table plus the root nid.
 
-    Renderable directly — `to_svg()` materializes the Chart / Layout
-    tree and renders through the existing pipeline. JSON round-trips via
+    Renderable directly — `to_svg()` hands this IR to the render half
+    (`_render_nodes.render_svg`). JSON round-trips via
     `to_dict` / `from_dict` (the `_json_layer` envelopes every
     non-JSON-native value type, same as the journal's JSON form).
     """
@@ -93,10 +93,16 @@ class FigureIR:
     root_nid: int
 
     def to_svg(self, *, clean: bool = False) -> str:
-        return _materialize(self, self.root_nid).to_svg(clean=clean)
+        from ._render_nodes import render_svg
+        return render_svg(self, clean=clean)
 
     def to_html(self, full_page: bool = False) -> str:
-        return _materialize(self, self.root_nid).to_html(full_page=full_page)
+        svg = self.to_svg()
+        if full_page:
+            return ('<!doctype html><html><head><meta charset="utf-8">'
+                    '<title>plotlet</title></head>'
+                    f'<body style="margin:24px">{svg}</body></html>')
+        return svg
 
     def resolve(self):
         """Lower one step further: the resolved IR (`_ir_resolved.py`)
@@ -319,7 +325,9 @@ def ir_to_journal(ir: FigureIR):
 
 
 # ---------------------------------------------------------------------------
-# IR → plot (materialize Chart/Layout objects, render via the tree path)
+# Value envelopes — decode journal envelopes back to live objects. Used by
+# the render tree's hydrator (`_render_nodes.hydrate`) and by the facet
+# expansion above.
 # ---------------------------------------------------------------------------
 
 
@@ -344,84 +352,6 @@ def _decode(value: Any, nid_to_node: dict) -> Any:
     if isinstance(value, tuple):
         return tuple(_decode(v, nid_to_node) for v in value)
     return value
-
-
-def _materialize(ir: FigureIR, root_nid: int):
-    """Single forward pass over the dependency-ordered node table:
-    construct each node, apply its ops in order, bind its insets.
-    Envelopes in values resolve to real objects on demand."""
-    from .chart import Chart, Layout
-
-    nid_to_node: dict[int, object] = {}
-
-    def _dec(value: Any) -> Any:
-        return _decode(value, nid_to_node)
-
-    for n in ir.nodes:
-        kwargs = {k: _dec(v) for k, v in n.init.items()}
-
-        if n.kind == "chart":
-            # `Chart.__init__` accepts only field-state kwargs (see
-            # chart.py). `init` carries exactly those — method-sugar
-            # kwargs live on the `chart()` factory and appear in the
-            # IR as ops, not as construction state.
-            nid_to_node[n.nid] = Chart(**kwargs)
-        elif n.kind in ("legend", "diagram"):
-            nid_to_node[n.nid] = _materialize_leaf(n.kind, kwargs, nid_to_node)
-        elif n.kind == "layout":
-            children = [nid_to_node[c] if c is not None else None
-                        for c in kwargs["children"]]
-            layout = Layout(kwargs["layout_kind"], children)
-            if kwargs.get("grid_rows") is not None:
-                layout._grid_rows = kwargs["grid_rows"]
-            if kwargs.get("grid_cols") is not None:
-                layout._grid_cols = kwargs["grid_cols"]
-            nid_to_node[n.nid] = layout
-        else:
-            raise ValueError(f"FigureIR: unknown node kind {n.kind!r}")
-
-        obj = nid_to_node[n.nid]
-
-        # Method ops — go through the normal recorder path (aes / data
-        # injection is a no-op on already-normalized ops). Artist
-        # frame_defaults aren't carried by the IR or the journal;
-        # `_replay` regenerates them at render time.
-        for op in n.ops:
-            method = getattr(obj, op["op"])
-            method(*[_dec(a) for a in op["args"]],
-                   **{k: _dec(v) for k, v in op["kwargs"].items()})
-
-        # Insets bind after the host's ops, matching journal order
-        # (`to_journal` emits `_inset_add` after all method events).
-        for ins in n.insets:
-            obj._attach_inset(tuple(ins["rect"]),
-                              nid_to_node[ins["chart_nid"]])
-
-    return nid_to_node[root_nid]
-
-
-def _materialize_leaf(kind: str, kwargs: dict, nid_to_node: dict):
-    """Recreate a legend or diagram leaf. Non-data leaves go through
-    `Chart._new_sized_leaf`, then per-kind state gets restored."""
-    from .chart import Chart
-    leaf = Chart._new_sized_leaf(
-        canvas_width=kwargs["canvas_width"],
-        canvas_height=kwargs["canvas_height"],
-        leaf_kind=kind,
-        margin=kwargs.get("margin"),
-    )
-    if kind == "legend":
-        leaf._legend_sources = [nid_to_node[n]
-                                for n in kwargs.get("legend_sources", [])]
-        leaf._legend_names = dict(kwargs.get("legend_names_pairs", []))
-        leaf._legend_group_by_chart = kwargs.get("legend_group_by_chart", True)
-        leaf._legend_valign = kwargs.get("legend_valign")
-        leaf._legend_user_width = kwargs.get("legend_user_width")
-        leaf._legend_user_height = kwargs.get("legend_user_height")
-        leaf._legend_gap = kwargs.get("legend_gap")
-    if kind == "diagram":
-        leaf._diagram_inner = kwargs.get("diagram_inner")
-    return leaf
 
 
 # ---------------------------------------------------------------------------

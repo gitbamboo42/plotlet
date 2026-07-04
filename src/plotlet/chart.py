@@ -40,10 +40,10 @@ from __future__ import annotations
 
 import importlib.util
 import inspect
-import re
 from pathlib import Path
 
-from ._spec import _SIZESPEC, _MARGIN_FLOOR, _OUTER_MARGIN, _LAYOUTSPEC
+from ._spec import _SIZESPEC, _MARGIN_FLOOR, _OUTER_MARGIN
+from ._tree import compute_share_classes, normalize_share_mode
 from .utils import _to_px, _normalize_data
 from .registry import get_artist, all_artist_names
 
@@ -68,42 +68,6 @@ def _has_column(data, name):
         return name in data
     except (TypeError, KeyError):
         return False
-
-
-# Strip every `data-plotlet-*="..."` attribute. The leading space is part of
-# the match so we don't leave a double space behind — every attr is emitted
-# with a leading separator (see `_attrs_str` in core.py and the inline
-# `f'data-plotlet-...'` writes in `_layout_engine.py`, which sit after another
-# attr or end up with their own trailing space).
-_CLEAN_ATTR_RE = re.compile(r' data-plotlet-[\w-]+="[^"]*"')
-# Strip `<metadata data-plotlet-payload="...">...</metadata>` blocks. CDATA
-# content can include `<` `>` `&` but `json.dumps` won't emit `]]>` (see
-# `_metadata_block` in core.py), so the non-greedy match is safe.
-_CLEAN_METADATA_RE = re.compile(
-    r'<metadata data-plotlet-payload="[^"]*">.*?</metadata>', re.DOTALL
-)
-
-
-def _strip_plotlet_attrs(svg: str) -> str:
-    """Remove every `data-plotlet-*` attribute and `<metadata
-    data-plotlet-payload=...>` block from a rendered SVG. Used by
-    `to_svg(clean=True)` for users who want a plain SVG with no AI/schema
-    metadata. Class names like `plotlet-artist` stay — they're structural,
-    not metadata."""
-    svg = _CLEAN_METADATA_RE.sub("", svg)
-    svg = _CLEAN_ATTR_RE.sub("", svg)
-    return svg
-
-
-def _extract_theme(calls) -> str | None:
-    """Last-call-wins scan for the active theme. Returns `None` when the
-    chart never set a theme — `active_theme(None)` is a passthrough that
-    leaves the spec dicts on their current values."""
-    name = None
-    for call_name, args, _kw in calls:
-        if call_name == "theme":
-            name = args[0] if args else None
-    return name
 
 
 class _Renderable:
@@ -138,20 +102,19 @@ class _Renderable:
         want a plain SVG for embedding or sharing and don't need the
         AI/schema surface documented in `docs/AI_ATTRS.md`."""
         self._require_render_root()
-        svg = self._render_root()._to_svg_unchecked(outer=dict(_OUTER_MARGIN))
-        if clean:
-            svg = _strip_plotlet_attrs(svg)
-        return svg
+        from ._ir import to_ir
+        from ._render_nodes import render_svg
+        return render_svg(to_ir(self), clean=clean)
 
     def _render_root(self):
-        """Lower this tree to the figure IR and materialize the render
-        tree back from it. Every user-facing render goes journal → IR →
-        plot — one pipeline, so the IR provably carries everything the
-        renderer consumes. The user's own tree is never handed to the
-        engine (and never mutated by it)."""
-        from ._ir import to_ir, _materialize
-        ir = to_ir(self)
-        return _materialize(ir, ir.root_nid)
+        """Lower this tree to the figure IR and hydrate the renderer's
+        private node tree from it. Every user-facing render goes
+        journal → IR → plot — one pipeline, so the IR provably carries
+        everything the renderer consumes. The user's own tree is never
+        handed to the engine (and never mutated by it)."""
+        from ._ir import to_ir
+        from ._render_nodes import hydrate
+        return hydrate(to_ir(self))
 
     def regions(self) -> list[dict]:
         """Return the chrome regions emitted during a render of this
@@ -258,20 +221,22 @@ class _Renderable:
             raise ValueError(f"{cls_name}.fit() canvas dimensions must be positive.")
         node = deepcopy(self)
         node._parent = None  # copy may inherit a stale parent ref
-        # Materialize the copy so journal-derived fields (_share_*,
-        # _attached_*, _coordinate, _gap*, …) exist before `_natural_size`
-        # reads them. The deepcopy preserves the journal but is a separate
-        # tree from the one render-time materialize touches.
-        materialize(node)
         # Direct solve. Natural figure = data_total + overhead (margins,
         # gaps, non-data leaves). Solving target = s * data_total +
         # overhead for s gives the exact factor in one pass — unless the
         # overhead changes with scale (it can, via measure-driven tick
         # label growth). Iterating absorbs that residual; in practice
         # 2–3 passes converge to within a pixel.
+        #
+        # Measurement runs on a hydrated render tree, rebuilt each pass:
+        # `_natural_size` mutates the tree it measures, and
+        # `_scale_data_dims` updates the recorder copy between passes.
+        from ._render_nodes import materialize as _derive_render_state
         for _ in range(6):
-            W_nat, H_nat = _natural_size(node)
-            D_w, D_h = _data_total_size(node)
+            rroot = node._render_root()
+            _derive_render_state(rroot)
+            W_nat, H_nat = _natural_size(rroot)
+            D_w, D_h = _data_total_size(rroot)
             ratios = []
             if W is not None and D_w > 0:
                 overhead_w = W_nat - D_w
@@ -659,8 +624,8 @@ class Chart(_Renderable):
 
     def _attach(self, side: str, charts, *, hide_labels: bool = True,
                 gap: float | None = None) -> "Chart":
-        # Validation + warning at user-call time; field state is set
-        # by `_apply_attach` only via `materialize()` at render.
+        # Validation + warning at user-call time; field state is wired
+        # on the render tree (`_render_nodes._apply_attach`) at render.
         share_axis = "y" if side in ("left", "right") else "x"
         share_attr = "_share_x" if share_axis == "x" else "_share_y"
         for c in charts:
@@ -697,41 +662,12 @@ class Chart(_Renderable):
         # record time (just like `_compose` sets it for layout
         # children), read by validation (`_attach`, `_compose`,
         # `_require_render_root`) and by cascade (`_ancestor_calls`).
-        # `materialize()` never touches it; only the derived fields
-        # below (`_attached_*`, `_share_*`, `_is_attached`,
-        # `_attachment_gap`) get rebuilt from the journal at render.
+        # The derived fields (`_attached_*`, `_share_*`, `_is_attached`,
+        # `_attachment_gap`) are wired on the render tree by
+        # `_render_nodes.materialize` — never on these recorder objects.
         for c in charts:
             c._parent = self
         return self
-
-    def _apply_attach(self, side: str, charts, *, hide_labels: bool,
-                      gap: float | None) -> None:
-        """Field-mutation half of `_attach`. Called only by
-        `materialize()` from the recorded `attach_{side}` entry; never
-        from user code. Idempotent against a freshly-reset Chart: target
-        list empty, no `_is_attached` flag, no share wiring."""
-        target_list = {
-            "left":  self._attached_left,
-            "right": self._attached_right,
-            "above": self._attached_above,
-            "below": self._attached_below,
-        }[side]
-        share_axis = "y" if side in ("left", "right") else "x"
-        share_attr = "_share_x" if share_axis == "x" else "_share_y"
-        for c in charts:
-            setattr(c, share_attr, self)
-            c._is_attached = True
-            if not hide_labels:
-                # Per-leaf flag read by the joined-pair walk; setting it on
-                # the attachment alone is enough — `_mark_joined_pair`
-                # skips the hide step if either side opts out.
-                hide_flag = f"_share_hide_labels_{share_axis}"
-                setattr(c, hide_flag, False)
-            # Per-attachment gap to inward neighbor. None falls back to the
-            # spec default at allocate time so a theme override flows in.
-            c._attachment_gap = (float(gap) if gap is not None
-                                 else _LAYOUTSPEC["attach_gap"])
-            target_list.append(c)
 
     # ---------- render ----------
 
@@ -780,16 +716,18 @@ class Layout(_Renderable):
         self._parent: "Layout | None" = None
         # Journal of state-method calls (sectors, share_x/y,
         # align_x/y, coordinate, gap). Append-only: user calls only ever
-        # add entries here, and `materialize()` is the sole writer to the
-        # derived fields below. Compose isn't journaled here — every
-        # `|` / `/` builds a fresh Layout via `_compose`, never mutating
-        # an existing one, so the tree itself stays append-only: each
-        # `_children` list is written once at construction and never
-        # edited. The engine's flat-row view of `(a|b) | c` comes from
-        # `_effective_children()` at read time, not from in-place flatten.
-        # Layout state is resolved by parent-chain cascade at render
-        # time: each leaf walks up collecting cascadable entries from
-        # ancestors. Layout never mutates a leaf's journal.
+        # add entries here; the derived fields below are wired from
+        # these entries on the render tree (`_render_nodes.materialize`)
+        # and stay at their defaults on this recorder object. Compose
+        # isn't journaled here — every `|` / `/` builds a fresh Layout
+        # via `_compose`, never mutating an existing one, so the tree
+        # itself stays append-only: each `_children` list is written
+        # once at construction and never edited. The engine's flat-row
+        # view of `(a|b) | c` comes from `_effective_children()` at
+        # read time, not from in-place flatten. Layout state is
+        # resolved by parent-chain cascade at render time: each leaf
+        # walks up collecting cascadable entries from ancestors. Layout
+        # never mutates a leaf's journal.
         self._calls: list[tuple[str, list, dict]] = []
         self._gap:   float | None = None  # unified override
         self._gap_x: float | None = None  # per-axis override (between cols)
@@ -966,14 +904,15 @@ class Layout(_Renderable):
     def _validate_share(self, axis: str, mode) -> None:
         """Pure-validation pass for `share_x/y`. Called at user-call time
         so layout-kind errors and shape mismatches surface at the user's
-        `share_x()` line, not at render. Mutates nothing — `_apply_share`
-        does the field writes when `materialize()` runs at render."""
-        norm = _normalize_share_mode(axis, mode)
+        `share_x()` line, not at render. Mutates nothing — the field
+        writes happen on the render tree (`_render_nodes._apply_share`)
+        when `materialize` runs at render."""
+        norm = normalize_share_mode(axis, mode)
         if norm in ("none", "all"):
             return
         if self._layout_kind != "grid":
             # Composition fallback: v-of-h with share_x("col"), or
-            # h-of-v with share_y("row"). `_compute_share_classes`
+            # h-of-v with share_y("row"). `compute_share_classes`
             # validates the cell-count match below.
             expected_outer = "v" if norm == "col" else "h"
             if self._layout_kind != expected_outer:
@@ -983,41 +922,11 @@ class Layout(_Renderable):
                     f"{'h' if norm == 'col' else 'v'}-sub-layouts; got "
                     f"{self._layout_kind!r}."
                 )
-        self._compute_share_classes(norm)  # result discarded — call for its raises
-
-    def _apply_share(self, axis: str, mode, *,
-                     hide_labels: bool = True) -> None:
-        """Field-mutation half of `share_x/y`. Called only by
-        `materialize()` from the recorded `share_{x,y}` entry; never
-        from user code. Validation already fired at record time
-        (`_validate_share`), so the journal here is trusted."""
-        norm = _normalize_share_mode(axis, mode)
-        if norm == "none":
-            return
-        if norm in ("col", "row") and self._layout_kind != "grid":
-            # Mark for `_coordinate_margins` to run the per-column /
-            # per-row coordination — alignment is opt-in so the user
-            # can't be surprised when sub-layout widths differ.
-            self._virtual_grid_aligned = True
-        classes = self._compute_share_classes(norm)
-        attr = "_share_x" if axis == "x" else "_share_y"
-        hide_attr = f"_share_hide_labels_{axis}"
-        for cls in classes:
-            if len(cls) < 2:
-                continue
-            anchor = cls[0]
-            for leaf in cls[1:]:
-                setattr(leaf, attr, anchor)
-            if not hide_labels:
-                # Flag every leaf in the class (anchor included) so the
-                # joined-pair walk skips hide_* / suppress_*_labels on
-                # both sides of every joint in this share class.
-                for leaf in cls:
-                    setattr(leaf, hide_attr, False)
+        compute_share_classes(self, norm)  # result discarded — call for its raises
 
     def _validate_align(self, axis: str, mode) -> None:
         """Pure-validation pass for `align_x/y`. See `_validate_share`."""
-        norm = _normalize_share_mode(axis, mode)
+        norm = normalize_share_mode(axis, mode)
         if norm in ("none", "all"):
             # `align_x("all")` doesn't have a meaningful geometric reading
             # (every leaf shares some axis at once). Restrict to col/row.
@@ -1033,77 +942,6 @@ class Layout(_Renderable):
                     f"{'h' if norm == 'col' else 'v'}-sub-layouts; got "
                     f"{self._layout_kind!r}."
                 )
-
-    def _apply_align(self, axis: str, mode) -> None:
-        """Geometric counterpart to `_apply_share` — flips
-        `_virtual_grid_aligned` so per-column/per-row coordination runs,
-        but never wires share chains or touches `_share_hide_labels_*`.
-        Validation already fired at record time (`_validate_align`)."""
-        self._virtual_grid_aligned = True
-
-    def _compute_share_classes(self, mode: str) -> list[list]:
-        from ._layout_engine import _iter_leaves
-
-        def cell_leaves(cell):
-            if cell is None:
-                return []
-            if cell._is_parent:
-                return [l for l in _iter_leaves(cell) if l._leaf_kind == "data"]
-            return [cell] if cell._leaf_kind == "data" else []
-
-        if mode == "all":
-            return [[l for l in _iter_leaves(self) if l._leaf_kind == "data"]]
-
-        # Grid layout: original semantics — children laid out in row-major
-        # order with explicit (rows, cols) shape.
-        if self._layout_kind == "grid":
-            rows, cols = self._grid_rows, self._grid_cols
-            children = self._children
-            if mode == "col":
-                return [
-                    [l for r in range(rows) for l in cell_leaves(children[r * cols + c])]
-                    for c in range(cols)
-                ]
-            return [
-                [l for c in range(cols) for l in cell_leaves(children[r * cols + c])]
-                for r in range(rows)
-            ]
-
-        # Composition layout treated as a virtual grid:
-        #   share_x("col") on v-of-h → group by column index across rows.
-        #   share_y("row") on h-of-v → group by row index across columns.
-        # Every child must be a same-kind parent and all must agree on
-        # cell count — otherwise the column/row mapping is ambiguous.
-        # `_effective_children()` is the post-flatten engine view; sub-
-        # layouts also expose their flat children so column indexing
-        # honors `(a|b) | c` reading as one row of three.
-        inner = "h" if self._layout_kind == "v" else "v"
-        axis_word = "x" if mode == "col" else "y"
-        outer_children = self._effective_children()
-        sub_children = []
-        counts = []
-        for ch in outer_children:
-            if ch is None or not ch._is_parent or ch._layout_kind != inner:
-                what = (f"{ch._layout_kind!r} layout" if ch is not None and ch._is_parent
-                        else "bare chart")
-                raise ValueError(
-                    f"share_{axis_word}({mode!r}) on a {self._layout_kind!r} "
-                    f"composition requires every child to be an {inner!r} "
-                    f"sub-layout; found a {what}."
-                )
-            flat = ch._effective_children()
-            sub_children.append(flat)
-            counts.append(len(flat))
-        if len(set(counts)) != 1:
-            raise ValueError(
-                f"share_{axis_word}({mode!r}): every sub-layout must have "
-                f"the same number of cells; got {counts}."
-            )
-        n = counts[0]
-        return [
-            [l for sub in sub_children for l in cell_leaves(sub[i])]
-            for i in range(n)
-        ]
 
     # ---------- render ----------
 
@@ -1241,21 +1079,6 @@ def _rasterize(svg: str, path, fmt: str, *, scale: float = 1.0, dpi: int | None 
     fn(**kw)
 
 
-def _normalize_share_mode(axis: str, mode) -> str:
-    """Map share_x / share_y param to one of "all" / "col" / "row" / "none".
-    Accepts True ("all"), False / None ("none"), or the four literal strings."""
-    if mode is True:
-        return "all"
-    if mode is False or mode is None:
-        return "none"
-    if isinstance(mode, str) and mode in ("all", "col", "row", "none"):
-        return mode
-    raise ValueError(
-        f"share_{axis}=: expected True, False, or one of "
-        f"'all', 'col', 'row', 'none'; got {mode!r}"
-    )
-
-
 def _compose(left, right, kind: str):
     """Implement `|` / `/`. Either operand may be a `Chart` (leaf) or a
     `Layout` (parent). Always returns a fresh outer Layout — never
@@ -1271,126 +1094,3 @@ def _compose(left, right, kind: str):
             "Compose fresh charts, or copy your sub-assembly."
         )
     return Layout(kind, [left, right])
-
-
-# ---------------------------------------------------------------------------
-# Journal materialization — `materialize()` is the sole driver for the
-# Layout/Chart fields derived from state methods (`share_x/y`, `align_x/y`,
-# `coordinate`, `gap`, `attach_*`). User-facing methods only validate and
-# append to `_calls`; field writes happen here, just before render.
-# ---------------------------------------------------------------------------
-
-# Names materialize knows how to dispatch on a Layout journal entry. New
-# Layout state methods must either be listed here (with a dispatch arm
-# in the loop below) or in `_LAYOUT_PASSTHROUGH` (consumed elsewhere —
-# today: `sectors`, handled by `_ancestor_calls` cascade at replay time).
-_LAYOUT_MATERIALIZED = frozenset({
-    "share_x", "share_y", "coordinate", "gap", "align_x", "align_y",
-})
-_LAYOUT_PASSTHROUGH = frozenset({"sectors"})
-
-
-def _walk_tree(root):
-    """Yield every node reachable from `root` — Layouts via `_children`,
-    Charts via their `_attached_*` lists. Order: parent before children,
-    so apply passes that depend on parent state run cleanly."""
-    yield root
-    if root._is_parent:
-        for child in root._children:
-            if child is not None:
-                yield from _walk_tree(child)
-    else:
-        for atch in (*root._attached_left, *root._attached_right,
-                     *root._attached_above, *root._attached_below):
-            yield from _walk_tree(atch)
-
-
-def materialize(root):
-    """Re-derive Layout/Chart field state from recorded journals.
-
-    Resets the derived fields produced by `Layout.share_x/y`,
-    `.align_x/y`, `.coordinate`, `.gap`, and `Chart.attach_*`, then
-    replays each node's `_calls` to rebuild them.
-
-    `sectors` is journaled but not materialized here — it has no
-    long-lived field; the cascade in `_ancestor_calls` reads it
-    directly off the journal at replay time. Compose is structural
-    and lives in `Layout.__init__` + `_compose`, not the journal.
-
-    Idempotent: calling materialize twice produces the same state.
-    Render paths (`_render_layout`, `_Renderable.fit`) call this once
-    up front; nothing else should need to.
-    """
-    nodes = list(_walk_tree(root))
-    layouts = [n for n in nodes if n._is_parent]
-    charts  = [n for n in nodes if not n._is_parent]
-
-    # Reset derived state. Tree structure (_children, _layout_kind,
-    # _grid_rows/_cols) is not materialized — it's set at construction
-    # and mutated only by `_compose`'s in-place flatten.
-    for la in layouts:
-        la._coordinate = None
-        la._gap = None
-        la._gap_x = None
-        la._gap_y = None
-        la._virtual_grid_aligned = False
-    for ch in charts:
-        ch._attached_left  = []
-        ch._attached_right = []
-        ch._attached_above = []
-        ch._attached_below = []
-        ch._is_attached = False
-        ch._share_x = None
-        ch._share_y = None
-        ch._share_hide_labels_x = True
-        ch._share_hide_labels_y = True
-
-    # Chart attach entries first — they set `_share_x/_share_y` on
-    # attached charts (host as anchor). Layout share/align replays
-    # after and may override, matching the user-build order (build
-    # attachments, then compose into a layout, then share).
-    for ch in charts:
-        for entry in ch._calls:
-            name = entry[0]
-            if name.startswith("attach_"):
-                side = name[len("attach_"):]
-                ch._apply_attach(side, entry[1],
-                                 hide_labels=entry[2].get("hide_labels", True),
-                                 gap=entry[2].get("gap"))
-
-    for la in layouts:
-        for entry in la._calls:
-            name, args, kw = entry[0], entry[1], entry[2]
-            # Closed-set guard. A new `Layout.foo()` that records `("foo",
-            # …)` but forgets the materializer below would silently
-            # no-op at render — fail loudly here so the bug surfaces on
-            # the first `to_svg()` instead of as a missing visual effect.
-            if name in _LAYOUT_PASSTHROUGH:
-                continue
-            if name not in _LAYOUT_MATERIALIZED:
-                raise AssertionError(
-                    f"materialize: Layout._calls entry {name!r} has no "
-                    f"branch below and is not in _LAYOUT_PASSTHROUGH. "
-                    f"Add a dispatch arm or list it as passthrough."
-                )
-            if name == "share_x":
-                la._apply_share("x", args[0], hide_labels=kw.get("hide_labels", True))
-            elif name == "share_y":
-                la._apply_share("y", args[0], hide_labels=kw.get("hide_labels", True))
-            elif name == "coordinate":
-                la._coordinate = args[0]
-            elif name == "gap":
-                if args:
-                    la._gap = float(args[0])
-                    la._gap_x = None
-                    la._gap_y = None
-                if "x" in kw: la._gap_x = float(kw["x"])
-                if "y" in kw: la._gap_y = float(kw["y"])
-            elif name == "align_x":
-                la._apply_align("x", args[0])
-            elif name == "align_y":
-                la._apply_align("y", args[0])
-
-    return root
-
-

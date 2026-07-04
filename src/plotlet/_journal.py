@@ -36,9 +36,9 @@ Node ids: opaque monotonic ints from a process-global counter. Two
 journals never share ids by construction.
 
 Rendering goes journal → IR → plot: at render time the journal is
-lowered to the figure IR (`_ir.py`) — the per-node compiled form —
-which materializes the same Chart / Layout objects the tree path would
-build and renders through the existing pipeline. Round-trip proves the
+lowered to the figure IR (`_ir.py`) — the per-node compiled form — and
+the render half hydrates its private node tree from that
+(`_render_nodes.py`) and runs the pipeline. Round-trip proves the
 journal is complete; the IR is the surface for inspection and
 programmatic transformation (`to_ir` / `from_ir`).
 """

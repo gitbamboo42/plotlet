@@ -74,8 +74,10 @@ def _run_invariants() -> int:
     # These invariants poke layout-engine internals (`_build_panel_opts`,
     # `_measure`, …) directly. Those expect a materialized tree —
     # render entry points (`to_svg`) materialize automatically, but
-    # internal pokes must materialize themselves.
-    from plotlet.chart import materialize
+    # internal pokes must materialize themselves. The derive pass is
+    # duck-typed, so it works on recorder trees here just like on the
+    # hydrated render trees the engine normally sees.
+    from plotlet._render_nodes import materialize
     checks = 0
     failed = 0
 
