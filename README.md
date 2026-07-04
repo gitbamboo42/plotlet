@@ -29,7 +29,7 @@ Compact, vendor-neutral onboarding docs live in [`skills/`](skills/):
 
 ## Dependencies
 
-plotlet supports Python 3.8+ (CI tests 3.9+).
+plotlet supports Python 3.9+.
 
 Required: `fonttools`, `scipy` (used by regression, qq, pointplot, dendrogram). numpy / pandas / polars inputs work transparently.
 

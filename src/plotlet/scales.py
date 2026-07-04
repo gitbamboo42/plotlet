@@ -11,6 +11,8 @@ calendar boundaries (year, month, day, hour, minute, second) and the scale
 exposes `format_tick` so the caller can render labels at the matching
 resolution.
 """
+from __future__ import annotations
+
 import datetime
 import math
 from dataclasses import dataclass, field
