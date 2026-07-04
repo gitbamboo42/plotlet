@@ -15,11 +15,11 @@ from __future__ import annotations
 
 import math
 
-from ._spec import SPEC, _FRAME, _FONTSPEC, _PADSPEC
-from .draw import (resolve_color, text_path, segment,
+from .._spec import SPEC, _FRAME, _FONTSPEC, _PADSPEC
+from ..draw import (resolve_color, text_path, segment,
                    measure_text, cap_height, descender, tick_band_height,
                    rotated_label_bbox)
-from . import _regions
+from .. import _regions
 
 _SECTORSPEC = SPEC["sectors"]
 
@@ -618,7 +618,7 @@ def emit_chrome(*, st, inp, iw, ih,
     # `Sectors.divider`. Artists that span sectors (chord_links, ribbons)
     # also suppress walls via `ArtistSpec.crosses_sectors` — walls cutting
     # through cross-sector curves read as a layering bug.
-    from .registry import get_artist as _get_artist
+    from ..registry import get_artist as _get_artist
     _crossers = any(
         (_spec := _get_artist(a["type"])) is not None and _spec.crosses_sectors
         for a in st["artists"]

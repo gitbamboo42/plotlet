@@ -8,7 +8,7 @@ Three representations of one plot, ordered by distance from the user:
               order, each carrying its construction state, its method
               ops, and its insets. "What the figure is."
     plot      the rendered SVG. The render half hydrates its private
-              node tree from the IR (`_render_nodes.hydrate`) and runs
+              node tree from the IR (`render.hydrate`) and runs
               the pipeline over it. This is the only render path —
               `Chart.to_svg()` itself lowers through the IR — so output
               is byte-identical however a figure reaches the renderer.
@@ -48,7 +48,7 @@ are shared with the journal — the IR stores values exactly as
 `to_journal` encoded them, and `_decode` here resolves them back at
 hydration time.
 
-A second lowering stage lives in `_ir_resolved.py`: `FigureIR.resolve()`
+A second lowering stage lives in `render/resolved.py`: `FigureIR.resolve()`
 projects the figure into a pre-layout render plan (resolved scales,
 baked palettes, effective margins) for inspection and tooling.
 """
@@ -85,7 +85,7 @@ class FigureIR:
     """Compiled figure: dependency-ordered node table plus the root nid.
 
     Renderable directly — `to_svg()` hands this IR to the render half
-    (`_render_nodes.render_svg`). JSON round-trips via
+    (`render.render_svg`). JSON round-trips via
     `to_dict` / `from_dict` (the `_json_layer` envelopes every
     non-JSON-native value type, same as the journal's JSON form).
     """
@@ -93,7 +93,7 @@ class FigureIR:
     root_nid: int
 
     def to_svg(self, *, clean: bool = False) -> str:
-        from ._render_nodes import render_svg
+        from .render import render_svg
         return render_svg(self, clean=clean)
 
     def to_html(self, full_page: bool = False) -> str:
@@ -105,11 +105,11 @@ class FigureIR:
         return svg
 
     def resolve(self):
-        """Lower one step further: the resolved IR (`_ir_resolved.py`)
+        """Lower one step further: the resolved IR (`render/resolved.py`)
         — a pre-layout render plan with resolved scales, baked
         palettes, and effective margins. A projection for inspection
         and tooling, not a round-trip peer."""
-        from ._ir_resolved import resolve_ir
+        from .render.resolved import resolve_ir
         return resolve_ir(self)
 
     def to_dict(self) -> dict:
@@ -326,7 +326,7 @@ def ir_to_journal(ir: FigureIR):
 
 # ---------------------------------------------------------------------------
 # Value envelopes — decode journal envelopes back to live objects. Used by
-# the render tree's hydrator (`_render_nodes.hydrate`) and by the facet
+# the render tree's hydrator (`render.hydrate`) and by the facet
 # expansion above.
 # ---------------------------------------------------------------------------
 

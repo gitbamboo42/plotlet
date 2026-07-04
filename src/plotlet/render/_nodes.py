@@ -19,9 +19,9 @@ from __future__ import annotations
 
 import re
 
-from ._spec import _MARGIN_FLOOR, _OUTER_MARGIN, _SIZESPEC, _LAYOUTSPEC
-from ._tree import compute_share_classes, normalize_share_mode
-from .utils import _to_px
+from .._spec import _MARGIN_FLOOR, _OUTER_MARGIN, _SIZESPEC, _LAYOUTSPEC
+from .._tree import compute_share_classes, normalize_share_mode
+from ..utils import _to_px
 
 
 class RenderNode:
@@ -174,7 +174,7 @@ def hydrate(ir):
     `_calls` (values decoded back to live objects); insets bind
     directly. Derived field state is NOT wired here — `materialize`
     does that, and every engine entry point calls it first."""
-    from ._ir import _decode
+    from .._ir import _decode
 
     nid_to_node: dict[int, object] = {}
     for n in ir.nodes:

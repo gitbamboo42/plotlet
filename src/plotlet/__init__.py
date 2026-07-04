@@ -20,7 +20,7 @@ from . import artists  # noqa: F401  — registers built-in artists on import
 from .chart import Chart, Layout, chart, grid
 from .legend import legend
 from .registry import ArtistSpec, add_artist, artist_table, declare_coord_support
-from .coordinates import CircularCoordinate
+from .render.coordinates import CircularCoordinate
 from .sectors import Sectors
 from .layout_diagram import layout_diagram
 from .themes import load_theme, available_themes, register_theme
@@ -32,7 +32,7 @@ from ._coord_registry import register_coord_codec
 from ._journal import (to_journal, from_journal, to_json, from_json,
                        JournalNode, Journal)
 from ._ir import to_ir, from_ir, FigureIR, IRNode
-from ._ir_resolved import resolve_ir
+from .render.resolved import resolve_ir
 from . import draw, utils
 
 __all__ = ["chart", "Chart", "Layout", "SPEC", "TAB10", "colors",

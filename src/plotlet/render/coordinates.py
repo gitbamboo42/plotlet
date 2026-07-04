@@ -78,8 +78,8 @@ from __future__ import annotations
 import math
 
 from . import _chrome_circular as _cc
-from ._coord_registry import register_coord_codec
-from .registry import declare_coord_support
+from .._coord_registry import register_coord_codec
+from ..registry import declare_coord_support
 
 
 
@@ -93,8 +93,8 @@ def _circular_chrome_pad(st) -> float:
 
     Returns 0 when no chrome is drawn outside the ring.
     """
-    from ._spec import SPEC, _FRAME, _FONTSPEC
-    from .draw import cap_height, measure_text
+    from .._spec import SPEC, _FRAME, _FONTSPEC
+    from ..draw import cap_height, measure_text
 
     tl        = _FRAME["tick_length"]
     tp        = _FRAME["tick_pad"]
@@ -314,9 +314,9 @@ class CircularCoordinate:
         """
         from itertools import count
         from ._layout_engine import _build_panel_opts
-        from ._spec import active_theme
+        from .._spec import active_theme
         from .core import _expand_frame_defaults, _panel_open, _render_inner
-        from . import _regions
+        from .. import _regions
         _ZERO_MARGIN = {"left": 0, "right": 0, "top": 0, "bottom": 0}
         # Shared across leaves so coord-clip `<clipPath id>`s don't
         # collide once each leaf's body is concatenated into one document.

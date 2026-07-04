@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import math
 
-from .draw import cap_height, descender, circle, coord, measure_text, path, segment, text_path
+from ..draw import cap_height, descender, circle, coord, measure_text, path, segment, text_path
 
 
 # ---------------------------------------------------------------------------

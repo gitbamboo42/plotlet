@@ -26,7 +26,7 @@ inspection, linting, and tooling, and deliberately drops the
 information needed to rebuild the journal. Same journal → same
 resolved IR.
 
-Implementation reuses the render half's node tree (`_render_nodes.py`:
+Implementation reuses the render half's node tree (`render/_nodes.py`:
 hydrate + materialize), then the layout engine's panel-opts pre-pass.
 The render tree is a private staging area; the resolved IR is the
 artifact.
@@ -35,7 +35,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .scales import _AxisDescriptor as IRScale
+from ..scales import _AxisDescriptor as IRScale
 
 
 # ---------------------------------------------------------------------------
@@ -112,9 +112,9 @@ def resolve_ir(node):
     The round-trip contract lives with the journal and the figure IR;
     the resolved IR sits below them and is a projection, not a
     round-trip peer. Same journal → same resolved IR."""
-    from ._ir import to_ir
+    from .._ir import to_ir
     from ._layout_engine import _build_panel_opts
-    from ._render_nodes import hydrate, materialize
+    from ._nodes import hydrate, materialize
 
     ir = to_ir(node)
     root = hydrate(ir)
@@ -241,7 +241,7 @@ def _coord_to_ir(coord, panel_opts=None, states=None):
     journal uses for round-tripping. Any Chart-typed params (e.g.
     `CircularCoordinate.inner`) recurse into `IRPanel` so the coord
     params stay IR-native — no dangling Chart references."""
-    from ._coord_registry import _COORD_REGISTRY
+    from .._coord_registry import _COORD_REGISTRY
     for name, cls in _COORD_REGISTRY.items():
         if isinstance(coord, cls):
             raw = coord._to_dict() if hasattr(coord, "_to_dict") else {}
@@ -254,7 +254,7 @@ def _coord_to_ir(coord, panel_opts=None, states=None):
 def _coerce_param(v, panel_opts, states):
     """Recursively wrap node-typed coord params (e.g.
     `CircularCoordinate.inner`) as IRPanel."""
-    from ._render_nodes import RenderNode
+    from ._nodes import RenderNode
     if isinstance(v, RenderNode):
         return _chart_to_ir(v, panel_opts or {}, states or {})
     if isinstance(v, dict):

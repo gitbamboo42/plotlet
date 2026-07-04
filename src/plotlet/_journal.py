@@ -38,7 +38,7 @@ journals never share ids by construction.
 Rendering goes journal → IR → plot: at render time the journal is
 lowered to the figure IR (`_ir.py`) — the per-node compiled form — and
 the render half hydrates its private node tree from that
-(`_render_nodes.py`) and runs the pipeline. Round-trip proves the
+(`render/_nodes.py`) and runs the pipeline. Round-trip proves the
 journal is complete; the IR is the surface for inspection and
 programmatic transformation (`to_ir` / `from_ir`).
 """

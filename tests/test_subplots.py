@@ -334,7 +334,7 @@ def _run_invariants():
     # so direct field-poking before to_svg() no longer survives into
     # render. Drive `_topo_order` with hand-built leaves to confirm
     # the cycle guard still raises.
-    from plotlet._layout_engine import _topo_order
+    from plotlet.render._layout_engine import _topo_order
     f1 = pt.chart(); f1.line(data={"x": [1,2], "y": [1,2]}, x="x", y="y")
     f2 = pt.chart(); f2.line(data={"x": [1,2], "y": [2,1]}, x="x", y="y")
     f1._share_y = f2
@@ -369,8 +369,8 @@ def _run_invariants():
     src = pt.chart(); src.line(data={"x": [0, 10], "y": [0, 100]}, x="x", y="y")
     shr = pt.chart(); shr.line(data={"x": [0, 10], "y": [-5, 5]}, x="x", y="y")
     parent = (src | shr).share_y()
-    from plotlet._layout_engine import _build_panel_opts
-    from plotlet._render_nodes import materialize
+    from plotlet.render._layout_engine import _build_panel_opts
+    from plotlet.render import materialize
     materialize(parent)
     panel_opts, _ = _build_panel_opts(parent)
     src_y = panel_opts[id(src)].y_axis

@@ -41,7 +41,29 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from .scales import SectoredValue
+
+class SectoredValue(float):
+    """A scalar tagged with the index of the sector it belongs to.
+
+    On a sectored axis, a position isn't a number — it's
+    ``(sector, value)``. The framework's sector remap emits these so
+    the scale can project each point unambiguously: two rows that
+    resolve to the same global float but belong to different sectors
+    land on different pixels (separated by ``gap_px``).
+
+    Subclassing ``float`` keeps these transparent for downstream math
+    (midpoints, widths, comparisons all work). Arithmetic between two
+    ``SectoredValue``s degrades to plain ``float`` — fine, because
+    derived quantities (e.g. an interval's midpoint) are interior
+    points where boundary disambiguation doesn't apply."""
+
+    __slots__ = ("sector_idx",)
+
+    def __new__(cls, value, sector_idx):
+        instance = super().__new__(cls, value)
+        instance.sector_idx = sector_idx
+        return instance
+
 
 _UNSET = object()
 

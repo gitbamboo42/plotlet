@@ -103,7 +103,7 @@ class _Renderable:
         AI/schema surface documented in `docs/AI_ATTRS.md`."""
         self._require_render_root()
         from ._ir import to_ir
-        from ._render_nodes import render_svg
+        from .render import render_svg
         return render_svg(to_ir(self), clean=clean)
 
     def _render_root(self):
@@ -113,7 +113,7 @@ class _Renderable:
         everything the renderer consumes. The user's own tree is never
         handed to the engine (and never mutated by it)."""
         from ._ir import to_ir
-        from ._render_nodes import hydrate
+        from .render import hydrate
         return hydrate(to_ir(self))
 
     def regions(self) -> list[dict]:
@@ -209,7 +209,7 @@ class _Renderable:
 
         Returns a fresh copy; the original is unchanged."""
         from copy import deepcopy
-        from ._layout_engine import _natural_size, _data_total_size
+        from .render._layout_engine import _natural_size, _data_total_size
         cls_name = type(self).__name__
         W = _to_px(canvas_width)
         H = _to_px(canvas_height)
@@ -231,7 +231,7 @@ class _Renderable:
         # Measurement runs on a hydrated render tree, rebuilt each pass:
         # `_natural_size` mutates the tree it measures, and
         # `_scale_data_dims` updates the recorder copy between passes.
-        from ._render_nodes import materialize as _derive_render_state
+        from .render import materialize as _derive_render_state
         for _ in range(6):
             rroot = node._render_root()
             _derive_render_state(rroot)
@@ -625,7 +625,7 @@ class Chart(_Renderable):
     def _attach(self, side: str, charts, *, hide_labels: bool = True,
                 gap: float | None = None) -> "Chart":
         # Validation + warning at user-call time; field state is wired
-        # on the render tree (`_render_nodes._apply_attach`) at render.
+        # on the render tree (`render._nodes._apply_attach`) at render.
         share_axis = "y" if side in ("left", "right") else "x"
         share_attr = "_share_x" if share_axis == "x" else "_share_y"
         for c in charts:
@@ -664,7 +664,7 @@ class Chart(_Renderable):
         # `_require_render_root`) and by cascade (`_ancestor_calls`).
         # The derived fields (`_attached_*`, `_share_*`, `_is_attached`,
         # `_attachment_gap`) are wired on the render tree by
-        # `_render_nodes.materialize` — never on these recorder objects.
+        # `render.materialize` — never on these recorder objects.
         for c in charts:
             c._parent = self
         return self
@@ -683,7 +683,7 @@ class Chart(_Renderable):
         behavior stays in sync with multi-panel behavior by construction,
         so the class of "works in a grid, breaks standalone" bugs
         disappears."""
-        from ._layout_engine import _render_layout
+        from .render._layout_engine import _render_layout
         return _render_layout(self, outer=outer)
 
     def _require_render_root(self):
@@ -717,7 +717,7 @@ class Layout(_Renderable):
         # Journal of state-method calls (sectors, share_x/y,
         # align_x/y, coordinate, gap). Append-only: user calls only ever
         # add entries here; the derived fields below are wired from
-        # these entries on the render tree (`_render_nodes.materialize`)
+        # these entries on the render tree (`render.materialize`)
         # and stay at their defaults on this recorder object. Compose
         # isn't journaled here — every `|` / `/` builds a fresh Layout
         # via `_compose`, never mutating an existing one, so the tree
@@ -905,7 +905,7 @@ class Layout(_Renderable):
         """Pure-validation pass for `share_x/y`. Called at user-call time
         so layout-kind errors and shape mismatches surface at the user's
         `share_x()` line, not at render. Mutates nothing — the field
-        writes happen on the render tree (`_render_nodes._apply_share`)
+        writes happen on the render tree (`render._nodes._apply_share`)
         when `materialize` runs at render."""
         norm = normalize_share_mode(axis, mode)
         if norm in ("none", "all"):
@@ -946,7 +946,7 @@ class Layout(_Renderable):
     # ---------- render ----------
 
     def _to_svg_unchecked(self, *, outer=None) -> str:
-        from ._layout_engine import _render_layout
+        from .render._layout_engine import _render_layout
         return _render_layout(self, outer=outer)
 
 

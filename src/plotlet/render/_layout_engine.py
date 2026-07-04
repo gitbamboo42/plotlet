@@ -39,18 +39,18 @@ from __future__ import annotations
 from graphlib import CycleError, TopologicalSorter
 from itertools import count
 
-from ._spec import SPEC, _LAYOUTSPEC, _FONTSPEC, active_theme
+from .._spec import SPEC, _LAYOUTSPEC, _FONTSPEC, active_theme
 from .core import (
     _render_inner, _replay, _enforce_floors, _required_margin,
     _x_descriptor_multi, _y_descriptor_multi,
     _PanelOpts,
     _figure_root_attrs, _panel_open,
 )
-from .scales import _AxisDescriptor
-from ._tree import iter_leaves as _iter_leaves
+from ..scales import _AxisDescriptor
+from .._tree import iter_leaves as _iter_leaves
 from . import _attachments
-from . import _regions
-from .draw import coord
+from .. import _regions
+from ..draw import coord
 
 
 def _extract_theme(calls) -> str | None:
@@ -295,7 +295,7 @@ def _natural_size(root: Chart) -> tuple[int, int]:
     # Legend leaves harvest their content size from sibling data leaves;
     # without this, layouts containing a layout-level legend would report
     # a stale 1×1 placeholder canvas.
-    from .legend import _size_legends
+    from ._legend import _size_legends
     _size_legends(root, states)
     return _measure(root)
 
@@ -1001,9 +1001,9 @@ def _render_layout(root, outer=None) -> str:
     # Materialize first — replay the recorded journals to populate
     # `_share_x/y`, `_coordinate`, `_gap*`, `_attached_*`, etc. before
     # anything reads them. Normally `root` is the hydrated render tree
-    # (`_render_nodes.hydrate`); the pass is duck-typed, so internal
+    # (`render.hydrate`); the pass is duck-typed, so internal
     # callers may hand it a recorder tree too.
-    from ._render_nodes import materialize
+    from ._nodes import materialize
     materialize(root)
     # If the root has a container coord that implements `render_layout`,
     # delegate the entire render to it — the coord owns its strategy
@@ -1043,7 +1043,7 @@ def _render_layout_rect(root: Chart, outer=None) -> str:
     panel_opts, states = _build_panel_opts(root)
     # Override each legend leaf's intrinsic _fig size with its
     # content-driven size before measure runs.
-    from .legend import _size_legends
+    from ._legend import _size_legends
     _size_legends(root, states)
     W, H = _measure(root)
     W, H = int(round(W)), int(round(H))
@@ -1137,7 +1137,7 @@ def _render_layout_rect(root: Chart, outer=None) -> str:
         # above; skip them here (they have no `_leaf_kind` attribute).
         if leaf._is_parent or leaf._leaf_kind != "legend":
             continue
-        from .legend import _render_legend
+        from ._legend import _render_legend
         # Same `data-plotlet-kind` + bbox attrs the data-panel wrapper
         # carries, so `layout_diagram` can render an outline for the
         # legend leaf the way it does for charts (minus the data area).

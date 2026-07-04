@@ -77,7 +77,7 @@ def _run_invariants() -> int:
     # internal pokes must materialize themselves. The derive pass is
     # duck-typed, so it works on recorder trees here just like on the
     # hydrated render trees the engine normally sees.
-    from plotlet._render_nodes import materialize
+    from plotlet.render import materialize
     checks = 0
     failed = 0
 
@@ -169,7 +169,7 @@ def _run_invariants() -> int:
     left2.annotate("L", xy=(0.5, 2.0))
     h6.attach_left(left2)
     materialize(h6)
-    from plotlet._layout_engine import _build_panel_opts, _measure, _allocate
+    from plotlet.render._layout_engine import _build_panel_opts, _measure, _allocate
     po, _ = _build_panel_opts(h6)
     W, H = _measure(h6)
     placements = []
@@ -184,7 +184,7 @@ def _run_invariants() -> int:
            f"left_data_y={left_data_y})")
 
     # Sector inheritance: above-attachment picks up host's x-sectors.
-    from plotlet._layout_engine import _build_panel_opts as _bpo
+    from plotlet.render._layout_engine import _build_panel_opts as _bpo
     h7 = pt.chart(data_width=240, data_height=100)
     h7.sectors({"chr1": 100, "chr2": 200}, axis="x", column="chr",
                divider=True, label=True)

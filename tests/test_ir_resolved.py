@@ -18,7 +18,7 @@ import math
 import pytest
 
 import plotlet as pt
-from plotlet._ir_resolved import (
+from plotlet.render.resolved import (
     IRArtist,
     IRCoord,
     IRLayout,

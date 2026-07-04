@@ -26,22 +26,23 @@ from dataclasses import dataclass, field
 from importlib.metadata import version as _pkg_version
 from types import SimpleNamespace
 
-from ._spec import (
+from .._spec import (
     SPEC, _MARGIN_FLOOR, _FRAME, _GRIDSPEC, _FONTSPEC, _LEGSPEC,
     _LAYOUTSPEC, _D, _DASH,
 )
 _SECTORSPEC = SPEC["sectors"]
-from .draw import resolve_color, TAB10
-from .scales import (_LinearScale, _LogScale, _CategoryScale, _SymlogScale,
-                      _SectoredLinearScale, SectoredValue,
+from ..draw import resolve_color, TAB10
+from ..scales import (_LinearScale, _LogScale, _CategoryScale, _SymlogScale,
+                      _SectoredLinearScale,
                       _PowerScale, _TimeScale, _nice_domain, _fmt_tick,
                       _to_epoch, _coerce_time_lim, _AxisDescriptor)
-from .draw import measure_text
-from .draw import coord, rect, segment, text_path
-from . import _regions
+from ..sectors import SectoredValue
+from ..draw import measure_text
+from ..draw import coord, rect, segment, text_path
+from .. import _regions
 from . import _chrome
-from .utils import histogram, collect_categories
-from .registry import RenderContext, get_artist, _COORD_SUPPORT
+from ..utils import histogram, collect_categories
+from ..registry import RenderContext, get_artist, _COORD_SUPPORT
 
 # AI-readable SVG attrs — see docs/AI_ATTRS.md. Every plotlet SVG carries
 # `data-plotlet-*` attributes describing plot type, axes, scales, ranges,
@@ -495,7 +496,7 @@ def _replay(calls):
             if _cyt is not None and st.get("y_ticks") is None:
                 st["y_ticks"] = _cyt
         elif name == "sectors":
-            from .sectors import Sectors
+            from ..sectors import Sectors
             col  = kw.get("column")
             axis = kw.get("axis", "x")
             # Forward only display kwargs the user explicitly set, so a
@@ -600,7 +601,7 @@ def _resolve_tick_formatter(user_fmt, scale):
     if user_fmt is None:
         return getattr(scale, "format_tick", _fmt_tick)
     if isinstance(user_fmt, str):
-        from .formatters import get_formatter
+        from ..formatters import get_formatter
         named = get_formatter(user_fmt)
         if named is not None:
             return named
@@ -1235,13 +1236,13 @@ def _inline_legend_layout(st):
         # Gradient-only block: no background rect, no padding around the
         # block — the strip carries its own border. Sits flush against
         # the data area's outer edge (modulo legend_gap).
-        from .legend import _inline_gradient_block_size
+        from ._legend import _inline_gradient_block_size
         lw, lh = _inline_gradient_block_size([d for _, d in cont])
     else:
         # Vertical mixed (cont + disc) or discrete-only. Stack continuous
         # strips on top, discrete rows below, with section_gap between.
         # Background rect wraps everything → outer padding.
-        from .legend import _inline_gradient_block_size, _partition_by_group
+        from ._legend import _inline_gradient_block_size, _partition_by_group
         disc_max_text = (max(measure_text(e["label"], tick_size) for _, e in disc)
                           if disc else 0.0)
         disc_w = sw + 6 + disc_max_text if disc else 0.0
@@ -1649,7 +1650,7 @@ def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal,
     function so the translate ctxmgr in `_render_inner` stays a
     2-liner instead of forcing 70 lines of indentation. No behavior
     change vs the previous inline form."""
-    from .legend import _render_continuous_entry, _render_discrete_entry
+    from ._legend import _render_continuous_entry, _render_discrete_entry
     parts = []
     is_gradient_only = bool(cont) and not disc
     if not is_gradient_only and pos in _INSIDE_POSITIONS:
@@ -1702,7 +1703,7 @@ def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal,
     # artist (color + size + shape) renders each aesthetic as its own
     # block with a header — entries with the same key cluster together
     # across artist records.
-    from .legend import _partition_by_group
+    from ._legend import _partition_by_group
     sub_groups = _partition_by_group(disc, lambda ae: ae[1].get("group"))
     label_size = _FONTSPEC["label_size"]
     sub_header_h = label_size + 4
