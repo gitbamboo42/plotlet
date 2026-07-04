@@ -258,9 +258,71 @@ def ring_pile_titled():
     return pile.title("two rings — layout title")
 
 
+def ring_inner_chords():
+    # Bare-chart root with `inner=`: the central disc hosts a chord
+    # panel that inherits the host's sector partition. Pins the root
+    # wrap lowering — this exact shape used to render the ring but
+    # silently drop the disc, while pt.grid([[...]]) wrapping worked.
+    import plotlet.extensions.chord_links  # noqa: F401 — registers the artist
+    sec = pt.Sectors(names=("A", "B", "C"), lengths=(100.0, 80.0, 60.0),
+                     gap=6)
+    ring = pt.chart(title="ring + inner chords",
+                    xlim=(0, 240), ylim=(0, 6),
+                    data_width=320, data_height=320)
+    ring.scatter(data={"pos": [20, 55, 90, 30, 60, 20, 45],
+                       "val": [2, 4, 5, 3, 5, 2, 4],
+                       "sec": ["A", "A", "A", "B", "B", "C", "C"]},
+                 x="pos", y="val", color="#534AB7", size=3)
+    arcs = pt.chart(xlim=(0, 240), data_width=320, data_height=320)
+    arcs.chord_links(
+        data={"s1": ["A", "A", "B"], "x1": [30.0, 70.0, 40.0],
+              "s2": ["B", "C", "C"], "x2": [40.0, 30.0, 50.0]},
+        x1="x1", x2="x2", x1_sector="s1", x2_sector="s2")
+    ring.coordinate(pt.CircularCoordinate(r_inner=0.5, inner=arcs))
+    ring.sectors(sec, column="sec")
+    return ring
+
+
 # ---------------------------------------------------------------------------
 # Sector × CircularCoordinate guard
 # ---------------------------------------------------------------------------
+
+def test_inner_disc_renders_from_bare_chart_root():
+    """A bare Chart root must render `inner=` content — the chart-root
+    path used to drop the disc silently (the panel path never read
+    `coord.inner`), while the pt.grid([[...]]) form worked. The root
+    wrap lowering routes both through `render_layout`; asserting equal
+    chord counts, not byte equality — the forms owe the same *content*,
+    not the same bytes."""
+    import plotlet.extensions.chord_links  # noqa: F401
+
+    def ring():
+        c = pt.chart(xlim=(0, 200), ylim=(0, 6),
+                     data_width=300, data_height=300)
+        c.scatter(data={"pos": [25, 75, 25, 75], "val": [3, 6, 4, 5],
+                        "sec": ["A", "A", "B", "B"]},
+                  x="pos", y="val", color="#534AB7")
+        return c
+
+    def arcs():
+        a = pt.chart(xlim=(0, 200), data_width=300, data_height=300)
+        a.chord_links(data={"s1": ["A"], "x1": [50.0],
+                            "s2": ["B"], "x2": [50.0]},
+                      x1="x1", x2="x2", x1_sector="s1", x2_sector="s2")
+        return a
+
+    def n_chords(svg):
+        return svg.count('stroke="#1f77b4"')  # chord_links default stroke
+
+    sec = pt.Sectors(names=("A", "B"), lengths=(100.0, 100.0), gap=4)
+    bare = ring().coordinate(
+        pt.CircularCoordinate(r_inner=0.5, inner=arcs())
+    ).sectors(sec, column="sec")
+    grid = pt.grid([[ring()]]).coordinate(
+        pt.CircularCoordinate(r_inner=0.5, inner=arcs())
+    ).sectors(sec, column="sec")
+    assert n_chords(bare.to_svg()) == n_chords(grid.to_svg()) == 1
+
 
 def test_circular_with_y_sectors_raises():
     # y-sectors with CircularCoordinate (concentric bands) is not yet
@@ -292,6 +354,7 @@ PLOTS = {
     "ring_partial_arc_right_side": ring_partial_arc_right_side,
     "ring_partial_arc_sectors":    ring_partial_arc_sectors,
     "ring_pile_titled":            ring_pile_titled,
+    "ring_inner_chords":           ring_inner_chords,
 }
 
 

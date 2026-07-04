@@ -165,3 +165,79 @@ def test_facet_lowers_to_core_kinds():
     kinds = {n.kind for n in ir.nodes}
     assert kinds <= {"chart", "legend", "diagram", "layout"}, kinds
     assert ir.to_svg() == svg_direct
+
+
+# ---------------------------------------------------------------------------
+# Root-wrap lowering — composition ops hoist off a single-chart root
+# ---------------------------------------------------------------------------
+
+
+def _op_names(node):
+    return [op["op"] for op in node.ops]
+
+
+def _root_and_leaf(ir):
+    root = next(n for n in ir.nodes if n.nid == ir.root_nid)
+    (leaf_nid,) = root.init["children"]
+    return root, next(n for n in ir.nodes if n.nid == leaf_nid)
+
+
+def test_sectored_root_wraps_in_layout():
+    """A bare sectored chart lowers to a 1×1 layout root carrying the
+    `sectors` op; panel ops — artists, frame state, the panel title —
+    stay on the leaf."""
+    c = pt.chart({"x": [1.0, 2.0], "y": [3.0, 4.0]},
+                 title="panel title", xlim=(0, 10))
+    c.scatter(x="x", y="y")
+    c.sectors(pt.Sectors(names=("A",), lengths=(10.0,), gap=2))
+
+    root, leaf = _root_and_leaf(pt.to_ir(c))
+    assert root.kind == "layout" and root.init["layout_kind"] == "h"
+    assert _op_names(root) == ["sectors"]
+    assert leaf.kind == "chart"
+    assert "sectors" not in _op_names(leaf)
+    assert "title" in _op_names(leaf), "panel title stays on the leaf"
+
+
+def test_circular_root_hoists_title_coordinate_sectors():
+    """A container-coordinate root hoists title + coordinate + sectors
+    together — the overlay path reads all three off the layout (the
+    band, the strategy, and the inner-disc sector inheritance)."""
+    c = pt.chart({"x": [1.0, 2.0], "y": [3.0, 4.0]},
+                 title="ring", xlim=(0, 10), ylim=(0, 5))
+    c.scatter(x="x", y="y")
+    c.coordinate(pt.CircularCoordinate(r_inner=0.4))
+    c.sectors(pt.Sectors(names=("A",), lengths=(10.0,), gap=2))
+
+    root, leaf = _root_and_leaf(pt.to_ir(c))
+    assert root.kind == "layout"
+    assert sorted(_op_names(root)) == ["coordinate", "sectors", "title"]
+    assert not set(_op_names(leaf)) & {"title", "coordinate", "sectors"}
+    assert "scatter" in _op_names(leaf)
+
+
+def test_plain_root_does_not_wrap():
+    c = pt.chart({"x": [1.0], "y": [2.0]}, title="t")
+    c.scatter(x="x", y="y")
+    ir = pt.to_ir(c)
+    root = next(n for n in ir.nodes if n.nid == ir.root_nid)
+    assert root.kind == "chart"
+
+
+def test_sectored_layout_child_does_not_wrap():
+    """Only the root wraps. A sectored chart inside a layout keeps its
+    sectors — in-layout charts already have a layout home for
+    composition state, and grid cells are charts by API contract."""
+    a = pt.chart({"x": [1.0, 2.0], "y": [3.0, 4.0]}, xlim=(0, 10))
+    a.scatter(x="x", y="y")
+    a.sectors(pt.Sectors(names=("A",), lengths=(10.0,), gap=2))
+    b = pt.chart({"x": [1.0], "y": [2.0]})
+    b.scatter(x="x", y="y")
+
+    ir = pt.to_ir(pt.grid([[a, b]]))
+    root = next(n for n in ir.nodes if n.nid == ir.root_nid)
+    assert root.kind == "layout" and root.init["layout_kind"] == "grid"
+    children = [next(n for n in ir.nodes if n.nid == c)
+                for c in root.init["children"]]
+    assert all(n.kind == "chart" for n in children)
+    assert any("sectors" in _op_names(n) for n in children)
