@@ -166,9 +166,8 @@ def allocate(host: Chart, host_x: float, host_y: float,
 
 
 def _is_sectors_call(call, axis: str) -> bool:
-    """A `_calls` entry is `(name, args, kw)` or 4-tuple with a trailing
-    `from_default` flag. Sectors carries `axis=` in kw (default 'x')."""
-    name, _args, kw = call[0], call[1], call[2]
+    """Sectors carries `axis=` in kw (default 'x')."""
+    name, _args, kw = call
     return name == "sectors" and kw.get("axis", "x") == axis
 
 

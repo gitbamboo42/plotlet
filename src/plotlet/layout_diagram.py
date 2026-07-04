@@ -86,8 +86,9 @@ def layout_diagram(chart: Chart) -> Chart:
     # would force `chart` to grow when re-composed via `|` or `grid`.
     chart._require_render_root()
     from . import _regions
+    root = chart._render_root()
     with _regions.collecting() as sink:
-        src_svg = chart._to_svg_unchecked()
+        src_svg = root._to_svg_unchecked()
     regions_data = [{"kind": r.kind, "bbox": r.bbox, "name": r.name,
                      "meta": r.meta} for r in sink.regions]
     W, H = _figure_size(src_svg)

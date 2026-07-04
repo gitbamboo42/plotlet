@@ -66,8 +66,9 @@ def _collect(chart) -> tuple[list[dict], float, float]:
     chart = _materialize(chart)
     from . import _regions
     from ._spec import _OUTER_MARGIN
+    root = chart._render_root()
     with _regions.collecting() as sink:
-        svg = chart._to_svg_unchecked(outer=dict(_OUTER_MARGIN))
+        svg = root._to_svg_unchecked(outer=dict(_OUTER_MARGIN))
     regions = [{"kind": r.kind, "bbox": r.bbox, "name": r.name, "meta": r.meta}
                for r in sink.regions]
     m = re.search(r'<svg[^>]*\bwidth="([0-9.]+)"\s+height="([0-9.]+)"', svg)

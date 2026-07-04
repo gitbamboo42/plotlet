@@ -24,9 +24,11 @@ Composition operators:
 
   * `a / b` → vertical `Layout`. Same flattening rule.
 
-The render pipeline (margin coordination, share-pre-pass, allocation,
-SVG emission) lives in the private `_layout_engine.py`. Chart and Layout
-both lazy-import from there in their render methods.
+Rendering goes journal → IR → plot: `to_svg()` lowers the tree to the
+figure IR (`_ir.py`) and renders the materialized result — the IR path
+is the only render path. The pipeline itself (margin coordination,
+share-pre-pass, allocation, SVG emission) lives in the private
+`_layout_engine.py`.
 
 Invariants:
 
@@ -98,11 +100,7 @@ def _extract_theme(calls) -> str | None:
     chart never set a theme — `active_theme(None)` is a passthrough that
     leaves the spec dicts on their current values."""
     name = None
-    for call in calls:
-        # Calls are 3-tuples from user code or 4-tuples from frame_defaults
-        # (see Chart.__getattr__). Theme is always user-set, but iterating
-        # the same list requires tolerating both shapes.
-        call_name, args = call[0], call[1]
+    for call_name, args, _kw in calls:
         if call_name == "theme":
             name = args[0] if args else None
     return name
@@ -140,10 +138,20 @@ class _Renderable:
         want a plain SVG for embedding or sharing and don't need the
         AI/schema surface documented in `docs/AI_ATTRS.md`."""
         self._require_render_root()
-        svg = self._to_svg_unchecked(outer=dict(_OUTER_MARGIN))
+        svg = self._render_root()._to_svg_unchecked(outer=dict(_OUTER_MARGIN))
         if clean:
             svg = _strip_plotlet_attrs(svg)
         return svg
+
+    def _render_root(self):
+        """Lower this tree to the figure IR and materialize the render
+        tree back from it. Every user-facing render goes journal → IR →
+        plot — one pipeline, so the IR provably carries everything the
+        renderer consumes. The user's own tree is never handed to the
+        engine (and never mutated by it)."""
+        from ._ir import to_ir, _materialize
+        ir = to_ir(self)
+        return _materialize(ir, ir.root_nid)
 
     def regions(self) -> list[dict]:
         """Return the chrome regions emitted during a render of this
@@ -161,8 +169,9 @@ class _Renderable:
         deterministic, no chart state change."""
         from . import _regions
         self._require_render_root()
+        root = self._render_root()
         with _regions.collecting() as sink:
-            self._to_svg_unchecked(outer=dict(_OUTER_MARGIN))
+            root._to_svg_unchecked(outer=dict(_OUTER_MARGIN))
         return [{"kind": r.kind, "bbox": r.bbox, "name": r.name, "meta": r.meta}
                 for r in sink.regions]
 
@@ -518,15 +527,9 @@ class Chart(_Renderable):
                     if "data" in kwargs:
                         kwargs["data"] = _normalize_data(kwargs["data"])
                     args = tuple(_normalize_data(a) for a in args)
-                if spec is not None and spec.frame_defaults is not None:
-                    for call in spec.frame_defaults(list(args), dict(kwargs)) or ():
-                        # Tag with a 4th element so `_replay` can route
-                        # `xscale(order=...)` from frame_defaults to
-                        # `<axis>_order_default` — letting a peer artist's
-                        # `axis_order` hook (e.g. dendrogram) win over the
-                        # frame_default's suggested order without
-                        # disturbing user-explicit `c.xscale(order=...)`.
-                        self._calls.append((*call, True))
+                # Only the user action is recorded — an artist's
+                # frame_defaults regenerate inside `_replay` on every
+                # render (see `_expand_frame_defaults` in core.py).
                 self._calls.append((name, list(args), dict(kwargs)))
                 return self
             # Surface the artist's module docstring on the recorder so

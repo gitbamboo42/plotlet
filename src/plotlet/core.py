@@ -288,6 +288,26 @@ def _sector_remap_data(call_kw, st):
     return call_kw
 
 
+def _expand_frame_defaults(calls):
+    """Insert each artist's `frame_defaults` entries immediately before
+    the artist call itself, tagged with a trailing `True` so
+    `_record_scale` can route a default `order=` to `<axis>_order_default`
+    (letting a peer artist's `axis_order` hook win over the suggested
+    order without disturbing user-explicit `c.xscale(order=...)`).
+
+    Defaults regenerate here on every replay rather than being recorded —
+    `_calls` and the journal carry only user actions. Returns a new list;
+    the input is never mutated."""
+    out = []
+    for call in calls:
+        spec = get_artist(call[0])
+        if spec is not None and spec.frame_defaults is not None:
+            for d in spec.frame_defaults(list(call[1]), dict(call[2])) or ():
+                out.append((*d, True))
+        out.append(call)
+    return out
+
+
 def _replay(calls):
     """Walk a Chart's recorded calls into a state dict consumed by the
     renderer. Pure function of `calls` and the artist registry — same input
@@ -381,13 +401,14 @@ def _replay(calls):
     #     (in `_build_panel_opts`) still apply, then a leaf-level
     #     `c.sectors(...)` later in the list overwrites (last-write-wins).
     # Sort is stable, so cascade order is preserved among sectors.
-    calls = sorted(calls, key=lambda c: c[0] != "sectors")
+    calls = sorted(_expand_frame_defaults(calls),
+                   key=lambda c: c[0] != "sectors")
     for call in calls:
-        # Calls are stored as 3-tuples `(name, args, kw)` from user code
-        # or 4-tuples `(name, args, kw, from_default=True)` when emitted by
-        # an artist's `frame_defaults` (see Chart.__getattr__). The flag
-        # lets `_record_scale` distinguish a frame-default `order=` (loses
-        # to a peer artist's `axis_order` hook) from a user-explicit one.
+        # Entries are 3-tuples `(name, args, kw)` from recorded user code
+        # or 4-tuples `(name, args, kw, True)` synthesized just above by
+        # `_expand_frame_defaults`. The flag lets `_record_scale`
+        # distinguish a frame-default `order=` (loses to a peer artist's
+        # `axis_order` hook) from a user-explicit one.
         if len(call) == 4:
             name, args, kw, from_default = call
         else:

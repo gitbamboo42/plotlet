@@ -7,10 +7,11 @@ Three representations of one plot, ordered by distance from the user:
     IR        per-node structured form: a table of nodes in dependency
               order, each carrying its construction state, its method
               ops, and its insets. "What the figure is."
-    plot      the rendered SVG. The IR materializes the same Chart /
-              Layout objects the tree path would build and renders
-              through the existing pipeline, so output is byte-identical
-              to the original figure.
+    plot      the rendered SVG. The IR materializes Chart / Layout
+              objects and renders them through the pipeline. This is
+              the only render path — `Chart.to_svg()` itself lowers
+              through the IR — so output is byte-identical however a
+              figure reaches the renderer.
 
 The journal is the recording format — append-only, interleaved, one
 entry per action. The IR is the *compiled* form: events grouped by the
@@ -337,9 +338,10 @@ def _materialize(ir: FigureIR, root_nid: int):
 
         obj = nid_to_node[n.nid]
 
-        # Method ops — go through the normal recorder path. Any
-        # frame_defaults an artist injects regenerate here, so the IR
-        # (like the journal) deliberately doesn't carry them.
+        # Method ops — go through the normal recorder path (aes / data
+        # injection is a no-op on already-normalized ops). Artist
+        # frame_defaults aren't carried by the IR or the journal;
+        # `_replay` regenerates them at render time.
         for op in n.ops:
             method = getattr(obj, op["op"])
             method(*[_decode(a) for a in op["args"]],

@@ -315,7 +315,7 @@ class CircularCoordinate:
         from itertools import count
         from ._layout_engine import _build_panel_opts
         from ._spec import active_theme
-        from .core import _panel_open, _render_inner
+        from .core import _expand_frame_defaults, _panel_open, _render_inner
         from . import _regions
         _ZERO_MARGIN = {"left": 0, "right": 0, "top": 0, "bottom": 0}
         # Shared across leaves so coord-clip `<clipPath id>`s don't
@@ -390,12 +390,17 @@ class CircularCoordinate:
                 ])
                 # x-axis: only the outermost ring shows ticks/labels/sector
                 # labels (conventionally, labels sit outside the
-                # outermost track). Inner rings suppress unless the user explicitly
-                # called xticks(...) on that leaf.
+                # outermost track). Inner rings suppress unless the leaf's
+                # replay input already carries an xticks entry — user-
+                # explicit, or an artist frame-default (chord / heatmap
+                # rings set their own tick treatment), hence checking the
+                # expanded list, which is exactly what `_replay` will see.
                 # y-axis suppression comes from the leaf coord's own
                 # `y_ticks=[]` default (`CircularCoordinate.__init__`);
                 # opt in per leaf with an explicit `c.yticks(...)`.
-                has_xticks = any(c[0] == "xticks" for c in leaf._calls[:n0])
+                has_xticks = any(
+                    c[0] == "xticks"
+                    for c in _expand_frame_defaults(leaf._calls[:n0]))
                 if not is_outermost and not has_xticks:
                     leaf._calls.append(("xticks", [[]], {"labels": False}))
                 leaf._data_width  = W

@@ -38,10 +38,12 @@ A spec bundles the four things `_render_inner` needs to know about a plot type:
         explicit `xscale("category", order=...)` still wins.
 
   - `frame_defaults(args, kwargs) -> list[tuple] | None` (optional)
-        Return a list of `(call_name, args, kwargs)` to record *before*
-        the artist itself. Used by artists with strong conventional
-        defaults (e.g. dendrogram hides all spines). User calls made
-        after the artist still win — replay is in order.
+        Return a list of `(call_name, args, kwargs)` applied *before*
+        the artist itself. Never recorded — `_replay` regenerates them
+        from the artist call on every render. Used by artists with
+        strong conventional defaults (e.g. dendrogram hides all
+        spines). User calls made after the artist still win — replay
+        is in order.
 
 `add_artist(name, ...)` is the public extension API. After calling it, users
 can do `fig.<name>(...)` and it Just Works.

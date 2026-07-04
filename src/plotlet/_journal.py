@@ -307,17 +307,13 @@ def to_journal(root) -> Journal:
         })
 
     def _emit_call(nid: int, entry) -> None:
-        """A `_calls` entry — always 3-tuple `(name, args, kwargs)`
-        from user code. 4-tuple entries with a trailing `from_default`
-        flag are artist-injected frame defaults; on replay, the artist
-        call regenerates them naturally, so they don't belong in the
-        journal."""
-        if len(entry) > 3 and entry[3]:
-            return
-        name = entry[0]
-        args = [_encode(a) for a in entry[1]]
-        kwargs = {k: _encode(v) for k, v in entry[2].items()}
-        journal.append(name, nid, args=args, kwargs=kwargs)
+        """A `_calls` entry — `(name, args, kwargs)`, always a user
+        action. Artist frame defaults are never recorded; `_replay`
+        regenerates them from the artist call on every render."""
+        name, args, kwargs = entry
+        journal.append(name, nid,
+                       args=[_encode(a) for a in args],
+                       kwargs={k: _encode(v) for k, v in kwargs.items()})
 
     _emit_node(root)
     journal.root_nid = nid_map[id(root)]

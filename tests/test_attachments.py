@@ -86,23 +86,32 @@ def _run_invariants() -> int:
             failed += 1
             print(f"FAIL   {msg}")
 
-    # Size lock: attached chart's perpendicular dim matches host; parallel preserved.
+    # Size lock: attached chart's perpendicular dim matches host; parallel
+    # preserved. `to_svg()` renders a materialized copy and never mutates
+    # the user's objects, so the lock is asserted on the render tree
+    # (`_render_root()` + engine pass), not on the user's charts.
     host = pt.chart(data_width=200, data_height=150)
     host.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
     left = pt.chart(data_width=40, data_height=999)
     left.annotate("L", xy=(0.5, 1.0))
     host.attach_left(left)
-    host.to_svg()
-    _check(left._data_height == 150 and left._data_width == 40,
+    root = host._render_root()
+    root._to_svg_unchecked()
+    r_left = root._attached_left[0]
+    _check(r_left._data_height == 150 and r_left._data_width == 40,
            "left attachment height locks to host; width preserved")
+    _check(left._data_height == 999 and left._data_width == 40,
+           "render never mutates the user's chart objects")
 
     top = pt.chart(data_width=999, data_height=40)
     host2 = pt.chart(data_width=200, data_height=150)
     host2.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
     top.line(data={"x": [0, 1, 2], "y": [1, 2, 1]}, x="x", y="y")
     host2.attach_above(top)
-    host2.to_svg()
-    _check(top._data_width == 200 and top._data_height == 40,
+    root2 = host2._render_root()
+    root2._to_svg_unchecked()
+    r_top = root2._attached_above[0]
+    _check(r_top._data_width == 200 and r_top._data_height == 40,
            "above attachment width locks to host; height preserved")
 
     # Validation: double-attach the same chart, attach already-parented chart.
