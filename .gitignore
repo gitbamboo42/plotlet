@@ -70,6 +70,9 @@ CLAUDE.local.md
 # Personal working notes
 TODO*.md
 
+# Per-layer debugging dump (see "Debugging rendered output" in skills/developers.md)
+debug.md
+
 # Speculative drafts / aspirational docs — not part of the project yet
 future/
 

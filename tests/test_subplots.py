@@ -230,6 +230,18 @@ def fit_width_only():
     return (_sin(data_width=220) | _cos(data_width=220)).fit(canvas_width=400)
 
 
+def grid_suptitle():
+    # Layout-level titles: the outer 2×1 composition carries a
+    # figure-level title band, and the nested titled row gets its own
+    # band above its sub-rect. Leaf panel titles render inside their
+    # panels as usual — three title levels in one figure.
+    a = _sin(data_width=200, data_height=120)
+    b = _cos(data_width=200, data_height=120)
+    row = (a | b).title("nested row title")
+    c = _bar(data_width=420, data_height=110)
+    return (row / c).title("Figure-level suptitle")
+
+
 def share_x_col_v_of_h():
     # v-of-h composition with cross-row column-wise x-sharing — the
     # canonical "stacked tracks across a domain" shape. Each row uses
@@ -267,6 +279,7 @@ PLOTS = {
     "fit_to_canvas":       fit_to_canvas,
     "fit_width_only":      fit_width_only,
     "share_x_col_v_of_h":  share_x_col_v_of_h,
+    "grid_suptitle":       grid_suptitle,
 }
 
 
@@ -468,3 +481,37 @@ def test_data_total_size_reflects_share_scaling():
     b2.scatter(data={"x": [1, 2, 3], "y": [3, 2, 1]}, x="x", y="y")
 
     assert data_total_size(pt.to_ir((a2 | b2).share_y())) == (250.0, 100.0)
+
+
+def test_layout_title_band():
+    """`Layout.title` adds one centered band above the layout's rect:
+    the figure grows by exactly the panel-title block (pad.title +
+    title_size), the band text lands in regions as a `title` above
+    every panel, and `fit()` treats the band as overhead."""
+    from plotlet._spec import _FONTSPEC, _PADSPEC
+    from plotlet.render import natural_size
+
+    def cell(t):
+        c = pt.chart(title=t, data_width=160, data_height=110)
+        c.scatter(data={"x": [1, 2, 3], "y": [3, 1, 2]}, x="x", y="y")
+        return c
+
+    band = _PADSPEC["title"] + _FONTSPEC["title_size"]
+
+    plain = pt.grid([[cell("a"), cell("b")]])
+    titled = pt.grid([[cell("a"), cell("b")]]).title("Figure title")
+    W0, H0 = natural_size(pt.to_ir(plain))
+    W1, H1 = natural_size(pt.to_ir(titled))
+    assert (W1, H1) == (W0, H0 + band)
+
+    regs = [r for r in titled.regions() if r["name"] == "title"]
+    texts = {r["meta"].get("text") for r in regs}
+    assert "Figure title" in texts and {"a", "b"} <= texts
+    fig_r = next(r for r in regs if r["meta"].get("text") == "Figure title")
+    assert fig_r["bbox"][1] < band, "band title must sit inside the top band"
+    assert all(fig_r["bbox"][1] < r["bbox"][1]
+               for r in regs if r is not fig_r), "band sits above panel titles"
+
+    fitted = titled.fit(canvas_width=250)
+    Wf, _ = natural_size(pt.to_ir(fitted))
+    assert abs(Wf - 250) <= 1

@@ -794,6 +794,18 @@ class Layout(_Renderable):
         self._calls.append(("coordinate", [coord], {}))
         return self
 
+    def title(self, text) -> "Layout":
+        """Figure-level title: one centered band above this layout's
+        rect, styled like a panel title (same font spec, `pad.title`
+        gap to the content below). Works on any layout — a rect grid
+        gets a suptitle, a coordinate pile (circular overlay) gets the
+        band above its canvas, and a nested titled layout gets the band
+        above its own sub-rect. Panel-level titles stay on the leaf
+        charts (`c.title(...)`); this is the composition-level
+        counterpart. Last call wins."""
+        self._calls.append(("title", [text], {}))
+        return self
+
     def _iter_leaves(self):
         """Depth-first yield of every leaf Chart under this layout."""
         for child in self._children:

@@ -313,7 +313,8 @@ class CircularCoordinate:
         delegates here.
         """
         from itertools import count
-        from ._layout_engine import _build_panel_opts
+        from ._layout_engine import (_build_panel_opts, _emit_layout_title,
+                                     _title_band_h)
         from .._spec import active_theme
         from .core import _expand_frame_defaults, _panel_open, _render_inner
         from .. import _regions
@@ -327,6 +328,11 @@ class CircularCoordinate:
             raise ValueError("Layout.coordinate(): no leaf charts to render")
         W = max(leaf._data_width  for leaf in leaves)
         H = max(leaf._data_height for leaf in leaves)
+        # Layout-level title: one band above the overlay canvas —
+        # `_atomic_size` claims the same extra height for parent
+        # placement. Leaf bodies (and their recorded regions) shift
+        # down by the band.
+        band = _title_band_h(root)
 
         # Probe the outermost leaf's state (with full layout context so
         # layout-level .sectors() propagates) to compute required chrome.
@@ -420,8 +426,8 @@ class CircularCoordinate:
             with active_theme(_theme):
                 # Emit just the panel body (no <svg> wrapper) — the
                 # caller concatenates each leaf's body into the shared
-                # overlay canvas.
-                with _regions.translate(0, 0):
+                # overlay canvas (below the title band, when present).
+                with _regions.translate(0, band):
                     inner = _render_inner(_st, W, H, _ZERO_MARGIN, _po,
                                           clip_counter=_clip_counter)
                 body = (_panel_open(_st, _po, "translate(0,0)",
@@ -473,7 +479,11 @@ class CircularCoordinate:
             bodies.append(_render_leaf(self.inner, inner_coord,
                                        prepend=inner_prepend))
 
-        return W, H, "".join(bodies)
+        body = "".join(bodies)
+        if band:
+            body = (_emit_layout_title(root, 0, 0, W)
+                    + f'<g transform="translate(0,{band})">{body}</g>')
+        return W, H + band, body
 
     def draw_frame(self, project, iw, ih, y_ticks_r, y_labels, frame_opts) -> str:
         return _cc.draw_y_chrome(

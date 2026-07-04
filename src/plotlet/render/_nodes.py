@@ -226,11 +226,12 @@ def hydrate(ir):
 # Names materialize knows how to dispatch on a layout journal entry. New
 # Layout state methods must either be listed here (with a dispatch arm
 # in the loop below) or in `_LAYOUT_PASSTHROUGH` (consumed elsewhere —
-# today: `sectors`, handled by `_ancestor_calls` cascade at replay time).
+# `sectors` by the `_ancestor_calls` cascade at replay time, `title` by
+# the band emit in the layout engine / coord `render_layout`).
 _LAYOUT_MATERIALIZED = frozenset({
     "share_x", "share_y", "coordinate", "gap", "align_x", "align_y",
 })
-_LAYOUT_PASSTHROUGH = frozenset({"sectors"})
+_LAYOUT_PASSTHROUGH = frozenset({"sectors", "title"})
 
 
 def _walk_tree(root):

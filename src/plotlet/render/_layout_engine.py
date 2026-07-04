@@ -42,7 +42,7 @@ from __future__ import annotations
 from graphlib import CycleError, TopologicalSorter
 from itertools import count
 
-from .._spec import SPEC, _LAYOUTSPEC, _FONTSPEC, active_theme
+from .._spec import SPEC, _LAYOUTSPEC, _FONTSPEC, _PADSPEC, active_theme
 from .core import (
     _render_inner, _replay, _enforce_floors, _required_margin,
     _x_descriptor_multi, _y_descriptor_multi,
@@ -53,7 +53,7 @@ from ..scales import _AxisDescriptor
 from .._tree import iter_leaves as _iter_leaves
 from . import _attachments
 from .. import _regions
-from ..draw import coord
+from ..draw import coord, descender, text_path
 
 
 def _extract_theme(calls) -> str | None:
@@ -65,6 +65,46 @@ def _extract_theme(calls) -> str | None:
         if call_name == "theme":
             name = args[0] if args else None
     return name
+
+
+# ---------------------------------------------------------------------------
+# Layout-level title — one centered band above a titled layout's rect,
+# styled like a panel title. Rect layouts get it via `_measure` /
+# `_allocate` / the placement emit below; coord-bearing layouts draw
+# their own inside `coord.render_layout` (the band is part of the (W, H)
+# they claim, kept in sync via `_atomic_size`).
+# ---------------------------------------------------------------------------
+
+def _layout_title(node) -> str:
+    """Last-recorded `title` op on a layout node ('' when untitled or
+    not a layout)."""
+    if not getattr(node, "_is_parent", False):
+        return ""
+    text = ""
+    for call_name, args, _kw in node._calls:
+        if call_name == "title":
+            text = args[0] if args and args[0] is not None else ""
+    return text
+
+
+def _title_band_h(node) -> int:
+    """Vertical pixels the title band adds above a titled layout's
+    content — the panel-title block (`pad.title` gap + title font
+    size), so composed and single-panel titles share one rhythm."""
+    if not _layout_title(node):
+        return 0
+    return _PADSPEC["title"] + _FONTSPEC["title_size"]
+
+
+def _emit_layout_title(node, x: float, y: float, w: float) -> str:
+    """The band's text fragment: centered over the layout's width, cap
+    top at the band top, `pad.title` clear of the content below. Same
+    text-as-paths emit as panel titles (`tag=` records the region)."""
+    size = _FONTSPEC["title_size"]
+    return text_path(_layout_title(node), x + w / 2,
+                     y + size - descender(size), size,
+                     anchor="middle", color=_FONTSPEC["color"],
+                     tag="title")
 
 
 # Layout gaps stay captured — they're parent-level positional, not
@@ -220,15 +260,16 @@ def _is_atomic(node) -> bool:
 def _atomic_size(node) -> tuple[int, int]:
     """Canvas size for an atomic node. Leaves use their declared
     `_canvas_*`; coord-bearing Layouts match the (W, H) their coord's
-    `render_layout` will claim — max of inner data-leaf dims, the same
-    formula CircularCoordinate uses for its overlay canvas."""
+    `render_layout` will claim — max of inner data-leaf dims plus the
+    title band, the same formula CircularCoordinate uses for its
+    overlay canvas."""
     if not node._is_parent:
         return _leaf_rect_size(node)
     leaves = [l for l in node._iter_leaves() if l._leaf_kind == "data"]
     if not leaves:
         return 0, 0
     return (max(l._data_width  for l in leaves),
-            max(l._data_height for l in leaves))
+            max(l._data_height for l in leaves) + _title_band_h(node))
 
 
 def _measure(node) -> tuple[int, int]:
@@ -247,20 +288,21 @@ def _measure(node) -> tuple[int, int]:
             w += l + r
             h += a + b
         return w, h
+    band = _title_band_h(node)
     if node._layout_kind == "h":
         eff = node._effective_children()
         sizes = [_measure(c) for c in eff]
         gaps = _gaps_h(eff)
         W = sum(w for w, _ in sizes) + sum(gaps)
         H = max(h for _, h in sizes)
-        return W, H
+        return W, H + band
     if node._layout_kind == "v":
         eff = node._effective_children()
         sizes = [_measure(c) for c in eff]
         gaps = _gaps_v(eff)
         W = max(w for w, _ in sizes)
         H = sum(h for _, h in sizes) + sum(gaps)
-        return W, H
+        return W, H + band
     # grid — each column's width is the max natural canvas across cells
     # in that column; each row's height likewise.
     rows, cols = node._grid_rows, node._grid_cols
@@ -279,7 +321,7 @@ def _measure(node) -> tuple[int, int]:
     v_gaps = [_grid_row_gap(children, rows, cols, r) for r in range(rows - 1)]
     W = int(round(sum(col_widths) + sum(h_gaps)))
     H = int(round(sum(row_heights) + sum(v_gaps)))
-    return W, H
+    return W, H + band
 
 
 def _natural_size(root) -> tuple[int, int]:
@@ -411,7 +453,12 @@ def _allocate(node, x: float, y: float, w: float, h: float, out: list):
     (set via `pt.chart(data_width=, data_height=)` or the canvas_* form)
     act as relative ratios — so a narrow colorbar leaf in
     `hm | pt.colorbar(hm)` self-sizes without forcing the user to declare
-    explicit widths."""
+    explicit widths.
+
+    A titled rect layout additionally records itself with its band rect
+    — the placement loop draws the band text there — and its children
+    allocate below the band. Coord-bearing layouts are atomic here and
+    band themselves inside `coord.render_layout`."""
     if _is_atomic(node):
         if not node._is_parent and _attachments.has_attachments(node):
             # Carve out the slot for the host itself, then place
@@ -427,6 +474,11 @@ def _allocate(node, x: float, y: float, w: float, h: float, out: list):
             return
         out.append((node, (x, y, w, h)))
         return
+    band = _title_band_h(node)
+    if band:
+        out.append((node, (x, y, w, band)))
+        y += band
+        h -= band
     if node._layout_kind == "h":
         eff = node._effective_children()
         gaps = _gaps_h(eff)
@@ -1090,15 +1142,22 @@ def _render_layout_rect(root, outer=None) -> str:
     clip_counter = count()
     for leaf, (x, y, w, h) in placements:
         if leaf._is_parent:
-            # Coord-bearing sub-Layout — `_is_atomic` kept the placement
-            # system from descending into it, so we ask the coord directly
-            # for its `(W, H, body)`. The body inlines inside a translate
-            # group; we don't want the `<svg>` wrapper here because we're
-            # not the document root.
-            _W, _H, body = leaf._coordinate.render_layout(leaf)
-            parts.append(
-                f'<g transform="translate({coord(x)},{coord(y)})">{body}</g>'
-            )
+            lcoord = leaf._coordinate
+            if lcoord is not None and hasattr(lcoord, "render_layout"):
+                # Coord-bearing sub-Layout — `_is_atomic` kept the
+                # placement system from descending into it, so we ask the
+                # coord directly for its `(W, H, body)`. The body inlines
+                # inside a translate group; we don't want the `<svg>`
+                # wrapper here because we're not the document root.
+                _W, _H, body = lcoord.render_layout(leaf)
+                parts.append(
+                    f'<g transform="translate({coord(x)},{coord(y)})">{body}</g>'
+                )
+            else:
+                # Titled rect layout — `_allocate` recorded its band
+                # rect; draw the centered title text there.
+                with _regions.translate(ol, ot):
+                    parts.append(_emit_layout_title(leaf, x, y, w))
             continue
         kind = leaf._leaf_kind
         if kind == "legend":

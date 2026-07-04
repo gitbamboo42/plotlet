@@ -242,6 +242,22 @@ def ring_partial_arc_sectors():
     return c
 
 
+def ring_pile_titled():
+    # Layout-level title on a circular overlay: the pile's `.title(...)`
+    # renders as one band above the ring canvas ("a ring's title lives
+    # on the layout"); per-leaf titles stay suppressed in piles.
+    outer = pt.chart(xlim=(0, 1), ylim=(0, 1),
+                     data_width=300, data_height=300)
+    outer.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
+               color="#1D9E75", width=1.5)
+    inner = pt.chart(xlim=(0, 1), ylim=(0, 1),
+                     data_width=300, data_height=120)
+    inner.scatter(data={"x": _SCATTER_T, "y": _SCATTER_V}, x="x", y="y",
+                  color="#534AB7", size=2.5, alpha=0.6)
+    pile = (outer / inner).coordinate(pt.CircularCoordinate(r_inner=0.35))
+    return pile.title("two rings — layout title")
+
+
 # ---------------------------------------------------------------------------
 # Sector × CircularCoordinate guard
 # ---------------------------------------------------------------------------
@@ -275,6 +291,7 @@ PLOTS = {
     "ring_partial_arc":            ring_partial_arc,
     "ring_partial_arc_right_side": ring_partial_arc_right_side,
     "ring_partial_arc_sectors":    ring_partial_arc_sectors,
+    "ring_pile_titled":            ring_pile_titled,
 }
 
 
