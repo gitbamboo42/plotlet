@@ -9,11 +9,15 @@ neutral vocabulary (`registry`, `draw`, `_spec`, `scales`, `sectors`,
 `_regions`, `_tree`, `utils`, `_json_layer`, `_coord_registry`,
 `formatters`, `themes`).
 
-Two directions, two tests: a subprocess proves importing the recording
-half loads no render module; a static import scan proves no render
-module names a front-half module. A regression in either direction is
-an architecture bug, not a style nit — fix the import, don't widen the
-lists here.
+Two directions: a subprocess proves importing the recording half loads
+no render module; a static import scan proves no render module names a
+front-half module. A regression in either direction is an architecture
+bug, not a style nit — fix the import, don't widen the lists here.
+Two consequences of the laziness are pinned alongside: rendering does
+load the render half, and `{"$coord": ...}` envelopes decode in a cold
+process (built-in coords register on import of `render/coordinates.py`,
+which nothing imports eagerly anymore — `resolve_coord` fills the
+registry on first miss).
 """
 from __future__ import annotations
 
@@ -61,6 +65,40 @@ def test_rendering_loads_the_render_half_lazily():
         "assert 'plotlet.render' in sys.modules\n"
     )
     subprocess.run([sys.executable, "-c", code], check=True)
+
+
+def test_coord_envelope_decodes_in_a_fresh_process(tmp_path):
+    """A `{"$coord": ...}` envelope must decode in a process that never
+    touched `pt.CircularCoordinate`. Every in-process round-trip test
+    registers the coord class as a side effect of constructing the
+    figure, so only a subprocess exercises the cold path: JSON from
+    disk, empty coord registry, `resolve_coord` importing the built-in
+    coord module on the first miss."""
+    import json
+
+    import plotlet as pt
+
+    c = pt.chart(data_width=300, data_height=300)
+    c.scatter(data={"x": [1, 2, 3], "y": [4, 5, 6]}, x="x", y="y")
+    lay = pt.grid([[c]])
+    lay.coordinate(pt.CircularCoordinate(r_inner=0.3))
+    blob = json.dumps(pt.to_ir(lay).to_dict())
+    ir_path = tmp_path / "circular_ir.json"
+    svg_path = tmp_path / "expected.svg"
+    ir_path.write_text(blob)
+    svg_path.write_text(pt.from_ir(json.loads(blob)).to_svg())
+
+    code = (
+        "import json, sys\n"
+        "import plotlet as pt\n"
+        "assert not any(m.startswith('plotlet.render')"
+        " for m in sys.modules)\n"
+        "svg = pt.from_ir(json.load(open(sys.argv[1]))).to_svg()\n"
+        "assert svg == open(sys.argv[2]).read(), "
+        "'cold-process decode differs from warm in-process render'\n"
+    )
+    subprocess.run([sys.executable, "-c", code, str(ir_path), str(svg_path)],
+                   check=True)
 
 
 def _imported_plotlet_modules(path: Path):

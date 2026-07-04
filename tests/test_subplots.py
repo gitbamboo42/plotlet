@@ -440,3 +440,31 @@ def test_subplots_invariants():
     for the same pattern."""
     failed = _run_invariants()
     assert failed == 0, f"{failed} subplot invariant(s) failed (see captured stdout)"
+
+
+def test_data_total_size_reflects_share_scaling():
+    """The seam's `data_total_size` must report share-*coordinated* data
+    dims, not the raw recorded ones — it runs the natural-size
+    measurement pre-pass first, and that call is load-bearing even
+    though its return value is discarded. `Chart.fit()` solves
+    `target = s * data_total + overhead` from this number; a
+    share-unaware value changes its convergence arithmetic.
+
+    Here `share_y()` forces b (100×200) to the anchor's height (100)
+    and rescales its width to preserve aspect (→ 50×100), so the h-row
+    total is (200+50, max(100, 100)) — not the raw (300, 200)."""
+    from plotlet.render import data_total_size
+
+    a = pt.chart(data_width=200, data_height=100)
+    a.scatter(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
+    b = pt.chart(data_width=100, data_height=200)
+    b.scatter(data={"x": [1, 2, 3], "y": [3, 2, 1]}, x="x", y="y")
+
+    assert data_total_size(pt.to_ir(a | b)) == (300.0, 200.0)   # unshared control
+
+    a2 = pt.chart(data_width=200, data_height=100)
+    a2.scatter(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
+    b2 = pt.chart(data_width=100, data_height=200)
+    b2.scatter(data={"x": [1, 2, 3], "y": [3, 2, 1]}, x="x", y="y")
+
+    assert data_total_size(pt.to_ir((a2 | b2).share_y())) == (250.0, 100.0)
