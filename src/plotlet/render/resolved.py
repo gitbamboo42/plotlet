@@ -97,6 +97,7 @@ class IRLayout:
     share_y: dict = field(default_factory=dict)
     gap: dict = field(default_factory=dict)      # {"gap","gap_x","gap_y"}
     coord: IRCoord | None = None
+    title: str | None = None                     # figure-title band text
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +130,7 @@ def _node_to_ir(node, panel_opts, states):
 
 
 def _layout_to_ir(layout, panel_opts, states):
+    from ._layout_engine import _layout_title
     share_x = _last_call(layout, "share_x")
     share_y = _last_call(layout, "share_y")
     gap = {"gap": layout._gap, "gap_x": layout._gap_x, "gap_y": layout._gap_y}
@@ -146,6 +148,7 @@ def _layout_to_ir(layout, panel_opts, states):
         share_y=share_y,
         gap=gap,
         coord=coord,
+        title=_layout_title(layout) or None,
     )
 
 

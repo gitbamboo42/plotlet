@@ -131,3 +131,18 @@ def test_figure_ir_resolve_method():
     via_fn = pt.resolve_ir(c)
     assert _nan_eq(via_method, via_fn)
     assert via_method.chrome.get("title") == "t"
+
+
+def test_layout_title_projected():
+    """A layout's figure-title band is visible in the resolved IR —
+    `IRLayout.title`, last call wins, `None` when untitled."""
+    def pair():
+        a = pt.chart({"x": [1.0, 2.0], "y": [3.0, 4.0]})
+        a.scatter(x="x", y="y")
+        b = pt.chart({"x": [1.0, 2.0], "y": [4.0, 3.0]})
+        b.line(x="x", y="y")
+        return a | b
+
+    assert pt.resolve_ir(pair().title("first").title("Figure title")).title \
+        == "Figure title"
+    assert pt.resolve_ir(pair()).title is None
