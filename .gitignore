@@ -69,9 +69,13 @@ CLAUDE.local.md
 
 # Personal working notes
 TODO*.md
+plan.md
 
 # Per-layer debugging dump (see "Debugging rendered output" in skills/developers.md)
 debug.md
+
+# Local pipeline-comparison snapshot pages (not published)
+snapshot_v*.html
 
 # Speculative drafts / aspirational docs — not part of the project yet
 future/

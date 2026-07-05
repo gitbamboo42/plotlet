@@ -20,10 +20,9 @@ out in `docs/IR.md`:
   * op names resolve: chart-family ops against the artist registry ∪
     the frame-method set ∪ `attach_*`; layout ops against the
     materialized ∪ passthrough sets
-  * a root chart node carries no composition-level ops (`sectors`,
-    container-strategy `coordinate`) — `journal_to_ir` hoists those
-    onto a 1×1 layout wrapper at lowering, so only hand-built IRs can
-    violate this
+  * the root node is a layout — `journal_to_ir` wraps a lone leaf in a
+    1×1 layout at lowering (hoisting a chart root's composition-level
+    ops onto the wrapper), so only hand-built IRs can violate this
 
 Interpretation is registry-relative by design — an IR referencing an
 extension artist or a custom coord validates only once the module
@@ -55,25 +54,6 @@ def _chart_op_ok(name: str) -> bool:
 def _layout_op_ok(name: str) -> bool:
     from ._nodes import _LAYOUT_MATERIALIZED, _LAYOUT_PASSTHROUGH
     return name in _LAYOUT_MATERIALIZED or name in _LAYOUT_PASSTHROUGH
-
-
-def _is_container_coord_op(op: dict) -> bool:
-    """True when a `coordinate` op carries a container-strategy coord —
-    one that owns the whole composition render via `render_layout`.
-    Mirrors the lowering test in `_ir._wrap_panel_ops`; the halves share
-    the coord registry, not code."""
-    args = op.get("args") or []
-    if not args:
-        return False
-    coord = args[0]
-    if isinstance(coord, dict) and "$coord" in coord:
-        from .._coord_registry import resolve_coord
-        try:
-            cls = resolve_coord(coord["$coord"])
-        except KeyError:
-            return False
-        return hasattr(cls, "render_layout")
-    return hasattr(coord, "render_layout")
 
 
 def _check_values(value, kinds: dict, where: str) -> None:
@@ -276,17 +256,11 @@ def validate(ir):
         raise _err(f"root_nid {ir.root_nid!r} is not in the node table "
                    f"(nids: {sorted(kinds)}).")
 
-    root = next(n for n in ir.nodes if n.nid == ir.root_nid)
-    if root.kind == "chart":
-        for i, op in enumerate(root.ops):
-            name = op["op"]
-            if name == "sectors" or (name == "coordinate"
-                                     and _is_container_coord_op(op)):
-                raise _err(
-                    f"node {root.nid} (chart, root) ops[{i}]: {name!r} is "
-                    f"composition-level state and lives on a layout node — "
-                    f"`journal_to_ir` hoists it onto a 1×1 layout wrapper "
-                    f"at lowering. Host the op on a layout node whose "
-                    f"children include this chart."
-                )
+    if kinds[ir.root_nid] != "layout":
+        raise _err(
+            f"root node {ir.root_nid} has kind {kinds[ir.root_nid]!r} — "
+            f"the root is always a layout node. `journal_to_ir` wraps a "
+            f"lone leaf in a 1×1 layout at lowering; wrap this node in a "
+            f"layout whose children include it."
+        )
     return ir

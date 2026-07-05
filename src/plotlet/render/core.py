@@ -1929,7 +1929,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
             if _clip_id:
                 parts.append(f'<g clip-path="url(#{_clip_id})">')
             else:
-                parts.append(f'<svg x="0" y="0" width="{iw}" height="{ih}" overflow="hidden">')
+                parts.append(f'<svg x="0" y="0" width="{iw:.10g}" height="{ih:.10g}" overflow="hidden">')
             if _has_svg_transform:
                 xfm = _coord_object.svg_transform(_coord_project, iw, ih)
                 parts.append(f'<g transform="{xfm}">')
@@ -2031,7 +2031,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
     # parent's title/labels if its own margins overhang.
     insets = st.get("insets") or []
     if insets:
-        parts.append(f'<svg x="0" y="0" width="{iw}" height="{ih}" overflow="hidden">')
+        parts.append(f'<svg x="0" y="0" width="{iw:.10g}" height="{ih:.10g}" overflow="hidden">')
     for inset_rect, inset_chart in insets:
         x_frac, y_frac, w_frac, h_frac = inset_rect
         # Render the inset first; this populates `_last_M_eff` so we can

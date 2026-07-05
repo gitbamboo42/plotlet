@@ -168,7 +168,8 @@ def test_facet_lowers_to_core_kinds():
 
 
 # ---------------------------------------------------------------------------
-# Root-wrap lowering — composition ops hoist off a single-chart root
+# Root-wrap lowering — every leaf root wraps in a 1×1 layout; a chart
+# root's composition ops hoist onto the wrapper
 # ---------------------------------------------------------------------------
 
 
@@ -216,12 +217,33 @@ def test_circular_root_hoists_title_coordinate_sectors():
     assert "scatter" in _op_names(leaf)
 
 
-def test_plain_root_does_not_wrap():
+def test_plain_root_wraps_with_no_hoist():
+    """Every root wraps — a plain chart becomes a 1×1 layout with an
+    empty op list; panel state (the title) stays on the leaf."""
     c = pt.chart({"x": [1.0], "y": [2.0]}, title="t")
     c.scatter(x="x", y="y")
-    ir = pt.to_ir(c)
-    root = next(n for n in ir.nodes if n.nid == ir.root_nid)
-    assert root.kind == "chart"
+    root, leaf = _root_and_leaf(pt.to_ir(c))
+    assert root.kind == "layout" and root.init["layout_kind"] == "h"
+    assert _op_names(root) == []
+    assert leaf.kind == "chart"
+    assert "title" in _op_names(leaf)
+
+
+def test_lone_chart_equals_its_grid_form():
+    """The root wrap makes the two spellings one figure: a bare chart
+    and `pt.grid([[c]])` render byte-identical SVG. The themed variant
+    pins the figure background following the sole leaf's theme through
+    the wrapper (a lone dark chart keeps its dark canvas)."""
+    def chart(theme=None):
+        c = pt.chart({"x": [1.0, 2.0, 3.0], "y": [4.0, 5.0, 6.0]},
+                     title="t", xlabel="x")
+        c.scatter(x="x", y="y")
+        if theme:
+            c.theme(theme)
+        return c
+
+    assert chart().to_svg() == pt.grid([[chart()]]).to_svg()
+    assert chart("dark").to_svg() == pt.grid([[chart("dark")]]).to_svg()
 
 
 def test_sectored_layout_child_does_not_wrap():

@@ -130,7 +130,11 @@ def test_figure_ir_resolve_method():
     via_method = pt.to_ir(c).resolve()
     via_fn = pt.resolve_ir(c)
     assert _nan_eq(via_method, via_fn)
-    assert via_method.chrome.get("title") == "t"
+    # a lone chart resolves through its 1×1 layout wrapper; the panel
+    # title lives on the leaf
+    assert isinstance(via_method, IRLayout)
+    (panel,) = via_method.children
+    assert panel.chrome.get("title") == "t"
 
 
 def test_layout_title_projected():

@@ -230,7 +230,7 @@ def journal_to_ir(journal, root_nid: int | None = None) -> FigureIR:
                 "kwargs": entry.get("kwargs", {}),
             })
 
-    root_nid = _wrap_panel_ops(nodes, root_nid)
+    root_nid = _wrap_root(nodes, root_nid)
 
     # Dependency order: DFS from the root, dependencies first. The
     # journal guarantees the reference graph is acyclic (an entry can
@@ -263,8 +263,9 @@ def _is_container_coord_op(op: dict) -> bool:
     `render_layout` (e.g. `CircularCoordinate`). Values arrive as
     `{"$coord": name}` envelopes from `to_journal`; a live coord object
     (hand-built journal) is duck-checked directly. Resolving the name is
-    a lazy front→render call — the price is that IR *structure* is
-    registry-relative for container coords (documented in docs/IR.md)."""
+    a lazy front→render call — the price is that op *placement* (which
+    node ends up carrying `coordinate` / `title`) is registry-relative
+    for container coords (documented in docs/IR.md)."""
     if op["op"] != "coordinate" or not op["args"]:
         return False
     coord = op["args"][0]
@@ -278,23 +279,27 @@ def _is_container_coord_op(op: dict) -> bool:
     return hasattr(coord, "render_layout")
 
 
-def _wrap_panel_ops(nodes: dict, root_nid: int) -> int:
-    """Canonicalize a single-chart figure: when the *root* is a chart
-    whose ops carry `sectors` or a container-strategy `coordinate`,
-    wrap it in a 1×1 layout node and hoist those ops onto the wrapper.
-    The recorder keeps the order-free chart-level API (`c.sectors(...)`,
-    `c.coordinate(...)` return `self`); this pass is where the sugar
-    lowers away, so the render half sees the same shape users write by
-    hand as `pt.grid([[c]]).coordinate(...)` — composition-level state
-    lives on a layout, never on a root chart.
+def _wrap_root(nodes: dict, root_nid: int) -> int:
+    """Canonicalize the root: every IR root is a layout node. A lone
+    leaf (chart / legend / diagram) wraps in a 1×1 `"h"` layout, so the
+    render half sees one shape — the same one users write by hand as
+    `pt.grid([[c]])` — and consumers get a single invariant instead of
+    a leaf-or-layout root union.
 
-    Hoist rule: a container-coordinate wrap hoists `title` +
-    `coordinate` + `sectors` (the overlay path suppresses leaf chrome,
-    so the title needs its layout-level home, and its inner-disc
-    inheritance reads the layout's calls); a sectors-only wrap hoists
-    just `sectors` (the rect path renders leaf chrome normally — panel
-    titles stay panel titles). Non-container coordinates are per-panel
-    point transforms and stay on the chart.
+    A chart root additionally hoists its composition-level ops onto the
+    wrapper. The recorder keeps the order-free chart-level API
+    (`c.sectors(...)`, `c.coordinate(...)` return `self`); this pass is
+    where the sugar lowers away — composition-level state lives on a
+    layout, never on a chart.
+
+    Hoist rule: a container-strategy `coordinate` (one whose coord
+    class defines `render_layout`) hoists `title` + `coordinate` +
+    `sectors` (the overlay path suppresses leaf chrome, so the title
+    needs its layout-level home, and its inner-disc inheritance reads
+    the layout's calls); otherwise just `sectors` (the rect path
+    renders leaf chrome normally — panel titles stay panel titles).
+    Non-container coordinates are per-panel point transforms and stay
+    on the chart.
 
     Only the root wraps. A chart inside a layout already has a layout
     home for composition state (the sectors cascade), and `pt.grid`
@@ -306,15 +311,15 @@ def _wrap_panel_ops(nodes: dict, root_nid: int) -> int:
     root nid. The wrapper nid mints deterministically above the
     journal's max, so same journal → same IR holds."""
     node = nodes[root_nid]
-    if node.kind != "chart":
+    if node.kind == "layout":
         return root_nid
-    has_container = any(_is_container_coord_op(op) for op in node.ops)
-    hoisted_names = (("title", "coordinate", "sectors") if has_container
-                     else ("sectors",))
-    hoisted = [op for op in node.ops if op["op"] in hoisted_names]
-    if not hoisted:
-        return root_nid
-    node.ops = [op for op in node.ops if op["op"] not in hoisted_names]
+    hoisted: list = []
+    if node.kind == "chart":
+        has_container = any(_is_container_coord_op(op) for op in node.ops)
+        hoisted_names = (("title", "coordinate", "sectors") if has_container
+                         else ("sectors",))
+        hoisted = [op for op in node.ops if op["op"] in hoisted_names]
+        node.ops = [op for op in node.ops if op["op"] not in hoisted_names]
     wrapper_nid = max(nodes) + 1
     nodes[wrapper_nid] = IRNode(
         nid=wrapper_nid, kind="layout",

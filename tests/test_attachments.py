@@ -99,7 +99,10 @@ def _run_invariants() -> int:
     host.attach_left(left)
     root = host._render_root()
     root._to_svg_unchecked()
-    r_left = root._attached_left[0]
+    # the root is the lone chart's 1×1 layout wrapper; the host leaf
+    # (and its attachments) is its sole child
+    (r_host,) = root._children
+    r_left = r_host._attached_left[0]
     _check(r_left._data_height == 150 and r_left._data_width == 40,
            "left attachment height locks to host; width preserved")
     _check(left._data_height == 999 and left._data_width == 40,
@@ -112,7 +115,8 @@ def _run_invariants() -> int:
     host2.attach_above(top)
     root2 = host2._render_root()
     root2._to_svg_unchecked()
-    r_top = root2._attached_above[0]
+    (r_host2,) = root2._children
+    r_top = r_host2._attached_above[0]
     _check(r_top._data_width == 200 and r_top._data_height == 40,
            "above attachment width locks to host; height preserved")
 

@@ -67,6 +67,22 @@ def _extract_theme(calls) -> str | None:
     return name
 
 
+def _figure_theme(root) -> str | None:
+    """Theme scoping the outer `<svg>` (the figure background). A root
+    that funnels to a single leaf — the 1×1 wrapper `journal_to_ir`
+    mints around a lone chart — takes that leaf's theme, so a lone dark
+    chart gets a dark canvas. Roots with sibling panels take no theme:
+    themes are per-chart, and each leaf's own `active_theme` block
+    scopes its chrome."""
+    node = root
+    while getattr(node, "_is_parent", False):
+        children = [c for c in node._children if c is not None]
+        if len(children) != 1:
+            return None
+        node = children[0]
+    return _extract_theme(node._calls)
+
+
 # ---------------------------------------------------------------------------
 # Layout-level title — one centered band above a titled layout's rect,
 # styled like a panel title. Rect layouts get it via `_measure` /
@@ -332,10 +348,6 @@ def _natural_size(root) -> tuple[int, int]:
 
     Mutates `root` — pass a deep copy if you need a non-destructive
     measurement. Used by `Chart.fit()`."""
-    if not root._is_parent and root._leaf_kind != "data":
-        # Non-data leaf root (legend, diagram): no measure-driven growth;
-        # keep the canvas the leaf was constructed with.
-        return _measure(root)
     _, states = _build_panel_opts(root)
     # Legend leaves harvest their content size from sibling data leaves;
     # without this, layouts containing a layout-level legend would report
@@ -1081,7 +1093,7 @@ def _render_layout(root, outer=None) -> str:
         # (so a themed root gets the right figure background), and
         # `_figure_root_attrs()` carries the standard plotlet schema
         # attrs so downstream tools can identify the SVG.
-        with active_theme(_extract_theme(root._calls)):
+        with active_theme(_figure_theme(root)):
             return (f'<svg xmlns="http://www.w3.org/2000/svg" '
                     f'width="{Wt}" height="{Ht}" viewBox="0 0 {Wt} {Ht}" '
                     f'font-family="{_FONTSPEC["family"]}" font-size="11" '
@@ -1115,13 +1127,12 @@ def _render_layout_rect(root, outer=None) -> str:
     Wt = W + ol + or_
     Ht = H + ot + ob
 
-    # Root theme scopes the outer <svg> emit — for a single-leaf root
-    # (Chart with `theme=`), this puts the figure background under the
-    # leaf's theme so a dark chart gets a dark canvas. Real multi-panel
-    # Layout roots don't carry a theme, so this is a passthrough there
-    # and each leaf's own `active_theme` block below still owns its chrome.
-    root_theme = _extract_theme(root._calls)
-    with active_theme(root_theme):
+    # Root theme scopes the outer <svg> emit — a root that funnels to a
+    # single leaf (the lone-chart wrapper) puts the figure background
+    # under that leaf's theme so a dark chart gets a dark canvas.
+    # Multi-panel roots take no theme, and each leaf's own
+    # `active_theme` block below still owns its chrome.
+    with active_theme(_figure_theme(root)):
         parts = [
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{Wt}" height="{Ht}" '
             f'viewBox="0 0 {Wt} {Ht}" font-family="{_FONTSPEC["family"]}" font-size="11" '

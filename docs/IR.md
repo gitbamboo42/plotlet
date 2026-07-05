@@ -96,18 +96,19 @@ coord is valid only in a process that has imported the module
 registering it. That's the same rule as rendering — determinism is
 "same input **and same registry** → same SVG".
 
-**Lowering canonicalizes single-chart figures.** When the journal's
-root is a chart carrying `sectors` or a container-strategy `coordinate`
-(one whose coord class implements `render_layout`), `journal_to_ir`
-wraps it in a 1×1 `"h"` layout and hoists those ops onto the wrapper —
-plus `title` in the container case, since the overlay path draws no
-leaf chrome. Composition-level state therefore never sits on a *root*
-chart node, and `validate` rejects hand-built IRs that put it there.
-Only the root wraps: charts inside layouts already have a layout home
-for composition state, and grid cells are charts by API contract. One
-consequence: for container coords the IR's *structure* (not just its
-interpretation) is registry-relative — whether the wrap fires depends
-on resolving the `$coord` name at lowering time.
+**The root is always a layout.** `journal_to_ir` wraps a lone leaf
+(chart / legend / diagram) in a 1×1 `"h"` layout, so every IR presents
+one root shape and `validate` rejects hand-built IRs with a leaf root.
+A chart root's composition-level ops hoist onto the wrapper: `sectors`
+always; a container-strategy `coordinate` (one whose coord class
+implements `render_layout`) additionally hoists `coordinate` and
+`title`, since the overlay path draws no leaf chrome. Composition-level
+state therefore never sits on a chart at the root position. Only the
+root wraps: charts inside layouts already have a layout home for
+composition state, and grid cells are charts by API contract. One
+consequence: for container coords the *placement* of the hoisted ops is
+registry-relative — deciding whether `coordinate`/`title` hoist requires
+resolving the `$coord` name at lowering time.
 
 ## Value envelopes
 
@@ -123,9 +124,10 @@ hydration:
 
 A dict containing the key `$node` must be exactly that single-key form.
 In the JSON form (`to_dict` / `from_dict`), non-JSON-native values
-(tuples, dates, NaN/Inf, DataFrames) are additionally wrapped by
-`_json_layer` envelopes (`$tuple`, `$date`, `$float`, `$df`, ...);
-those decode at `from_dict` time, before the IR contract applies.
+(tuples, sets, dates/datetimes, DataFrames, non-string-keyed dicts)
+are additionally wrapped by `_json_layer` envelopes (`$tuple`, `$set`,
+`$date`, `$datetime`, `$dataframe`, `$dict_pairs`); those decode at
+`from_dict` time, before the IR contract applies.
 
 ## Version discipline
 

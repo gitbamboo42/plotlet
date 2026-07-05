@@ -253,24 +253,22 @@ def _legend_kind_target_ir():
     return pt.to_ir(pt.legend() | c)
 
 
-def test_root_chart_rejects_composition_ops():
-    """`sectors` (and container-strategy `coordinate`) on a *root* chart
-    node — the exact shape `journal_to_ir`'s root wrap exists to
-    prevent. Rebuilt here by un-hoisting a lowered figure."""
+def test_leaf_root_rejected():
+    """The root is always a layout — a hand-built IR with a chart root
+    (the shape `journal_to_ir`'s root wrap exists to prevent) fails.
+    Rebuilt here by unwrapping a lowered figure."""
     c = pt.chart({"x": [1.0, 2.0], "y": [3.0, 4.0]}, xlim=(0, 10))
     c.scatter(x="x", y="y")
-    c.sectors(pt.Sectors(names=("A",), lengths=(10.0,), gap=2))
     ir = pt.to_ir(c)
 
     wrapper = next(n for n in ir.nodes if n.nid == ir.root_nid)
     leaf = next(n for n in ir.nodes
                 if n.nid == wrapper.init["children"][0])
-    leaf.ops.extend(wrapper.ops)  # un-hoist: sectors back onto the chart
     broken = pt.FigureIR(
         nodes=[n for n in ir.nodes if n.nid != wrapper.nid],
         root_nid=leaf.nid,
     )
-    with pytest.raises(ValueError, match="composition-level"):
+    with pytest.raises(ValueError, match="root .* layout"):
         validate(broken)
 
 
