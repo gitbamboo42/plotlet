@@ -87,7 +87,7 @@ Op names are interpreted per kind:
   `sectors`, `theme`, ... — `_FRAME_OPS` in `render/core.py` is the
   authoritative set), or `attach_left/right/above/below`.
 - `layout` nodes: `share_x`, `share_y`, `align_x`, `align_y`, `gap`,
-  `coordinate`, `sectors` (`_LAYOUT_MATERIALIZED` ∪
+  `coordinate`, `sectors`, `title` (`_LAYOUT_MATERIALIZED` ∪
   `_LAYOUT_PASSTHROUGH` in `render/_nodes.py`).
 
 **Interpretation is registry-relative.** The IR stores names, not
@@ -95,6 +95,19 @@ implementations: an IR referencing an extension artist or a custom
 coord is valid only in a process that has imported the module
 registering it. That's the same rule as rendering — determinism is
 "same input **and same registry** → same SVG".
+
+**Lowering canonicalizes single-chart figures.** When the journal's
+root is a chart carrying `sectors` or a container-strategy `coordinate`
+(one whose coord class implements `render_layout`), `journal_to_ir`
+wraps it in a 1×1 `"h"` layout and hoists those ops onto the wrapper —
+plus `title` in the container case, since the overlay path draws no
+leaf chrome. Composition-level state therefore never sits on a *root*
+chart node, and `validate` rejects hand-built IRs that put it there.
+Only the root wraps: charts inside layouts already have a layout home
+for composition state, and grid cells are charts by API contract. One
+consequence: for container coords the IR's *structure* (not just its
+interpretation) is registry-relative — whether the wrap fires depends
+on resolving the `$coord` name at lowering time.
 
 ## Value envelopes
 

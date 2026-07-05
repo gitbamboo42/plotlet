@@ -82,6 +82,14 @@ pt.grid([[a, b], [c, d]]).gap(x=4, y=16)   # per-axis override
 
 Defaults come from `spec.json` (`layout.gap`, `layout.gap_x`, `layout.gap_y`). Gap is configured on the layout object — `pt.grid` and `|`/`/` share the same `.gap()` surface.
 
+## Figure title
+
+`.title("...")` on any layout draws one centered band above that layout's rect — the suptitle convention. It nests (a titled row inside a titled grid gets its own band) and works on circular layouts (band above the ring). Panel titles stay on the charts; last call wins.
+
+```python
+pt.grid([[a, b], [c, d]]).title("Figure 2")
+```
+
 ## Legends
 
 One constructor for both discrete swatches and continuous gradients — geometry follows from the source's color mapping, not the constructor name. A "colorbar" is just `pt.legend(hm)` where `hm` has a continuous cmap; no separate `pt.colorbar()` call.

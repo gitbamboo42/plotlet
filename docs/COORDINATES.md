@@ -30,6 +30,13 @@ renders through the new coord.
   a ring. Each coord lists its supported artists via
   `declare_coord_support`; the renderer raises if you mix a coord with
   an artist not in that list.
+- **Both hosting forms are one form.** `c.coordinate(...)` on a bare
+  chart and `pt.grid([[c]]).coordinate(...)` produce the same figure:
+  lowering wraps a single-chart root in a 1×1 layout and hoists
+  `coordinate` / `sectors` (and the title, for container coords like
+  `CircularCoordinate`) onto it, so both routes render through the
+  coord's layout strategy. A ring's title draws as the layout title
+  band above the ring.
 
 ## Built-in: `CircularCoordinate`
 
