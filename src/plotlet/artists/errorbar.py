@@ -15,14 +15,10 @@ mutually exclusive with the matching `*err=`.
 import math
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list
+from ..utils import to_list, all_numeric
 from ..draw import marker, segment, errorbar_v, errorbar_h
 from .._spec import _D, _LEGSPEC
 from ._shared import _xy_minmax
-
-
-def _is_numeric_axis(vs):
-    return all(isinstance(v, (int, float)) for v in vs)
 
 
 def _resolve_offset(data, spec, n):
@@ -106,12 +102,12 @@ def _artist_errorbar(a, xs_, ys_, col):
     xlo, xhi, ylo, yhi = a["xlo"], a["xhi"], a["ylo"], a["yhi"]
     has_xerr = any(xlo) or any(xhi)
     has_yerr = any(ylo) or any(yhi)
-    if has_xerr and not _is_numeric_axis(xs):
+    if has_xerr and not all_numeric(xs):
         raise TypeError(
             "errorbar: xerr/xmin/xmax requires a numeric x; "
             "got non-numeric values."
         )
-    if has_yerr and not _is_numeric_axis(ys):
+    if has_yerr and not all_numeric(ys):
         raise TypeError(
             "errorbar: yerr/ymin/ymax requires a numeric y; "
             "got non-numeric values."
@@ -139,7 +135,7 @@ def _artist_errorbar(a, xs_, ys_, col):
 
 def _errorbar_xdomain(a):
     xs = a["xs"]
-    if not _is_numeric_axis(xs):
+    if not all_numeric(xs):
         return list(xs)
     xlo, xhi = a["xlo"], a["xhi"]
     return [x - lo for x, lo in zip(xs, xlo)] + [x + hi for x, hi in zip(xs, xhi)]
@@ -147,7 +143,7 @@ def _errorbar_xdomain(a):
 
 def _errorbar_ydomain(a):
     ys = a["ys"]
-    if not _is_numeric_axis(ys):
+    if not all_numeric(ys):
         return list(ys)
     ylo, yhi = a["ylo"], a["yhi"]
     return [y - lo for y, lo in zip(ys, ylo)] + [y + hi for y, hi in zip(ys, yhi)]

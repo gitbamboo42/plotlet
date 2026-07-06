@@ -227,8 +227,11 @@ def demo():
     hm = pt.chart(title="curved-tree-driven split heatmap",
                   data_width=420, data_height=180)
     hm.sectors(col_clusters, axis="x", divider=False, label=False)
-    hm.heatmap(matrix, xticklabels=col_labels,
-               yticklabels=[f"r{i+1}" for i in range(nrows_hm)],
+    row_labels = [f"r{i+1}" for i in range(nrows_hm)]
+    hm_df = {"col": col_labels}
+    for i, name in enumerate(row_labels):
+        hm_df[name] = matrix[i]
+    hm.heatmap(data=hm_df, x="col", values=row_labels,
                cmap="viridis", legend={"label": "value"})
     hm.attach_above(tree)
     return pt.grid([[hm, pt.legend()]]).gap(0)

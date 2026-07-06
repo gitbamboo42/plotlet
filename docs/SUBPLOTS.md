@@ -28,7 +28,9 @@ fig = pt.grid([[a, b], [c, d]])
 # repo (heatmaps/) for the worked examples.
 hm.sectors(col_clusters, axis="x", divider=False, label=False)
 hm.sectors(row_clusters, axis="y", divider=False, label=False)
-hm.heatmap(matrix, xticklabels=samples, yticklabels=genes, ...)
+# tidy input: `sample` column holds the x labels (one row per heatmap
+# column), each gene column is a value track.
+hm.heatmap(data=df, x="sample", values=genes, ...)
 hm.attach_above(top_strip, top_tree)   # strip closest to host, tree above
 hm.attach_left(left_strip, left_tree)
 fig = pt.grid([[hm, pt.legend()]])

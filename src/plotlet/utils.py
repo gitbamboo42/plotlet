@@ -17,6 +17,7 @@ Example:
 The inverse-direction primitives (emit SVG strings) live in `plotlet.draw`.
 """
 import math
+import numbers
 import re
 
 from .registry import get_artist
@@ -80,16 +81,34 @@ def to_list(obj):
     return list(obj)
 
 
+def all_numeric(seq):
+    """True iff `seq` is non-empty and every element is a real number
+    (bool excluded). The axis-kind dispatch predicate: a numeric column
+    puts its axis on a linear scale, anything else stays categorical.
+
+    `numbers.Real` rather than `(int, float)` so numpy scalars (np.int64
+    et al. register with the numbers ABCs but don't subclass int) don't
+    silently flip an axis categorical. NaN counts as numeric — callers
+    that can't render NaN positions must reject it explicitly.
+    """
+    saw = False
+    for v in seq:
+        if isinstance(v, bool) or not isinstance(v, numbers.Real):
+            return False
+        saw = True
+    return saw
+
+
 class DataFrameLite:
     """Canonical in-memory form for DataFrame-shaped inputs.
 
     Any pandas / polars / duck-typed DataFrame the user passes goes
     through `_normalize_data` at the recorder boundary and lands here.
-    The class supports the two access patterns plotlet artists actually
-    use: attributes (`.values`, `.columns`, `.index` — heatmap) and
-    column indexing (`df[col]` returns a plain list — line, scatter,
-    bar, etc.). Everything is plain Python so the journal never holds
-    a library-specific object and JSON serialization is trivial."""
+    The class supports the access patterns plotlet artists actually
+    use: column indexing (`df[col]` returns a plain list), `in`
+    containment, and iteration over column names. Everything is plain
+    Python so the journal never holds a library-specific object and
+    JSON serialization is trivial."""
     __slots__ = ("values", "columns", "index", "_col_index")
 
     def __init__(self, values, columns, index):

@@ -33,7 +33,10 @@ def attach_four_sides_chained():
     matrix = [[i + j for j in range(5)] for i in range(4)]
 
     host = pt.chart(data_width=200, data_height=140, title="four sides")
-    host.heatmap(matrix, xticklabels=cols, yticklabels=rows)
+    hm_df = {"col": cols}
+    for name, values in zip(rows, matrix):
+        hm_df[name] = values
+    host.heatmap(data=hm_df, x="col", values=rows)
 
     def row_line(values):
         c = pt.chart(data_width=44)
@@ -214,8 +217,11 @@ def _run_invariants() -> int:
     h8 = pt.chart(data_width=120, data_height=140)
     h8.sectors({"A": ["g1", "g2"], "B": ["g3", "g4"]}, axis="y",
                divider=False, label=False)
-    h8.heatmap([[1, 2], [2, 3], [3, 4], [4, 5]],
-               xticklabels=cols7, yticklabels=rows7)
+    h8_mat = [[1, 2], [2, 3], [3, 4], [4, 5]]
+    h8_df = {"col": cols7}
+    for name, values in zip(rows7, h8_mat):
+        h8_df[name] = values
+    h8.heatmap(data=h8_df, x="col", values=rows7)
     left8 = pt.chart(data_width=20)
     left8.yscale("category", order=rows7, padding=0)
     left8.line(data={"x": [1, 2, 1, 2], "y": rows7}, x="x", y="y")

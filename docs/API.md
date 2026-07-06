@@ -6,11 +6,12 @@ only: pass `data=` (any object supporting `data[col_name]` — pandas /
 polars / dict-of-lists / dict-of-arrays) and refer to columns by name
 (`x="col"`, `y="col"`, `color="col"`, `fill="col"` on fill-defaulted
 artists). `data=` set on `pt.chart(...)` propagates to every mark, so
-per-call `data=` is optional once it's set at chart level. Matrix and
-shape marks (`heatmap`, `imshow`, `contour`, `dendrogram`,
-`axhline`/`axvline`, `rect`, `polygon`) take their natural positional
-input — there's no "column name" version for a 2-D matrix or a single
-y-value. All methods return `self`, so they chain.
+per-call `data=` is optional once it's set at chart level. `heatmap` is
+also table-shaped (`data=df, x=, values=`, see below). The remaining
+shape marks (`imshow`, `contour`, `dendrogram`, `axhline`/`axvline`,
+`rect`, `polygon`) take their natural positional input — there's no
+"column name" version for a 2-D matrix or a single y-value. All methods
+return `self`, so they chain.
 
 ## Frame options
 
@@ -107,7 +108,9 @@ regions. Two kinds, picked from the spec shape:
   ```python
   c.sectors({"clusterA": ["c1", "c2"],
              "clusterB": ["c3"]}, axis="x")
-  c.heatmap(matrix, xticklabels=["c1","c2","c3"], yticklabels=[...])
+  # tidy input: the `col` column holds the x labels (one table row per
+  # heatmap column); the remaining columns are the value tracks.
+  c.heatmap(data=df, x="col")
   ```
 
 | kwarg | notes |
@@ -125,7 +128,7 @@ heatmap clusters with visible gap whitespace and no labels, pass
 ```python
 c.sectors({"clusterA": ["c1", "c2"], "clusterB": ["c3"]},
           axis="x", divider=False, label=False)
-c.heatmap(matrix, xticklabels=["c1","c2","c3"], yticklabels=[...])
+c.heatmap(data=df, x="col")   # df["col"] = ["c1","c2","c3"]
 ```
 
 Layout-level sugar fans out one declaration to every leaf:
@@ -224,7 +227,7 @@ universal and not repeated.
 | call | options |
 | --- | --- |
 | `.imshow(data, **opts)` | `cmap` (~180 vendored, default `"viridis"`), `vmin`, `vmax`, `extent`, `annot`, `fmt`, `annot_color`, `annot_fontsize` |
-| `.heatmap(df, **opts)` | `cmap`, `vmin`, `vmax`, `norm`, `center`, `xticklabels`, `yticklabels`, `legend`, `annot`, `fmt`, `annot_color`, `annot_fontsize`, `border`. For row/column clusters with gaps, call `c.sectors({cluster: [members]}, axis=...)` on the panel — see [Sectors](#sectors). |
+| `.heatmap(data=df, x=, values=, sector=, **opts)` | Tidy input: each table row → a heatmap column (x-position from the `x` column — numeric → continuous axis, string → categorical), each value column → a track row (`values=` selects/orders them, default = all non-`x`/`sector` columns). A numeric `x` is auto-sorted (row order carries no meaning); duplicate or NaN positions raise. Opts: `cmap`, `vmin`, `vmax`, `norm`, `center`, `palette`, `absent_fill`, `legend`, `annot`, `fmt`, `annot_color`, `annot_fontsize`, `linewidth`, `linecolor`, `border`. `sector=` (a column) + `c.sectors(...)` draws gaps; for categorical-x clusters call `c.sectors({cluster: [members]}, axis=...)` — see [Sectors](#sectors). A bare matrix is not accepted; reshape it into a table first. |
 | `.dendrogram(data, **opts)` | `orient="top"\|"left"\|"right"\|"bottom"`, `labels`, `method="single"\|"complete"\|"average"\|"ward"\|...` (scipy), `metric`, `linkage=<Z>` (skip scipy.linkage), `tree=<SplitTree>` (skip clustering entirely), `clusters=[...]` (parallel grouping vector for two-level cluster), `parent=True\|<frac>` (render centroid tree above per-block trees). Visual gap whitespace lives on the panel as `c.sectors(...)` — see [Sectors](#sectors). |
 | `.axhline(y, **opts)` / `.axvline(x, **opts)` | `color`, `linewidth`, `linestyle`, `alpha`, axes-fraction `xmin`/`xmax` |
 | `.axhspan(ymin, ymax, **opts)` / `.axvspan(xmin, xmax, **opts)` | `color`, `alpha`, `label` |
@@ -238,8 +241,8 @@ universal and not repeated.
 - On `line` / `scatter`, `group=<col>` is the **invisible** split — finer-grained sub-records (one polyline per subject, say) without burning a color channel or a legend row. `alpha=<col>` interpolates opacity per level via `alphas=(min, max)`. `line` additionally has `linestyle=<col>` (dash cycle per level); not on `scatter`. When `color=` and `linestyle=` (or `alpha=`) map the *same* column, the existing color legend swatches inherit the dash / opacity — the canonical pattern for colorblind-safe or B&W-print redundancy.
 - Reference lines / spans default to black, are drawn outside the data color cycle, and don't participate in autoscaling.
 - On `scatter`, `size=<col>` maps a numeric column to per-point radius (px, rescaled into `sizes=(min, max)` — default `(2, 7)`); `style=<col>` cycles markers per unique value (`o`, `s`, `^`, `v`, `x`, `+`). `color`, `group`, `size`, `style`, `alpha` all compose.
-- `.imshow` emits one `<rect>` per cell for small grids (≤10000 cells, vector-clean at any zoom) and a base64 PNG above that. `.heatmap` is the DataFrame-aware companion — `df.index` becomes row labels, `df.columns` becomes column labels; cells render at integer + 0.5 centers so a top/left dendrogram pairs cleanly via `share_x` / `share_y` (or `attach_above` / `attach_left`, which auto-share).
-- On both, `annot=True` overlays each cell's value as a text label (correlation / confusion matrices). `annot=<2D array>` uses custom labels — numbers formatted via `fmt`, strings verbatim — so labels independent of cell values (e.g. significance asterisks over a correlation cmap) are a string-array away. `fmt=".2g"` is the format spec (passed to `format(value, fmt)`). `annot_color="auto"` picks black or white per cell via luminance; pass any CSS color for uniform text.
+- `.imshow` emits one `<rect>` per cell for small grids (≤10000 cells, vector-clean at any zoom) and a base64 PNG above that. `.heatmap` is the tidy-table companion — each table row is a heatmap column (x-position from the `x` column), each value column a track row. A numeric `x` gives a continuous axis that `share_x`-aligns with a scatter/line; a string `x` gives categorical bands so a top/left dendrogram pairs cleanly via `share_x` / `share_y` (or `attach_above` / `attach_left`, which auto-share).
+- On both, `annot=True` overlays each cell's value as a text label (correlation / confusion matrices). `annot=<2D array>` uses custom labels — numbers formatted via `fmt`, strings verbatim — so labels independent of cell values (e.g. significance asterisks over a correlation cmap) are a string-array away. `fmt=".2g"` is the format spec (passed to `format(value, fmt)`); palette-mode heatmap labels skip `fmt` and render verbatim (identifiers/counts, not measurements). `annot_color="auto"` picks black or white per cell via luminance; pass any CSS color for uniform text.
 - **Cluster gaps.** Heatmap row/column clusters are declared via `c.sectors({cluster: [members]}, axis="x" | "y")` on the panel — the category scale picks up the implied split positions and inserts a 6-px (default) gap at every block boundary, and the heatmap reorders cells at draw time to match the sector cat order. Pass the *same* grouping info as a parallel list to `.dendrogram(clusters=[...])` and it runs scipy *per block* for within-block leaf order plus once more on the per-block centroids for between-block order — a two-level cluster. The dendrogram exposes the resulting leaf order via `axis_order`, so the heatmap follows automatically when both share a category axis (`attach_above` / `attach_left`). `parent=True` on the dendrogram also renders the centroid tree above the per-block trees in the same panel. See [`plotlet-cookbook/heatmaps/`](https://github.com/gitbamboo42/plotlet-cookbook/tree/main/heatmaps) for the worked examples.
 
 ## Clustering helpers

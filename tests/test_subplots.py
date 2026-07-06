@@ -210,6 +210,30 @@ def complex_grid_shares():
     ]).share_x("col").share_y("row")
 
 
+def share_x_scatter_heatmap():
+    # Continuous scatter aligned over a continuous-x heatmap track via
+    # share_x — the case categorical heatmaps can't do (numeric vs
+    # categorical share classes are incompatible). The scatter is sampled
+    # on the column grid so points sit on cell centers, and both leaves
+    # pin `xlim` to the heatmap extent so the shared frame hugs the strip
+    # (otherwise the scatter's auto domain-padding insets the cells).
+    import math
+    cols = [float(c) for c in range(12)]
+    sc = pt.chart(title="signal", data_height=110)
+    sc.scatter(data={"x": cols,
+                     "y": [math.sin(0.6 * c) + 0.2 * c for c in cols]},
+               x="x", y="y")
+    sc.xlim(-0.5, 11.5)
+    tracks = ["t1", "t2", "t3"]
+    df = {"x": cols}
+    for row, name in enumerate(tracks):
+        df[name] = [math.sin(0.5 * c + row) for c in cols]
+    hm = pt.chart(title="tracks", data_height=90)
+    hm.heatmap(data=df, x="x", values=tracks, cmap="viridis")
+    hm.xlim(-0.5, 11.5)
+    return (sc / hm).share_x(True)
+
+
 def fit_to_canvas():
     # `.fit(canvas_width=, canvas_height=)` rescales data regions so the
     # rendered SVG fits the target canvas, layout-aware: tick labels,
@@ -274,6 +298,7 @@ PLOTS = {
     "width_hint":          width_hint_narrow_side,
     "height_hint":         height_hint_short_top,
     "complex_grid":        complex_grid_shares,
+    "share_x_scatter_heatmap": share_x_scatter_heatmap,
     "gap_method":          custom_gap_method,
     "gap_grid_kwarg":      custom_gap_grid_kwarg,
     "fit_to_canvas":       fit_to_canvas,

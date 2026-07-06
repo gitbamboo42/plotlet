@@ -20,7 +20,7 @@ from .colormaps import colormap, colormap_lut, list_colormaps, ContinuousNorm
 from .font import measure_text, cap_height, descender, tick_band_height, rotated_label_bbox
 from .format import coord, stroke_w, opacity, degree
 from .linestyles import resolve_linestyle
-from ._png import encode_rgb
+from ._png import encode_rgb, image_png
 
 __all__ = [
     "text_path", "marker", "op", "segment", "rect", "circle",
@@ -32,5 +32,5 @@ __all__ = [
     "rotated_label_bbox",
     "coord", "stroke_w", "opacity", "degree",
     "resolve_linestyle",
-    "encode_rgb",
+    "encode_rgb", "image_png",
 ]

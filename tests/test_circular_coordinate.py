@@ -185,6 +185,57 @@ def ring_shapes():
     return c
 
 
+def ring_heatmap():
+    # Continuous-x heatmap under Circular → each cell rect warps into an
+    # annular sector. Numeric `x` column wraps around the ring; the track
+    # rows stack as concentric bands. imshow can't do this (no warp).
+    tracks = ["a", "b", "c"]
+    df = {"pos": [float(i) for i in range(24)]}
+    for row, name in enumerate(tracks):
+        df[name] = [math.sin(0.4 * i + row) for i in range(24)]
+    c = pt.chart(title="heatmap — ring", data_width=300, data_height=300)
+    c.coordinate(pt.CircularCoordinate(r_inner=0.35))
+    c.heatmap(data=df, x="pos", values=tracks, cmap="viridis")
+    return c
+
+
+def ring_heatmap_sectors():
+    # Two concentric sectored rings sharing one angular x — a scatter ring
+    # outside, a continuous-x heatmap ring inside — with real gaps between
+    # sector groups (the wrap gap + two inter-sector gaps). Each ring keeps
+    # its OWN radial y, so heatmap tracks and scatter values don't collide
+    # on one axis. The `grp` column tags every column/point's sector: the
+    # heatmap groups its cell edges per sector (gaps fall between groups)
+    # and the scatter routes through the same `column="grp"` tag.
+    # Layout-level `.coordinate(...)` + `.sectors(...)` fan out to both.
+    sec_names = ["A", "B", "C"]
+    sec_lens = [0.45, 0.30, 0.25]
+    grp, xh, t1, t2 = [], [], [], []
+    sx, sy, sg = [], [], []
+    for name, slen in zip(sec_names, sec_lens):
+        for i in range(8):
+            p = (i + 0.5) / 8 * slen
+            grp.append(name); xh.append(p)
+            t1.append(math.sin(10 * p)); t2.append(math.cos(8 * p))
+        for i in range(12):
+            p = (i + 0.5) / 12 * slen
+            sx.append(p); sg.append(name)
+            sy.append(_clamp01(0.5 + 0.4 * math.sin(6 * math.pi * p / slen)))
+
+    sc = pt.chart(xlim=(0, 1), ylim=(0, 1), data_width=320, data_height=110)
+    sc.scatter(data={"x": sx, "y": sy, "grp": sg}, x="x", y="y",
+               color="#534AB7", size=2.5, alpha=0.8)
+    hm = pt.chart(xlim=(0, 1), ylim=(0, 1), data_width=320, data_height=240)
+    hm.heatmap(data={"grp": grp, "x": xh, "t1": t1, "t2": t2},
+               x="x", sector="grp", values=["t1", "t2"], cmap="viridis")
+
+    pile = (sc / hm).coordinate(
+        pt.CircularCoordinate(r_inner=0.30, wrap_gap_deg=8))
+    pile.sectors(pt.Sectors(names=tuple(sec_names), lengths=tuple(sec_lens),
+                            gap=8), axis="x", column="grp")
+    return pile.title("ring — sectored heatmap + scatter")
+
+
 def ring_partial_arc():
     # Partial arc — `start_deg=90, end_deg=360` sweeps 270° clockwise
     # from 3 o'clock around through 6 / 9 / 12. Exercises the open-arc
@@ -349,6 +400,8 @@ PLOTS = {
     "ring_inner_outer":            ring_inner_outer,
     "ring_references":             ring_references,
     "ring_shapes":                 ring_shapes,
+    "ring_heatmap":                ring_heatmap,
+    "ring_heatmap_sectors":        ring_heatmap_sectors,
     "ring_x_sectors":              ring_x_sectors,
     "ring_partial_arc":            ring_partial_arc,
     "ring_partial_arc_right_side": ring_partial_arc_right_side,

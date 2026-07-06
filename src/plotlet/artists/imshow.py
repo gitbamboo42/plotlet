@@ -1,13 +1,11 @@
 """imshow needs a preprocessing step (2-D-ify, autocompute vmin/vmax) before
 domain can be computed. We do that in record() rather than draw().
 """
-import base64
-
 from ..registry import ArtistSpec, add_artist
 from ..utils import to_list_2d
 from .._spec import _D
 from ..draw import rect, text_path
-from ..draw import encode_rgb
+from ..draw import image_png
 from ..draw import colormap_lut, ContinuousNorm
 
 
@@ -90,12 +88,7 @@ def _artist_imshow(a, xs_, ys_, col):
                 else:
                     i = int(norm.to_unit(v) * 255 + 0.5) * 3
                     buf.append(lut[i]); buf.append(lut[i+1]); buf.append(lut[i+2])
-        png = encode_rgb(bytes(buf), ncols, nrows)
-        b64 = base64.b64encode(png).decode("ascii")
-        out.append(f'<image x="{sx_l:.3f}" y="{sy_t:.3f}" '
-                   f'width="{pw:.3f}" height="{ph:.3f}" '
-                   f'preserveAspectRatio="none" image-rendering="pixelated" '
-                   f'href="data:image/png;base64,{b64}"/>')
+        out.append(image_png(sx_l, sy_t, pw, ph, buf, ncols, nrows))
 
     annot = opts.get("annot", False)
     if annot is not False and annot is not None:

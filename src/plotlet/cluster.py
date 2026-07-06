@@ -1,9 +1,9 @@
 """Hierarchical-clustering helpers.
 
 These build a `SplitTree` — N scipy linkage matrices plus the order to
-display them in. The dendrogram artist renders it; the same object can
-drive a heatmap's column/row order by passing `tree.display_labels` to
-`xticklabels=` / `yticklabels=`.
+display them in. The dendrogram artist renders it and drives the shared
+category scale's order (`axis_order`), so a heatmap on the same panel
+picks up the clustered row/column order automatically.
 
 Two entry points:
 

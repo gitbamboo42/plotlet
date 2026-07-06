@@ -1,10 +1,12 @@
 """Minimal PNG encoder — RGB only, stdlib zlib.
 
-Used by `imshow` to embed large images as a single base64 data URI rather
-than thousands of `<rect>` elements. Hand-rolled to avoid a Pillow dep.
+Used by the raster fallbacks (`imshow`, large heatmaps) to embed images
+as a single base64 data URI rather than thousands of `<rect>` elements.
+Hand-rolled to avoid a Pillow dep.
 """
 from __future__ import annotations
 
+import base64
 import struct
 import zlib
 
@@ -36,3 +38,17 @@ def encode_rgb(pixels: bytes, width: int, height: int) -> bytes:
     return (sig + _chunk(b"IHDR", ihdr)
             + _chunk(b"IDAT", zlib.compress(bytes(raw)))
             + _chunk(b"IEND", b""))
+
+
+def image_png(x, y, w, h, pixels, width, height):
+    """One `<image>` element with a packed RGB buffer embedded as a
+    base64 PNG data URI — the shared raster-fallback emission. `pixels`
+    is `width*height*3` bytes, row-major top-down; `x`/`y`/`w`/`h` is the
+    pixel bbox the image stretches across (`preserveAspectRatio="none"`,
+    nearest-neighbour scaling so cells stay crisp)."""
+    png = encode_rgb(bytes(pixels), width, height)
+    b64 = base64.b64encode(png).decode("ascii")
+    return (f'<image x="{x:.3f}" y="{y:.3f}" '
+            f'width="{w:.3f}" height="{h:.3f}" '
+            f'preserveAspectRatio="none" image-rendering="pixelated" '
+            f'href="data:image/png;base64,{b64}"/>')

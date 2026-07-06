@@ -149,15 +149,16 @@ def sectors_categorical_y_heatmap():
                  data_width=320, data_height=260)
     c.sectors({"pwA": ["g1", "g2", "g3"], "pwB": ["g4", "g5"]},
               axis="y", divider=False)
-    c.heatmap(
-        [[0.1, 0.2, 0.3, 0.4],
-         [0.5, 0.6, 0.7, 0.8],
-         [0.2, 0.4, 0.6, 0.8],
-         [0.9, 0.1, 0.2, 0.3],
-         [0.5, 0.5, 0.5, 0.5]],
-        yticklabels=["g1", "g2", "g3", "g4", "g5"],
-        xticklabels=["c1", "c2", "c3", "c4"],
-    )
+    rows = ["g1", "g2", "g3", "g4", "g5"]
+    matrix = [[0.1, 0.2, 0.3, 0.4],
+              [0.5, 0.6, 0.7, 0.8],
+              [0.2, 0.4, 0.6, 0.8],
+              [0.9, 0.1, 0.2, 0.3],
+              [0.5, 0.5, 0.5, 0.5]]
+    df = {"col": ["c1", "c2", "c3", "c4"]}
+    for name, values in zip(rows, matrix):
+        df[name] = values
+    c.heatmap(data=df, x="col", values=rows)
     return c
 
 
