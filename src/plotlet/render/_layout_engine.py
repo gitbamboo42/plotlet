@@ -1092,13 +1092,17 @@ def _render_layout(root, outer=None) -> str:
         # Match `_render_layout_rect`: root theme scopes the outer <svg>
         # (so a themed root gets the right figure background), and
         # `_figure_root_attrs()` carries the standard plotlet schema
-        # attrs so downstream tools can identify the SVG.
+        # attrs so downstream tools can identify the SVG. The background
+        # is a real first-child <rect> — CSS `background` on the root
+        # element is ignored by non-browser consumers (cairosvg).
         with active_theme(_figure_theme(root)):
             return (f'<svg xmlns="http://www.w3.org/2000/svg" '
                     f'width="{Wt}" height="{Ht}" viewBox="0 0 {Wt} {Ht}" '
-                    f'font-family="{_FONTSPEC["family"]}" font-size="11" '
-                    f'style="background:{SPEC["figure"]["background"]}"'
-                    f'{_figure_root_attrs()}>{wrap}{body}{close}</svg>')
+                    f'font-family="{_FONTSPEC["family"]}" font-size="11"'
+                    f'{_figure_root_attrs()}>'
+                    f'<rect width="{Wt}" height="{Ht}" '
+                    f'fill="{SPEC["figure"]["background"]}"/>'
+                    f'{wrap}{body}{close}</svg>')
     # Default: rectangular stack. Coord-bearing sub-Layouts are treated as
     # atomic blocks by `_measure` / `_allocate` (see `_is_atomic`) and
     # rendered through their coord's own strategy at placement time —
@@ -1135,9 +1139,12 @@ def _render_layout_rect(root, outer=None) -> str:
     with active_theme(_figure_theme(root)):
         parts = [
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{Wt}" height="{Ht}" '
-            f'viewBox="0 0 {Wt} {Ht}" font-family="{_FONTSPEC["family"]}" font-size="11" '
-            f'style="background:{SPEC["figure"]["background"]}"'
-            f'{_figure_root_attrs()}>'
+            f'viewBox="0 0 {Wt} {Ht}" font-family="{_FONTSPEC["family"]}" font-size="11"'
+            f'{_figure_root_attrs()}>',
+            # Real first-child <rect>, not CSS `background` on the root —
+            # non-browser consumers (cairosvg) ignore the CSS property.
+            f'<rect width="{Wt}" height="{Ht}" '
+            f'fill="{SPEC["figure"]["background"]}"/>',
         ]
     if ol or ot:
         parts.append(f'<g transform="translate({ol},{ot})">')

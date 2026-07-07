@@ -38,7 +38,10 @@ fig = a | b
 
 The outer SVG background comes from whatever theme is active at the
 root render. For an unthemed parent like `a | b`, that's `classic` — set
-a theme on a wrapping chart if you want a non-default outer canvas.
+a theme on a wrapping chart if you want a non-default outer canvas. The
+background is painted as a real first-child `<rect>` (not CSS on the
+root element), so PNG/PDF exports and non-browser SVG consumers carry
+it too.
 
 ## What a theme controls
 

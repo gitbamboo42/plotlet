@@ -18,6 +18,9 @@ on the root.
 | `data-plotlet-schema`  | `"2"`                  | bumped only when names change incompatibly |
 | `data-plotlet-kind`    | `"layout"`             | always `"layout"` — a lone chart is a 1x1 layout |
 
+The root's first child is the figure-background `<rect>`; it carries no
+`data-plotlet-*` attributes — skip it when walking for tagged elements.
+
 ### Panel `<g>` (one per chart leaf)
 
 | Attribute                | Example                | Notes |

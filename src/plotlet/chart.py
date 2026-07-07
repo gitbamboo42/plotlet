@@ -142,17 +142,18 @@ class _Renderable:
         return svg
 
     def _repr_html_(self) -> str:
-        # Overlay responsive CSS for notebook display only — the file
-        # output from `to_svg()` is not touched. `max-width:100%` lets the
-        # figure shrink with a narrow cell; the existing `width` attribute
-        # caps it at natural size; `height:auto` preserves aspect via the
-        # viewBox. Merged into the existing `style="background:..."` to
-        # avoid a duplicate attribute (browsers would drop one).
-        return self.to_svg().replace(
-            'style="background:',
-            'style="max-width:100%;height:auto;background:',
-            1,
-        )
+        # Notebook display only — the file output from `to_svg()` is not
+        # touched. Wrapped as an <img> (SVG data URI) rather than inline
+        # <svg> markup so the browser treats the figure as an image:
+        # draggable out of the cell and right-click-copyable, like a
+        # raster cell output. `max-width:100%` lets the figure
+        # shrink with a narrow cell; the SVG's own width/height attrs set
+        # the intrinsic size; `height:auto` preserves aspect. base64, not
+        # percent-encoded UTF-8 — avoids `#`/quote escaping in the URI.
+        import base64
+        b64 = base64.standard_b64encode(self.to_svg().encode("utf-8")).decode("ascii")
+        return (f'<img style="max-width:100%;height:auto" alt="plotlet figure" '
+                f'src="data:image/svg+xml;base64,{b64}"/>')
 
     def show(self):
         self._require_render_root()
