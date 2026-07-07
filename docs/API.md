@@ -28,6 +28,17 @@ tokens (reserve margin space beside the data area): `"right"` (default),
 `"center"`. Outside positions emit no frame; inside positions get a
 translucent background for readability over plot marks.
 
+Per-artist `legend={...}` customizes that artist's entries wherever they
+render (in-frame or `pt.legend()` panel): `{"label": ..., "ticks": [...]}`
+on a continuous source retitles its gradient strip; `{"glyph": "rect"}`
+swaps the series swatch for the standard rectangle — the readable choice
+when the plot mark itself is tiny (e.g. `scatter` with `size=1.5`);
+aesthetic keys (`alpha`, `size`, `marker`, `markersize`, `linewidth`,
+`linestyle`) override that value in the legend key only — ggplot2's
+`override.aes`. So `scatter(..., alpha=0.2, legend={"alpha": 1})` plots
+translucent points with an opaque legend key. Aesthetic guides
+(scatter's graded size dots) keep their own glyphs.
+
 Sizes accept bare pixels (`400`) or unit-suffixed strings (`"4in"`,
 `"10cm"`, `"100mm"`, `"72pt"`). The **data region** is the user-facing
 primitive — the canvas grows to fit titles and tick labels. To target

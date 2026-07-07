@@ -1200,12 +1200,14 @@ def _inline_legend_layout(st):
     sync — change geometry here, both paths follow."""
     if not st["legend"]:
         return None
+    from ._legend import _legend_source_artist
     disc = []
     cont = []
     for a in st["artists"]:
         spec = get_artist(a["type"])
         if spec is None:
             continue
+        a = _legend_source_artist(a)
         if spec.legend_gradient is not None:
             desc = spec.legend_gradient(a)
             if desc is not None:
@@ -1757,6 +1759,28 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
     _x_sec = st["x_sectors"]
     _y_sec = st["y_sectors"]
 
+    # color assignment — only color-cycle artists consume the cycle.
+    # Runs before the legend harvest below: entries capture `_color` at
+    # harvest time (a `legend={...}` override harvests from a *copy* of
+    # the record, so later in-place stamping wouldn't reach it).
+    color_idx = 0
+    for a in st["artists"]:
+        spec = get_artist(a["type"])
+        # Honor either `color=` (stroke-defaulted artists) or `fill=`
+        # literal (fill-defaulted artists, e.g. bar) as the artist's
+        # user-set primary color — both should skip the cycle and supply
+        # `_color` for the legend.
+        user_color = resolve_color(a["opts"].get("color")
+                                    or a["opts"].get("_color_literal")
+                                    or a["opts"].get("_fill_literal"))
+        if user_color is not None:
+            a["_color"] = user_color
+        elif spec is not None and spec.uses_color_cycle:
+            a["_color"] = TAB10[color_idx % 10]
+            color_idx += 1
+        else:
+            a["_color"] = spec.default_color if spec else None
+
     # In-frame legend geometry is computed up front because a top-position
     # legend sits between the title and the data area — the title's y
     # offset depends on it. For other positions / inside / no legend, the
@@ -1842,25 +1866,6 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
             y = y_scale(t)
             parts.append(segment(0, y, iw, y,
                                  color=_GRIDSPEC["color"], width=gw, dash=gd))
-
-    # color assignment — only color-cycle artists consume the cycle
-    color_idx = 0
-    for a in st["artists"]:
-        spec = get_artist(a["type"])
-        # Honor either `color=` (stroke-defaulted artists) or `fill=`
-        # literal (fill-defaulted artists, e.g. bar) as the artist's
-        # user-set primary color — both should skip the cycle and supply
-        # `_color` for the legend.
-        user_color = resolve_color(a["opts"].get("color")
-                                    or a["opts"].get("_color_literal")
-                                    or a["opts"].get("_fill_literal"))
-        if user_color is not None:
-            a["_color"] = user_color
-        elif spec is not None and spec.uses_color_cycle:
-            a["_color"] = TAB10[color_idx % 10]
-            color_idx += 1
-        else:
-            a["_color"] = spec.default_color if spec else None
 
     # build the render context once — passed to every draw call.
     # When svg_transform is present the coordinate mapping is handled at the

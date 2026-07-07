@@ -76,6 +76,13 @@ class ArtistSpec:
     # `group` clusters entries under one header (multi-aesthetic guides).
     # `paint(a, ctx, x0, y_mid) -> str` overrides the default rect swatch;
     # `_a` is auto-attached so paint functions can read the recorded artist.
+    # The legend renderer handles the per-artist-call `legend={...}`
+    # customization dict centrally — every artist gets it for free; don't
+    # reimplement it per-artist. Aesthetic overrides (alpha, size, marker,
+    # markersize, linewidth, linestyle) are merged into a copy of the
+    # record's opts *before* legend_entries/legend_gradient is called;
+    # `legend={"glyph": "rect"}` additionally bypasses `paint` on
+    # un-`group`ed entries at paint time.
     legend_entries: Callable[[dict], list[dict]] | None = None
     legend_gradient: Callable[[dict], dict | None] | None = None
     data_attrs: Callable[[dict], dict | None] | None = None

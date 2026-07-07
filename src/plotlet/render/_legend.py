@@ -41,6 +41,29 @@ def _swatch_ctx(a: dict) -> RenderContext:
     )
 
 
+# Aesthetic keys a per-artist `legend={...}` dict may override for swatch
+# painting — ggplot2's `override.aes`. Applied at harvest time
+# (`_legend_source_artist`) so every paint callback sees the overridden
+# values whether it reads the record's opts or closure-captured them at
+# emission; the plot itself is untouched. `glyph` is not in this set —
+# it swaps the swatch drawing entirely and is handled at paint time in
+# `_render_discrete_entry`.
+_SWATCH_AES = ("alpha", "size", "marker", "markersize", "linewidth", "linestyle")
+
+
+def _legend_source_artist(a: dict) -> dict:
+    """The record to harvest an artist's legend entries from: a shallow
+    copy with `legend={...}` aesthetic overrides merged into opts, or the
+    record itself when there are none. `c.scatter(..., alpha=0.2,
+    legend={"alpha": 1})` plots translucent points but paints an opaque
+    legend key."""
+    legend_opts = (a.get("opts") or {}).get("legend") or {}
+    overrides = {k: legend_opts[k] for k in _SWATCH_AES if k in legend_opts}
+    if not overrides:
+        return a
+    return {**a, "opts": {**a["opts"], **overrides}}
+
+
 def _build_groups(sources: list, states: dict[int, dict],
                   names: dict, group_by_chart: bool) -> list[dict]:
     """Collect entries per source and decide each section's header.
@@ -61,6 +84,7 @@ def _build_groups(sources: list, states: dict[int, dict],
             spec = get_artist(a["type"])
             if spec is None:
                 continue
+            a = _legend_source_artist(a)
             if spec.legend_gradient is not None:
                 desc = spec.legend_gradient(a)
                 if desc is not None:
@@ -126,11 +150,20 @@ def _render_discrete_entry(entry: dict, a: dict, ctx_for,
     """One discrete legend row: swatch + label. Shared between the inline
     legend (core._render_inner) and the standalone legend leaf
     (_render_legend) so swatch behavior — paint callback, default color,
-    alpha aesthetic — stays in one place.
+    alpha aesthetic, `legend={"glyph": ...}` override — stays in one place.
 
     `a` is the source artist (needed by paint callbacks). `ctx_for(a)`
     builds the RenderContext for that callback; standalone uses
-    `_swatch_ctx`, inline uses the panel's own draw context."""
+    `_swatch_ctx`, inline uses the panel's own draw context.
+
+    An artist call carrying `legend={"glyph": "rect"}` gets the standard
+    rect swatch instead of its own `paint` — the readable key when the
+    plot mark is tiny (ggplot2's `key_glyph = "rect"`). Grouped entries
+    (aesthetic guides like scatter's size dots) are exempt: a uniform
+    rect would erase the very encoding they exist to show. Aesthetic
+    overrides (`legend={"alpha": 1, ...}`, see `_SWATCH_AES`) don't
+    appear here — they were merged into the record's opts at harvest by
+    `_legend_source_artist`, before `paint` was even created."""
     sw = _LEGSPEC["swatch_width"]
     # One canonical swatch bbox per entry, regardless of what `paint`
     # actually draws — a line, a 4-px scatter dot, a 14-px scatter dot,
@@ -143,11 +176,23 @@ def _render_discrete_entry(entry: dict, a: dict, ctx_for,
     _regions.record("rect", (x, y_mid - row_h / 2, sw, row_h),
                     name="legend-mark")
     paint = entry.get("paint")
+    legend_opts = (a.get("opts") or {}).get("legend") or {}
+    glyph = legend_opts.get("glyph")
+    if glyph not in (None, "rect"):
+        raise ValueError(
+            f"legend={{'glyph': {glyph!r}}} — 'rect' is the only supported "
+            f"glyph override."
+        )
+    if glyph == "rect" and entry.get("group") is None:
+        paint = None
     if paint is not None:
         swatch = paint(a, ctx_for(a), x, y_mid)
     else:
+        alpha = entry.get("alpha", 1)
+        if entry.get("group") is None:
+            alpha = legend_opts.get("alpha", alpha)
         swatch = rect(x, y_mid - 5, sw, 10,
-                      fill=entry["color"], alpha=entry.get("alpha", 1))
+                      fill=entry["color"], alpha=alpha)
     label = text_path(entry["label"], x + sw + 6, y_mid + 4,
                       _FONTSPEC["tick_size"], anchor="start",
                       color=_FONTSPEC["color"], tag="legend-text")

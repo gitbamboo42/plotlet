@@ -28,6 +28,13 @@ near-duplicate baselines:
   legend_flat_fixed   — group_by_chart=False flatten + explicit
                         `canvas_width=` / `canvas_height=` on the legend
                         leaf, overriding the content-driven auto-size.
+  legend_swatch_overrides — per-artist `legend={...}` customization:
+                        `{"glyph": "rect"}` renders the standard rect
+                        swatch instead of the artist's tiny scatter marker
+                        (size-aesthetic guide keeps its graded dots —
+                        grouped entries are exempt); aesthetic overrides
+                        (`{"alpha": 1}` on a translucent scatter) restyle
+                        the key without touching the plot.
   legend_joined_grid  — annotated-heatmap-shaped grid where the legend cell
                         sits next to a join-pair-collapsed assembly. Tests
                         that legend_gap (6 px) coexists with share-pair
@@ -103,6 +110,30 @@ def legend_flat_fixed():
                              canvas_width=140, canvas_height=160)
 
 
+def legend_swatch_overrides():
+    # 1.5 px markers are unreadable as legend keys — `legend={"glyph":
+    # "rect"}` swaps the series swatch for the standard rectangle. On `b`
+    # the size guide keeps its graded dots: the override skips grouped
+    # (aesthetic-guide) entries, only the "signal" label row becomes a rect.
+    # On `c` the points are near-invisible at alpha=0.15 but the legend
+    # key paints opaque and enlarged via aesthetic overrides.
+    xs = [i * 0.2 for i in range(50)]
+    df = {"x": xs,
+          "y": [math.sin(x) for x in xs],
+          "grp": ["even" if i % 2 == 0 else "odd" for i in range(50)],
+          "mass": [1.0 + (i % 7) for i in range(50)]}
+    a = pt.chart(title="tiny", data_width=200, data_height=140)
+    a.scatter(data=df, x="x", y="y", color="grp", size=1.5,
+              legend={"glyph": "rect"})
+    b = pt.chart(title="sized", data_width=200, data_height=140)
+    b.scatter(data=df, x="x", y="y", size="mass", sizes=(1, 5),
+              label="signal", legend={"glyph": "rect"})
+    c = pt.chart(title="faint", data_width=200, data_height=140)
+    c.scatter(data=df, x="x", y="y", color="grp", alpha=0.15, size=2,
+              legend={"alpha": 1, "size": 5})
+    return (a | b | c) | pt.legend()
+
+
 def legend_joined_grid():
     # Top track shares x with main (column 1); left tree shares y with main
     # (row 1). Both share-pairs are gap-collapsed (0 px). Legend sits to
@@ -136,6 +167,7 @@ PLOTS = {
     "legend_mixed":        legend_mixed,
     "legend_overrides":    legend_overrides,
     "legend_flat_fixed":   legend_flat_fixed,
+    "legend_swatch_overrides": legend_swatch_overrides,
     "legend_joined_grid":  legend_joined_grid,
     "legend_gap_override": legend_gap_override,
 }
@@ -146,3 +178,12 @@ import pytest
 @pytest.mark.parametrize("name,fn", list(PLOTS.items()), ids=list(PLOTS.keys()))
 def test_legend_baseline(name, fn, baseline_compare):
     baseline_compare("legend", name, fn().to_svg())
+
+
+def test_legend_glyph_unknown_raises():
+    c = pt.chart(data_width=120, data_height=100)
+    c.scatter(data={"x": [1, 2], "y": [1, 2]}, x="x", y="y",
+              label="s", legend={"glyph": "circle"})
+    fig = c | pt.legend()
+    with pytest.raises(ValueError, match="glyph"):
+        fig.to_svg()
