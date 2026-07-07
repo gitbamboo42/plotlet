@@ -145,6 +145,17 @@ def _partition_by_group(entries, key):
     return out
 
 
+def _entry_columns(entries: list, ncols: int) -> list[list]:
+    """Split a discrete entry list into `ncols` columns, filled
+    down-then-across (matplotlib / ggplot2 fill order): ceil(N / ncols)
+    rows per column. Fewer real columns come back when there aren't
+    enough entries to fill them all."""
+    if ncols <= 1 or not entries:
+        return [entries]
+    rows = -(-len(entries) // ncols)
+    return [entries[i:i + rows] for i in range(0, len(entries), rows)]
+
+
 def _render_discrete_entry(entry: dict, a: dict, ctx_for,
                            x: float, y_mid: float) -> str:
     """One discrete legend row: swatch + label. Shared between the inline
@@ -326,7 +337,12 @@ def _legend_content_size(leaf, sources: list,
 
     Height = sum of section heights + inter-section gaps + top/bottom
     padding. Strip height is fixed at `legend.gradient_height` per
-    continuous entry — independent of source plot height."""
+    continuous entry — independent of source plot height.
+
+    With `ncols > 1` each discrete block spreads over columns (sized
+    per-column to its widest entry, `legend.column_gap` apart) and
+    contributes only its first column's row count to the height —
+    mirror of the paint geometry in `_render_legend`."""
     names = leaf._legend_names or {}
     group_by_chart = leaf._legend_group_by_chart
     groups = _build_groups(sources, states, names, group_by_chart)
@@ -368,10 +384,13 @@ def _legend_content_size(leaf, sources: list,
             if sub_name:
                 max_w = max(max_w, measure_text(str(sub_name), label_size))
                 total_h += header_h
-            for entry in sub_entries:
-                disc_w = sw + 6 + measure_text(entry["label"], tick_size)
-                max_w = max(max_w, disc_w)
-            total_h += len(sub_entries) * row_h
+            cols = _entry_columns(sub_entries, leaf._legend_ncols)
+            block_w = sum(
+                max(sw + 6 + measure_text(e["label"], tick_size) for e in col)
+                for col in cols
+            ) + (len(cols) - 1) * _LEGSPEC["column_gap"]
+            max_w = max(max_w, block_w)
+            total_h += len(cols[0]) * row_h
             if si < len(sub_groups) - 1:
                 total_h += _LEGSPEC["section_gap"]
         if gi < len(groups) - 1:
@@ -410,7 +429,10 @@ def _render_legend(leaf, w: float, h: float,
 
     Strip height is fixed at `legend.gradient_height` (independent of
     `h`); when the parent allocates more vertical space than the content
-    needs, the content is top-aligned and the surplus sits below."""
+    needs, the content is top-aligned and the surplus sits below.
+
+    `pt.legend(ncols=N)` wraps each discrete block into columns filled
+    down-then-across; headers and gradient strips span the full width."""
     sources = leaf._legend_sources or data_leaves
     names = getattr(leaf, "_legend_names", {}) or {}
     group_by_chart = getattr(leaf, "_legend_group_by_chart", True)
@@ -423,6 +445,7 @@ def _render_legend(leaf, w: float, h: float,
     pad_x = _LEGSPEC["pad_x"]
     pad_y = _LEGSPEC["pad_y"]
     row_h = _LEGSPEC["row_height"]
+    sw = _LEGSPEC["swatch_width"]
     tick_size = _FONTSPEC["tick_size"]
     label_size = _FONTSPEC["label_size"]
     text_color = _FONTSPEC["color"]
@@ -454,11 +477,16 @@ def _render_legend(leaf, w: float, h: float,
                                        color=text_color,
                                        tag="legend-header"))
                 cy += header_h
-            for i, entry in enumerate(sub_entries):
-                ry = cy + i * row_h + row_h / 2
-                parts.append(_render_discrete_entry(entry, entry["_a"],
-                                                    _swatch_ctx, pad_x, ry))
-            cy += len(sub_entries) * row_h
+            cols = _entry_columns(sub_entries, leaf._legend_ncols)
+            cx = pad_x
+            for col in cols:
+                for i, entry in enumerate(col):
+                    ry = cy + i * row_h + row_h / 2
+                    parts.append(_render_discrete_entry(entry, entry["_a"],
+                                                        _swatch_ctx, cx, ry))
+                cx += (max(sw + 6 + measure_text(e["label"], tick_size)
+                           for e in col) + _LEGSPEC["column_gap"])
+            cy += len(cols[0]) * row_h
             if si < len(sub_groups) - 1:
                 cy += _LEGSPEC["section_gap"]
         if gi < len(groups) - 1:

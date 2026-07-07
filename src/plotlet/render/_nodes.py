@@ -48,6 +48,7 @@ class RenderNode:
         self._legend_names: dict = {}
         self._legend_group_by_chart = True
         self._legend_valign = "middle"
+        self._legend_ncols = 1
         self._legend_user_width = None
         self._legend_user_height = None
         self._legend_gap = None
@@ -160,6 +161,7 @@ def _leaf_node(kind: str, init: dict, nid_to_node: dict) -> RenderNode:
         node._legend_names = dict(init.get("legend_names_pairs", []))
         node._legend_group_by_chart = init.get("legend_group_by_chart", True)
         node._legend_valign = init.get("legend_valign")
+        node._legend_ncols = init.get("legend_ncols", 1)
         node._legend_user_width = init.get("legend_user_width")
         node._legend_user_height = init.get("legend_user_height")
         node._legend_gap = init.get("legend_gap")

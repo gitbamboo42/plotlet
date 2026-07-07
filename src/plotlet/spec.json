@@ -103,7 +103,8 @@
     "gradient_width": 19,
     "gradient_height": 70,
     "gradient_n_stops": 32,
-    "section_gap": 11
+    "section_gap": 11,
+    "column_gap": 18
   },
   "layout": {
     "gap": 8,

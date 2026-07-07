@@ -26,7 +26,10 @@ tokens (reserve margin space beside the data area): `"right"` (default),
 `"left"`, `"top"`, `"bottom"`. Inside tokens (overlay the data area):
 `"top-right"`, `"top-left"`, `"bottom-right"`, `"bottom-left"`,
 `"center"`. Outside positions emit no frame; inside positions get a
-translucent background for readability over plot marks.
+translucent background for readability over plot marks. `ncols=N`
+(also on `pt.legend(...)`) wraps discrete entries into N columns,
+filled down-then-across; `"top"` / `"bottom"` default to one
+horizontal row until `ncols=` switches them to the grid.
 
 Per-artist `legend={...}` customizes that artist's entries wherever they
 render (in-frame or `pt.legend()` panel): `{"label": ..., "ticks": [...]}`

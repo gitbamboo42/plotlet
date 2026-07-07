@@ -454,6 +454,7 @@ class Chart(_Renderable):
         leaf._legend_names = {}
         leaf._legend_group_by_chart = True
         leaf._legend_valign = "middle"
+        leaf._legend_ncols = 1
         leaf._legend_user_width = None
         leaf._legend_user_height = None
         leaf._legend_gap = None
@@ -467,7 +468,8 @@ class Chart(_Renderable):
         leaf._is_attached = False
         return leaf
 
-    def legend(self, *args, position: str | None = None, **kwargs) -> "Chart":
+    def legend(self, *args, position: str | None = None,
+               ncols: int | None = None, **kwargs) -> "Chart":
         """Toggle the in-frame overlay legend.
 
         `chart.legend()` or `chart.legend(True)` turns it on; `False` off.
@@ -482,12 +484,23 @@ class Chart(_Renderable):
         Outside legends draw with no frame; inside legends get a
         translucent background for readability over plot marks.
 
+        `ncols=N` wraps each discrete entry list into N columns, filled
+        down-then-across (matplotlib's `ncols`, ggplot2's
+        `guide_legend(ncol=)`). On `"top"` / `"bottom"` the default is a
+        single horizontal row; `ncols=` switches those to the same
+        N-column grid.
+
         For a separate, layout-level legend leaf (the kind that lives in
         its own panel and harvests entries from sibling charts), use
         `pt.legend(...)` or `parent.legend(...)` on a `Layout`."""
         if kwargs:
             raise TypeError(
                 f"Chart.legend() got unexpected keyword arguments: {list(kwargs)!r}"
+            )
+        if ncols is not None and (not isinstance(ncols, int)
+                                  or isinstance(ncols, bool) or ncols < 1):
+            raise ValueError(
+                f"chart.legend(ncols={ncols!r}) — must be an int >= 1."
             )
         if args and not isinstance(args[0], bool):
             raise TypeError(
@@ -504,7 +517,11 @@ class Chart(_Renderable):
             )
         # Record directly — `legend` is in _FRAME_METHODS but our specialized
         # method above shadows __getattr__, so we use `_record` explicitly.
-        kw = {"position": position} if position is not None else {}
+        kw = {}
+        if position is not None:
+            kw["position"] = position
+        if ncols is not None:
+            kw["ncols"] = ncols
         return self._record("legend", *args, **kw)
 
     # ---------- recording (leaf only) ----------

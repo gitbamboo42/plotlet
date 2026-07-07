@@ -385,6 +385,9 @@ def _replay(calls):
         # `"bottom-right"`, `"bottom-left"`, `"center"` — overlay the data
         # area.
         "legend_position": "right",
+        # Discrete entries per legend column (down-then-across fill);
+        # `"top"` / `"bottom"` render a single horizontal row when 1.
+        "legend_ncols": 1,
         # Data-area clipping on by default — artists past xlim/ylim get
         # cropped at the data boundary. Set False (`c.clip(False)`) to
         # let lines and large markers bleed into the margin space.
@@ -498,6 +501,8 @@ def _replay(calls):
             st["legend"] = (args[0] if args else True)
             if "position" in kw:
                 st["legend_position"] = kw["position"]
+            if "ncols" in kw:
+                st["legend_ncols"] = kw["ncols"]
         elif name == "clip":   st["clip"] = bool(args[0]) if args else True
         elif name == "facecolor": st["facecolor"] = args[0] if args else None
         elif name == "coordinate":
@@ -1185,7 +1190,8 @@ def _inline_legend_layout(st):
     Returns a dict with `disc` (list of `(artist, entry)` pairs from
     `spec.legend_entries`), `cont` (list of `(artist, descriptor)` pairs
     from `spec.legend_gradient`), block width/height (`lw`, `lh`), a
-    `horizontal` flag (entries arranged left-to-right vs. stacked), and
+    `horizontal` flag (entries arranged left-to-right vs. stacked),
+    `ncols` (discrete entries per column, from `c.legend(ncols=)`), and
     the resolved `position` (auto-flipped from inside-corner tokens →
     "right" when a continuous mapping is in play, since an inside
     colorbar inside the data area is incoherent). Returns `None` if
@@ -1233,7 +1239,11 @@ def _inline_legend_layout(st):
         pos = "right"
     else:
         pos = requested
-    horizontal = pos in ("top", "bottom")
+    # `ncols > 1` switches top/bottom from the single-row layout to the
+    # same N-column grid the vertical positions use (ggplot2: setting
+    # ncol overrides the horizontal direction's one-row default).
+    ncols = st.get("legend_ncols", 1)
+    horizontal = pos in ("top", "bottom") and ncols == 1
 
     row_h = _LEGSPEC["row_height"]
     pad_x = _LEGSPEC["pad_x"]
@@ -1257,31 +1267,36 @@ def _inline_legend_layout(st):
     else:
         # Vertical mixed (cont + disc) or discrete-only. Stack continuous
         # strips on top, discrete rows below, with section_gap between.
-        # Background rect wraps everything → outer padding.
-        from ._legend import _inline_gradient_block_size, _partition_by_group
-        disc_max_text = (max(measure_text(e["label"], tick_size) for _, e in disc)
-                          if disc else 0.0)
-        disc_w = sw + 6 + disc_max_text if disc else 0.0
-        # Sub-group sizing: each named sub-group adds a small header row
-        # plus the existing section_gap separates adjacent sub-groups.
+        # Background rect wraps everything → outer padding. Each
+        # sub-group's rows spread over `ncols` columns (per-column widest
+        # entry, `legend.column_gap` apart) — mirror of the paint
+        # geometry in `_emit_inline_legend_body`.
+        from ._legend import (_entry_columns, _inline_gradient_block_size,
+                              _partition_by_group)
         label_size = _FONTSPEC["label_size"]
         sub_header_h = label_size + 4
         sub_groups = _partition_by_group(disc, lambda ae: ae[1].get("group"))
-        for name, _items in sub_groups:
+        disc_w = 0.0
+        disc_h = 0.0
+        for name, items in sub_groups:
             if name:
                 disc_w = max(disc_w, measure_text(str(name), label_size))
-        n_sub_headers = sum(1 for n, _ in sub_groups if n)
-        n_sub_gaps = max(0, len(sub_groups) - 1)
-        disc_h = (len(disc) * row_h
-                  + n_sub_headers * sub_header_h
-                  + n_sub_gaps * _LEGSPEC["section_gap"])
+                disc_h += sub_header_h
+            cols = _entry_columns(items, ncols)
+            block_w = sum(
+                max(sw + 6 + measure_text(e["label"], tick_size) for _, e in col)
+                for col in cols
+            ) + (len(cols) - 1) * _LEGSPEC["column_gap"]
+            disc_w = max(disc_w, block_w)
+            disc_h += len(cols[0]) * row_h
+        disc_h += max(0, len(sub_groups) - 1) * _LEGSPEC["section_gap"]
         cont_w, cont_h = _inline_gradient_block_size([d for _, d in cont])
         lw = max(disc_w, cont_w) + 2 * pad_x
         lh = cont_h + disc_h + 2 * pad_y
         if cont and disc:
             lh += _LEGSPEC["section_gap"]
     return {"disc": disc, "cont": cont, "lw": lw, "lh": lh,
-            "horizontal": horizontal, "position": pos}
+            "horizontal": horizontal, "position": pos, "ncols": ncols}
 
 
 def _resolve_panel_inputs(st, *, x_scale, y_scale, dw, dh, po):
@@ -1658,7 +1673,7 @@ def _panel_open(st, panel_opts: _PanelOpts, transform: str,
     return f'<g transform="{transform}"{attrs}>{meta}'
 
 
-def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal,
+def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal, ncols,
                               pad_x, pad_y, row_h, sw, tick_size,
                               text_color, ctx_for) -> str:
     """Render the inline legend body — the part *inside* the
@@ -1719,7 +1734,7 @@ def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal,
     # artist (color + size + shape) renders each aesthetic as its own
     # block with a header — entries with the same key cluster together
     # across artist records.
-    from ._legend import _partition_by_group
+    from ._legend import _entry_columns, _partition_by_group
     sub_groups = _partition_by_group(disc, lambda ae: ae[1].get("group"))
     label_size = _FONTSPEC["label_size"]
     sub_header_h = label_size + 4
@@ -1731,10 +1746,15 @@ def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal,
                                    color=text_color,
                                    tag="legend-header"))
             cur_y += sub_header_h
-        for a, entry in sub_items:
-            ry = cur_y + row_h / 2
-            parts.append(_render_discrete_entry(entry, a, ctx_for, pad_x, ry))
-            cur_y += row_h
+        cols = _entry_columns(sub_items, ncols)
+        cx = pad_x
+        for col in cols:
+            for i, (a, entry) in enumerate(col):
+                ry = cur_y + i * row_h + row_h / 2
+                parts.append(_render_discrete_entry(entry, a, ctx_for, cx, ry))
+            cx += (max(sw + 6 + measure_text(e["label"], tick_size)
+                       for _, e in col) + _LEGSPEC["column_gap"])
+        cur_y += len(cols[0]) * row_h
         if si < len(sub_groups) - 1:
             cur_y += _LEGSPEC["section_gap"]
     return ''.join(parts)
@@ -2025,7 +2045,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
         # in the body) land at outer-SVG positions.
         with _regions.translate(lx, ly):
             parts.append(_emit_inline_legend_body(
-                lw, lh, pos, cont, disc, horizontal,
+                lw, lh, pos, cont, disc, horizontal, leg["ncols"],
                 pad_x, pad_y, row_h, sw, tick_size, text_color, _ctx_for))
         parts.append('</g>')
 

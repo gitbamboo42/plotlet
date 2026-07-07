@@ -35,6 +35,10 @@ near-duplicate baselines:
                         grouped entries are exempt); aesthetic overrides
                         (`{"alpha": 1}` on a translucent scatter) restyle
                         the key without touching the plot.
+  legend_ncols        — `pt.legend(ncols=3)` wraps a 12-level categorical
+                        list into 3 columns (filled down-then-across);
+                        the size-aesthetic guide block wraps independently
+                        below its own header.
   legend_joined_grid  — annotated-heatmap-shaped grid where the legend cell
                         sits next to a join-pair-collapsed assembly. Tests
                         that legend_gap (6 px) coexists with share-pair
@@ -134,6 +138,23 @@ def legend_swatch_overrides():
     return (a | b | c) | pt.legend()
 
 
+def legend_ncols():
+    # 12 categories single-column would tower over the 160 px chart —
+    # ncols=3 wraps them into 3 columns of 4 rows, short enough to sit
+    # beside the chart in the usual right-hand position. The size guide
+    # (a grouped block with its own header) wraps independently: 4 dots
+    # at ncols=3 → 2 rows in 2 columns.
+    n = 60
+    cats = [f"type-{i % 12:02d}" for i in range(n)]
+    df = {"x": [i * 0.1 for i in range(n)],
+          "y": [math.sin(i * 0.35) + (i % 12) * 0.1 for i in range(n)],
+          "cat": cats,
+          "mass": [1.0 + (i % 9) for i in range(n)]}
+    a = pt.chart(title="many levels", data_width=260, data_height=160)
+    a.scatter(data=df, x="x", y="y", color="cat", size="mass", sizes=(1.5, 5))
+    return a | pt.legend(ncols=3)
+
+
 def legend_joined_grid():
     # Top track shares x with main (column 1); left tree shares y with main
     # (row 1). Both share-pairs are gap-collapsed (0 px). Legend sits to
@@ -168,6 +189,7 @@ PLOTS = {
     "legend_overrides":    legend_overrides,
     "legend_flat_fixed":   legend_flat_fixed,
     "legend_swatch_overrides": legend_swatch_overrides,
+    "legend_ncols":        legend_ncols,
     "legend_joined_grid":  legend_joined_grid,
     "legend_gap_override": legend_gap_override,
 }
@@ -178,6 +200,15 @@ import pytest
 @pytest.mark.parametrize("name,fn", list(PLOTS.items()), ids=list(PLOTS.keys()))
 def test_legend_baseline(name, fn, baseline_compare):
     baseline_compare("legend", name, fn().to_svg())
+
+
+def test_legend_ncols_invalid_raises():
+    with pytest.raises(ValueError, match="ncols"):
+        pt.legend(ncols=0)
+    with pytest.raises(ValueError, match="ncols"):
+        pt.legend(ncols=2.5)
+    with pytest.raises(ValueError, match="ncols"):
+        pt.chart().legend(ncols=0)
 
 
 def test_legend_glyph_unknown_raises():

@@ -110,6 +110,9 @@ pt.legend(*srcs, group_by_chart=False)   # flat list
 
 # Rename or hide per-source section headers
 pt.legend(hm, names={hm: "Treatment", top: None})
+
+# Wrap a long categorical list into columns (filled down-then-across)
+pt.legend(src, ncols=3)
 ```
 
 ## Single-parent rule

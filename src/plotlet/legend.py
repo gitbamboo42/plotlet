@@ -15,6 +15,7 @@ from .chart import Chart
 def legend(*sources: Chart, names: dict | None = None,
            group_by_chart: bool = True,
            valign: str = "middle",
+           ncols: int = 1,
            canvas_width: int | float | str | None = None,
            canvas_height: int | float | str | None = None,
            legend_gap: int | float | None = None,
@@ -36,6 +37,12 @@ def legend(*sources: Chart, names: dict | None = None,
     or explicit `canvas_height=`). `"middle"` (default) centers it;
     `"top"` pins it to the top edge.
 
+    `ncols=N` wraps each discrete entry list into N columns, filled
+    down-then-across (matplotlib's `ncols`, ggplot2's `guide_legend(
+    ncol=)`) — the fix for a long categorical legend outgrowing its
+    siblings. Headers and gradient strips span the full width; each
+    grouped guide block wraps independently.
+
     Legend leaves have no data axes, so the dimensional surface is
     canvas-only: pass `canvas_width=` / `canvas_height=` to override the
     content-driven auto-size. `legend_gap=N` overrides the default 6 px
@@ -47,6 +54,10 @@ def legend(*sources: Chart, names: dict | None = None,
     if valign not in ("top", "middle"):
         raise ValueError(
             f"pt.legend(valign={valign!r}) — must be 'top' or 'middle'."
+        )
+    if not isinstance(ncols, int) or isinstance(ncols, bool) or ncols < 1:
+        raise ValueError(
+            f"pt.legend(ncols={ncols!r}) — must be an int >= 1."
         )
     for src in sources:
         if not isinstance(src, Chart):
@@ -70,6 +81,7 @@ def legend(*sources: Chart, names: dict | None = None,
     leaf._legend_names = dict(names) if names else {}
     leaf._legend_group_by_chart = group_by_chart
     leaf._legend_valign = valign
+    leaf._legend_ncols = ncols
     leaf._legend_user_width = canvas_width
     leaf._legend_user_height = canvas_height
     leaf._legend_gap = float(legend_gap) if legend_gap is not None else None

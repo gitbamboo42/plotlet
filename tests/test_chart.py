@@ -1937,6 +1937,22 @@ def chart_legend_outside_top():    return _legend_position_chart("top")
 def chart_legend_outside_bottom(): return _legend_position_chart("bottom")
 
 
+def chart_legend_ncols_bottom():
+    # `c.legend(position="bottom", ncols=3)` — 9 series that would make
+    # a single horizontal row far wider than the 300 px chart wrap into
+    # a 3-column grid (filled down-then-across), centered below the
+    # x-axis band like the single-row bottom legend.
+    xs = _xs()
+    c = pt.chart(title="legend bottom ncols=3",
+                 xlabel="t", ylabel="value", grid=True,
+                 data_width=300, data_height=180)
+    for k in range(9):
+        c.line(data={"x": xs, "y": [math.sin(x + k * 0.35) + k * 0.15 for x in xs]},
+               x="x", y="y", label=f"phase-{k}")
+    c.legend(position="bottom", ncols=3)
+    return c
+
+
 def chart_circular_overlay():
     """`Layout.coordinate(CircularCoordinate)` — overlay semantics.
 
@@ -2067,6 +2083,7 @@ PLOTS = {
     "legend_outside_left":   chart_legend_outside_left,
     "legend_outside_top":    chart_legend_outside_top,
     "legend_outside_bottom": chart_legend_outside_bottom,
+    "legend_ncols_bottom":   chart_legend_ncols_bottom,
     "boxplot":               chart_boxplot,
     "violin":                chart_violin,
     "swarm":                 chart_swarm,

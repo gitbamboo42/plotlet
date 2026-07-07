@@ -60,7 +60,7 @@ render half ignores: `data` and chart-level aes (`x`, `y`, `color`,
 zero). Optional: `margin`, `legend_sources` (list of nids — positional
 reference form; each must name a leaf node, not a layout),
 `legend_names_pairs` (pairs, not a dict — keys may be `$node`
-envelopes), `legend_group_by_chart`, `legend_valign`,
+envelopes), `legend_group_by_chart`, `legend_valign`, `legend_ncols`,
 `legend_user_width`, `legend_user_height`, `legend_gap`.
 
 **`diagram`** — pre-rendered SVG leaf. Required: `canvas_width`,

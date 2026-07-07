@@ -287,6 +287,7 @@ def to_journal(root) -> Journal:
                 "legend_names_pairs": names_pairs,
                 "legend_group_by_chart": leaf._legend_group_by_chart,
                 "legend_valign": leaf._legend_valign,
+                "legend_ncols": leaf._legend_ncols,
                 "legend_user_width": leaf._legend_user_width,
                 "legend_user_height": leaf._legend_user_height,
                 "legend_gap": leaf._legend_gap,
