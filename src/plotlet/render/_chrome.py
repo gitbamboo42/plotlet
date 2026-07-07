@@ -18,7 +18,7 @@ import math
 from .._spec import SPEC, _FRAME, _FONTSPEC, _PADSPEC
 from ..draw import (resolve_color, text_path, segment,
                    measure_text, cap_height, descender, tick_band_height,
-                   rotated_label_bbox)
+                   rotated_label_bbox, text_block_height)
 from .. import _regions
 
 _SECTORSPEC = SPEC["sectors"]
@@ -166,18 +166,21 @@ def label_band_sizes(st, inp, dw, dh):
 
     chrome = chrome_stack_extents(st, inp)
 
-    # xlabel block: full glyph height (≈ label_size) + 2px gap + pad.xlabel.
-    # Lives on whichever side x_side names; the title is its own block above
-    # the xlabel when they share the top edge.
-    xlabel_band = (2 + label_size + _PADSPEC["xlabel"]
+    # xlabel block: full glyph-block height (label_size for one line, one
+    # line_height more per `\n`) + 2px gap + pad.xlabel. Lives on whichever
+    # side x_side names; the title is its own block above the xlabel when
+    # they share the top edge.
+    xlabel_band = (2 + text_block_height(st["xlabel"], label_size) + _PADSPEC["xlabel"]
                    if st["xlabel"] and not inp.hide_xlabel else 0)
-    ylabel_band = (2 + label_size + _PADSPEC["ylabel"]
+    ylabel_band = (2 + text_block_height(st["ylabel"], label_size) + _PADSPEC["ylabel"]
                    if st["ylabel"] and not inp.hide_ylabel else 0)
 
     # Title sits past the top chrome band + any top-side xlabel block,
-    # then adds `pad.title + title_size` for its own block — mirrors the
-    # inside-out walk in `emit_frame_labels` so reservation matches positioning.
-    title_top = _PADSPEC["title"] + title_size if (st["title"] and not inp.hide_t) else 0
+    # then adds `pad.title` + its glyph-block height for its own block —
+    # mirrors the inside-out walk in `emit_frame_labels` so reservation
+    # matches positioning.
+    title_top = (_PADSPEC["title"] + text_block_height(st["title"], title_size)
+                 if (st["title"] and not inp.hide_t) else 0)
     top    = chrome["top"]    + (xlabel_band if inp.x_side == "top"    else 0) + title_top
     bottom = chrome["bottom"] + (xlabel_band if inp.x_side == "bottom" else 0)
     left   = chrome["left"]   + (ylabel_band if inp.y_side == "left"   else 0)
@@ -233,18 +236,26 @@ def emit_frame_labels(st, inp, iw, ih, chrome, *, top_legend_outset=0):
     title_size = _FONTSPEC["title_size"]
     text_color = _FONTSPEC["color"]
     parts = []
-    xlabel_band = (2 + label_size + _PADSPEC["xlabel"]
+    xlabel_band = (2 + text_block_height(st["xlabel"], label_size) + _PADSPEC["xlabel"]
                    if st["xlabel"] and not inp.hide_xlabel else 0)
+
+    # `text_path` anchors multi-line text at the FIRST line's baseline with
+    # lines flowing downward. On bottom/right sides the block naturally
+    # grows away from the data area, so single-line anchor formulas hold;
+    # on top/left the anchor shifts outward by the extra-lines height
+    # (`block - size`, zero for one line) so the LAST line lands in the
+    # single-line slot and the block grows outward instead of into the axis.
 
     if st["xlabel"] and not inp.hide_xlabel:
         # Walk past the chrome stack + 2-px gap + full label_size, then back
         # up by descender to land on the baseline. Bottom: y positive past
         # ih. Top: y negative past 0 — same descender adjustment lands the
         # visible glyph bottom at the band's inner edge.
+        xlabel_extra = text_block_height(st["xlabel"], label_size) - label_size
         if inp.x_side == "bottom":
             xlabel_baseline = ih + chrome["bottom"] + 2 + label_size - descender(label_size)
         else:
-            xlabel_baseline = -(chrome["top"] + 2 + descender(label_size))
+            xlabel_baseline = -(chrome["top"] + 2 + descender(label_size) + xlabel_extra)
         parts.append(text_path(st["xlabel"], iw / 2, xlabel_baseline,
                                 label_size, anchor="middle", color=text_color,
                                 tag="xlabel"))
@@ -252,9 +263,12 @@ def emit_frame_labels(st, inp, iw, ih, chrome, *, top_legend_outset=0):
     if st["ylabel"] and not inp.hide_ylabel:
         # Walk past the chrome stack + 2-px gap, then half label_size to
         # land on the rotated text's center. Left: cx negative (outside
-        # panel on left). Right: cx positive past iw.
+        # panel on left) — under rotate=90 extra lines flow toward +x
+        # (the panel), so the anchor shifts left by the extra-lines
+        # height. Right: cx positive past iw, extra lines flow outward.
+        ylabel_extra = text_block_height(st["ylabel"], label_size) - label_size
         if inp.y_side == "left":
-            ylabel_cx = -(chrome["left"] + 2 + label_size / 2)
+            ylabel_cx = -(chrome["left"] + 2 + label_size / 2 + ylabel_extra)
         else:
             ylabel_cx = iw + chrome["right"] + 2 + label_size / 2
         parts.append(text_path(st["ylabel"], ylabel_cx, ih / 2,
@@ -264,7 +278,8 @@ def emit_frame_labels(st, inp, iw, ih, chrome, *, top_legend_outset=0):
     if st["title"] and not inp.hide_t:
         top_xlabel = xlabel_band if inp.x_side == "top" else 0
         outer = chrome["top"] + top_xlabel + top_legend_outset + _PADSPEC["title"]
-        title_y = -(outer + descender(title_size))
+        title_extra = text_block_height(st["title"], title_size) - title_size
+        title_y = -(outer + descender(title_size) + title_extra)
         parts.append(text_path(st["title"], iw / 2, title_y, title_size,
                                 anchor="middle", color=text_color,
                                 tag="title"))

@@ -879,7 +879,9 @@ class Layout(_Renderable):
         band above its canvas, and a nested titled layout gets the band
         above its own sub-rect. Panel-level titles stay on the leaf
         charts (`c.title(...)`); this is the composition-level
-        counterpart. Last call wins."""
+        counterpart. Last call wins. `\\n` in the text starts a new
+        line (same as panel titles / axis labels); the band grows to
+        fit."""
         self._calls.append(("title", [text], {}))
         return self
 

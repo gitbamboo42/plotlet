@@ -39,6 +39,8 @@ See `docs/SUBPLOTS.md` for the design rationale.
 """
 from __future__ import annotations
 
+import math
+
 from graphlib import CycleError, TopologicalSorter
 from itertools import count
 
@@ -53,7 +55,7 @@ from ..scales import _AxisDescriptor
 from .._tree import iter_leaves as _iter_leaves
 from . import _attachments
 from .. import _regions
-from ..draw import coord, descender, text_path
+from ..draw import coord, descender, text_path, text_block_height
 
 
 def _extract_theme(calls) -> str | None:
@@ -105,11 +107,14 @@ def _layout_title(node) -> str:
 
 def _title_band_h(node) -> int:
     """Vertical pixels the title band adds above a titled layout's
-    content — the panel-title block (`pad.title` gap + title font
-    size), so composed and single-panel titles share one rhythm."""
-    if not _layout_title(node):
+    content — the panel-title block (`pad.title` gap + title glyph-block
+    height, one line_height more per `\\n`), so composed and single-panel
+    titles share one rhythm. Ceiled to an int: the band feeds the root
+    canvas width/height, which stay integer px."""
+    title = _layout_title(node)
+    if not title:
         return 0
-    return _PADSPEC["title"] + _FONTSPEC["title_size"]
+    return math.ceil(_PADSPEC["title"] + text_block_height(title, _FONTSPEC["title_size"]))
 
 
 def _emit_layout_title(node, x: float, y: float, w: float) -> str:

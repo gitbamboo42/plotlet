@@ -12,6 +12,7 @@ from fontTools.ttLib import TTFont
 from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.pens.transformPen import TransformPen
 from fontTools.misc.transform import Transform
+from .._spec import _FONTSPEC
 from .format import coord
 
 
@@ -46,11 +47,28 @@ def _glyph(ch):
 
 
 def measure_text(s: str, size: float) -> float:
-    """Exact pixel width of `s` rendered in DejaVu Sans at `size` pt."""
+    """Exact pixel width of `s` rendered in DejaVu Sans at `size` pt.
+    Multi-line text (`\\n`) measures as the widest line."""
     if not s:
         return 0.0
+    if "\n" in s:
+        return max(measure_text(line, size) for line in s.split("\n"))
     scale = size / _UPEM
     return sum(_glyph(ch).width * scale for ch in s)
+
+
+def line_height(size: float) -> float:
+    """Baseline-to-baseline distance between consecutive lines of
+    multi-line text at `size` pt (``size × font.linespacing``)."""
+    return size * _FONTSPEC["linespacing"]
+
+
+def text_block_height(s: str, size: float) -> float:
+    """Layout height of the text block for `s` at `size` pt — the bare
+    font size for single-line text (matching what layout math reserved
+    before multi-line existed), plus one `line_height` per extra line.
+    Use this wherever band/margin math previously reserved `size`."""
+    return size + (s.count("\n")) * line_height(size)
 
 
 def cap_height(size: float) -> float:
@@ -118,31 +136,35 @@ def _glyph_path_d(s: str, x: float, y: float, size: float,
     """Build the SVG `d` attribute for `s` rendered at baseline (x, y).
 
     `anchor` matches SVG's text-anchor ('start' | 'middle' | 'end');
-    `fontstyle="italic"` applies the synthetic oblique skew."""
+    `fontstyle="italic"` applies the synthetic oblique skew. Multi-line
+    text (`\\n`) puts the FIRST line's baseline at (x, y) and steps each
+    subsequent line down by `line_height(size)`; every line is anchored
+    independently, so `anchor="middle"` centers each line."""
     if not s:
         return ""
-    width = measure_text(s, size)
-    if anchor == "middle":
-        x0 = x - width / 2
-    elif anchor == "end":
-        x0 = x - width
-    else:
-        x0 = x
     pen = SVGPathPen(_GS)
     scale = size / _UPEM
-    cx = x0
     italic = (fontstyle == "italic")
-    for ch in s:
-        g = _glyph(ch)
-        # SVG y points down, font y points up — flip with negative scale.
-        # Italic: skewX applied before the y-flip+scale so the slant lives
-        # in the post-scale (screen) frame; top of glyph leans right.
-        t = Transform().translate(cx, y).scale(scale, -scale)
-        if italic:
-            t = t.skew(_ITALIC_SKEW_RAD, 0)
-        tpen = TransformPen(pen, t)
-        g.draw(tpen)
-        cx += g.width * scale
+    for i, line in enumerate(s.split("\n")):
+        width = measure_text(line, size)
+        if anchor == "middle":
+            cx = x - width / 2
+        elif anchor == "end":
+            cx = x - width
+        else:
+            cx = x
+        ly = y + i * line_height(size)
+        for ch in line:
+            g = _glyph(ch)
+            # SVG y points down, font y points up — flip with negative scale.
+            # Italic: skewX applied before the y-flip+scale so the slant lives
+            # in the post-scale (screen) frame; top of glyph leans right.
+            t = Transform().translate(cx, ly).scale(scale, -scale)
+            if italic:
+                t = t.skew(_ITALIC_SKEW_RAD, 0)
+            tpen = TransformPen(pen, t)
+            g.draw(tpen)
+            cx += g.width * scale
     return _round_glyph_floats(pen.getCommands())
 
 

@@ -34,7 +34,8 @@ _HEX_VERTICES = [
      math.sin(-math.pi / 2 + i * math.pi / 3))
     for i in range(6)
 ]
-from .font import measure_text, _glyph_path_d, _decoration_y_offset, cap_height, descender
+from .font import (measure_text, _glyph_path_d, _decoration_y_offset,
+                   cap_height, descender, line_height)
 from .linestyles import resolve_linestyle
 from .._regions import record as _record_region
 from .format import coord, degree, opacity, stroke_w
@@ -79,6 +80,10 @@ def text_path(s: str, x: float, y: float, size: float,
     inside a custom artist's `draw` callback to emit text-as-paths so output
     stays font-independent across machines.
 
+    Multi-line text: `\\n` starts a new line one `line_height(size)` below
+    the previous one; (x, y) stays the FIRST line's baseline and each line
+    is anchored independently (so `anchor="middle"` centers every line).
+
     `fontstyle="italic"` synthesizes an oblique slant via a -12° skew
     during glyph composition (the bundled DejaVu Sans ships no real
     italic face).
@@ -94,30 +99,33 @@ def text_path(s: str, x: float, y: float, size: float,
     d = _glyph_path_d(s, x, y, size, anchor=anchor, fontstyle=fontstyle)
     if not d:
         return ""
-    # Compute the unrotated text rect once when either bbox recording
-    # or decoration drawing needs it — the anchor mapping is the same
-    # for both, so duplicating it would be a foot-gun the moment one
-    # path changed.
-    needs_text_rect = tag is not None or decoration != "none"
-    if needs_text_rect:
-        w = measure_text(s, size)
+    # Anchor mapping from a line's width to its left edge — shared by the
+    # bbox rect (block-widest line) and the per-line decoration strokes,
+    # so the two can't drift apart.
+    def _anchor_left(width: float) -> float:
         if anchor == "middle":
-            rx = x - w / 2
-        elif anchor == "end":
-            rx = x - w
-        else:
-            rx = x
+            return x - width / 2
+        if anchor == "end":
+            return x - width
+        return x
+
+    lines = s.split("\n")
     if tag is not None:
-        # Region capture. Baseline at y maps to cap_height above and
-        # descender below. When `rotate` is set, the SVG transform
-        # rotates the glyph around (x, y), so the recorded bbox is the
-        # axis-aligned hull of the four rotated corners — and the
-        # precise rotated rectangle's 4 corners go in meta as `polygon`
-        # so overlap detection can use SAT (axis-aligned hulls of
-        # 45°-rotated rectangles overlap even when the rectangles
-        # themselves don't, so AABB alone is a false-positive trap).
+        # Region capture. First-line baseline at y maps to cap_height
+        # above; the block extends descender below the LAST line's
+        # baseline. Width is the widest line's. When `rotate` is set,
+        # the SVG transform rotates the glyph around (x, y), so the
+        # recorded bbox is the axis-aligned hull of the four rotated
+        # corners — and the precise rotated rectangle's 4 corners go in
+        # meta as `polygon` so overlap detection can use SAT
+        # (axis-aligned hulls of 45°-rotated rectangles overlap even
+        # when the rectangles themselves don't, so AABB alone is a
+        # false-positive trap).
+        w = measure_text(s, size)
+        rx = _anchor_left(w)
         ry = y - cap_height(size)
-        rh = cap_height(size) + descender(size)
+        rh = (cap_height(size) + descender(size)
+              + (len(lines) - 1) * line_height(size))
         if rotate:
             # SVG transform uses `-rotate` (CCW in user space); same sign
             # here so the corner math matches the visible rendering.
@@ -143,9 +151,15 @@ def text_path(s: str, x: float, y: float, size: float,
     if decoration != "none":
         dy = _decoration_y_offset(decoration, size)
         line_w = max(0.6, size * 0.06)
-        out += (f'<line x1="{coord(rx)}" y1="{coord(y + dy)}" '
-                f'x2="{coord(rx + w)}" y2="{coord(y + dy)}" '
-                f'stroke="{color}" stroke-width="{stroke_w(line_w)}"/>')
+        for i, line in enumerate(lines):
+            if not line:
+                continue
+            lw = measure_text(line, size)
+            lx = _anchor_left(lw)
+            ly = y + i * line_height(size) + dy
+            out += (f'<line x1="{coord(lx)}" y1="{coord(ly)}" '
+                    f'x2="{coord(lx + lw)}" y2="{coord(ly)}" '
+                    f'stroke="{color}" stroke-width="{stroke_w(line_w)}"/>')
     if rotate:
         out = f'<g transform="rotate({degree(-rotate)} {coord(x)} {coord(y)})">{out}</g>'
     return out

@@ -1991,6 +1991,19 @@ def chart_circular_overlay():
     )
 
 
+def chart_multiline_labels():
+    """`\\n` in title / xlabel / ylabel — each extra line adds one
+    `line_height` to the label's block, margins grow to fit, and every
+    line is anchored (centered) independently."""
+    xs = _xs()
+    df = {"t": xs, "sin": [math.sin(x) for x in xs]}
+    c = pt.chart(df, title="two-line title:\nsecond line",
+                 xlabel="time\n(seconds)", ylabel="amplitude\n(unitless)",
+                 grid=True)
+    c.line(x="t", y="sin")
+    return c
+
+
 PLOTS = {
     "table":               chart_table,
     "color":               chart_color,
@@ -2111,12 +2124,67 @@ PLOTS = {
     "line_group":            chart_line_group,
     "line_linetype":         chart_line_linetype,
     "line_alpha":            chart_line_alpha,
+    "multiline_labels":      chart_multiline_labels,
 }
 
 
 @pytest.mark.parametrize("name,fn", list(PLOTS.items()), ids=list(PLOTS.keys()))
 def test_chart_baseline(name, fn, baseline_compare):
     baseline_compare("chart", name, fn().to_svg())
+
+
+# ---------------------------------------------------------------------------
+# multi-line title / axis labels (no baselines)
+
+
+def test_multiline_label_geometry():
+    """`\\n` in title / xlabel / ylabel grows the figure by exactly one
+    `line_height` per extra line on the matching side, and the recorded
+    text-block regions are one `line_height` taller / wider."""
+    from plotlet.draw import line_height, measure_text, text_block_height
+    from plotlet._spec import _FONTSPEC
+    from plotlet.render import natural_size
+
+    # measure_text on multi-line = widest line; block height adds one
+    # line_height per extra line on top of the bare size.
+    assert measure_text("ab\nabcdef", 14) == measure_text("abcdef", 14)
+    assert text_block_height("ab", 14) == 14
+    assert text_block_height("ab\ncd\nef", 14) == 14 + 2 * line_height(14)
+
+    def cell(title, xlabel, ylabel):
+        c = pt.chart(title=title, xlabel=xlabel, ylabel=ylabel,
+                     data_width=200, data_height=140)
+        c.line(data={"x": [0, 1, 2], "y": [1, 0, 2]}, x="x", y="y")
+        return c
+
+    W0, H0 = natural_size(pt.to_ir(cell("t", "x", "y")))
+    W1, H1 = natural_size(pt.to_ir(cell("t\nt2", "x\nx2", "y\ny2")))
+    lh_title = line_height(_FONTSPEC["title_size"])
+    lh_label = line_height(_FONTSPEC["label_size"])
+    assert abs((H1 - H0) - (lh_title + lh_label)) <= 1   # title + xlabel lines
+    assert abs((W1 - W0) - lh_label) <= 1                # ylabel line
+
+    two = cell("t\nt2", "x\nx2", "y\ny2")
+    two.to_svg()
+    regs = {r["name"]: r for r in two.regions() if r["name"] in
+            ("title", "xlabel", "ylabel", "panel")}
+    one = cell("t", "x", "y")
+    one.to_svg()
+    regs1 = {r["name"]: r for r in one.regions() if r["name"] in
+             ("title", "xlabel", "ylabel")}
+    assert abs(regs["title"]["bbox"][3] - (regs1["title"]["bbox"][3] + lh_title)) < 0.01
+    assert abs(regs["xlabel"]["bbox"][3] - (regs1["xlabel"]["bbox"][3] + lh_label)) < 0.01
+    # ylabel is rotated 90° — the extra line grows its screen WIDTH.
+    assert abs(regs["ylabel"]["bbox"][2] - (regs1["ylabel"]["bbox"][2] + lh_label)) < 0.01
+
+    # No label block may bleed into the panel.
+    px, py, pw, ph = regs["panel"]["bbox"]
+    tx, ty, tw, th = regs["title"]["bbox"]
+    assert ty + th <= py
+    xx, xy, xw, xh = regs["xlabel"]["bbox"]
+    assert xy >= py + ph
+    yx, yy, yw, yh = regs["ylabel"]["bbox"]
+    assert yx + yw <= px
 
 
 # ---------------------------------------------------------------------------
