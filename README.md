@@ -29,11 +29,11 @@ Compact, vendor-neutral onboarding docs live in [`skills/`](skills/):
 
 ## Dependencies
 
-plotlet supports Python 3.9+.
+plotlet supports Python 3.10+.
 
-Required: `fonttools`, `scipy` (used by regression, qq, pointplot, dendrogram). numpy / pandas / polars inputs work transparently.
+Required: `fonttools`, `scipy` (used by regression, qq, pointplot, dendrogram), `resvg_py` (PNG rendering — prebuilt wheels, no system libraries). numpy / pandas / polars inputs work transparently.
 
-Optional: `cairosvg` for PNG / PDF export.
+Optional: `cairosvg` for PDF export (`pip install plotlet[pdf]`).
 
 ## Installation
 

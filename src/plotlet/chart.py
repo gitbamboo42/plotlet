@@ -32,14 +32,17 @@ only render path, and this half never sees the pipeline internals.
 Invariants:
 
   * Single parent — composing a node that already has a `_parent` raises.
-  * Show-on-child raises — calling `.show()` / `.to_svg()` / `_repr_html_`
+  * Show-on-child raises — calling `.show()` / `.to_svg()` / `_repr_mimebundle_`
     on a node with a non-None `_parent` raises with a pointer up.
 """
 from __future__ import annotations
 
 import importlib.util
 import inspect
+import re
 from pathlib import Path
+
+import resvg_py
 
 from ._spec import _SIZESPEC, _MARGIN_FLOOR
 from ._tree import compute_share_classes, normalize_share_mode
@@ -67,6 +70,30 @@ def _has_column(data, name):
         return name in data
     except (TypeError, KeyError):
         return False
+
+
+# Notebook display renders PNG at 2x and pins the logical size in the
+# output metadata — retina-sharp at natural size.
+_REPR_SCALE = 2
+
+# Root-tag size attrs, always integer px in our own emit
+# (`_layout_engine` writes `width="{Wt}" height="{Ht}"` on the root).
+_SVG_SIZE_RE = re.compile(r'<svg[^>]* width="(\d+)" height="(\d+)"')
+
+
+def _svg_size(svg: str) -> tuple[int, int]:
+    m = _SVG_SIZE_RE.match(svg)
+    if m is None:
+        raise ValueError("could not read width/height off the SVG root tag")
+    return int(m.group(1)), int(m.group(2))
+
+
+def _svg_to_png(svg: str, *, scale: float = 1.0) -> bytes:
+    """SVG → PNG bytes via resvg (statically bundled — no system
+    libraries). `skip_system_fonts` keeps rasterization independent of
+    installed fonts; plotlet text is already path outlines."""
+    return bytes(resvg_py.svg_to_bytes(svg_string=svg, zoom=float(scale),
+                                       skip_system_fonts=True))
 
 
 class _Renderable:
@@ -141,44 +168,76 @@ class _Renderable:
                     f'<body style="margin:24px">{svg}</body></html>')
         return svg
 
-    def _repr_html_(self) -> str:
+    def _repr_mimebundle_(self, include=None, exclude=None):
         # Notebook display only — the file output from `to_svg()` is not
-        # touched. Wrapped as an <img> (SVG data URI) rather than inline
-        # <svg> markup so the browser treats the figure as an image:
-        # draggable out of the cell and right-click-copyable, like a
-        # raster cell output. `max-width:100%` lets the figure
-        # shrink with a narrow cell; the SVG's own width/height attrs set
-        # the intrinsic size; `height:auto` preserves aspect. base64, not
-        # percent-encoded UTF-8 — avoids `#`/quote escaping in the URI.
+        # touched. A real `image/png` output (not HTML) so frontends
+        # attach their native image affordances: drag out of the cell,
+        # Copy Image, Save Image As. Rendered at 2x with the logical
+        # size in metadata so it displays retina-sharp at natural size.
+        # `show(format="svg")` is the vector alternative.
+        svg = self.to_svg()
+        w, h = _svg_size(svg)
+        return ({"image/png": _svg_to_png(svg, scale=_REPR_SCALE)},
+                {"image/png": {"width": w, "height": h}})
+
+    def _svg_img_html(self) -> str:
+        # Vector notebook display, wrapped as an <img> (SVG data URI)
+        # rather than inline <svg> markup so the browser treats the
+        # figure as an image and it can be dragged out of the cell.
+        # base64, not percent-encoded UTF-8 — avoids `#`/quote escaping
+        # in the URI. No native copy/save buttons: frontends reserve
+        # those for bitmap-MIME outputs (the `format="png"` path).
         import base64
         b64 = base64.standard_b64encode(self.to_svg().encode("utf-8")).decode("ascii")
         return (f'<img style="max-width:100%;height:auto" alt="plotlet figure" '
                 f'src="data:image/svg+xml;base64,{b64}"/>')
 
-    def show(self):
+    def show(self, *, format: str = "png", scale: float = _REPR_SCALE):
+        """Display in a notebook. `format="png"` (default) emits a real
+        `image/png` output — native drag/copy/save in every frontend,
+        rendered at `scale`× and displayed at logical size. `format="svg"`
+        displays the vector SVG as a draggable <img> — crisp at any zoom,
+        but without the native image buttons."""
         self._require_render_root()
+        if format not in ("png", "svg"):
+            raise ValueError(
+                f'show: format= must be "png" or "svg"; got {format!r}.'
+            )
         try:
             from IPython.display import HTML, display
         except ImportError:
             print(self.to_html(full_page=True))
             return
-        display(HTML(self._repr_html_()))
+        if format == "svg":
+            display(HTML(self._svg_img_html()))
+            return
+        svg = self.to_svg()
+        w, h = _svg_size(svg)
+        display({"image/png": _svg_to_png(svg, scale=scale)},
+                metadata={"image/png": {"width": w, "height": h}}, raw=True)
 
     def save_svg(self, path, *, clean: bool = False):
         Path(path).write_text(self.to_svg(clean=clean))
         return self
 
-    def save_png(self, path, *, scale: float = 1.0, dpi: int | None = None):
-        """Rasterize to PNG. Requires `cairosvg` (`pip install cairosvg`).
-        `scale` multiplies the canvas pixel dimensions uniformly (e.g.
-        `scale=2` for retina); `dpi` overrides the default 96 dpi
-        rendering — both are passed straight through."""
-        _rasterize(self.to_svg(), path, "png", scale=scale, dpi=dpi)
+    def save_png(self, path, *, scale: float = 1.0):
+        """Rasterize to PNG via the bundled resvg renderer. `scale`
+        multiplies the canvas pixel dimensions uniformly (e.g. `scale=2`
+        for retina)."""
+        Path(path).write_bytes(_svg_to_png(self.to_svg(), scale=scale))
         return self
 
     def save_pdf(self, path):
-        """Rasterize to PDF. Requires `cairosvg`."""
-        _rasterize(self.to_svg(), path, "pdf")
+        """Rasterize to PDF. Requires `cairosvg` (`pip install cairosvg`,
+        or `pip install plotlet[pdf]`)."""
+        try:
+            import cairosvg
+        except ImportError as e:
+            raise ImportError(
+                "save_pdf() needs cairosvg. Install with: pip install cairosvg"
+            ) from e
+        cairosvg.svg2pdf(bytestring=self.to_svg().encode("utf-8"),
+                         write_to=str(path))
         return self
 
     def write_html(self, path):
@@ -1043,22 +1102,6 @@ def _scale_data_dims(node, s: float) -> None:
             _scale_data_dims(child, s)
 
 
-def _rasterize(svg: str, path, fmt: str, *, scale: float = 1.0, dpi: int | None = None):
-    """SVG → PNG/PDF via cairosvg. Imported lazily so users who only use
-    `save_svg` / `write_html` don't pay for a heavy dependency."""
-    try:
-        import cairosvg
-    except ImportError as e:
-        raise ImportError(
-            f"save_{fmt}() needs cairosvg. Install with: pip install cairosvg"
-        ) from e
-    fn = {"png": cairosvg.svg2png, "pdf": cairosvg.svg2pdf}[fmt]
-    kw = {"bytestring": svg.encode("utf-8"), "write_to": str(path)}
-    if fmt == "png":
-        kw["scale"] = float(scale)
-        if dpi is not None:
-            kw["dpi"] = int(dpi)
-    fn(**kw)
 
 
 def _compose(left, right, kind: str):

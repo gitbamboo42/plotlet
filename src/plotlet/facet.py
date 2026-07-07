@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import math
 
-from .chart import Chart, chart, grid
+from .chart import Chart, chart, grid, _REPR_SCALE
 
 
 def facet(data, *, by, col_wrap=None, share_x=True, share_y=True,
@@ -140,18 +140,18 @@ class FacetGrid:
     def to_html(self, full_page: bool = False) -> str:
         return self._materialize().to_html(full_page=full_page)
 
-    def _repr_html_(self) -> str:
-        return self._materialize()._repr_html_()
+    def _repr_mimebundle_(self, include=None, exclude=None):
+        return self._materialize()._repr_mimebundle_(include, exclude)
 
-    def show(self):
-        return self._materialize().show()
+    def show(self, *, format: str = "png", scale: float = _REPR_SCALE):
+        return self._materialize().show(format=format, scale=scale)
 
     def save_svg(self, path):
         self._materialize().save_svg(path)
         return self
 
-    def save_png(self, path, *, scale: float = 1.0, dpi: int | None = None):
-        self._materialize().save_png(path, scale=scale, dpi=dpi)
+    def save_png(self, path, *, scale: float = 1.0):
+        self._materialize().save_png(path, scale=scale)
         return self
 
     def save_pdf(self, path):

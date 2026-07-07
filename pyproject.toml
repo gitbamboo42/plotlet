@@ -9,7 +9,7 @@ description = "Python library for reproducible, multi-panel scientific figures, 
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
     { name = "gitbamboo42" },
 ]
@@ -27,16 +27,17 @@ classifiers = [
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Visualization",
     "Topic :: Multimedia :: Graphics",
 ]
 dependencies = [
   "fonttools>=4.0",
   "scipy>=1.10",
+  "resvg_py>=0.3",
 ]
 
 [project.optional-dependencies]
@@ -51,6 +52,9 @@ test = [
 ]
 loess = [
   "statsmodels>=0.13",
+]
+pdf = [
+  "cairosvg",
 ]
 
 [tool.pytest.ini_options]
