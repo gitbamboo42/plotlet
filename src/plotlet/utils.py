@@ -22,6 +22,7 @@ import re
 
 from .registry import get_artist
 from .draw import TAB10, resolve_color
+from .draw import palette as _named_palette
 
 
 _UNIT_PX = {
@@ -299,12 +300,15 @@ def palette_color(palette, value, index):
     """Resolve a hue-category value to a color via `palette`. Returns
     `None` when `palette` is `None`/empty or doesn't cover `value`, in
     which case the caller falls through to its own cycle. Accepts a
-    dict (category → color) or a sequence indexed by category-appearance
+    palette name (`"Set2"`, see `plotlet.list_palettes()`), a dict
+    (category → color), or a sequence indexed by category-appearance
     order (wraps modulo length). Palette values pass through
     `resolve_color`, so the standard shortcuts (`"C0"`–`"C9"`, named
     colors, single-letter codes) work alongside hex / CSS strings."""
     if not palette:
         return None
+    if isinstance(palette, str):
+        palette = _named_palette(palette)
     if isinstance(palette, dict):
         return resolve_color(palette.get(value))
     return resolve_color(palette[index % len(palette)])

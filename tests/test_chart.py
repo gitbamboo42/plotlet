@@ -1720,6 +1720,16 @@ def chart_bar_dodge():
     return c
 
 
+def chart_named_palette():
+    df = _bar_quarterly_df()
+    c = pt.chart(data_width=320, data_height=200,
+                 title='named palette ("Set2")', ylabel="$M", legend=True)
+    c.bar(data=df, x="quarter", y="value", fill="series", position="dodge",
+          palette="Set2")
+    c.legend()
+    return c
+
+
 def chart_bar_fill():
     df = _bar_quarterly_df()
     c = pt.chart(data_width=300, data_height=200,
@@ -2114,6 +2124,7 @@ PLOTS = {
     "qq":                    chart_qq,
     "bar_stack":             chart_bar_stack,
     "bar_dodge":             chart_bar_dodge,
+    "named_palette":         chart_named_palette,
     "bar_fill":              chart_bar_fill,
     "bar_long_fill":         chart_bar_long_fill,
     "area_stack":            chart_area_stack,

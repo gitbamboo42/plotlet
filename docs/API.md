@@ -250,7 +250,7 @@ universal and not repeated.
 
 ### Notes
 
-- A column-driven grouping aes (`color=<col>` or `fill=<col>`) splits into one call per unique value with auto-labels and tab10 colors; the palette is overridable per-artist via `palette=`.
+- A column-driven grouping aes (`color=<col>` or `fill=<col>`) splits into one call per unique value with auto-labels and tab10 colors; the palette is overridable per-artist via `palette=` — a name string (`"Set2"`), a color list, or a `{category: color}` dict (see [Palettes](#palettes)).
 - `color=` is the stroke and `fill=` is the fill — independent kwargs. So an outlined bar is `fill=<col>, color="black"`; previously inexpressible.
 - On `line` / `scatter`, `group=<col>` is the **invisible** split — finer-grained sub-records (one polyline per subject, say) without burning a color channel or a legend row. `alpha=<col>` interpolates opacity per level via `alphas=(min, max)`. `line` additionally has `linestyle=<col>` (dash cycle per level); not on `scatter`. When `color=` and `linestyle=` (or `alpha=`) map the *same* column, the existing color legend swatches inherit the dash / opacity — the canonical pattern for colorblind-safe or B&W-print redundancy.
 - Reference lines / spans default to black, are drawn outside the data color cycle, and don't participate in autoscaling.
@@ -273,10 +273,19 @@ Deeper layout helpers — `layout_tree(tree)`, `layout_parent(tree)`, `fit_paren
 
 ## Color shortcuts
 
-- `"C0"`–`"C9"` → tab10 palette
-- Named: `"blue"`, `"orange"`, `"green"`, `"red"`, `"purple"`, `"brown"`, `"pink"`, `"gray"`, `"olive"`, `"cyan"`
-- Single-letter: `"k"`, `"w"`, `"b"`, `"g"`, `"r"`
+- `"C0"`, `"C1"`, … → tab10 cycle (wraps past `"C9"`)
+- Named: `"blue"`, `"orange"`, `"green"`, `"red"`, `"purple"`, `"brown"`, `"pink"`, `"gray"`, `"olive"`, `"cyan"` — tab10-flavored, not CSS
+- Single-letter: `"b"`, `"g"`, `"r"`, `"c"`, `"m"`, `"y"`, `"k"`, `"w"`
+- Grayscale strings: `"0"` (black) – `"1"` (white), e.g. `"0.5"`
+- `(r, g, b)` / `(r, g, b, a)` tuples of floats in [0, 1]
 - Any hex / CSS color string passes through
+
+## Palettes
+
+- `pt.palette(name)` → list of hex colors. Qualitative names (`pt.list_palettes()`: `"Set1"`–`"Set3"`, `"Pastel1"`/`"Pastel2"`, `"Dark2"`, `"Accent"`, `"Paired"`, `"tab10"`/`"tab20"`/`"tab20b"`/`"tab20c"`) return the full palette; `n` truncates or cycles past the end.
+- `pt.palette(name, n)` also samples any continuous colormap (`pt.list_colormaps()`) at `n` evenly-spaced points — e.g. `pt.palette("viridis", 12)` for 12 hex colors, no matplotlib round-trip.
+- `"_r"` suffix reverses either kind.
+- Artists' `palette=` accepts a name string directly: `c.bar(..., fill="group", palette="Set2")` — alongside the existing list and `{category: color}` dict forms.
 
 ## Inset axes
 
