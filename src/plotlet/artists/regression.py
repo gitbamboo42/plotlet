@@ -138,9 +138,9 @@ def _regression_draw(a, ctx):
         pts_top = [(ctx.x_scale(x), ctx.y_scale(y)) for x, y in upper]
         pts_bot = [(ctx.x_scale(x), ctx.y_scale(y)) for x, y in lower]
         band = pts_top + pts_bot[::-1]
-        out.append(polygon(band, fill=col, alpha=fill_alpha))
+        out.append(polygon(band, fill=col, alpha=fill_alpha, project=ctx.warp))
         line_pts = [(ctx.x_scale(x), ctx.y_scale(y)) for x, y in mid]
-        out.append(polyline(line_pts, color=col, width=lw))
+        out.append(polyline(line_pts, color=col, width=lw, project=ctx.warp))
     return "".join(out)
 
 

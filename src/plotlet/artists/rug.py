@@ -85,7 +85,8 @@ def _rug_draw(a, ctx):
                     continue
                 px = ctx.x_scale(v)
                 out.append(segment(px, y_base, px, y_top,
-                                   color=col, width=lw, alpha=alpha))
+                                   color=col, width=lw, alpha=alpha,
+                                   project=ctx.warp))
         else:
             x_base = 0
             x_right = length * ctx.iw
@@ -94,7 +95,8 @@ def _rug_draw(a, ctx):
                     continue
                 py = ctx.y_scale(v)
                 out.append(segment(x_base, py, x_right, py,
-                                   color=col, width=lw, alpha=alpha))
+                                   color=col, width=lw, alpha=alpha,
+                                   project=ctx.warp))
     return "".join(out)
 
 

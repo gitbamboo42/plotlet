@@ -164,7 +164,7 @@ def _bar_draw(a, ctx):
     def _emit(x, y, w, h, col):
         out.append(draw_rect(x, y, w, h, fill=col, stroke=stroke,
                              stroke_width=lw, dash=opts.get("linestyle"),
-                             alpha=alpha, shape_rendering=sr))
+                             alpha=alpha, shape_rendering=sr, project=ctx.warp))
 
     if multi and position in ("stack", "fill"):
         running = [0.0] * len(cats)

@@ -35,7 +35,7 @@ from ..utils import (quantile, resolve_aes, palette_color,
                      silverman_bw, kde_1d)
 from ..utils import _drop_nan
 from ..draw import TAB10, resolve_color
-from ..draw import coord, path, rect, segment
+from ..draw import polygon, rect, segment
 from .._spec import _FRAME, _FIGSPEC
 
 
@@ -147,9 +147,9 @@ def _violin_draw(a, ctx):
                     left.append((cp - d_px, vp))
                     right.append((cp + d_px, vp))
             pts = left + right[::-1]
-            path_d = "M" + " L".join(f"{coord(x)},{coord(y)}" for x, y in pts) + " Z"
-            out.append(path(path_d, fill=fill, stroke=line, stroke_width=lw,
-                            fill_alpha=fill_alpha if do_fill else 1.0))
+            out.append(polygon(pts, fill=fill, stroke=line, stroke_width=lw,
+                               fill_alpha=fill_alpha if do_fill else 1.0,
+                               project=ctx.warp))
 
             q1 = quantile(vs, 0.25)
             q2 = quantile(vs, 0.50)
@@ -169,32 +169,40 @@ def _violin_draw(a, ctx):
                 vp_wlo = val_scale(whisker_lo)
                 vp_whi = val_scale(whisker_hi)
                 if horizontal:
-                    out.append(segment(vp_wlo, cp, vp_q1, cp, color=line, width=lw))
-                    out.append(segment(vp_q3, cp, vp_whi, cp, color=line, width=lw))
+                    out.append(segment(vp_wlo, cp, vp_q1, cp, color=line, width=lw,
+                                       project=ctx.warp))
+                    out.append(segment(vp_q3, cp, vp_whi, cp, color=line, width=lw,
+                                       project=ctx.warp))
                     out.append(rect(min(vp_q1, vp_q3), cp - box_half,
                                     abs(vp_q3 - vp_q1), 2 * box_half,
-                                    fill=box_fill, stroke=line, stroke_width=lw))
+                                    fill=box_fill, stroke=line, stroke_width=lw,
+                                    project=ctx.warp))
                     out.append(segment(vp_q2, cp - box_half, vp_q2, cp + box_half,
-                                       color=line, width=lw))
+                                       color=line, width=lw, project=ctx.warp))
                 else:
-                    out.append(segment(cp, vp_wlo, cp, vp_q1, color=line, width=lw))
-                    out.append(segment(cp, vp_q3, cp, vp_whi, color=line, width=lw))
+                    out.append(segment(cp, vp_wlo, cp, vp_q1, color=line, width=lw,
+                                       project=ctx.warp))
+                    out.append(segment(cp, vp_q3, cp, vp_whi, color=line, width=lw,
+                                       project=ctx.warp))
                     out.append(rect(cp - box_half, min(vp_q1, vp_q3),
                                     2 * box_half, abs(vp_q3 - vp_q1),
-                                    fill=box_fill, stroke=line, stroke_width=lw))
+                                    fill=box_fill, stroke=line, stroke_width=lw,
+                                    project=ctx.warp))
                     out.append(segment(cp - box_half, vp_q2, cp + box_half, vp_q2,
-                                       color=line, width=lw))
+                                       color=line, width=lw, project=ctx.warp))
             elif inner == "quartile":
                 for q in (q1, q2, q3):
                     vp = val_scale(q)
                     if horizontal:
                         out.append(segment(vp, cp - half_w_px * 0.7,
                                            vp, cp + half_w_px * 0.7,
-                                           color=line, width=lw, dash="3,2"))
+                                           color=line, width=lw, dash="3,2",
+                                           project=ctx.warp))
                     else:
                         out.append(segment(cp - half_w_px * 0.7, vp,
                                            cp + half_w_px * 0.7, vp,
-                                           color=line, width=lw, dash="3,2"))
+                                           color=line, width=lw, dash="3,2",
+                                           project=ctx.warp))
     return "".join(out)
 
 

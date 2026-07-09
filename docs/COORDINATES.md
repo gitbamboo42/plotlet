@@ -87,15 +87,21 @@ own modules — `import plotlet.extensions.chord_links` activates the
 artist.
 
 **Supported artists.** Core: data marks (`scatter`, `line`, `step`,
-`hist`, `heatmap`, `fill_between`, `area`); reference primitives
-(`axhline`, `axvline`, `axhspan`, `axvspan`, `hlines`, `vlines`); shape
-primitives (`rect`, `polygon`, `polyline`). Reference and shape
-primitives warp through the standard `draw.*` subdivision: segments
-become arcs, rects become annular sectors, polygons curve along the
-ring. Extensions: `numeric_bar`, `chord_links`, `chord_ribbon`,
-`annotation_strip` (each activates on import). The authoritative
-list is the `declare_coord_support("Circular", [...])` block at the
-bottom of [`coordinates.py`](../src/plotlet/coordinates.py).
+`hist`, `heatmap`, `fill_between`, `area`, `bar`, `errorbar`);
+statistical / distribution marks (`strip`, `swarm`, `boxplot`, `violin`,
+`pointplot`, `qq`, `rug`, `ecdf`, `freqpoly`, `density_1d`,
+`regression`); reference primitives (`axhline`, `axvline`, `axhspan`,
+`axvspan`, `hlines`, `vlines`); shape primitives (`rect`, `polygon`,
+`polyline`). Everything warps through the standard `draw.*` subdivision:
+segments become arcs, rects become annular sectors (a bar → a wedge, a
+box → an annular box), polygons curve along the ring; point marks
+re-anchor but keep their glyph shape. Not supported: 2-D field marks
+(`imshow`, `hexbin`, `kde_2d`, `contour`) and the stacked-baseline
+`ridge` don't map to a 1-D-over-angle canvas; `dendrogram` awaits its
+own radial-tree treatment. Extensions: `numeric_bar`, `chord_links`,
+`chord_ribbon`, `annotation_strip` (each activates on import). The
+authoritative list is the `declare_coord_support("Circular", [...])`
+block at the bottom of [`coordinates.py`](../src/plotlet/coordinates.py).
 
 **Per-artist coord knobs.** A few artists expose a kwarg that only
 matters under a non-Cartesian coord:

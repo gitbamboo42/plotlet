@@ -121,11 +121,12 @@ def _pointplot_draw(a, ctx):
         py = ctx.y_scale(est)
         if lo == lo and hi == hi:
             out.append(errorbar_v(cx, ctx.y_scale(lo), ctx.y_scale(hi),
-                                  capsize=capsize, color=col, width=lw))
+                                  capsize=capsize, color=col, width=lw,
+                                  project=ctx.warp))
         pts.append((cx, py))
-    out.append(polyline(pts, color=col, width=lw))
+    out.append(polyline(pts, color=col, width=lw, project=ctx.warp))
     for x, y in pts:
-        out.append(circle(x, y, r, fill=col))
+        out.append(circle(x, y, r, fill=col, project=ctx.warp))
     return "".join(out)
 
 

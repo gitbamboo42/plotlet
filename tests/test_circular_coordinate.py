@@ -22,34 +22,38 @@ import pytest
 # Shared deterministic data
 # ---------------------------------------------------------------------------
 
-def _clamp01(v):
-    return max(0.0, min(1.0, v))
-
-
+# No value clamping: the charts below autoscale, so the axis fits whatever
+# range the data has (the default 5% expand keeps extremes off the rim) —
+# exactly like a cartesian chart. Data is only kept in [0, 1] where a test
+# deliberately forces that frame (references / shapes / sectors / arcs).
 _RNG = random.Random(11)
 
 _N_LINE = 12
 _LINE_TS = [i / _N_LINE for i in range(_N_LINE + 1)]
-_LINE_V  = [_clamp01(0.5 + 0.35 * math.sin(2 * math.pi * t)) for t in _LINE_TS]
-_BAND_LO = [_clamp01(v - 0.08) for v in _LINE_V]
-_BAND_HI = [_clamp01(v + 0.08) for v in _LINE_V]
+_LINE_V  = [0.5 + 0.35 * math.sin(2 * math.pi * t) for t in _LINE_TS]
+_BAND_LO = [v - 0.08 for v in _LINE_V]
+_BAND_HI = [v + 0.08 for v in _LINE_V]
 
 _SCATTER_T = [_RNG.random() for _ in range(60)]
-_SCATTER_V = [_clamp01(0.5 + 0.4 * math.sin(2 * math.pi * t)
-                       + _RNG.gauss(0, 0.06))
+_SCATTER_V = [0.5 + 0.4 * math.sin(2 * math.pi * t) + _RNG.gauss(0, 0.06)
               for t in _SCATTER_T]
 
 _N_BAR = 24
 _BAR_T = [(i + 0.5) / _N_BAR for i in range(_N_BAR)]
-_BAR_V = [_clamp01(0.3 + 0.5 * abs(math.sin(2 * math.pi * t))) for t in _BAR_T]
+_BAR_V = [0.3 + 0.5 * abs(math.sin(2 * math.pi * t)) for t in _BAR_T]
 
+# Grouped categorical sample (strip / swarm / boxplot / violin / pointplot):
+# each category is a small distribution centered at a walking mean.
+_CAT_NAMES = [f"c{i}" for i in range(6)]
+_CAT_DATA = {"cat": [], "val": []}
+for _ci, _cn in enumerate(_CAT_NAMES):
+    _mu = 0.35 + 0.4 * abs(math.sin(0.9 * _ci))
+    for _k in range(30):
+        _CAT_DATA["cat"].append(_cn)
+        _CAT_DATA["val"].append(_mu + _RNG.gauss(0, 0.10))
 
-def _ring_chart(title):
-    c = pt.chart(title=title, xlim=(0, 1), ylim=(0, 1),
-                 data_width=300, data_height=300)
-    c.coordinate(pt.CircularCoordinate())
-    c.xticks([0.0, 0.25, 0.5, 0.75])
-    return c
+# A single 1-D distribution (qq / rug / ecdf / freqpoly / density_1d).
+_DIST = [0.5 + 0.16 * _RNG.gauss(0, 1) for _ in range(150)]
 
 
 # ---------------------------------------------------------------------------
@@ -57,14 +61,16 @@ def _ring_chart(title):
 # ---------------------------------------------------------------------------
 
 def ring_scatter():
-    c = _ring_chart("scatter — ring")
+    c = pt.chart(title="scatter — ring", data_width=300, data_height=300)
+    c.coordinate(pt.CircularCoordinate())
     c.scatter(data={"x": _SCATTER_T, "y": _SCATTER_V}, x="x", y="y",
               color="#534AB7", size=3, alpha=0.55)
     return c
 
 
 def ring_line():
-    c = _ring_chart("line — ring")
+    c = pt.chart(title="line — ring", data_width=300, data_height=300)
+    c.coordinate(pt.CircularCoordinate())
     c.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
            color="#1D9E75", width=1.5)
     return c
@@ -75,14 +81,16 @@ def ring_line_chords():
     # connecting segments are literal Cartesian chords (no per-edge
     # subdivision). Same data as `ring_line` so the two baselines are a
     # direct visual pair: same sample points, arc on vs off.
-    c = _ring_chart("line — chords (arc=False)")
+    c = pt.chart(title="line — chords (arc=False)", data_width=300, data_height=300)
+    c.coordinate(pt.CircularCoordinate())
     c.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
            color="#1D9E75", width=1.5, arc=False)
     return c
 
 
 def ring_line_band():
-    c = _ring_chart("line + band — ring")
+    c = pt.chart(title="line + band — ring", data_width=300, data_height=300)
+    c.coordinate(pt.CircularCoordinate())
     c.fill_between(data={"x": _LINE_TS, "lo": _BAND_LO, "hi": _BAND_HI},
                    x="x", y1="lo", y2="hi", fill="#1D9E75", alpha=0.25)
     c.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
@@ -91,9 +99,121 @@ def ring_line_band():
 
 
 def ring_numeric_bar():
-    c = _ring_chart("numeric_bar — ring")
+    c = pt.chart(title="numeric_bar — ring", data_width=300, data_height=300)
+    c.coordinate(pt.CircularCoordinate())
     c.numeric_bar(data={"x": _BAR_T, "y": _BAR_V}, x="x", y="y",
                   width=0.025, color="#D9534F", alpha=0.85)
+    return c
+
+
+def ring_bar():
+    # Core `bar` under Circular — a categorical x-scale wraps around the
+    # ring (coxcomb / polar-bar look); each bar rect warps into an annular
+    # wedge via project=ctx.warp.
+    cats = [f"c{i}" for i in range(_N_BAR)]
+    c = pt.chart(title="bar — ring", data_width=300, data_height=300)
+    c.coordinate(pt.CircularCoordinate())
+    c.bar(data={"cat": cats, "val": _BAR_V}, x="cat", y="val",
+          fill="#D9534F", alpha=0.85)
+    return c
+
+
+def ring_errorbar():
+    # Core `errorbar` under Circular — radial stems + arc caps warp per
+    # sub-segment; markers keep their glyph shape and just re-anchor.
+    yerr = [0.05 + 0.02 * abs(math.cos(3 * t)) for t in _BAR_T]
+    c = pt.chart(title="errorbar — ring", data_width=300, data_height=300)
+    c.coordinate(pt.CircularCoordinate())
+    c.errorbar(data={"x": _BAR_T, "y": _BAR_V, "e": yerr},
+               x="x", y="y", yerr="e", color="#534AB7", size=3)
+    return c
+
+
+# --- statistical / distribution artists on a categorical or numeric ring ---
+
+def ring_strip():
+    c = pt.chart(title="strip — ring", data_width=300, data_height=300)
+    c.coordinate(pt.CircularCoordinate())
+    c.strip(data=_CAT_DATA, x="cat", y="val", fill="cat", palette="Set2")
+    return c
+
+
+def ring_swarm():
+    c = pt.chart(title="swarm — ring", data_width=300, data_height=300)
+    c.coordinate(pt.CircularCoordinate())
+    c.swarm(data=_CAT_DATA, x="cat", y="val", fill="cat", palette="Set2")
+    return c
+
+
+def ring_boxplot():
+    # Box → annular wedge, whiskers radial, median arc, fliers repositioned.
+    c = pt.chart(title="boxplot — ring", data_width=300, data_height=300)
+    c.coordinate(pt.CircularCoordinate())
+    c.boxplot(data=_CAT_DATA, x="cat", y="val", fill="cat", palette="Set2")
+    return c
+
+
+def ring_violin():
+    # KDE lobe warps into a mirrored annular blob (polygon project path).
+    c = pt.chart(title="violin — ring", data_width=300, data_height=300)
+    c.coordinate(pt.CircularCoordinate())
+    c.violin(data=_CAT_DATA, x="cat", y="val", fill="cat", palette="Set2")
+    return c
+
+
+def ring_pointplot():
+    c = pt.chart(title="pointplot — ring", data_width=300, data_height=300)
+    c.coordinate(pt.CircularCoordinate())
+    c.pointplot(data=_CAT_DATA, x="cat", y="val", color="#1D9E75")
+    return c
+
+
+def ring_qq():
+    # Theoretical quantiles run negative→positive on x, sample values on y.
+    c = pt.chart(title="qq — ring", data_width=300, data_height=300)
+    c.coordinate(pt.CircularCoordinate())
+    c.qq(data={"s": _DIST}, sample="s", dist="normal",
+         color="#534AB7", size=2.5)
+    return c
+
+
+def ring_rug():
+    c = pt.chart(title="rug — ring", data_width=300, data_height=300)
+    c.coordinate(pt.CircularCoordinate())
+    c.rug(data={"x": _DIST}, x="x", color="#444444")
+    return c
+
+
+def ring_ecdf():
+    c = pt.chart(title="ecdf — ring", data_width=300, data_height=300)
+    c.coordinate(pt.CircularCoordinate())
+    c.ecdf(data={"x": _DIST}, x="x", color="#534AB7")
+    return c
+
+
+def ring_freqpoly():
+    c = pt.chart(title="freqpoly — ring", data_width=300, data_height=300)
+    c.coordinate(pt.CircularCoordinate())
+    c.freqpoly(data={"x": _DIST}, x="x", bins=20, color="#1D9E75")
+    return c
+
+
+def ring_density_1d():
+    # Filled density closes to the baseline ring via a warped polygon.
+    c = pt.chart(title="density_1d — ring", data_width=300, data_height=300)
+    c.coordinate(pt.CircularCoordinate())
+    c.density_1d(data={"x": _DIST}, x="x", fill=True, color="#534AB7")
+    return c
+
+
+def ring_regression():
+    xs = [i / 40 for i in range(41)]
+    ys = [0.4 + 0.4 * x + 0.05 * math.sin(9 * x) for x in xs]
+    # The CI band extends past the fit line — autoscale for breathing room.
+    c = pt.chart(title="regression — ring", data_width=300, data_height=300)
+    c.coordinate(pt.CircularCoordinate())
+    c.scatter(data={"x": xs, "y": ys}, x="x", y="y", size=2, alpha=0.5)
+    c.regression(data={"x": xs, "y": ys}, x="x", y="y", color="#D9534F")
     return c
 
 
@@ -110,7 +230,7 @@ def ring_x_sectors():
         for i in range(ts_per):
             t_in = (i + 0.5) / ts_per
             pts_x.append(t_in * slen)
-            pts_y.append(_clamp01(0.5 + 0.35 * math.sin(4 * math.pi * t_in)))
+            pts_y.append(0.5 + 0.35 * math.sin(4 * math.pi * t_in))
             pts_sec.append(sname)
 
     c = pt.chart(title="ring — x-sectors",
@@ -158,7 +278,10 @@ def ring_references():
     # Reference primitives under Circular: axhline → concentric ring,
     # axvline → radial spoke, hlines/vlines → bounded arc / spoke
     # segments, axhspan → ring band, axvspan → angular wedge.
-    c = _ring_chart("references — ring")
+    c = pt.chart(title="references — ring", xlim=(0, 1), ylim=(0, 1),
+                 data_width=300, data_height=300)
+    c.coordinate(pt.CircularCoordinate())
+    c.xticks([0.0, 0.25, 0.5, 0.75])
     c.axhspan(0.65, 0.85, color="#9CC3D5", alpha=0.4)   # outer ring band
     c.axvspan(0.10, 0.30, color="#F2C57C", alpha=0.4)   # angular wedge
     c.axhline(0.50, color="#444", linewidth=1)          # mid ring
@@ -174,7 +297,10 @@ def ring_references():
 def ring_shapes():
     # Shape primitives under Circular: rect → annular sector, polygon →
     # warped closed contour, polyline → warped open stroke.
-    c = _ring_chart("shapes — ring")
+    c = pt.chart(title="shapes — ring", xlim=(0, 1), ylim=(0, 1),
+                 data_width=300, data_height=300)
+    c.coordinate(pt.CircularCoordinate())
+    c.xticks([0.0, 0.25, 0.5, 0.75])
     c.rect(0.10, 0.20, 0.25, 0.40, color="#A0C4E2", alpha=0.5)
     poly_x = [0.55, 0.75, 0.85, 0.70, 0.55]
     poly_y = [0.30, 0.30, 0.55, 0.70, 0.55]
@@ -220,7 +346,7 @@ def ring_heatmap_sectors():
         for i in range(12):
             p = (i + 0.5) / 12 * slen
             sx.append(p); sg.append(name)
-            sy.append(_clamp01(0.5 + 0.4 * math.sin(6 * math.pi * p / slen)))
+            sy.append(0.5 + 0.4 * math.sin(6 * math.pi * p / slen))
 
     sc = pt.chart(xlim=(0, 1), ylim=(0, 1), data_width=320, data_height=110)
     sc.scatter(data={"x": sx, "y": sy, "grp": sg}, x="x", y="y",
@@ -276,7 +402,7 @@ def ring_partial_arc_sectors():
         for i in range(ts_per):
             t_in = (i + 0.5) / ts_per
             pts_x.append(t_in * slen)
-            pts_y.append(_clamp01(0.5 + 0.30 * math.sin(3 * math.pi * t_in)))
+            pts_y.append(0.5 + 0.30 * math.sin(3 * math.pi * t_in))
             pts_sec.append(sname)
     c = pt.chart(title="partial arc — A/B/C sectors",
                  xlim=(0, 1), ylim=(0, 1),
@@ -397,6 +523,19 @@ PLOTS = {
     "ring_line_chords":            ring_line_chords,
     "ring_line_band":              ring_line_band,
     "ring_numeric_bar":            ring_numeric_bar,
+    "ring_bar":                    ring_bar,
+    "ring_errorbar":               ring_errorbar,
+    "ring_strip":                  ring_strip,
+    "ring_swarm":                  ring_swarm,
+    "ring_boxplot":                ring_boxplot,
+    "ring_violin":                 ring_violin,
+    "ring_pointplot":              ring_pointplot,
+    "ring_qq":                     ring_qq,
+    "ring_rug":                    ring_rug,
+    "ring_ecdf":                   ring_ecdf,
+    "ring_freqpoly":               ring_freqpoly,
+    "ring_density_1d":             ring_density_1d,
+    "ring_regression":             ring_regression,
     "ring_inner_outer":            ring_inner_outer,
     "ring_references":             ring_references,
     "ring_shapes":                 ring_shapes,

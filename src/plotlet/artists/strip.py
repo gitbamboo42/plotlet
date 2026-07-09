@@ -138,7 +138,7 @@ def _strip_draw(a, ctx):
                 cx, cy = (vp, cp + off) if horizontal else (cp + off, vp)
                 out.append(circle(cx, cy, r, fill=col, alpha=alpha,
                                   stroke=stroke if lw > 0 else None,
-                                  stroke_width=lw))
+                                  stroke_width=lw, project=ctx.warp))
     return "".join(out)
 
 

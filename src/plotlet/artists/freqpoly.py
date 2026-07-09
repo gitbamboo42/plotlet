@@ -109,7 +109,7 @@ def _freqpoly_draw(a, ctx):
         xs = [a["_lo"] - a["_w"] / 2] + centers + [a["_hi"] + a["_w"] / 2]
         ys = [0] + list(heights) + [0]
         pts = [(ctx.x_scale(x), ctx.y_scale(y)) for x, y in zip(xs, ys)]
-        out.append(polyline(pts, color=col, width=lw))
+        out.append(polyline(pts, color=col, width=lw, project=ctx.warp))
     return "".join(out)
 
 

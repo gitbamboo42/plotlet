@@ -81,7 +81,7 @@ def _ecdf_draw(a, ctx):
             pts.append((px, ctx.y_scale(prev_y)))
             pts.append((px, ctx.y_scale(y)))
             prev_y = y
-        out.append(polyline(pts, color=col, width=lw))
+        out.append(polyline(pts, color=col, width=lw, project=ctx.warp))
     return "".join(out)
 
 

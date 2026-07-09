@@ -188,7 +188,8 @@ def _boxplot_draw(a, ctx):
                 if horizontal:
                     pts = [(y, x) for x, y in pts]
                 out.append(polygon(pts, fill=fill, stroke=line, stroke_width=lw,
-                                   fill_alpha=fill_alpha if do_fill else 1.0))
+                                   fill_alpha=fill_alpha if do_fill else 1.0,
+                                   project=ctx.warp))
                 if horizontal:
                     median = (vp_q2, cp_lo_in, vp_q2, cp_hi_in)
                 else:
@@ -204,15 +205,16 @@ def _boxplot_draw(a, ctx):
                     median = (cp_lo, vp_q2, cp_hi, vp_q2)
                 out.append(rect(rect_xy[0], rect_xy[1], rect_wh[0], rect_wh[1],
                                 fill=fill, stroke=line, stroke_width=lw,
-                                fill_alpha=fill_alpha if do_fill else 1.0))
+                                fill_alpha=fill_alpha if do_fill else 1.0,
+                                project=ctx.warp))
 
             out.append(segment(median[0], median[1], median[2], median[3],
-                               color=line, width=median_lw))
+                               color=line, width=median_lw, project=ctx.warp))
             cap_w = box_w * 0.4
             out.append(eb_along_val(cp, vp_q3, vp_hi, capsize=cap_w,
-                                    color=line, width=lw))
+                                    color=line, width=lw, project=ctx.warp))
             out.append(eb_along_val(cp, vp_q1, vp_lo, capsize=cap_w,
-                                    color=line, width=lw))
+                                    color=line, width=lw, project=ctx.warp))
             if show_means:
                 mean_v = sum(vs) / len(vs)
                 vp_m = val_scale(mean_v)
@@ -220,12 +222,13 @@ def _boxplot_draw(a, ctx):
                 out.append(marker(mean_marker_k, cx_m, cy_m,
                                   flier_size * 1.5, line, 1,
                                   edgecolor=fill if do_fill else None,
-                                  edgewidth=lw * 0.8))
+                                  edgewidth=lw * 0.8, project=ctx.warp))
             for v in outliers:
                 vp = val_scale(v)
                 cx_dot, cy_dot = (vp, cp) if horizontal else (cp, vp)
                 out.append(circle(cx_dot, cy_dot, flier_size,
-                                  stroke=flier_line, stroke_width=lw * 0.9))
+                                  stroke=flier_line, stroke_width=lw * 0.9,
+                                  project=ctx.warp))
     return "".join(out)
 
 

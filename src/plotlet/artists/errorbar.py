@@ -97,7 +97,7 @@ def _errorbar_record(args, kw):
             "opts": kw}
 
 
-def _artist_errorbar(a, xs_, ys_, col):
+def _artist_errorbar(a, xs_, ys_, col, warp=None):
     xs, ys, opts = a["xs"], a["ys"], a["opts"]
     xlo, xhi, ylo, yhi = a["xlo"], a["xhi"], a["ylo"], a["yhi"]
     has_xerr = any(xlo) or any(xhi)
@@ -124,12 +124,14 @@ def _artist_errorbar(a, xs_, ys_, col):
             continue
         if dyl or dyh:
             out.append(errorbar_v(px, ys_(y - dyl), ys_(y + dyh),
-                                  capsize=capsize, color=col, width=lw, alpha=alpha))
+                                  capsize=capsize, color=col, width=lw,
+                                  alpha=alpha, project=warp))
         if dxl or dxh:
             out.append(errorbar_h(py, xs_(x - dxl), xs_(x + dxh),
-                                  capsize=capsize, color=col, width=lw, alpha=alpha))
+                                  capsize=capsize, color=col, width=lw,
+                                  alpha=alpha, project=warp))
         if mk:
-            out.append(marker(mk, px, py, msize, col, alpha))
+            out.append(marker(mk, px, py, msize, col, alpha, project=warp))
     return "".join(out)
 
 
@@ -177,7 +179,7 @@ add_artist(ArtistSpec(
     record=_errorbar_record,
     xdomain=_errorbar_xdomain,
     ydomain=_errorbar_ydomain,
-    draw=lambda a, ctx: _artist_errorbar(a, ctx.x_scale, ctx.y_scale, ctx.color),
+    draw=lambda a, ctx: _artist_errorbar(a, ctx.x_scale, ctx.y_scale, ctx.color, ctx.warp),
     legend_entries=_errorbar_legend_entries,
     data_attrs=_errorbar_data_attrs,
 ))

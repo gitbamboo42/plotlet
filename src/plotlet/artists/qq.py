@@ -65,7 +65,7 @@ def _qq_draw(a, ctx):
     out = []
     for tx, sy in zip(a["theo"], a["sample"]):
         px = ctx.x_scale(tx); py = ctx.y_scale(sy)
-        out.append(circle(px, py, r, fill=col, alpha=alpha))
+        out.append(circle(px, py, r, fill=col, alpha=alpha, project=ctx.warp))
     n = len(a["sample"])
     if n >= 4:
         i25 = int(0.25 * (n - 1)); i75 = int(0.75 * (n - 1))
@@ -80,7 +80,8 @@ def _qq_draw(a, ctx):
             y0, y1e = intercept + slope * x0, intercept + slope * x1e
             out.append(segment(ctx.x_scale(x0), ctx.y_scale(y0),
                                ctx.x_scale(x1e), ctx.y_scale(y1e),
-                               color="#888", width=1, dash="4,3"))
+                               color="#888", width=1, dash="4,3",
+                               project=ctx.warp))
     return "".join(out)
 
 

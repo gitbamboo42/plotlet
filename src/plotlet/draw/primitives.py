@@ -474,35 +474,41 @@ def arc(x0: float, y0: float, x1: float, y1: float, *,
 
 def errorbar_v(x: float, y_lo: float, y_hi: float, *,
                capsize: float = 4, color: str = "#000",
-               width: float = 1, alpha=1) -> str:
+               width: float = 1, alpha=1, project=None) -> str:
     """Vertical error bar at pixel `x` from `y_lo` to `y_hi`, with caps.
 
     `capsize` is the cap width in pixels; pass `0` to drop the caps.
+    `project=` forwards to each sub-segment so the stem and caps warp
+    under a non-affine coord (radial stem + arc caps on a ring).
     """
-    parts = [segment(x, y_lo, x, y_hi, color=color, width=width, alpha=alpha)]
+    parts = [segment(x, y_lo, x, y_hi, color=color, width=width, alpha=alpha,
+                     project=project)]
     if capsize:
         half = capsize / 2
         parts.append(segment(x - half, y_lo, x + half, y_lo,
-                             color=color, width=width, alpha=alpha))
+                             color=color, width=width, alpha=alpha, project=project))
         parts.append(segment(x - half, y_hi, x + half, y_hi,
-                             color=color, width=width, alpha=alpha))
+                             color=color, width=width, alpha=alpha, project=project))
     return "".join(parts)
 
 
 def errorbar_h(y: float, x_lo: float, x_hi: float, *,
                capsize: float = 4, color: str = "#000",
-               width: float = 1, alpha=1) -> str:
+               width: float = 1, alpha=1, project=None) -> str:
     """Horizontal error bar at pixel `y` from `x_lo` to `x_hi`, with caps.
 
     `capsize` is the cap height in pixels; pass `0` to drop the caps.
+    `project=` forwards to each sub-segment so the stem and caps warp
+    under a non-affine coord.
     """
-    parts = [segment(x_lo, y, x_hi, y, color=color, width=width, alpha=alpha)]
+    parts = [segment(x_lo, y, x_hi, y, color=color, width=width, alpha=alpha,
+                     project=project)]
     if capsize:
         half = capsize / 2
         parts.append(segment(x_lo, y - half, x_lo, y + half,
-                             color=color, width=width, alpha=alpha))
+                             color=color, width=width, alpha=alpha, project=project))
         parts.append(segment(x_hi, y - half, x_hi, y + half,
-                             color=color, width=width, alpha=alpha))
+                             color=color, width=width, alpha=alpha, project=project))
     return "".join(parts)
 
 
