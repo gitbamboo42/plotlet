@@ -129,7 +129,8 @@ def _record_scale(st, axis, args, kw, *, from_default=False):
 def _record_ticks(st, axis, args, kw):
     """Decode the xticks()/yticks() call into state.
 
-    Signature: xticks(ticks=None, labels=None, *, rotation=0, fontsize=None).
+    Signature: xticks(ticks=None, labels=None, *, rotation=0, fontsize=None,
+    fontstyle=None, fontweight=None, ...).
     Accepts the first arg positionally; pass `[]` to hide. Omitted
     kwargs leave the corresponding state alone, so `c.xticks(rotation=45)`
     rotates without disturbing auto positions.
@@ -155,6 +156,7 @@ def _record_ticks(st, axis, args, kw):
     if "rotation" in kw:  st[f"{axis}_rotation"]  = kw["rotation"]
     if "fontsize" in kw:  st[f"{axis}_fontsize"]  = kw["fontsize"]
     if "fontstyle" in kw: st[f"{axis}_fontstyle"] = kw["fontstyle"]
+    if "fontweight" in kw: st[f"{axis}_fontweight"] = kw["fontweight"]
     if "decoration" in kw: st[f"{axis}_decoration"] = kw["decoration"]
     if "direction" in kw: st[f"{axis}_direction"] = kw["direction"]
     if "marks" in kw:     st[f"{axis}_marks"]     = bool(kw["marks"])
@@ -316,7 +318,7 @@ def _expand_frame_defaults(calls):
 _FRAME_OPS = frozenset({
     "title", "xlabel", "ylabel", "xlim", "ylim",
     "xscale", "yscale", "grid", "legend",
-    "xticks", "yticks", "spines", "theme",
+    "xticks", "yticks", "spines", "theme", "font",
     "x_expand", "y_expand", "clip", "facecolor",
     "coordinate", "sectors",
 })
@@ -343,14 +345,14 @@ def _replay(calls):
         "x_expand": None, "y_expand": None,
         # xticks/yticks overrides (None = auto, [] = hide):
         "x_ticks": None, "x_labels": None, "x_rotation": 0, "x_fontsize": None,
-        "x_fontstyle": None, "x_decoration": None,
+        "x_fontstyle": None, "x_fontweight": None, "x_decoration": None,
         "x_direction": _FRAME["tick_direction"], "x_marks": True,
         "x_show_labels": True,
         "x_side": _FRAME["x_side"],
         "x_format": None, "x_minor": None,
         "x_step": None, "x_count": None,
         "y_ticks": None, "y_labels": None, "y_rotation": 0, "y_fontsize": None,
-        "y_fontstyle": None, "y_decoration": None,
+        "y_fontstyle": None, "y_fontweight": None, "y_decoration": None,
         "y_direction": _FRAME["tick_direction"], "y_marks": True,
         "y_show_labels": True,
         "y_side": _FRAME["y_side"],
@@ -544,11 +546,11 @@ def _replay(calls):
             # — both paths absorb the gap at scale-construction time.
             st[f"{axis}_sectors"] = sec
             st[f"{axis}_sector_column"] = col
-        elif name == "theme":
-            # `theme` is applied outside replay (`_render_layout` wraps
-            # the whole render in `active_theme(...)`) so the spec dicts
-            # are already on the right values by the time we get here.
-            # No state to record.
+        elif name in ("theme", "font"):
+            # Applied outside replay (`_layout_engine` wraps each leaf's
+            # measurement and render in `_node_style(...)` — theme +
+            # font scoping) so the spec dicts are already on the right
+            # values by the time we get here. No state to record.
             pass
     # When continuous sectors are active and the user didn't supply an
     # explicit lim, span the full sector range so every partition is
@@ -1361,6 +1363,13 @@ def _resolve_panel_inputs(st, *, x_scale, y_scale, dw, dh, po):
         y_size=st["y_fontsize"] if st["y_fontsize"] is not None else tick_size,
         x_rot=st["x_rotation"] or 0,
         y_rot=st["y_rotation"] or 0,
+        # Variant faces have their own advance widths — the margin
+        # reservation must measure with the same style/weight the render
+        # pass draws with.
+        x_style=st["x_fontstyle"] or "normal",
+        y_style=st["y_fontstyle"] or "normal",
+        x_weight=st["x_fontweight"] or "normal",
+        y_weight=st["y_fontweight"] or "normal",
         suppress_xt=suppress_xt, suppress_yt=suppress_yt,
         hide_t=hide_t, hide_b=hide_b, hide_l=hide_l, hide_r=hide_r,
         # Side routing pre-resolved so chrome functions don't re-derive.

@@ -52,12 +52,14 @@ def chrome_stack_extents(st, inp):
     x_band = out_x if not hide_x else 0
     has_xtl = (not inp.suppress_xt) and any(str(l) for l in inp.x_labels)
     if has_xtl:
-        x_band += _FRAME["tick_pad"] + tick_band_height(inp.x_labels, inp.x_size, inp.x_rot)
+        x_band += _FRAME["tick_pad"] + tick_band_height(inp.x_labels, inp.x_size, inp.x_rot,
+                                                        inp.x_style, inp.x_weight)
     x_sec = st["x_sectors"]
     if x_sec is not None and x_sec.label and not hide_x:
         _sec_x_size = x_sec.fontsize if x_sec.fontsize is not None else _SECTORSPEC["label_size"]
         _sec_x_rot  = x_sec.rotation if x_sec.rotation is not None else 0
-        _max_sec_w  = max((measure_text(str(n), _sec_x_size) for n in x_sec.names), default=_sec_x_size)
+        _max_sec_w  = max((measure_text(str(n), _sec_x_size, inp.x_style, inp.x_weight)
+                           for n in x_sec.names), default=_sec_x_size)
         _, _sec_h   = rotated_label_bbox(_max_sec_w, _sec_x_size, _sec_x_rot)
         top_gap = _SECTORSPEC["label_pad"] if has_xtl else _FRAME["tick_pad"]
         x_band += top_gap + _sec_h
@@ -65,15 +67,15 @@ def chrome_stack_extents(st, inp):
     y_band = out_y if not hide_y else 0
     has_ytl = (not inp.suppress_yt) and any(str(l) for l in inp.y_labels)
     if has_ytl:
-        max_ytl_w = max((measure_text(str(l), inp.y_size) for l in inp.y_labels),
-                        default=0.0)
+        max_ytl_w = max((measure_text(str(l), inp.y_size, inp.y_style, inp.y_weight)
+                         for l in inp.y_labels), default=0.0)
         ytl_bbox_w, _ = rotated_label_bbox(max_ytl_w, inp.y_size, inp.y_rot)
         y_band += _FRAME["tick_pad"] + ytl_bbox_w
     y_sec = st["y_sectors"]
     if y_sec is not None and y_sec.label and not hide_y:
         _sec_y_size = y_sec.fontsize if y_sec.fontsize is not None else _SECTORSPEC["label_size"]
-        sec_lbl_w = max((measure_text(str(n), _sec_y_size) for n in y_sec.names),
-                        default=0.0)
+        sec_lbl_w = max((measure_text(str(n), _sec_y_size, inp.y_style, inp.y_weight)
+                         for n in y_sec.names), default=0.0)
         top_gap = _SECTORSPEC["label_pad"] if has_ytl else _FRAME["tick_pad"]
         y_band += top_gap + sec_lbl_w
 
@@ -127,8 +129,8 @@ def label_band_sizes(st, inp, dw, dh):
         if x_tick_px:
             i_left  = min(range(n_x), key=lambda i: x_tick_px[i])
             i_right = max(range(n_x), key=lambda i: x_tick_px[i])
-            left_lbl_w,  _ = rotated_label_bbox(measure_text(str(inp.x_labels[i_left]),  inp.x_size), inp.x_size, inp.x_rot)
-            right_lbl_w, _ = rotated_label_bbox(measure_text(str(inp.x_labels[i_right]), inp.x_size), inp.x_size, inp.x_rot)
+            left_lbl_w,  _ = rotated_label_bbox(measure_text(str(inp.x_labels[i_left]),  inp.x_size, inp.x_style, inp.x_weight), inp.x_size, inp.x_rot)
+            right_lbl_w, _ = rotated_label_bbox(measure_text(str(inp.x_labels[i_right]), inp.x_size, inp.x_style, inp.x_weight), inp.x_size, inp.x_rot)
             left_inset  = x_tick_px[i_left]
             right_inset = dw - x_tick_px[i_right]
         else:
@@ -151,8 +153,8 @@ def label_band_sizes(st, inp, dw, dh):
                 top_half_h    = cap_height(inp.y_size) / 2
                 bottom_half_h = cap_height(inp.y_size) / 2 + descender(inp.y_size)
             else:
-                _, top_h = rotated_label_bbox(measure_text(str(inp.y_labels[i_top]), inp.y_size), inp.y_size, inp.y_rot)
-                _, bot_h = rotated_label_bbox(measure_text(str(inp.y_labels[i_bot]), inp.y_size), inp.y_size, inp.y_rot)
+                _, top_h = rotated_label_bbox(measure_text(str(inp.y_labels[i_top]), inp.y_size, inp.y_style, inp.y_weight), inp.y_size, inp.y_rot)
+                _, bot_h = rotated_label_bbox(measure_text(str(inp.y_labels[i_bot]), inp.y_size, inp.y_style, inp.y_weight), inp.y_size, inp.y_rot)
                 top_half_h    = top_h / 2
                 bottom_half_h = bot_h / 2
             top_inset    = y_tick_px[i_top]
@@ -293,7 +295,8 @@ def emit_frame_labels(st, inp, iw, ih, chrome, *, top_legend_outset=0):
 # ---------------------------------------------------------------------------
 
 def _tick_label(s, x, y, size, angle, axis, side,
-                fontstyle="normal", decoration="none", tag=None):
+                fontstyle="normal", fontweight="normal",
+                decoration="none", tag=None):
     """Render a single tick label as text-as-paths.
 
     Called for every tick label on every render — rotation is opt-in via
@@ -309,8 +312,8 @@ def _tick_label(s, x, y, size, angle, axis, side,
     side; for the bottom edge, positive rotation (CCW) uses anchor="end"
     (text extends downward), and the other three sides mirror that rule.
 
-    `fontstyle="italic"` propagates through `text_path` for synthesized
-    oblique tick labels.
+    `fontstyle="italic"` / `fontweight="bold"` propagate through
+    `text_path`, which resolves the variant face.
     `decoration="underline"|"overline"|"line-through"` adds a stroke line
     at the conventional offset."""
     color = _FONTSPEC["color"]
@@ -320,8 +323,8 @@ def _tick_label(s, x, y, size, angle, axis, side,
         else:
             anchor = "end" if side == "left" else "start"
         return text_path(s, x, y, size, anchor=anchor, color=color,
-                         fontstyle=fontstyle, decoration=decoration,
-                         tag=tag)
+                         fontstyle=fontstyle, fontweight=fontweight,
+                         decoration=decoration, tag=tag)
     if axis == "x":
         # On bottom: positive angle → anchor=end (text grows down-left
         # from anchor). On top: flipped — positive angle → anchor=start
@@ -347,8 +350,8 @@ def _tick_label(s, x, y, size, angle, axis, side,
         shift_sign = 1 if side == "bottom" else -1
         x = x + shift_sign * (cap_height(size) - descender(size)) / 2 * math.sin(math.radians(angle))
     return text_path(s, x, y, size, anchor=anchor, color=color,
-                     fontstyle=fontstyle, decoration=decoration,
-                     rotate=angle, tag=tag)
+                     fontstyle=fontstyle, fontweight=fontweight,
+                     decoration=decoration, rotate=angle, tag=tag)
 
 
 def _auto_minor_ticks(scale, major_ticks):
@@ -467,6 +470,8 @@ def emit_chrome(*, st, inp, iw, ih,
     hide_l, hide_r = inp.hide_l, inp.hide_r
     x_style = st.get("x_fontstyle") or "normal"
     y_style = st.get("y_fontstyle") or "normal"
+    x_weight = st.get("x_fontweight") or "normal"
+    y_weight = st.get("y_fontweight") or "normal"
     x_decor = st.get("x_decoration") or "none"
     y_decor = st.get("y_decoration") or "none"
     x_dir, y_dir = st["x_direction"], st["y_direction"]
@@ -556,6 +561,7 @@ def emit_chrome(*, st, inp, iw, ih,
                 "x_marks":       x_marks,
                 "x_show_labels": not suppress_xt,
                 "x_fontstyle":   x_style,
+                "x_fontweight":  x_weight,
                 "x_decoration":  x_decor,
             }
         ))
@@ -602,7 +608,8 @@ def emit_chrome(*, st, inp, iw, ih,
                     y_lbl = -x_label_dy - descender(x_size) * math.cos(math.radians(x_rot))
                 parts.append(_tick_label(str(lbl), x, y_lbl,
                                          x_size, x_rot, axis="x", side=x_side,
-                                         fontstyle=x_style, decoration=x_decor,
+                                         fontstyle=x_style, fontweight=x_weight,
+                                         decoration=x_decor,
                                          tag="tick-x"))
 
         # Minor ticks — shorter than majors (frame.minor_tick_ratio), no
@@ -680,8 +687,8 @@ def emit_chrome(*, st, inp, iw, ih,
                 # Tick labels are radial: inner edge at R+tl+tp, center at
                 # R+tl+tp+w/2 (per label), outer edge at R+tl+tp+w. Use the
                 # widest label as the conservative bound for stacking.
-                _max_w = max((measure_text(str(l), x_size) for l in x_labels),
-                             default=0.0)
+                _max_w = max((measure_text(str(l), x_size, x_style, x_weight)
+                              for l in x_labels), default=0.0)
                 x_chrome_extent = _tl + _tp + _max_w
             elif x_marks and x_ticks:
                 x_chrome_extent = _tl
@@ -702,6 +709,7 @@ def emit_chrome(*, st, inp, iw, ih,
                     "label_fontsize":    sec.fontsize if sec.fontsize is not None else _SECTORSPEC["label_size"],
                     "label_fontcolor":   _FONTSPEC["color"],
                     "label_fontstyle":   x_style,
+                    "label_fontweight":  x_weight,
                     "label_decoration":  x_decor,
                     "draw_dividers":     bool(sec.divider) and st["spine_walls"] and not _crossers,
                     "draw_labels":       bool(sec.label) and not suppress_xt,
@@ -731,7 +739,8 @@ def emit_chrome(*, st, inp, iw, ih,
                 _sec_cap_offset = cap_height(_sec_x_size) * math.cos(math.radians(_sec_x_rot))
                 if has_xtl:
                     sec_baseline = (ih + _FRAME["tick_pad"]
-                                    + tick_band_height(x_labels, x_size, x_rot)
+                                    + tick_band_height(x_labels, x_size, x_rot,
+                                                       x_style, x_weight)
                                     + sec_pad + _sec_cap_offset)
                 else:
                     sec_baseline = ih + _FRAME["tick_pad"] + _sec_cap_offset
@@ -739,7 +748,8 @@ def emit_chrome(*, st, inp, iw, ih,
                     parts.append(_tick_label(str(name), cx, sec_baseline,
                                              _sec_x_size, _sec_x_rot, axis="x",
                                              side="bottom",
-                                             fontstyle=x_style, decoration=x_decor,
+                                             fontstyle=x_style, fontweight=x_weight,
+                                             decoration=x_decor,
                                              tag="sector-label"))
     if y_sec is not None and (y_sec.divider or y_sec.label):
         sec_col, sec_w = _side_stroke("walls")
@@ -776,8 +786,8 @@ def emit_chrome(*, st, inp, iw, ih,
             _sec_y_size = sec.fontsize if sec.fontsize is not None else _SECTORSPEC["label_size"]
             has_ytl = any(str(l) for l in y_labels)
             if has_ytl:
-                ytl_w = max((measure_text(str(l), y_size) for l in y_labels),
-                            default=0.0)
+                ytl_w = max((measure_text(str(l), y_size, y_style, y_weight)
+                             for l in y_labels), default=0.0)
                 y_label_x = -(_FRAME["tick_pad"] + ytl_w + sec_pad)
             else:
                 y_label_x = -_FRAME["tick_pad"]
@@ -786,7 +796,8 @@ def emit_chrome(*, st, inp, iw, ih,
                                          cy + cap_height(_sec_y_size) / 2,
                                          _sec_y_size, 0, axis="y",
                                          side="left",
-                                         fontstyle=y_style, decoration=y_decor,
+                                         fontstyle=y_style, fontweight=y_weight,
+                                         decoration=y_decor,
                                          tag="sector-label"))
 
     # y-axis — coordinate-aware (left spine + ticks + labels via draw_frame)
@@ -824,6 +835,7 @@ def emit_chrome(*, st, inp, iw, ih,
                 "y_marks":       y_marks,
                 "y_show_labels": not suppress_yt,
                 "y_fontstyle":   y_style,
+                "y_fontweight":  y_weight,
                 "y_decoration":  y_decor,
                 "y_side":        inp.y_side,
                 "sector_ts":     _y_sector_ts,
@@ -862,7 +874,8 @@ def emit_chrome(*, st, inp, iw, ih,
                 # centered on the tick line (cap top at y - cap/2, cap bottom at y + cap/2).
                 parts.append(_tick_label(str(lbl), y_label_x, y + cap_height(y_size) / 2,
                                          y_size, y_rot, axis="y", side=y_side,
-                                         fontstyle=y_style, decoration=y_decor,
+                                         fontstyle=y_style, fontweight=y_weight,
+                                         decoration=y_decor,
                                          tag="tick-y"))
 
         y_minor = _resolve_minor_ticks(st["y_minor"], y_scale, y_ticks)

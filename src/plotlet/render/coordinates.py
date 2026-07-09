@@ -113,7 +113,10 @@ def _circular_chrome_pad(st) -> float:
             xlim = st.get("xlim") or (0, 1)
             max_val = max(abs(xlim[0]), abs(xlim[1]))
             labels = [f"{max_val:.4g}"]
-        max_w  = max((measure_text(l, x_size) for l in labels), default=0.0)
+        x_style  = st.get("x_fontstyle") or "normal"
+        x_weight = st.get("x_fontweight") or "normal"
+        max_w  = max((measure_text(l, x_size, x_style, x_weight)
+                      for l in labels), default=0.0)
         x_chrome = tl + tp + max_w
     elif st.get("x_marks", True) and x_ticks_v != []:
         x_chrome = tl                # marks only, no labels
@@ -314,8 +317,7 @@ class CircularCoordinate:
         """
         from itertools import count
         from ._layout_engine import (_build_panel_opts, _emit_layout_title,
-                                     _title_band_h)
-        from .._spec import active_theme
+                                     _node_style, _title_band_h)
         from .core import _expand_frame_defaults, _panel_open, _render_inner
         from .. import _regions
         _ZERO_MARGIN = {"left": 0, "right": 0, "top": 0, "bottom": 0}
@@ -420,10 +422,7 @@ class CircularCoordinate:
             _panel_opts, _states = _build_panel_opts(leaf)
             _st = _states[id(leaf)]
             _po = _panel_opts[id(leaf)]
-            _theme = None
-            for _c in leaf._calls:
-                if _c[0] == "theme": _theme = _c[1][0] if _c[1] else None
-            with active_theme(_theme):
+            with _node_style(leaf):
                 # Emit just the panel body (no <svg> wrapper) — the
                 # caller concatenates each leaf's body into the shared
                 # overlay canvas (below the title band, when present).

@@ -106,6 +106,7 @@ def draw_y_chrome(cx, cy, R, ri, start_rad, end_rad, is_full_ring,
     y_marks   = frame_opts["y_marks"]
     show_yl   = frame_opts["y_show_labels"]
     y_style   = frame_opts.get("y_fontstyle", "normal")
+    y_weight  = frame_opts.get("y_fontweight", "normal")
     y_decor   = frame_opts.get("y_decoration", "none")
     sector_ts = frame_opts.get("sector_ts")
     y_side    = frame_opts.get("y_side", "left")
@@ -199,7 +200,8 @@ def draw_y_chrome(cx, cy, R, ri, start_rad, end_rad, is_full_ring,
             else:            anchor = "middle"
             parts.append(text_path(str(lbl), lx, ly,
                                    y_size, anchor=anchor, color=font_col,
-                                   fontstyle=y_style, decoration=y_decor,
+                                   fontstyle=y_style, fontweight=y_weight,
+                                   decoration=y_decor,
                                    tag="tick-y"))
 
     return "".join(parts)
@@ -229,6 +231,7 @@ def draw_x_sector_chrome(cx, cy, R, ri, start_rad, end_rad, is_full_ring,
     font_size = sec_opts["label_fontsize"]
     font_col  = sec_opts["label_fontcolor"]
     font_st   = sec_opts.get("label_fontstyle", "normal")
+    font_wt   = sec_opts.get("label_fontweight", "normal")
     font_dc   = sec_opts.get("label_decoration", "none")
     draw_div  = sec_opts["draw_dividers"]
     draw_lbl  = sec_opts["draw_labels"]
@@ -283,7 +286,8 @@ def draw_x_sector_chrome(cx, cy, R, ri, start_rad, end_rad, is_full_ring,
             lx, ly = cx + (R + off) * ux, cy + (R + off) * uy
             parts.append(text_path(str(name), lx, ly,
                                    font_size, anchor="middle", color=font_col,
-                                   fontstyle=font_st, decoration=font_dc,
+                                   fontstyle=font_st, fontweight=font_wt,
+                                   decoration=font_dc,
                                    rotate=rot, tag="sector-label"))
 
     return "".join(parts)
@@ -307,6 +311,7 @@ def draw_x_chrome(cx, cy, R, start_rad, end_rad,
     x_marks   = frame_opts["x_marks"]
     show_xl   = frame_opts["x_show_labels"]
     x_style   = frame_opts.get("x_fontstyle", "normal")
+    x_weight  = frame_opts.get("x_fontweight", "normal")
     x_decor   = frame_opts.get("x_decoration", "none")
 
     parts = []
@@ -323,7 +328,7 @@ def draw_x_chrome(cx, cy, R, start_rad, end_rad,
         if show_xl:
             # Labels are radial: inner edge sits at R+tl+tp, center at
             # R+tl+tp+w/2 where w is this label's own rendered width.
-            w = measure_text(str(lbl), x_size)
+            w = measure_text(str(lbl), x_size, x_style, x_weight)
             off = tl + tp + w / 2
             lx, ly = cx + (R + off) * ux, cy + (R + off) * uy
             # Same tangential rotation formula as sector labels so all
@@ -342,7 +347,8 @@ def draw_x_chrome(cx, cy, R, start_rad, end_rad,
             ly += _ts * math.cos(ang)
             parts.append(text_path(str(lbl), lx, ly,
                                    x_size, anchor="middle", color=font_col,
-                                   fontstyle=x_style, decoration=x_decor,
+                                   fontstyle=x_style, fontweight=x_weight,
+                                   decoration=x_decor,
                                    rotate=rot, tag="tick-x"))
 
     return "".join(parts)

@@ -56,7 +56,7 @@ from .registry import get_artist, all_artist_names
 _FRAME_METHODS = {
     "title", "xlabel", "ylabel", "xlim", "ylim",
     "xscale", "yscale", "grid", "legend",
-    "xticks", "yticks", "spines", "theme",
+    "xticks", "yticks", "spines", "theme", "font",
     "x_expand", "y_expand", "clip", "facecolor",
     "coordinate", "sectors",
 }
@@ -1023,7 +1023,7 @@ def chart(data=None, *,
           xlim=None, ylim=None, xscale=None, yscale=None,
           x_expand=None, y_expand=None,
           legend=None, grid=None, clip=None,
-          facecolor=None, theme=None) -> Chart:
+          facecolor=None, theme=None, font=None) -> Chart:
     """Construct a table-bound Chart. Structural kwargs (`data_width`,
     `data_height`, `margin`) and aes kwargs (`x`, `y`, `fill`, `color`,
     `group`, `linestyle`, `palette`) go to the Chart constructor.
@@ -1049,6 +1049,7 @@ def chart(data=None, *,
     if clip      is not None: c.clip(clip)
     if facecolor is not None: c.facecolor(facecolor)
     if theme     is not None: c.theme(theme)
+    if font      is not None: c.font(font)
     return c
 
 

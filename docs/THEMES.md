@@ -76,6 +76,12 @@ Any of these can be overridden by a theme. Unspecified keys fall through
 to `classic` — which is just `spec.json` with no overrides. The full
 default spec lives in [`src/plotlet/spec.json`](../src/plotlet/spec.json).
 
+`font.family` doubles as the face selector: its first comma-separated
+segment takes the same values as `c.font(...)` — a bundled name or a
+`.ttf`/`.otf` path (see [API.md → Fonts](API.md#fonts)). A chart-level
+`c.font(...)` / `font=` overrides the theme's choice, so `theme="dark",
+font="Arimo"` compose.
+
 Convention: **the data palette stays orthogonal to theme.** TAB10 and
 the named-color shortcuts live in [`src/plotlet/draw/colors.py`](../src/plotlet/draw/colors.py)
 as plain constants — not in `spec.json`, not theme-overridable. Themes

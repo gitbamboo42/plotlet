@@ -99,7 +99,7 @@ framework wraps your fragment in a `<g>` that carries `data-plotlet-*` attrs.
 | `errorbar_v(x, y_lo, y_hi, *, capsize, color, width, alpha)` | Vertical bar with two caps; `capsize=0` drops the caps. |
 | `errorbar_h(y, x_lo, x_hi, *, capsize, color, width, alpha)` | Horizontal bar with two caps. |
 | `marker(kind, x, y, size, color, alpha)` | One of `"o" "s" "^" "v" "x" "+"` at pixel `(x, y)`. |
-| `text_path(s, x, y, size, anchor, color)` | Text as glyph paths (font-independent across machines). |
+| `text_path(s, x, y, size, anchor, color, fontstyle=, fontweight=)` | Text as glyph paths (font-independent across machines); `fontstyle="italic"` / `fontweight="bold"` select the active family's real variant faces. |
 
 `dash=` accepts the short codes (`"--"`, `":"`, `"-."`) or a raw SVG
 dasharray (`"6,3"`). `fill_alpha` / `stroke_alpha` override `alpha` per

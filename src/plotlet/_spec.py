@@ -90,6 +90,27 @@ def _restore(snapshot: dict) -> None:
 
 
 @contextlib.contextmanager
+def active_font(family: str | None):
+    """Override `font.family` for the duration of the `with` block.
+    `None` is a passthrough — the chart never chose a font.
+
+    Separate from `active_theme` because the theme context can't carry
+    this: `active_theme(None)` / same-theme calls short-circuit with no
+    snapshot, and *default theme + custom font* is exactly that case —
+    mutating `_FONTSPEC` inside the passthrough would leak across leaves.
+    """
+    if family is None:
+        yield
+        return
+    prev = _FONTSPEC["family"]
+    _FONTSPEC["family"] = family
+    try:
+        yield
+    finally:
+        _FONTSPEC["family"] = prev
+
+
+@contextlib.contextmanager
 def active_theme(name: str | None):
     """Apply theme `name` to the live spec dicts for the duration of the
     `with` block. `None` is a passthrough — used by code paths that

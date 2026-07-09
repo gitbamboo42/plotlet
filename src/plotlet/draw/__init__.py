@@ -18,7 +18,8 @@ from .primitives import (
 from .colors import TAB10, colors, resolve_color, palette, list_palettes, Palette
 from .colormaps import colormap, colormap_lut, list_colormaps, ContinuousNorm
 from .font import (measure_text, cap_height, descender, tick_band_height,
-                   rotated_label_bbox, line_height, text_block_height)
+                   rotated_label_bbox, line_height, text_block_height,
+                   svg_family)
 from .format import coord, stroke_w, opacity, degree
 from .linestyles import resolve_linestyle
 from ._png import encode_rgb, image_png
@@ -31,6 +32,7 @@ __all__ = [
     "colormap", "colormap_lut", "list_colormaps", "ContinuousNorm",
     "measure_text", "cap_height", "descender", "tick_band_height",
     "rotated_label_bbox", "line_height", "text_block_height",
+    "svg_family",
     "coord", "stroke_w", "opacity", "degree",
     "resolve_linestyle",
     "encode_rgb", "image_png",

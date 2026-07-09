@@ -39,12 +39,14 @@ See `docs/SUBPLOTS.md` for the design rationale.
 """
 from __future__ import annotations
 
+import contextlib
 import math
 
 from graphlib import CycleError, TopologicalSorter
 from itertools import count
 
-from .._spec import SPEC, _LAYOUTSPEC, _FONTSPEC, _PADSPEC, active_theme
+from .._spec import (SPEC, _LAYOUTSPEC, _FONTSPEC, _PADSPEC,
+                     active_font, active_theme)
 from .core import (
     _render_inner, _replay, _enforce_floors, _required_margin,
     _x_descriptor_multi, _y_descriptor_multi,
@@ -55,7 +57,7 @@ from ..scales import _AxisDescriptor
 from .._tree import iter_leaves as _iter_leaves
 from . import _attachments
 from .. import _regions
-from ..draw import coord, descender, text_path, text_block_height
+from ..draw import coord, descender, svg_family, text_path, text_block_height
 
 
 def _extract_theme(calls) -> str | None:
@@ -69,20 +71,54 @@ def _extract_theme(calls) -> str | None:
     return name
 
 
-def _figure_theme(root) -> str | None:
-    """Theme scoping the outer `<svg>` (the figure background). A root
-    that funnels to a single leaf — the 1×1 wrapper `journal_to_ir`
-    mints around a lone chart — takes that leaf's theme, so a lone dark
-    chart gets a dark canvas. Roots with sibling panels take no theme:
-    themes are per-chart, and each leaf's own `active_theme` block
-    scopes its chrome."""
+def _extract_font(calls) -> str | None:
+    """Last-call-wins scan for the chart's `font` selector (`None` when
+    the chart never chose one — `active_font(None)` is a passthrough)."""
+    family = None
+    for call_name, args, kw in calls:
+        if call_name == "font":
+            family = args[0] if args else kw.get("family")
+    return family
+
+
+def _funnel_leaf(root):
+    """The single leaf a root funnels to — the 1×1 wrapper
+    `journal_to_ir` mints around a lone chart — or `None` for roots
+    with sibling panels."""
     node = root
     while getattr(node, "_is_parent", False):
         children = [c for c in node._children if c is not None]
         if len(children) != 1:
             return None
         node = children[0]
-    return _extract_theme(node._calls)
+    return node
+
+
+@contextlib.contextmanager
+def _node_style(node):
+    """Theme + font scoping for one node's measurement/render. Every
+    site that measures or emits text enters this ONE helper, so
+    measurement can never disagree with render about the active face
+    (which would corrupt margin math). Font nests inside theme so a
+    `font` call overrides the theme's `font.family`."""
+    with active_theme(_extract_theme(node._calls)):
+        with active_font(_extract_font(node._calls)):
+            yield
+
+
+@contextlib.contextmanager
+def _figure_style(root):
+    """Theme + font scoping for the outer `<svg>` (figure background,
+    root font-family attr). A root that funnels to a single leaf takes
+    that leaf's style, so a lone dark chart gets a dark canvas; roots
+    with sibling panels take none — themes and fonts are per-chart, and
+    each leaf's own `_node_style` block scopes its chrome."""
+    leaf = _funnel_leaf(root)
+    if leaf is None:
+        yield
+        return
+    with _node_style(leaf):
+        yield
 
 
 # ---------------------------------------------------------------------------
@@ -852,7 +888,7 @@ def _build_panel_opts(root) -> tuple[dict[int, _PanelOpts], dict[int, dict]]:
     # another node's journal.
     states = {}
     for l in leaves:
-        with active_theme(_extract_theme(l._calls)):
+        with _node_style(l):
             effective = (_ancestor_calls(l)
                          + _attachments.attachment_inherited_calls(l)
                          + l._calls)
@@ -890,7 +926,7 @@ def _compute_measured_margins(leaves: list,
     reflect the leaf's theme overrides, not the ambient theme."""
     for leaf in leaves:
         po = panel_opts[id(leaf)]
-        with active_theme(_extract_theme(leaf._calls)):
+        with _node_style(leaf):
             M_floor = _enforce_floors(leaf._margin)
             M_req = _required_margin(states[id(leaf)],
                                      leaf._data_width,
@@ -1100,10 +1136,10 @@ def _render_layout(root, outer=None) -> str:
         # attrs so downstream tools can identify the SVG. The background
         # is a real first-child <rect> — CSS `background` on the root
         # element is ignored by non-browser consumers (cairosvg).
-        with active_theme(_figure_theme(root)):
+        with _figure_style(root):
             return (f'<svg xmlns="http://www.w3.org/2000/svg" '
                     f'width="{Wt}" height="{Ht}" viewBox="0 0 {Wt} {Ht}" '
-                    f'font-family="{_FONTSPEC["family"]}" font-size="11"'
+                    f'font-family="{svg_family()}" font-size="11"'
                     f'{_figure_root_attrs()}>'
                     f'<rect width="{Wt}" height="{Ht}" '
                     f'fill="{SPEC["figure"]["background"]}"/>'
@@ -1136,15 +1172,15 @@ def _render_layout_rect(root, outer=None) -> str:
     Wt = W + ol + or_
     Ht = H + ot + ob
 
-    # Root theme scopes the outer <svg> emit — a root that funnels to a
-    # single leaf (the lone-chart wrapper) puts the figure background
-    # under that leaf's theme so a dark chart gets a dark canvas.
-    # Multi-panel roots take no theme, and each leaf's own
-    # `active_theme` block below still owns its chrome.
-    with active_theme(_figure_theme(root)):
+    # Root theme + font scope the outer <svg> emit — a root that funnels
+    # to a single leaf (the lone-chart wrapper) puts the figure
+    # background under that leaf's style so a dark chart gets a dark
+    # canvas. Multi-panel roots take neither, and each leaf's own
+    # `_node_style` block below still owns its chrome.
+    with _figure_style(root):
         parts = [
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{Wt}" height="{Ht}" '
-            f'viewBox="0 0 {Wt} {Ht}" font-family="{_FONTSPEC["family"]}" font-size="11"'
+            f'viewBox="0 0 {Wt} {Ht}" font-family="{svg_family()}" font-size="11"'
             f'{_figure_root_attrs()}>',
             # Real first-child <rect>, not CSS `background` on the root —
             # non-browser consumers (cairosvg) ignore the CSS property.
@@ -1199,12 +1235,13 @@ def _render_layout_rect(root, outer=None) -> str:
         ih = h - M_eff["top"] - M_eff["bottom"]
         st = states[id(leaf)]
         transform = f'translate({coord(x + M_eff["left"])},{coord(y + M_eff["top"])})'
-        # Per-leaf theme wraps both panel-opening attrs and inner render,
-        # so frame draws (spines, ticks, text) read the leaf's theme.
-        # `_regions.translate(...)` tracks this leaf's outer offset on
-        # the sink so chrome bboxes land in outer-SVG coords; multi-panel
-        # layouts get correct per-panel positions without extra work.
-        with active_theme(_extract_theme(leaf._calls)):
+        # Per-leaf theme + font wrap both panel-opening attrs and inner
+        # render, so frame draws (spines, ticks, text) read the leaf's
+        # style. `_regions.translate(...)` tracks this leaf's outer
+        # offset on the sink so chrome bboxes land in outer-SVG coords;
+        # multi-panel layouts get correct per-panel positions without
+        # extra work.
+        with _node_style(leaf):
             # panel-bbox attr is documented as outer-SVG coords; add the
             # outer offset (ol, ot) since we live inside a translate wrapper.
             parts.append(_panel_open(st, po, transform, M_eff, iw, ih,

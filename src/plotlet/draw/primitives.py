@@ -71,6 +71,7 @@ def _subdivide_project(points, project, n: int = _COORD_NATIVE_SUBDIV):
 def text_path(s: str, x: float, y: float, size: float,
               anchor: str = "start", color: str = "#000",
               fontstyle: str = "normal",
+              fontweight: str = "normal",
               decoration: str = "none",
               rotate: float = 0,
               tag: str | None = None) -> str:
@@ -84,9 +85,10 @@ def text_path(s: str, x: float, y: float, size: float,
     the previous one; (x, y) stays the FIRST line's baseline and each line
     is anchored independently (so `anchor="middle"` centers every line).
 
-    `fontstyle="italic"` synthesizes an oblique slant via a -12° skew
-    during glyph composition (the bundled DejaVu Sans ships no real
-    italic face).
+    `fontstyle="italic"` / `fontweight="bold"` select the variant face —
+    real drawn Italic/Bold/BoldItalic files for the bundled families. A
+    path-loaded font falls back to a synthetic -12° oblique skew for
+    italic; bold raises (pass the bold file's path as `font=` instead).
 
     `decoration="underline" | "overline" | "line-through"` appends a stroke
     line at the conventional offset for that decoration.
@@ -96,7 +98,8 @@ def text_path(s: str, x: float, y: float, size: float,
     `xticks(rotation=...)` and the rest of the lib; SVG's native
     positive-CW is negated at emission so callers think in screen CCW.
     """
-    d = _glyph_path_d(s, x, y, size, anchor=anchor, fontstyle=fontstyle)
+    d = _glyph_path_d(s, x, y, size, anchor=anchor, fontstyle=fontstyle,
+                      fontweight=fontweight)
     if not d:
         return ""
     # Anchor mapping from a line's width to its left edge — shared by the
@@ -121,7 +124,7 @@ def text_path(s: str, x: float, y: float, size: float,
         # (axis-aligned hulls of 45°-rotated rectangles overlap even
         # when the rectangles themselves don't, so AABB alone is a
         # false-positive trap).
-        w = measure_text(s, size)
+        w = measure_text(s, size, fontstyle, fontweight)
         rx = _anchor_left(w)
         ry = y - cap_height(size)
         rh = (cap_height(size) + descender(size)
@@ -154,7 +157,7 @@ def text_path(s: str, x: float, y: float, size: float,
         for i, line in enumerate(lines):
             if not line:
                 continue
-            lw = measure_text(line, size)
+            lw = measure_text(line, size, fontstyle, fontweight)
             lx = _anchor_left(lw)
             ly = y + i * line_height(size) + dy
             out += (f'<line x1="{coord(lx)}" y1="{coord(ly)}" '

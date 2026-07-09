@@ -1133,9 +1133,9 @@ def chart_long_rotated_xticks():
 
 
 def chart_xticks_fontstyle_italic():
-    # Italic axis-tick labels via fontstyle. DejaVu Sans
-    # ships no real italic, so plotlet synthesizes a -12° oblique skew at
-    # render time (same approach matplotlib uses).
+    # Italic axis-tick labels via fontstyle — renders with the real
+    # DejaVuSans-Oblique face (synthetic skew is only the fallback for
+    # path-loaded fonts with no italic sibling).
     df = {"label": ["alpha", "beta", "gamma", "delta", "epsilon"],
           "rate": [0.42, 0.35, 0.28, 0.21, 0.18]}
     c = pt.chart(data_width=320, data_height=200,

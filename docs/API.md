@@ -19,7 +19,8 @@ Pass at construction or as chained setters:
 
 `title`, `xlabel`, `ylabel`, `xlim=(a, b)`, `ylim=(a, b)`, `xscale`,
 `yscale`, `grid=True/False`, `legend=True/False`, `clip=True/False`,
-`data_width`, `data_height`.
+`data_width`, `data_height`, `theme` (see [THEMES.md](THEMES.md)),
+`font` (see [Fonts](#fonts)).
 
 `c.legend(True, position=...)` places the in-frame legend. Outside
 tokens (reserve margin space beside the data area): `"right"` (default),
@@ -88,6 +89,12 @@ c.xticks([0, 5, 10], ["A","B","C"], rotation=45, fontsize=12,
 c.yticks(...)                            # same shape
 ```
 
+`fontstyle="italic"` / `fontweight="bold"` restyle the tick labels
+(sector-name labels on that axis inherit the style) with the real
+Italic/Bold faces of the active family — see [Fonts](#fonts).
+`decoration="underline" | "overline" | "line-through"` adds the
+matching stroke line.
+
 `format="{:.0%}"` or `format=lambda v: f"${v/1000:.0f}K"` formats
 auto-generated tick labels — string and callable both work; explicit
 labels still override.
@@ -98,6 +105,47 @@ scales; sub-decade on log); `minor=[v1, v2, …]` for explicit positions.
 Density overrides: `step=0.25` forces a fixed spacing; `count=4` requests
 roughly that many major ticks (the nice-numbers algorithm still picks
 the actual values).
+
+## Text in labels & annotations
+
+All text (titles, labels, ticks, legend, `text`/`annotate`) accepts any
+Unicode character the active font covers ([Fonts](#fonts); the default
+DejaVu Sans covers the full scientific set) — just type it, no markup:
+Greek (`α μ Σ`), super/subscripts (`10⁻⁵`, `H₂O`, `μm²`, `log₂ FC`),
+operators (`× ± ≤ ≈ → √ ∫`). Unicode super/subscripts exist only for
+digits, `+ − ( )`, and a few letters — no `x^{n+1}` markup (unbuilt).
+`\n` stacks lines: `"Fold change\n(log₂)"`.
+
+## Fonts
+
+Text renders as SVG path outlines from an explicitly named font file —
+never an OS font lookup — so output is byte-identical across machines
+and viewers need no font installed. Three tiers:
+
+1. **Default — DejaVu Sans** (bundled). Zero config. It stays the
+   default for coverage: Greek, Mathematical Operators, arrows, and
+   super/subscripts all render without tofu.
+2. **Bundled families** — `font="Arimo"`, the journal look:
+   metric-compatible with Helvetica/Arial, and the aliases
+   `"Helvetica"` / `"Arial"` select it. Arimo covers Greek and
+   super/subscripts but few math operators or arrows; glyphs a face
+   lacks render as `.notdef` boxes.
+3. **Escape hatch** — `font="/path/to/MyFont.ttf"` loads any TTF/OTF
+   on disk. Only the author needs the file at render time; the output
+   stays self-contained and carries the font's family name, never the
+   file path. ⚠️ Embedding a proprietary font's outlines in published
+   SVGs may be restricted by its EULA — check before shipping.
+
+`font=` at construction or chained `c.font(...)`; per-chart like
+`theme=`, and the two compose (`theme="dark", font="Arimo"`). Unknown
+font names raise — no silent fallback, no OS resolution.
+
+Both bundled families ship all four faces (Regular / Bold / Italic /
+BoldItalic), so per-text `fontstyle="italic"` / `fontweight="bold"`
+(on tick labels and `draw.text_path`) render real drawn variants. A
+path-loaded font is one file: italic falls back to a synthetic -12°
+skew, and `fontweight="bold"` raises — pass the bold file's path as
+`font=` instead.
 
 ## Sectors
 
