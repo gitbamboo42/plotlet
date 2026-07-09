@@ -8,8 +8,8 @@ Three input paths, all funnel into the same SplitTree → layout → draw
 pipeline:
 
 - `data=` (+ optional `clusters=` for two-level clustering) →
-  `cluster()` or `cluster_split()` builds the tree.
-- `linkage=` → one-block tree wrap (skip scipy.linkage, user has Z).
+  `linkage()` or `linkage_split()` builds the tree.
+- `linkage_matrix=` → one-block tree wrap (user already has a raw scipy Z).
 - `tree=` → use a pre-built SplitTree directly (lets the same cluster
   result drive multiple charts without redoing scipy work).
 
@@ -82,8 +82,8 @@ def _dendrogram_record(args, kw):
             blocks, layout_parent(tree), parent_frac,
             gap_frac=_D["tree_parent_gap"],
         )
-    # No user-supplied labels = numeric leaf axis. `cluster` /
-    # `cluster_split` fabricate string indices in this case, but the
+    # No user-supplied labels = numeric leaf axis. `linkage` /
+    # `linkage_split` fabricate string indices in this case, but the
     # renderer keeps the unlabeled path active so `_leaf_axis_pos` uses
     # scale.idx instead of cat lookup.
     leaf_labels = final_labels if had_labels else None

@@ -7,10 +7,10 @@ picks up the clustered row/column order automatically.
 
 Two entry points:
 
-- `cluster(data, labels, ...)` — one observation set, one linkage.
-- `cluster_split(data, split, labels, ...)` — two-level cluster: per-
+- `linkage(data, labels, ...)` — one observation set, one linkage.
+- `linkage_split(data, split, labels, ...)` — two-level cluster: per-
   group linkage for within-block leaf order, plus a centroid linkage to
-  pick the between-group order. Equivalent to calling `cluster` per
+  pick the between-group order. Equivalent to calling `linkage` per
   group and reordering the groups by similarity.
 
 Both return a `SplitTree`. Single-cluster trees are just multi-block
@@ -58,26 +58,26 @@ def _centroid(rows):
     return [sum(r[c] for r in rows) / n for c in range(d)]
 
 
-def cluster(data, labels=None, method="single", metric="euclidean") -> SplitTree:
+def linkage(data, labels=None, method="single", metric="euclidean") -> SplitTree:
     """Single linkage on `data`. Returns a one-block `SplitTree`."""
     if hasattr(data, "tolist"):
         data = data.tolist()
     if len(data) < 2:
         raise ValueError(
-            f"cluster(): need at least 2 observations, got {len(data)}"
+            f"linkage(): need at least 2 observations, got {len(data)}"
         )
     labs = (list(labels) if labels is not None
             else [str(i) for i in range(len(data))])
     if len(labs) != len(data):
         raise ValueError(
-            f"cluster(): labels has {len(labs)} entries but data has "
+            f"linkage(): labels has {len(labs)} entries but data has "
             f"{len(data)} observations"
         )
     Z = _scipy_linkage(data, method=method, metric=metric)
     return SplitTree(blocks=[(Z, labs)], between_order=[0])
 
 
-def cluster_split(data, split, labels=None,
+def linkage_split(data, split, labels=None,
                   method="single", metric="euclidean") -> SplitTree:
     """Two-level cluster: within-group + between-group centroid order.
 
@@ -94,14 +94,14 @@ def cluster_split(data, split, labels=None,
         data = data.tolist()
     if len(split) != len(data):
         raise ValueError(
-            f"cluster_split(): split length ({len(split)}) doesn't "
+            f"linkage_split(): split length ({len(split)}) doesn't "
             f"match data length ({len(data)})"
         )
     labs = (list(labels) if labels is not None
             else [str(i) for i in range(len(data))])
     if len(labs) != len(data):
         raise ValueError(
-            f"cluster_split(): labels has {len(labs)} entries but data "
+            f"linkage_split(): labels has {len(labs)} entries but data "
             f"has {len(data)} observations"
         )
 
@@ -362,14 +362,14 @@ def build_tree(args, kw, split):
 
     Dispatches in priority order:
     - `tree=`     → use directly (must be a `SplitTree`).
-    - `linkage=`  → wrap as a one-block `SplitTree` (skip scipy.linkage).
-    - `data=` + `split` → `cluster_split(...)`.
-    - `data=`             → `cluster(...)`.
+    - `linkage_matrix=` → wrap a raw scipy Z as a one-block `SplitTree`.
+    - `data=` + `split` → `linkage_split(...)`.
+    - `data=`             → `linkage(...)`.
 
     `had_labels` tracks whether `labels=` was explicitly supplied. Tree
     renderers use it to decide between a categorical leaf axis (labels
-    drive the scale) and a numeric one (unlabeled case) — `cluster()` /
-    `cluster_split()` fabricate `str(i)` defaults when labels are
+    drive the scale) and a numeric one (unlabeled case) — `linkage()` /
+    `linkage_split()` fabricate `str(i)` defaults when labels are
     omitted, so the returned `SplitTree.blocks` always carries labels,
     but the artist still wants to render the unlabeled case differently.
 
@@ -385,21 +385,21 @@ def build_tree(args, kw, split):
             )
         # When a pre-built tree is given the other input kwargs are
         # ignored — drop them so they don't leak into `opts`.
-        for key in ("data", "linkage", "method", "metric", "labels"):
+        for key in ("data", "linkage_matrix", "method", "metric", "labels"):
             kw.pop(key, None)
         return tree, True
     data = args[0] if args else kw.pop("data", None)
     if data is not None and hasattr(data, "tolist"):
         data = data.tolist()
-    Z = kw.pop("linkage", None)
+    Z = kw.pop("linkage_matrix", None)
     method = kw.pop("method", "single")
     metric = kw.pop("metric", "euclidean")
     labels = kw.pop("labels", None)
     if Z is not None:
         if split is not None:
             raise ValueError(
-                "linkage= and split= are mutually exclusive — split needs "
-                "per-block linkages; pass data= instead."
+                "linkage_matrix= and split= are mutually exclusive — split "
+                "needs per-block linkages; pass data= instead."
             )
         n = len(Z) + 1
         labs = list(labels) if had_labels else [str(i) for i in range(n)]
@@ -410,12 +410,12 @@ def build_tree(args, kw, split):
             )
         return SplitTree(blocks=[(Z, labs)], between_order=[0]), had_labels
     if data is None:
-        raise ValueError("pass data=, linkage=, or tree=")
+        raise ValueError("pass data=, linkage_matrix=, or tree=")
     if split is not None:
-        return (cluster_split(data, split, labels=labels,
+        return (linkage_split(data, split, labels=labels,
                               method=method, metric=metric),
                 had_labels)
-    return cluster(data, labels=labels, method=method, metric=metric), had_labels
+    return linkage(data, labels=labels, method=method, metric=metric), had_labels
 
 
 def tree_frame_defaults(kw, *,

@@ -7,7 +7,7 @@ Visual flourish — no algorithmic difference.
 
 Lives in extensions to demonstrate that an alternative tree renderer
 can be built using only the public clustering API
-(`pt.cluster_split` / `pt.cluster.layout_tree` / `pt.add_artist`) —
+(`pt.linkage_split` / `pt.cluster.layout_tree` / `pt.add_artist`) —
 no private symbols, no plotlet-core changes.
 
 API mirrors `dendrogram`:

@@ -202,17 +202,16 @@ sunburst, …), don't reach for `scipy.cluster.hierarchy` directly — the
 tree artist is purely a *renderer*. Canonical example:
 [`extensions/curved_tree.py`](../src/plotlet/extensions/curved_tree.py).
 
-The helpers below live in `plotlet.cluster`; import them with
-`from plotlet.cluster import layout_tree, fit_parent, ...`. The top-level
-`pt.cluster` / `pt.cluster_split` names are the two driver functions
-themselves, not the module — the import-from form is what you want for
-everything else.
+The helpers below live in the `plotlet.cluster` module, reachable either
+as `pt.cluster.<helper>` or via `from plotlet.cluster import layout_tree,
+fit_parent, ...`. The two driver functions are top-level: `pt.linkage`
+and `pt.linkage_split`.
 
 | Public helper | Use |
 |---|---|
-| `pt.cluster(data, labels=, method=, metric=)` | One scipy.linkage → `SplitTree` (one block). |
-| `pt.cluster_split(data, split=, labels=, …)` | Two-level cluster (within-block + centroid between-block) → multi-block `SplitTree`. |
-| `build_tree(args, kw, split)` | Standard input dispatch: pops `tree=` / `linkage=` / `data=` from `kw` and returns `(SplitTree, had_labels)`. Drop into your artist's `record`. |
+| `pt.linkage(data, labels=, method=, metric=)` | One scipy.linkage → `SplitTree` (one block). |
+| `pt.linkage_split(data, split=, labels=, …)` | Two-level cluster (within-block + centroid between-block) → multi-block `SplitTree`. |
+| `build_tree(args, kw, split)` | Standard input dispatch: pops `tree=` / `linkage_matrix=` / `data=` from `kw` and returns `(SplitTree, had_labels)`. Drop into your artist's `record`. |
 | `layout_tree(tree)` | `SplitTree` → `(blocks, offsets, final_labels)` ready for drawing. Per-block scipy.dendrogram + pooled height normalize. |
 | `layout_parent(tree)` | The optional centroid tree's `(icoord, dcoord, leaves)`, or `None` for single-block trees. |
 | `fit_parent(blocks, parent_layout, frac, gap_frac=)` | Shrinks per-block dcoords + drops parent leaves to each block's apex so both fit in one panel. |
