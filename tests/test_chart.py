@@ -157,6 +157,18 @@ def chart_imshow_diverging_center():
     return c
 
 
+def chart_imshow_user_cmap():
+    # register_colormap flows through both the imshow cell path and the
+    # gradient legend; center=0 pins the white anchor to zero on the
+    # asymmetric range, so anchoring stays the norm's job.
+    pt.register_colormap("bwr2_demo", ["#2166ac", "#f7f7f7", "#b2182b"])
+    data = [[(r - 4) * 0.5 + (c - 4) * 0.7 for c in range(12)] for r in range(10)]
+    c = pt.chart(title="user colormap (bwr2_demo)", xlabel="x", ylabel="y")
+    c.imshow(data, cmap="bwr2_demo", center=0, legend={"label": "value"})
+    c.legend()
+    return c
+
+
 def chart_imshow_log_norm():
     # Multi-decade dynamic range — without log, all but the brightest
     # cells render near-black; with log, structure across decades shows.
@@ -2056,6 +2068,7 @@ PLOTS = {
     "imshow_origin_upper": chart_imshow_origin_upper,
     "imshow_center":       chart_imshow_diverging_center,
     "imshow_log":          chart_imshow_log_norm,
+    "imshow_user_cmap":    chart_imshow_user_cmap,
     "heatmap_labeled":     chart_heatmap_labeled,
     "heatmap_dataframe":   chart_heatmap_dataframe,
     "heatmap_annot":       chart_heatmap_annot,

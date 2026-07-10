@@ -335,6 +335,18 @@ Deeper layout helpers — `layout_tree(tree)`, `layout_parent(tree)`, `fit_paren
 - `"_r"` suffix reverses either kind.
 - Artists' `palette=` accepts a name string directly: `c.bar(..., fill="group", palette="Set2")` — alongside the existing list and `{category: color}` dict forms.
 
+## User-defined colormaps
+
+```python
+pt.register_colormap("bwr2", ["#2166ac", "white", "#b2182b"])
+c.heatmap(data, x="col", y="row", value="z", cmap="bwr2", center=0)
+```
+
+- Colors interpolate linearly in RGB, evenly spaced or at explicit `stops=` (positions in [0, 1], first 0 and last 1, strictly increasing).
+- The reversed `name + "_r"` variant registers alongside; the name then works everywhere a built-in does — `cmap=` kwargs, colorbars, `pt.palette(name, n)`.
+- Anchoring the midpoint at a data value is the norm's job: pass `center=` (or `vmin=`/`vmax=`) to the artist rather than encoding data values in stops.
+- Registration is per-process, like `register_theme` — a serialized journal naming a user colormap needs the same `register_colormap` call before re-rendering in a fresh process. Built-in names can't be shadowed.
+
 ## Inset axes
 
 ```python

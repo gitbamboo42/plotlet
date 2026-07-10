@@ -15,7 +15,7 @@ Chart methods chain for incremental composition:
 """
 from ._spec import SPEC
 from .draw import TAB10, colors, palette, list_palettes
-from .draw import colormap, list_colormaps
+from .draw import colormap, list_colormaps, register_colormap
 from . import artists  # noqa: F401  — registers built-in artists on import
 from .chart import Chart, Layout, chart, grid
 from .legend import legend
@@ -46,7 +46,8 @@ def __getattr__(name):
 
 __all__ = ["chart", "Chart", "Layout", "SPEC", "TAB10", "colors",
            "palette", "list_palettes",
-           "colormap", "list_colormaps", "grid", "legend",
+           "colormap", "list_colormaps", "register_colormap",
+           "grid", "legend",
            "ArtistSpec", "add_artist", "artist_table", "declare_coord_support",
            "CircularCoordinate", "Sectors",
            "layout_diagram",

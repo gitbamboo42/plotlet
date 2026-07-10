@@ -112,6 +112,95 @@ def test_palette_is_plain_list_with_swatch_repr():
     assert "<svg" in TAB10._repr_html_()            # pt.colors previews too
 
 
+# ---------------------------------------------------------------- register_colormap
+
+def test_register_colormap_endpoints_and_midpoint():
+    pt.register_colormap("bwr2", ["#2166ac", "#ffffff", "#b2182b"])
+    cm = pt.colormap("bwr2")
+    assert cm(0.0) == (0x21, 0x66, 0xac)
+    assert cm(1.0) == (0xb2, 0x18, 0x2b)
+    # 0.5 lands between LUT samples (0.5 * 255 = 127.5) — white to
+    # within one quantization step
+    assert all(ch >= 254 for ch in cm(0.5))
+
+
+def test_register_colormap_reversed_variant():
+    pt.register_colormap("gb_ramp", ["green", "blue"])
+    names = pt.list_colormaps()
+    assert "gb_ramp" in names and "gb_ramp_r" in names
+    cm, cr = pt.colormap("gb_ramp"), pt.colormap("gb_ramp_r")
+    assert cr(0.0) == cm(1.0) and cr(1.0) == cm(0.0)
+    # the LUT itself is an exact triple-wise reversal
+    from plotlet.draw import colormap_lut
+    f, r = colormap_lut("gb_ramp"), colormap_lut("gb_ramp_r")
+    assert all(r[3 * i:3 * i + 3] == f[3 * (255 - i):3 * (255 - i) + 3]
+               for i in (0, 1, 100, 255))
+
+
+def test_register_colormap_linear_interpolation():
+    pt.register_colormap("kw_ramp", ["#000000", "#ffffff"])
+    cm = pt.colormap("kw_ramp")
+    assert cm(0.5) == (128, 128, 128)   # quantized midpoint of black→white
+
+
+def test_register_colormap_stops():
+    # black→white→black with the white anchor at 0.2 (= 51/255, exactly
+    # on a LUT sample).
+    pt.register_colormap("kwk", ["#000000", "#ffffff", "#000000"],
+                         stops=[0, 0.2, 1])
+    from plotlet.draw import colormap_lut
+    lut = colormap_lut("kwk")
+    assert len(lut) == 768
+    assert lut[0:3] == b"\x00\x00\x00"
+    assert lut[3 * 51:3 * 51 + 3] == b"\xff\xff\xff"
+    assert lut[-3:] == b"\x00\x00\x00"
+
+
+def test_register_colormap_accepts_tuples_and_names():
+    pt.register_colormap("tup_ramp", [(0, 0, 0), "red", "C0"])
+    cm = pt.colormap("tup_ramp")
+    assert cm(0.0) == (0, 0, 0)
+    assert cm(1.0) == (0x1f, 0x77, 0xb4)    # C0 == tab10 blue
+
+
+def test_register_colormap_overwrite_allowed():
+    pt.register_colormap("mut_ramp", ["#000000", "#ff0000"])
+    pt.register_colormap("mut_ramp", ["#000000", "#00ff00"])
+    assert pt.colormap("mut_ramp")(1.0) == (0, 255, 0)
+
+
+def test_register_colormap_feeds_palette():
+    pt.register_colormap("pal_ramp", ["#000000", "#ffffff"])
+    p = palette("pal_ramp", 3)
+    assert p == ["#000000", "#808080", "#ffffff"]
+    # interior _r samples can shift one quantization step; endpoints exact
+    r = palette("pal_ramp_r", 3)
+    assert (r[0], r[-1]) == (p[-1], p[0])
+
+
+def test_register_colormap_rejects_bad_input():
+    with pytest.raises(ValueError, match="built-in"):
+        pt.register_colormap("viridis", ["#000000", "#ffffff"])
+    with pytest.raises(ValueError, match="reserved"):
+        pt.register_colormap("foo_r", ["#000000", "#ffffff"])
+    with pytest.raises(ValueError, match="at least 2"):
+        pt.register_colormap("solo", ["#000000"])
+    with pytest.raises(ValueError, match="stops"):
+        pt.register_colormap("bad", ["#000000", "#ffffff"], stops=[0, 0.5, 1])
+    with pytest.raises(ValueError, match="start at 0"):
+        pt.register_colormap("bad", ["#000000", "#ffffff"], stops=[0.1, 1])
+    with pytest.raises(ValueError, match="increasing"):
+        pt.register_colormap("bad", ["k", "w", "k"], stops=[0, 0, 1])
+    with pytest.raises(ValueError, match="can't interpolate"):
+        pt.register_colormap("bad", ["rebeccapurple", "#ffffff"])
+    assert "bad" not in pt.list_colormaps()
+
+
+def test_unknown_colormap_hints_register():
+    with pytest.raises(ValueError, match="register_colormap"):
+        pt.colormap("no_such_cmap")
+
+
 # ---------------------------------------------------------------- palette_color
 
 def test_palette_color_accepts_name():

@@ -5,6 +5,7 @@ come from `palette()`, derived from the vendored colormap LUTs in
 `_cm_data` (no separate palette data).
 """
 from ._cm_data import LUTS
+from .colormaps import _lut
 
 
 class Palette(list):
@@ -119,14 +120,14 @@ def palette(name, n=None):
         if n is not None:
             cols = [cols[i % size] for i in range(n)]
         return Palette(cols)
-    if name in LUTS:
+    lut = _lut(name)
+    if lut is not None:
         if n is None:
             raise ValueError(
                 f"{name!r} is a continuous colormap — pass a count to "
                 f"sample it into a color list: palette({name!r}, n)")
         if n == 1:
-            return Palette([_lut_hex(LUTS[name], 128)])
-        lut = LUTS[name]
+            return Palette([_lut_hex(lut, 128)])
         return Palette(_lut_hex(lut, int(i * 255 / (n - 1) + 0.5))
                        for i in range(n))
     raise ValueError(
