@@ -54,7 +54,7 @@ from .registry import get_artist, all_artist_names
 # here because `Chart.__getattr__` / `__dir__` are the only consumers —
 # the dispatcher in `_replay` matches on name directly.
 _FRAME_METHODS = {
-    "title", "xlabel", "ylabel", "xlim", "ylim",
+    "title", "subtitle", "caption", "xlabel", "ylabel", "xlim", "ylim",
     "xscale", "yscale", "grid", "legend",
     "xticks", "yticks", "spines", "theme", "font",
     "x_expand", "y_expand", "clip", "facecolor",
@@ -455,6 +455,8 @@ class Chart(_Renderable):
         leaf._legend_group_by_chart = True
         leaf._legend_valign = "middle"
         leaf._legend_ncols = 1
+        leaf._legend_reverse = False
+        leaf._legend_manual = []
         leaf._legend_user_width = None
         leaf._legend_user_height = None
         leaf._legend_gap = None
@@ -469,7 +471,9 @@ class Chart(_Renderable):
         return leaf
 
     def legend(self, *args, position: str | None = None,
-               ncols: int | None = None, **kwargs) -> "Chart":
+               ncols: int | None = None,
+               reverse: bool | None = None,
+               entries: list | None = None, **kwargs) -> "Chart":
         """Toggle the in-frame overlay legend.
 
         `chart.legend()` or `chart.legend(True)` turns it on; `False` off.
@@ -489,6 +493,11 @@ class Chart(_Renderable):
         `guide_legend(ncol=)`). On `"top"` / `"bottom"` the default is a
         single horizontal row; `ncols=` switches those to the same
         N-column grid.
+
+        `reverse=True` flips the discrete entry order (matplotlib's
+        `reverse`). `entries=[{"label": ..., "color": ...}, ...]`
+        appends free-form manual rows after the harvested ones — see
+        `pt.legend` for the entry dict shape.
 
         For a separate, layout-level legend leaf (the kind that lives in
         its own panel and harvests entries from sibling charts), use
@@ -517,11 +526,17 @@ class Chart(_Renderable):
             )
         # Record directly — `legend` is in _FRAME_METHODS but our specialized
         # method above shadows __getattr__, so we use `_record` explicitly.
+        from .legend import _validate_manual_entries
+        _validate_manual_entries(entries, "chart.legend")
         kw = {}
         if position is not None:
             kw["position"] = position
         if ncols is not None:
             kw["ncols"] = ncols
+        if reverse is not None:
+            kw["reverse"] = bool(reverse)
+        if entries is not None:
+            kw["entries"] = [dict(e) for e in entries]
         return self._record("legend", *args, **kw)
 
     # ---------- recording (leaf only) ----------
@@ -1037,7 +1052,7 @@ def chart(data=None, *,
           # `Chart.__init__`) so the class stays pure field-state and
           # the journal event `new_chart` can carry exactly what the
           # constructor accepts with no whitelist at replay.
-          title=None, xlabel=None, ylabel=None,
+          title=None, subtitle=None, caption=None, xlabel=None, ylabel=None,
           xlim=None, ylim=None, xscale=None, yscale=None,
           x_expand=None, y_expand=None,
           legend=None, grid=None, clip=None,
@@ -1052,6 +1067,8 @@ def chart(data=None, *,
               margin=margin, x=x, y=y, fill=fill, color=color,
               group=group, linestyle=linestyle, palette=palette)
     if title    is not None: c.title(title)
+    if subtitle is not None: c.subtitle(subtitle)
+    if caption  is not None: c.caption(caption)
     if xlabel   is not None: c.xlabel(xlabel)
     if ylabel   is not None: c.ylabel(ylabel)
     if xlim     is not None: c.xlim(*xlim)

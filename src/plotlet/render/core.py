@@ -28,14 +28,14 @@ from types import SimpleNamespace
 
 from .._spec import (
     SPEC, _MARGIN_FLOOR, _FRAME, _GRIDSPEC, _FONTSPEC, _LEGSPEC,
-    _LAYOUTSPEC, _D, _DASH,
+    _LAYOUTSPEC, _PADSPEC, _D, _DASH,
 )
 _SECTORSPEC = SPEC["sectors"]
 from ..draw import resolve_color, TAB10
 from ..scales import (_nice_domain, _fmt_tick, _to_epoch,
                       _coerce_time_lim, _AxisDescriptor)
 from ..sectors import SectoredValue
-from ..draw import measure_text
+from ..draw import measure_text, text_block_height
 from ..draw import coord, rect, segment, text_path
 from .. import _regions
 from . import _chrome
@@ -317,7 +317,7 @@ def _expand_frame_defaults(calls):
 # baseline corpus renders through validate, so a missed name fails the
 # suite immediately.
 _FRAME_OPS = frozenset({
-    "title", "xlabel", "ylabel", "xlim", "ylim",
+    "title", "subtitle", "caption", "xlabel", "ylabel", "xlim", "ylim",
     "xscale", "yscale", "grid", "legend",
     "xticks", "yticks", "spines", "theme", "font",
     "x_expand", "y_expand", "clip", "facecolor",
@@ -330,7 +330,8 @@ def _replay(calls):
     renderer. Pure function of `calls` and the artist registry — same input
     + same registry → same output."""
     st = {
-        "artists": [], "title": "", "xlabel": "", "ylabel": "",
+        "artists": [], "title": "", "subtitle": "", "caption": "",
+        "xlabel": "", "ylabel": "",
         "xlim": None, "ylim": None, "xscale": "linear", "yscale": "linear",
         "x_order": None, "y_order": None,
         "x_padding": None, "y_padding": None,
@@ -381,7 +382,8 @@ def _replay(calls):
         "spine_walls": True,
         "spine_walls_color": None, "spine_walls_width": None,
         "spine_walls_linestyle": None,
-        "grid": _GRIDSPEC.get("default_on", False), "legend": False,
+        "grid": _GRIDSPEC.get("default_on", False), "grid_which": "major",
+        "legend": False,
         # Inline-legend placement. Outside tokens: `"right"` (default),
         # `"left"`, `"top"`, `"bottom"` — reserve margin space beside the
         # data area. Inside tokens: `"top-right"`, `"top-left"`,
@@ -391,6 +393,10 @@ def _replay(calls):
         # Discrete entries per legend column (down-then-across fill);
         # `"top"` / `"bottom"` render a single horizontal row when 1.
         "legend_ncols": 1,
+        "legend_reverse": False,
+        # Free-form manual rows (`c.legend(entries=[...])`) appended
+        # after the harvested entries.
+        "legend_manual": None,
         # Data-area clipping on by default — artists past xlim/ylim get
         # cropped at the data boundary. Set False (`c.clip(False)`) to
         # let lines and large markers bleed into the margin space.
@@ -479,6 +485,8 @@ def _replay(calls):
             else:
                 st["artists"].append(result)
         elif name == "title":  st["title"] = args[0]
+        elif name == "subtitle": st["subtitle"] = args[0]
+        elif name == "caption":  st["caption"] = args[0]
         elif name == "xlabel": st["xlabel"] = args[0]
         elif name == "ylabel": st["ylabel"] = args[0]
         elif name == "xlim":   st["xlim"] = (args[0], args[1])
@@ -506,13 +514,32 @@ def _replay(calls):
                         if attr in v: st[f"spine_{target}_{attr}"] = v[attr]
                 else:
                     st[f"spine_{target}"] = bool(v)
-        elif name == "grid":   st["grid"] = (args[0] if args else True)
+        elif name == "grid":
+            # c.grid() / c.grid(False) toggle; c.grid("both") or
+            # c.grid(which="minor") select which tick set draws lines.
+            v = args[0] if args else True
+            if isinstance(v, str):
+                st["grid"] = True
+                st["grid_which"] = v
+            else:
+                st["grid"] = bool(v)
+            if "which" in kw:
+                st["grid_which"] = kw["which"]
+            if st["grid_which"] not in ("major", "minor", "both"):
+                raise ValueError(
+                    f"c.grid(which={st['grid_which']!r}) — pass \"major\", "
+                    f"\"minor\", or \"both\"."
+                )
         elif name == "legend":
             st["legend"] = (args[0] if args else True)
             if "position" in kw:
                 st["legend_position"] = kw["position"]
             if "ncols" in kw:
                 st["legend_ncols"] = kw["ncols"]
+            if "reverse" in kw:
+                st["legend_reverse"] = kw["reverse"]
+            if "entries" in kw:
+                st["legend_manual"] = kw["entries"]
         elif name == "clip":   st["clip"] = bool(args[0]) if args else True
         elif name == "facecolor": st["facecolor"] = args[0] if args else None
         elif name == "aspect":
@@ -1206,16 +1233,16 @@ def _inline_legend_layout(st):
     colorbar inside the data area is incoherent). Returns `None` if
     there's nothing to draw.
 
-    Continuous + horizontal-position combos raise — a horizontal gradient
-    strip is its own render variant we haven't built; users on those
-    positions should compose with `pt.legend(c)` instead.
+    Gradient-only sources on "top"/"bottom" get the horizontal colorbar
+    variant (`gradient_h` flag). Continuous + discrete mixed on those
+    positions raises — the two blocks only stack on "right"/"left".
 
     Called by `_required_margin` (to reserve outside-legend margin space)
     and by `_render_inner`'s legend block (to paint), so the two stay in
     sync — change geometry here, both paths follow."""
     if not st["legend"]:
         return None
-    from ._legend import _legend_source_artist
+    from ._legend import _legend_source_artist, _manual_entry
     disc = []
     cont = []
     for a in st["artists"]:
@@ -1230,17 +1257,21 @@ def _inline_legend_layout(st):
         if spec.legend_entries is not None:
             for entry in spec.legend_entries(a):
                 disc.append((a, entry))
+    for e in st.get("legend_manual") or []:
+        entry = _manual_entry(e)
+        disc.append((entry["_a"], entry))
+    if st.get("legend_reverse"):
+        disc.reverse()
     if not disc and not cont:
         return None
 
     requested = st.get("legend_position", "right")
-    if cont and requested in ("top", "bottom"):
+    if cont and disc and requested in ("top", "bottom"):
         raise ValueError(
-            f"chart.legend(position={requested!r}) with a continuous color "
-            f"mapping (imshow / heatmap / hexbin) is not supported — only "
-            f"'right' or 'left' work for the inline colorbar. For a "
-            f"horizontal gradient strip, compose with `pt.legend(c)` "
-            f"instead and place it on top or bottom of your layout."
+            f"chart.legend(position={requested!r}) mixing a continuous "
+            f"color mapping with discrete entries is not supported — only "
+            f"'right' or 'left' stack the two. A gradient-only chart gets "
+            f"a horizontal colorbar on 'top'/'bottom'."
         )
     # Auto-flip inside-corner tokens to "right" for gradient charts — an
     # overlay colorbar would float over the data area, which never reads right.
@@ -1248,11 +1279,14 @@ def _inline_legend_layout(st):
         pos = "right"
     else:
         pos = requested
+    # Gradient-only on an outside top/bottom position → horizontal
+    # colorbar (strip runs vmin-left → vmax-right, ticks below).
+    gradient_h = bool(cont) and pos in ("top", "bottom")
     # `ncols > 1` switches top/bottom from the single-row layout to the
     # same N-column grid the vertical positions use (ggplot2: setting
     # ncol overrides the horizontal direction's one-row default).
     ncols = st.get("legend_ncols", 1)
-    horizontal = pos in ("top", "bottom") and ncols == 1
+    horizontal = pos in ("top", "bottom") and ncols == 1 and not cont
 
     row_h = _LEGSPEC["row_height"]
     pad_x = _LEGSPEC["pad_x"]
@@ -1260,9 +1294,14 @@ def _inline_legend_layout(st):
     sw    = _LEGSPEC["swatch_width"]
     tick_size = _FONTSPEC["tick_size"]
 
-    if horizontal:
-        # Discrete-only horizontal row (gradients on top/bottom would
-        # have raised above). Entries arranged left-to-right.
+    if gradient_h:
+        # Horizontal gradient-only block: like the vertical gradient-only
+        # case, no background rect and no padding — the strip borders
+        # itself and sits flush against the data area (modulo legend_gap).
+        from ._legend import _inline_gradient_block_size_h
+        lw, lh = _inline_gradient_block_size_h([d for _, d in cont])
+    elif horizontal:
+        # Discrete-only horizontal row. Entries arranged left-to-right.
         entry_ws = [sw + 6 + measure_text(e["label"], tick_size) for _, e in disc]
         spacer = 2 * pad_x
         lw = 2 * pad_x + sum(entry_ws) + (len(disc) - 1) * spacer
@@ -1305,7 +1344,8 @@ def _inline_legend_layout(st):
         if cont and disc:
             lh += _LEGSPEC["section_gap"]
     return {"disc": disc, "cont": cont, "lw": lw, "lh": lh,
-            "horizontal": horizontal, "position": pos, "ncols": ncols}
+            "horizontal": horizontal, "gradient_h": gradient_h,
+            "position": pos, "ncols": ncols}
 
 
 def _resolve_panel_inputs(st, *, x_scale, y_scale, dw, dh, po):
@@ -1472,6 +1512,19 @@ def _required_margin(st, dw, dh, po: "_PanelOpts") -> dict:
         title_overhang = max(0.0, (measure_text(st["title"], title_size) - dw) / 2.0)
         left  = max(left,  title_overhang)
         right = max(right, title_overhang)
+    if st["subtitle"]:
+        sub_overhang = max(0.0, (measure_text(st["subtitle"], _FONTSPEC["subtitle_size"]) - dw) / 2.0)
+        left  = max(left,  sub_overhang)
+        right = max(right, sub_overhang)
+    if st["caption"]:
+        # Caption band is not part of `label_band_sizes` — the bottom
+        # band positions the outside-bottom legend, and the caption sits
+        # past that legend (see `emit_frame_labels`). Reserve it here,
+        # additively like the legend below. Anchored right at x=dw, a
+        # caption wider than the data area spills left only.
+        caption_size = _FONTSPEC["caption_size"]
+        bottom += _PADSPEC["caption"] + text_block_height(st["caption"], caption_size)
+        left = max(left, max(0.0, measure_text(st["caption"], caption_size) - dw))
     if st["xlabel"] and not inp.hide_xlabel:
         xlabel_overhang = max(0.0, (measure_text(st["xlabel"], label_size) - dw) / 2.0)
         left  = max(left,  xlabel_overhang)
@@ -1689,8 +1742,8 @@ def _panel_open(st, panel_opts: _PanelOpts, transform: str,
     return f'<g transform="{transform}"{attrs}>{meta}'
 
 
-def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal, ncols,
-                              pad_x, pad_y, row_h, sw, tick_size,
+def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal, gradient_h,
+                              ncols, pad_x, pad_y, row_h, sw, tick_size,
                               text_color, ctx_for) -> str:
     """Render the inline legend body — the part *inside* the
     `<g transform="translate(lx, ly)">` wrapper. Lives in its own
@@ -1708,9 +1761,19 @@ def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal, ncols,
         parts.append(rect(0, 0, lw, lh,
                           fill=_LEGSPEC["background"],
                           alpha=_LEGSPEC["opacity"]))
+    if gradient_h:
+        # Horizontal colorbar (gradient-only, outside top/bottom).
+        from ._legend import (_h_gradient_entry_height,
+                              _render_continuous_entry_h)
+        cur_y = 0.0
+        for i, (_, desc) in enumerate(cont):
+            parts.append(_render_continuous_entry_h(desc, 0.0, cur_y))
+            cur_y += _h_gradient_entry_height(desc)
+            if i < len(cont) - 1:
+                cur_y += _LEGSPEC["section_gap"]
+        return ''.join(parts)
     if horizontal:
-        # Discrete-only horizontal row (continuous + horizontal would
-        # have raised in `_inline_legend_layout`). Entries left-to-right,
+        # Discrete-only horizontal row. Entries left-to-right,
         # vertically centered. Spacer matches `_inline_legend_layout`.
         spacer = 2 * pad_x
         cx = pad_x
@@ -1892,16 +1955,41 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
     # the x-axis (e.g. CircularCoordinate) because horizontals/verticals
     # render outside the ring after the warp would naturally apply.
     if st["grid"] and not _has_x_frame:
-        gw = _GRIDSPEC["width"]; gd = _GRIDSPEC["dasharray"]
-        if not x_is_cat:
-            for t in inp.x_ticks:
-                x = x_scale(t)
-                parts.append(segment(x, 0, x, ih,
-                                     color=_GRIDSPEC["color"], width=gw, dash=gd))
-        for t in inp.y_ticks:
-            y = y_scale(t)
-            parts.append(segment(0, y, iw, y,
-                                 color=_GRIDSPEC["color"], width=gw, dash=gd))
+        gcol = _GRIDSPEC["color"]
+        which = st["grid_which"]
+        # Minor lines first so major lines paint on top where they meet.
+        # grid(which="minor"/"both") is itself the explicit ask, so when
+        # the user hasn't configured minor ticks the auto subdivisions
+        # apply (ggplot behavior) — an explicit minor= list still wins.
+        if which in ("minor", "both"):
+            mw = _GRIDSPEC["minor_width"]; md = _GRIDSPEC["minor_dasharray"]
+            if not x_is_cat:
+                xm = st["x_minor"]
+                for t in _chrome._resolve_minor_ticks(
+                        xm if xm not in (None, False) else True,
+                        x_scale, inp.x_ticks):
+                    x = x_scale(t)
+                    parts.append(segment(x, 0, x, ih,
+                                         color=gcol, width=mw, dash=md))
+            if panel_opts.y_axis.kind != "category":
+                ym = st["y_minor"]
+                for t in _chrome._resolve_minor_ticks(
+                        ym if ym not in (None, False) else True,
+                        y_scale, inp.y_ticks):
+                    y = y_scale(t)
+                    parts.append(segment(0, y, iw, y,
+                                         color=gcol, width=mw, dash=md))
+        if which in ("major", "both"):
+            gw = _GRIDSPEC["width"]; gd = _GRIDSPEC["dasharray"]
+            if not x_is_cat:
+                for t in inp.x_ticks:
+                    x = x_scale(t)
+                    parts.append(segment(x, 0, x, ih,
+                                         color=gcol, width=gw, dash=gd))
+            for t in inp.y_ticks:
+                y = y_scale(t)
+                parts.append(segment(0, y, iw, y,
+                                     color=gcol, width=gw, dash=gd))
 
     # build the render context once — passed to every draw call.
     # When svg_transform is present the coordinate mapping is handled at the
@@ -2004,8 +2092,11 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
     text_color = _FONTSPEC["color"]
     top_legend_outset = (leg["lh"] + legend_gap
                          if inner_gap_top is not None else 0)
+    bottom_legend_outset = (leg["lh"] + legend_gap
+                            if legend_pos == "bottom" else 0)
     parts.extend(_chrome.emit_frame_labels(
         st, inp, iw, ih, chrome, top_legend_outset=top_legend_outset,
+        bottom_legend_outset=bottom_legend_outset,
     ))
 
     # legend — gather entries from every artist's legend_entries(a) and
@@ -2061,8 +2152,9 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
         # in the body) land at outer-SVG positions.
         with _regions.translate(lx, ly):
             parts.append(_emit_inline_legend_body(
-                lw, lh, pos, cont, disc, horizontal, leg["ncols"],
-                pad_x, pad_y, row_h, sw, tick_size, text_color, _ctx_for))
+                lw, lh, pos, cont, disc, horizontal, leg["gradient_h"],
+                leg["ncols"], pad_x, pad_y, row_h, sw, tick_size,
+                text_color, _ctx_for))
         parts.append('</g>')
 
     # Inset axes — render each as its own SVG fragment positioned by

@@ -80,6 +80,22 @@ def legend_continuous():
     return hm | pt.legend(hm)
 
 
+def legend_colorbar_bottom():
+    # Gradient-only + position="bottom" → horizontal colorbar under the
+    # data area (vmin left, ticks below the strip).
+    hm = pt.chart(title="heat", data_width=320, data_height=180)
+    hm.imshow(_matrix(), cmap="viridis", legend={"label": "intensity"})
+    hm.legend(True, position="bottom")
+    return hm
+
+
+def legend_colorbar_top():
+    hm = pt.chart(title="heat", data_width=320, data_height=180)
+    hm.imshow(_matrix(), cmap="plasma")
+    hm.legend(True, position="top")
+    return hm
+
+
 def legend_mixed():
     xs = _xs()
     im = pt.chart(title="heat", data_width=180, data_height=140)
@@ -88,6 +104,27 @@ def legend_mixed():
     lines.line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y", label="sin")
     lines.line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y", label="cos")
     return im | lines | pt.legend()
+
+
+def legend_reverse_manual():
+    # reverse=True flips each section's discrete order; entries= appends
+    # a free-form manual section (label + color, default rect swatch).
+    xs = _xs()
+    a = pt.chart(title="alpha", data_width=220, data_height=150)
+    a.line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y", label="sin")
+    a.line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y", label="cos")
+    return a | pt.legend(a, reverse=True,
+                         entries=[{"label": "threshold", "color": "red"},
+                                  {"label": "baseline", "color": "0.6"}])
+
+
+def legend_inline_manual():
+    xs = _xs()
+    c = pt.chart(data_width=280, data_height=160)
+    c.line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y", label="sin")
+    c.legend(True, position="right",
+             entries=[{"label": "cutoff", "color": "C3", "alpha": 0.4}])
+    return c
 
 
 def legend_overrides():
@@ -185,7 +222,11 @@ def legend_gap_override():
 PLOTS = {
     "legend_auto_grouped": legend_auto_grouped,
     "legend_continuous":   legend_continuous,
+    "legend_colorbar_bottom": legend_colorbar_bottom,
+    "legend_colorbar_top":  legend_colorbar_top,
     "legend_mixed":        legend_mixed,
+    "legend_reverse_manual": legend_reverse_manual,
+    "legend_inline_manual": legend_inline_manual,
     "legend_overrides":    legend_overrides,
     "legend_flat_fixed":   legend_flat_fixed,
     "legend_swatch_overrides": legend_swatch_overrides,

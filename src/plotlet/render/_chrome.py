@@ -180,12 +180,20 @@ def label_band_sizes(st, inp, dw, dh):
     # Title sits past the top chrome band + any top-side xlabel block,
     # then adds `pad.title` + its glyph-block height for its own block —
     # mirrors the inside-out walk in `emit_frame_labels` so reservation
-    # matches positioning.
+    # matches positioning. A subtitle stacks between the data area and
+    # the title (`pad.subtitle` apart when both are set).
     # The title renders even on a hidden-top joined edge (`hide_t` drops
     # only the *redundant* axis chrome — a title is the panel's identity,
     # e.g. facet labels on the lower rows of a shared-x grid).
-    title_top = (_PADSPEC["title"] + text_block_height(st["title"], title_size)
-                 if st["title"] else 0)
+    title_top = 0.0
+    if st["title"] or st["subtitle"]:
+        title_top += _PADSPEC["title"]
+        if st["subtitle"]:
+            title_top += text_block_height(st["subtitle"], _FONTSPEC["subtitle_size"])
+            if st["title"]:
+                title_top += _PADSPEC["subtitle"]
+        if st["title"]:
+            title_top += text_block_height(st["title"], title_size)
     top    = chrome["top"]    + (xlabel_band if inp.x_side == "top"    else 0) + title_top
     bottom = chrome["bottom"] + (xlabel_band if inp.x_side == "bottom" else 0)
     left   = chrome["left"]   + (ylabel_band if inp.y_side == "left"   else 0)
@@ -226,16 +234,18 @@ def label_band_sizes(st, inp, dw, dh):
     return bands, chrome
 
 
-def emit_frame_labels(st, inp, iw, ih, chrome, *, top_legend_outset=0):
-    """Emit xlabel / ylabel / title as SVG fragments. Walks inside-out
-    from the data area: past the chrome band on the active side, past
-    the label's own (2-px gap + label_size) block, then the title's
-    (pad.title + title_size) block above the top-side xlabel (when
-    ``inp.x_side == "top"``).
+def emit_frame_labels(st, inp, iw, ih, chrome, *, top_legend_outset=0,
+                      bottom_legend_outset=0):
+    """Emit xlabel / ylabel / title / subtitle / caption as SVG
+    fragments. Walks inside-out from the data area: past the chrome band
+    on the active side, past the label's own (2-px gap + label_size)
+    block, then the subtitle and title blocks above the top-side xlabel
+    (when ``inp.x_side == "top"``). The caption is the outermost bottom
+    element — small, right-aligned (ggplot's `labs(caption=)`).
 
-    ``top_legend_outset`` is the extra strip the title must hop over
-    when a top-position inline legend sits between title and data
-    (``leg_lh + legend_gap``); 0 otherwise.
+    ``top_legend_outset`` / ``bottom_legend_outset`` are the extra strips
+    the title (resp. caption) must hop over when an outside top/bottom
+    inline legend sits in between (``leg_lh + legend_gap``); 0 otherwise.
     """
     label_size = _FONTSPEC["label_size"]
     title_size = _FONTSPEC["title_size"]
@@ -280,14 +290,38 @@ def emit_frame_labels(st, inp, iw, ih, chrome, *, top_legend_outset=0):
                                 label_size, anchor="middle",
                                 color=text_color, rotate=90, tag="ylabel"))
 
-    if st["title"]:
+    if st["title"] or st["subtitle"]:
         top_xlabel = xlabel_band if inp.x_side == "top" else 0
         outer = chrome["top"] + top_xlabel + top_legend_outset + _PADSPEC["title"]
-        title_extra = text_block_height(st["title"], title_size) - title_size
-        title_y = -(outer + descender(title_size) + title_extra)
-        parts.append(text_path(st["title"], iw / 2, title_y, title_size,
-                                anchor="middle", color=text_color,
-                                tag="title"))
+        if st["subtitle"]:
+            subtitle_size = _FONTSPEC["subtitle_size"]
+            sub_extra = text_block_height(st["subtitle"], subtitle_size) - subtitle_size
+            sub_y = -(outer + descender(subtitle_size) + sub_extra)
+            parts.append(text_path(st["subtitle"], iw / 2, sub_y,
+                                    subtitle_size, anchor="middle",
+                                    color=text_color, tag="subtitle"))
+            outer += text_block_height(st["subtitle"], subtitle_size)
+            if st["title"]:
+                outer += _PADSPEC["subtitle"]
+        if st["title"]:
+            title_extra = text_block_height(st["title"], title_size) - title_size
+            title_y = -(outer + descender(title_size) + title_extra)
+            parts.append(text_path(st["title"], iw / 2, title_y, title_size,
+                                    anchor="middle", color=text_color,
+                                    tag="title"))
+
+    if st["caption"]:
+        # Outermost bottom element: past the bottom chrome, bottom-side
+        # xlabel block, and any bottom-position legend. First-line
+        # baseline anchored so multi-line captions grow downward.
+        caption_size = _FONTSPEC["caption_size"]
+        bottom_xlabel = xlabel_band if inp.x_side == "bottom" else 0
+        caption_y = (ih + chrome["bottom"] + bottom_xlabel
+                     + bottom_legend_outset + _PADSPEC["caption"]
+                     + caption_size - descender(caption_size))
+        parts.append(text_path(st["caption"], iw, caption_y, caption_size,
+                                anchor="end", color=text_color,
+                                tag="caption"))
 
     return parts
 

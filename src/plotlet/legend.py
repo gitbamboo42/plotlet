@@ -16,6 +16,8 @@ def legend(*sources: Chart, names: dict | None = None,
            group_by_chart: bool = True,
            valign: str = "middle",
            ncols: int = 1,
+           reverse: bool = False,
+           entries: list | None = None,
            canvas_width: int | float | str | None = None,
            canvas_height: int | float | str | None = None,
            legend_gap: int | float | None = None,
@@ -43,6 +45,16 @@ def legend(*sources: Chart, names: dict | None = None,
     siblings. Headers and gradient strips span the full width; each
     grouped guide block wraps independently.
 
+    `reverse=True` flips the discrete entry order within each section
+    (matplotlib's `reverse`) — the fix when stacked marks read bottom-up
+    but the legend reads top-down.
+
+    `entries=[{"label": ..., "color": ...}, ...]` appends free-form
+    manual rows not harvested from any artist (an annotation color, an
+    external reference). Each dict needs `label` and `color`; optional
+    `alpha`. Manual rows render as standard rect swatches after the
+    harvested sections.
+
     Legend leaves have no data axes, so the dimensional surface is
     canvas-only: pass `canvas_width=` / `canvas_height=` to override the
     content-driven auto-size. `legend_gap=N` overrides the default 6 px
@@ -51,6 +63,7 @@ def legend(*sources: Chart, names: dict | None = None,
     """
     if kwargs:
         raise TypeError(f"pt.legend() got unexpected keyword arguments: {list(kwargs)!r}")
+    _validate_manual_entries(entries, "pt.legend")
     if valign not in ("top", "middle"):
         raise ValueError(
             f"pt.legend(valign={valign!r}) — must be 'top' or 'middle'."
@@ -82,7 +95,26 @@ def legend(*sources: Chart, names: dict | None = None,
     leaf._legend_group_by_chart = group_by_chart
     leaf._legend_valign = valign
     leaf._legend_ncols = ncols
+    leaf._legend_reverse = bool(reverse)
+    leaf._legend_manual = [dict(e) for e in entries] if entries else []
     leaf._legend_user_width = canvas_width
     leaf._legend_user_height = canvas_height
     leaf._legend_gap = float(legend_gap) if legend_gap is not None else None
     return leaf
+
+
+def _validate_manual_entries(entries, where: str) -> None:
+    """Shared `entries=` validation for `pt.legend` and `Chart.legend`."""
+    if entries is None:
+        return
+    if not isinstance(entries, (list, tuple)):
+        raise TypeError(
+            f"{where}(entries=...) — pass a list of "
+            f'{{"label": ..., "color": ...}} dicts.'
+        )
+    for e in entries:
+        if not isinstance(e, dict) or "label" not in e or "color" not in e:
+            raise ValueError(
+                f"{where}(entries=...) — each entry needs at least "
+                f'"label" and "color"; got {e!r}.'
+            )

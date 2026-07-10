@@ -97,6 +97,18 @@ _QUALITATIVE_N = {
 }
 
 
+# Palettes that are plain color lists, not LUT-derived. "colorblind" is
+# Okabe & Ito's colorblind-safe qualitative set in its canonical order
+# (https://jfly.uni-koeln.de/color/) — safe under deuteranopia,
+# protanopia, and tritanopia.
+_EXPLICIT_PALETTES = {
+    "colorblind": [
+        "#000000", "#e69f00", "#56b4e9", "#009e73",
+        "#f0e442", "#0072b2", "#d55e00", "#cc79a7",
+    ],
+}
+
+
 def _lut_hex(lut, i):
     j = 3 * i
     return f"#{lut[j]:02x}{lut[j + 1]:02x}{lut[j + 2]:02x}"
@@ -113,6 +125,13 @@ def palette(name, n=None):
     returned `Palette` is a plain list that shows swatches in notebooks.
     """
     base = name[:-2] if name.endswith("_r") else name
+    if base in _EXPLICIT_PALETTES:
+        cols = list(_EXPLICIT_PALETTES[base])
+        if name.endswith("_r"):
+            cols.reverse()
+        if n is not None:
+            cols = [cols[i % len(cols)] for i in range(n)]
+        return Palette(cols)
     if base in _QUALITATIVE_N:
         size = _QUALITATIVE_N[base]
         lut = LUTS[name]
@@ -142,4 +161,4 @@ def list_palettes():
     Each also has a '_r' reversed variant, and any continuous colormap
     name (`list_colormaps()`) works too when `n` is given.
     """
-    return sorted(_QUALITATIVE_N)
+    return sorted(set(_QUALITATIVE_N) | set(_EXPLICIT_PALETTES))

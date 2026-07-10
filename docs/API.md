@@ -17,8 +17,13 @@ return `self`, so they chain.
 
 Pass at construction or as chained setters:
 
-`title`, `xlabel`, `ylabel`, `xlim=(a, b)`, `ylim=(a, b)`, `xscale`,
-`yscale`, `grid=True/False`, `legend=True/False`, `clip=True/False`,
+`title`, `subtitle` (smaller line under the title), `caption` (small
+right-aligned text below the chart — ggplot's `labs(caption=)`),
+`xlabel`, `ylabel`, `xlim=(a, b)`, `ylim=(a, b)`, `xscale`,
+`yscale`, `grid=True/False` (or `"major"`/`"minor"`/`"both"`; also
+`c.grid(which="minor")` — minor lines use the axes' `minor=` tick
+positions, or auto subdivisions when none are set), `legend=True/False`,
+`clip=True/False`,
 `data_width`, `data_height`, `theme` (see [THEMES.md](THEMES.md)),
 `font` (see [Fonts](#fonts)).
 
@@ -30,7 +35,13 @@ tokens (reserve margin space beside the data area): `"right"` (default),
 translucent background for readability over plot marks. `ncols=N`
 (also on `pt.legend(...)`) wraps discrete entries into N columns,
 filled down-then-across; `"top"` / `"bottom"` default to one
-horizontal row until `ncols=` switches them to the grid.
+horizontal row until `ncols=` switches them to the grid. A
+gradient-only chart (imshow / heatmap / hexbin) on `"top"` /
+`"bottom"` gets a horizontal colorbar — strip running vmin-left →
+vmax-right, ticks below. `reverse=True` (also on `pt.legend(...)`)
+flips the discrete entry order; `entries=[{"label": ..., "color":
+...}, ...]` appends free-form manual rows not harvested from any
+artist (optional `alpha`; rendered as standard rect swatches).
 
 Per-artist `legend={...}` customizes that artist's entries wherever they
 render (in-frame or `pt.legend()` panel): `{"label": ..., "ticks": [...]}`
@@ -97,7 +108,11 @@ matching stroke line.
 
 `format="{:.0%}"` or `format=lambda v: f"${v/1000:.0f}K"` formats
 auto-generated tick labels — string and callable both work; explicit
-labels still override.
+labels still override. Named formatters (`pt.list_formatters()`):
+`"money"`, `"si"`, `"percent"`, `"scientific"`, `"comma"`, and
+`"power10"` (`100000` → `10⁵`, `0.002` → `2×10⁻³` — the natural log-axis
+format, `c.xticks(format="power10")`). `pt.register_formatter(name, fn)`
+adds your own.
 
 `minor=True` adds auto-positioned minor ticks (5 per major-gap on linear
 scales; sub-decade on log); `minor=[v1, v2, …]` for explicit positions.
@@ -114,6 +129,8 @@ DejaVu Sans covers the full scientific set) — just type it, no markup:
 Greek (`α μ Σ`), super/subscripts (`10⁻⁵`, `H₂O`, `μm²`, `log₂ FC`),
 operators (`× ± ≤ ≈ → √ ∫`). Unicode super/subscripts exist only for
 digits, `+ − ( )`, and a few letters — no `x^{n+1}` markup (unbuilt).
+`pt.superscript("-2")` / `pt.subscript("2")` convert plain strings so
+you don't hunt for codepoints: `"kg·m" + pt.superscript("-2")` → `kg·m⁻²`.
 `\n` stacks lines: `"Fold change\n(log₂)"`.
 
 ## Fonts
@@ -331,10 +348,15 @@ Deeper layout helpers — `layout_tree(tree)`, `layout_parent(tree)`, `fit_paren
 
 ## Palettes
 
-- `pt.palette(name)` → list of hex colors. Qualitative names (`pt.list_palettes()`: `"Set1"`–`"Set3"`, `"Pastel1"`/`"Pastel2"`, `"Dark2"`, `"Accent"`, `"Paired"`, `"tab10"`/`"tab20"`/`"tab20b"`/`"tab20c"`) return the full palette; `n` truncates or cycles past the end.
+- `pt.palette(name)` → list of hex colors. Qualitative names (`pt.list_palettes()`: `"Set1"`–`"Set3"`, `"Pastel1"`/`"Pastel2"`, `"Dark2"`, `"Accent"`, `"Paired"`, `"tab10"`/`"tab20"`/`"tab20b"`/`"tab20c"`, `"colorblind"`) return the full palette; `n` truncates or cycles past the end.
+- `"colorblind"` is the Okabe–Ito colorblind-safe set (8 colors, black first) — safe under deuteranopia, protanopia, and tritanopia.
 - `pt.palette(name, n)` also samples any continuous colormap (`pt.list_colormaps()`) at `n` evenly-spaced points — e.g. `pt.palette("viridis", 12)` for 12 hex colors, no matplotlib round-trip.
 - `"_r"` suffix reverses either kind.
 - Artists' `palette=` accepts a name string directly: `c.bar(..., fill="group", palette="Set2")` — alongside the existing list and `{category: color}` dict forms.
+
+## Datasets
+
+`pt.load(name)` → `dict[col, list]`, the shape `pt.chart()` accepts directly; `pt.list_datasets()` for names. Bundled: `"penguins"` (scatter/grouping), `"flights"` (month × year heatmap), `"anscombe"` (regression/facets), `"tips"` (categorical: bar, box, violin). Numeric columns arrive as `float`/`int` with missing values as `nan`; sources and citations in `NOTICE.md`.
 
 ## User-defined colormaps
 

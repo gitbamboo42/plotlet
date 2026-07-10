@@ -10,6 +10,15 @@ Available datasets:
   - "penguins" — Palmer Penguins (Gorman, Williams & Fraser 2014; CC0).
     344 rows × 8 columns: species, island, bill_length_mm, bill_depth_mm,
     flipper_length_mm, body_mass_g, sex, year.
+  - "flights" — monthly airline passenger totals 1949–1960 (Box &
+    Jenkins 1976). 144 rows × 3 columns: year, month, passengers.
+    Pivots naturally into a month × year heatmap.
+  - "anscombe" — Anscombe's quartet (Anscombe 1973). 44 rows × 3
+    columns: dataset, x, y. Four x/y sets with near-identical summary
+    statistics — regression and facet demos.
+  - "tips" — restaurant tipping records (Bryant & Smith 1995). 244 rows
+    × 7 columns: total_bill, tip, sex, smoker, day, time, size.
+    Categorical workflows: bar, box, violin, swarm.
 
 Example:
 
@@ -34,6 +43,19 @@ _TYPES = {
         "flipper_length_mm": float,
         "body_mass_g":       float,
         "year":              int,
+    },
+    "flights": {
+        "year":       int,
+        "passengers": int,
+    },
+    "anscombe": {
+        "x": float,
+        "y": float,
+    },
+    "tips": {
+        "total_bill": float,
+        "tip":        float,
+        "size":       int,
     },
 }
 

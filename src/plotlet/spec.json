@@ -15,13 +15,17 @@
     "tick_size": 13,
     "label_size": 14,
     "title_size": 16,
+    "subtitle_size": 13,
+    "caption_size": 11,
     "linespacing": 1.2,
     "color": "#000"
   },
   "pad": {
     "title": 13,
+    "subtitle": 4,
     "xlabel": 8,
-    "ylabel": 8
+    "ylabel": 8,
+    "caption": 8
   },
   "frame": {
     "color": "#000000",
@@ -41,6 +45,8 @@
     "color": "#b0b0b0",
     "width": 0.7,
     "dasharray": "2,3",
+    "minor_width": 0.5,
+    "minor_dasharray": "2,4",
     "default_on": false
   },
   "sectors": {
@@ -105,6 +111,7 @@
     "border_offset": 8,
     "gradient_width": 19,
     "gradient_height": 70,
+    "gradient_length": 140,
     "gradient_n_stops": 32,
     "section_gap": 11,
     "column_gap": 18

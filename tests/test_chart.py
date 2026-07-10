@@ -1309,6 +1309,56 @@ def chart_minor_ticks_linear():
     return c
 
 
+def chart_power10_math_text():
+    # power10 log ticks + unicode super/subscripts in axis labels +
+    # italic in-plot text — the math-text vocabulary in one baseline.
+    c = pt.chart(data_width=400, data_height=190, title="math text",
+                 xlabel="dose (mol·L" + pt.superscript("-1") + ")",
+                 ylabel="H" + pt.subscript("2") + "O flux (kg·m"
+                        + pt.superscript("-2") + ")")
+    c.line(data={"x": [1, 10, 100, 1000, 10000],
+                 "y": [0.001, 0.01, 0.1, 1, 10]}, x="x", y="y", marker="o")
+    c.xscale("log")
+    c.yscale("log")
+    c.xticks(format="power10")
+    c.yticks(format="power10")
+    c.text(data={"x": [10], "y": [1], "s": ["BRCA1"]}, x="x", y="y",
+           label="s", fontstyle="italic")
+    return c
+
+
+def chart_subtitle_caption():
+    # Subtitle stacks under the title (smaller); caption is the
+    # outermost bottom element, right-aligned (ggplot's labs(caption=)).
+    c = pt.chart(data_width=340, data_height=170,
+                 title="Fuel efficiency", subtitle="highway, 1999-2008",
+                 caption="Source: EPA", xlabel="displ", ylabel="hwy")
+    c.scatter(data={"x": [1.8, 2.0, 2.8, 3.1, 4.2, 5.3],
+                    "y": [29, 31, 26, 27, 23, 20]}, x="x", y="y")
+    return c
+
+
+def chart_minor_grid():
+    # which="both": thin minor lines between the major ones, auto
+    # positions on the linear axes without minor ticks enabled.
+    c = pt.chart(data_width=400, data_height=180,
+                 title="minor grid", xlabel="x", ylabel="y", grid="both")
+    c.line(data={"x": [0, 1, 2, 3, 4, 5], "y": [0, 1, 4, 9, 16, 25]}, x="x", y="y", marker="o")
+    return c
+
+
+def chart_minor_grid_log():
+    # log x: minor gridlines at the 2..9 decade multipliers, drawn from
+    # c.grid(which=) with explicit minor ticks shown too.
+    c = pt.chart(data_width=400, data_height=180,
+                 title="minor grid log", xlabel="freq", ylabel="amp")
+    c.line(data={"x": [1, 10, 100, 1000, 10000], "y": [1, 5, 12, 25, 60]}, x="x", y="y", marker="o")
+    c.xscale("log")
+    c.xticks(minor=True)
+    c.grid(which="both")
+    return c
+
+
 def chart_minor_ticks_log():
     c = pt.chart(data_width=400, data_height=180,
                  title="minor ticks log", xlabel="freq", ylabel="amp")
@@ -2444,6 +2494,10 @@ PLOTS = {
     "reverse_y":           chart_reverse_y,
     "minor_ticks_linear":  chart_minor_ticks_linear,
     "minor_ticks_log":     chart_minor_ticks_log,
+    "minor_grid":          chart_minor_grid,
+    "minor_grid_log":      chart_minor_grid_log,
+    "subtitle_caption":    chart_subtitle_caption,
+    "power10_math_text":   chart_power10_math_text,
     "ticks_step":          chart_ticks_step,
     "ticks_count":         chart_ticks_count,
     "annotate":            chart_annotate,

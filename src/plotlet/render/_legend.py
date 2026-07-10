@@ -17,9 +17,9 @@ nodes.
 """
 from __future__ import annotations
 
-from ..draw import colormap, ContinuousNorm
+from ..draw import colormap, ContinuousNorm, resolve_color
 from ..registry import RenderContext, get_artist
-from ..draw import measure_text
+from ..draw import cap_height, measure_text
 from ..draw import coord, rect, segment, text_path
 from .. import _regions
 from ..scales import _fmt_tick
@@ -64,8 +64,19 @@ def _legend_source_artist(a: dict) -> dict:
     return {**a, "opts": {**a["opts"], **overrides}}
 
 
+def _manual_entry(e: dict) -> dict:
+    """A free-form `entries=` dict → the harvested-entry shape. The `_a`
+    stub stands in for the source artist that manual entries don't have;
+    the default rect-swatch paint path only reads its `opts`/`_color`."""
+    entry = dict(e)
+    entry["color"] = resolve_color(entry["color"])
+    entry["_a"] = {"type": "_manual", "opts": {}, "_color": entry["color"]}
+    return entry
+
+
 def _build_groups(sources: list, states: dict[int, dict],
-                  names: dict, group_by_chart: bool) -> list[dict]:
+                  names: dict, group_by_chart: bool,
+                  reverse: bool = False, manual: list | None = None) -> list[dict]:
     """Collect entries per source and decide each section's header.
 
     Each returned dict is `{"header": str|None, "cont": [...], "disc": [...]}`.
@@ -73,7 +84,10 @@ def _build_groups(sources: list, states: dict[int, dict],
     `names[src] = None`, the source has no `title`, grouping is off, or
     a continuous entry already carries its own `legend["label"]` (the
     chart title would just stack a second redundant caption above the
-    gradient). Sources contributing zero entries are skipped entirely."""
+    gradient). Sources contributing zero entries are skipped entirely.
+
+    `reverse=True` flips each section's discrete entry order; `manual`
+    entries (`pt.legend(entries=)`) form one final headerless section."""
     raw = []
     for src in sources:
         st = states.get(id(src))
@@ -107,11 +121,17 @@ def _build_groups(sources: list, states: dict[int, dict],
         raw.append({"header": header, "cont": cont, "disc": disc})
 
     if not group_by_chart and raw:
-        return [{
+        raw = [{
             "header": None,
             "cont": [c for g in raw for c in g["cont"]],
             "disc": [d for g in raw for d in g["disc"]],
         }]
+    if manual:
+        raw.append({"header": None, "cont": [],
+                    "disc": [_manual_entry(e) for e in manual]})
+    if reverse:
+        for g in raw:
+            g["disc"] = g["disc"][::-1]
     return raw
 
 
@@ -294,6 +314,111 @@ def _render_continuous_entry(entry: dict, x: float, y: float,
     return "".join(parts)
 
 
+def _h_gradient_geometry(entry: dict):
+    """Shared geometry for one horizontal gradient strip: the norm, tick
+    values, and how far the centered tick labels overhang past each strip
+    end (after the same inward baseline bias the vertical strip applies).
+    Sizing and painting both call this so they can't drift apart."""
+    tick_size = _FONTSPEC["tick_size"]
+    length = float(_LEGSPEC["gradient_length"])
+    norm = ContinuousNorm(entry["vmin"], entry["vmax"],
+                           kind=entry.get("norm", "linear"),
+                           center=entry.get("center"))
+    n = max(2, min(7, int(length // 45)))
+    ticks = (list(entry["ticks"]) if entry.get("ticks") is not None
+             else norm.ticks(n))
+    mid = length / 2
+    over_l = over_r = 0.0
+    for t in ticks:
+        tx = norm.to_unit(t) * length
+        bias = 4 * (mid - tx) / mid if mid > 0 else 0.0
+        half = measure_text(_fmt_tick(t), tick_size) / 2
+        over_l = max(over_l, half - (tx + bias))
+        over_r = max(over_r, tx + bias + half - length)
+    return norm, ticks, over_l, over_r
+
+
+def _render_continuous_entry_h(entry: dict, x: float, y: float) -> str:
+    """Horizontal variant of `_render_continuous_entry`: optional label
+    above, then a gradient strip of fixed length (`legend.gradient_length`)
+    running vmin-left → vmax-right, ticks below the strip. `x` is the
+    block's left edge — the strip starts `over_l` further right so edge
+    tick labels stay inside the block."""
+    parts = []
+    tick_size = _FONTSPEC["tick_size"]
+    text_color = _FONTSPEC["color"]
+    length = float(_LEGSPEC["gradient_length"])
+    thick = _LEGSPEC["gradient_width"]
+    norm, ticks, over_l, _ = _h_gradient_geometry(entry)
+    x0 = x + over_l
+    label_text = entry.get("label")
+    label_h = tick_size + 4 if label_text else 0
+    if label_text:
+        parts.append(text_path(label_text, x0, y + tick_size,
+                                tick_size, anchor="start", color=text_color,
+                                tag="legend-header"))
+
+    strip_y = y + label_h
+    cm = colormap(entry["cmap"])
+    n_bands = _LEGSPEC["gradient_n_stops"] + 1
+    band_w = length / n_bands
+    for i in range(n_bands):
+        # i=0 at left → vmin color; same rect-band construction (and AA
+        # overlap) as the vertical strip — see _render_continuous_entry.
+        r, g, b = cm(i / _LEGSPEC["gradient_n_stops"])
+        w = band_w + (1.0 if i < n_bands - 1 else 0.0)
+        parts.append(rect(x0 + i * band_w, strip_y, w, thick,
+                          fill=f"rgb({r},{g},{b})"))
+    parts.append(rect(x0, strip_y, length, thick,
+                      stroke=_FRAME["color"], stroke_width=_FRAME["width"],
+                      tag="legend-mark"))
+
+    ty0 = strip_y + thick
+    ty1 = ty0 + _FRAME["tick_length"]
+    base_y = ty1 + _FRAME["tick_pad"] + cap_height(tick_size)
+    mid = length / 2
+    for t in ticks:
+        tx = x0 + norm.to_unit(t) * length
+        parts.append(segment(tx, ty0, tx, ty1,
+                             color=_FRAME["color"], width=_FRAME["width"]))
+        bias = 4 * (x0 + mid - tx) / mid if mid > 0 else 0.0
+        parts.append(text_path(_fmt_tick(t), tx + bias, base_y,
+                                tick_size, anchor="middle", color=text_color,
+                                tag="legend-text"))
+    return "".join(parts)
+
+
+def _h_gradient_entry_height(entry: dict) -> float:
+    """Block height of one horizontal gradient entry — label band (if
+    any) + strip thickness + tick + tick-label band."""
+    tick_size = _FONTSPEC["tick_size"]
+    label_h = tick_size + 4 if entry.get("label") else 0
+    return (label_h + _LEGSPEC["gradient_width"] + _FRAME["tick_length"]
+            + _FRAME["tick_pad"] + tick_size)
+
+
+def _inline_gradient_block_size_h(cont_entries: list[dict]) -> tuple[float, float]:
+    """Horizontal counterpart of `_inline_gradient_block_size` — strips
+    stack vertically, each `legend.gradient_length` long plus whatever
+    the edge tick labels overhang."""
+    if not cont_entries:
+        return 0, 0
+    tick_size = _FONTSPEC["tick_size"]
+    length = float(_LEGSPEC["gradient_length"])
+    max_w = 0.0
+    total_h = 0.0
+    for i, entry in enumerate(cont_entries):
+        _, _, over_l, over_r = _h_gradient_geometry(entry)
+        label = entry.get("label")
+        if label:
+            max_w = max(max_w, over_l + measure_text(label, tick_size))
+        max_w = max(max_w, over_l + length + over_r)
+        total_h += _h_gradient_entry_height(entry)
+        if i < len(cont_entries) - 1:
+            total_h += _LEGSPEC["section_gap"]
+    return max_w, total_h
+
+
 def _inline_gradient_block_size(cont_entries: list[dict]) -> tuple[float, float]:
     """Block (width, height) for a vertical stack of gradient strips —
     used by the in-frame inline-colorbar path. Mirrors the per-entry
@@ -345,7 +470,9 @@ def _legend_content_size(leaf, sources: list,
     mirror of the paint geometry in `_render_legend`."""
     names = leaf._legend_names or {}
     group_by_chart = leaf._legend_group_by_chart
-    groups = _build_groups(sources, states, names, group_by_chart)
+    groups = _build_groups(sources, states, names, group_by_chart,
+                           reverse=leaf._legend_reverse,
+                           manual=leaf._legend_manual)
     if not groups:
         return 1.0, 1.0
 
@@ -438,7 +565,9 @@ def _render_legend(leaf, w: float, h: float,
     group_by_chart = getattr(leaf, "_legend_group_by_chart", True)
     valign = leaf._legend_valign
 
-    groups = _build_groups(sources, states, names, group_by_chart)
+    groups = _build_groups(sources, states, names, group_by_chart,
+                           reverse=leaf._legend_reverse,
+                           manual=leaf._legend_manual)
     if not groups:
         return ''
 

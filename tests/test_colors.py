@@ -71,6 +71,17 @@ def test_palette_n_truncates_and_cycles():
     assert ten[8] == palette("Set2")[0]   # wraps past the end
 
 
+def test_colorblind_palette():
+    cb = palette("colorblind")
+    assert cb == ["#000000", "#e69f00", "#56b4e9", "#009e73",
+                  "#f0e442", "#0072b2", "#d55e00", "#cc79a7"]   # Okabe–Ito
+    assert palette("colorblind_r") == cb[::-1]
+    assert palette("colorblind", 3) == cb[:3]
+    ten = palette("colorblind", 10)
+    assert len(ten) == 10 and ten[8] == cb[0]   # wraps past the end
+    assert "colorblind" in list_palettes()
+
+
 def test_continuous_sampling():
     v = palette("viridis", 5)
     assert len(v) == 5
