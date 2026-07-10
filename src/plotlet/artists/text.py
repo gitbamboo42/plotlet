@@ -58,13 +58,17 @@ def _text_bbox_rect(s, x, y_baseline, fontsize, anchor, bb):
                       alpha=bb["alpha"])
 
 
-def _artist_annotate(a, xs_, ys_, col):
+def _artist_annotate(a, xs_, ys_, col, warp=None):
     """Text label at `xytext`, optionally connected to `xy` by an arrow.
 
     Pixel placement and arrow geometry both run through the panel's
     scales — the user gives data coordinates, we draw in pixels. The
     arrowhead is a small filled triangle; the line stops at the head's
     base so the seam doesn't show through anti-aliasing.
+
+    Under a non-affine coord only the two anchor points warp; the arrow
+    stays a straight screen-space connector and the glyphs stay upright
+    (matplotlib's polar-annotate behavior).
     """
     opts = a["opts"]
     fontsize = opts.get("fontsize", _D["text_size"])
@@ -83,6 +87,9 @@ def _artist_annotate(a, xs_, ys_, col):
     px_tx, py_tx = xs_(x_tx), ys_(y_tx)
     if not all(math.isfinite(v) for v in (px_xy, py_xy, px_tx, py_tx)):
         return ""
+    if warp is not None:
+        px_xy, py_xy = warp(px_xy, py_xy)
+        px_tx, py_tx = warp(px_tx, py_tx)
 
     out = []
     if opts.get("arrow", True):
@@ -116,9 +123,13 @@ def _artist_annotate(a, xs_, ys_, col):
     return "".join(out)
 
 
-def _artist_text(a, xs_, ys_, col):
+def _artist_text(a, xs_, ys_, col, warp=None):
     """Render text labels at data coordinates. Accepts parallel
-    `xs` / `ys` / `labels` lists. Empty labels are skipped."""
+    `xs` / `ys` / `labels` lists. Empty labels are skipped.
+
+    Under a non-affine coord only the anchor point warps — glyphs stay
+    upright and `dx`/`dy` remain screen-space nudges (a `dy=-4` means
+    screen-up, not radially-out)."""
     opts = a["opts"]
     fontsize = opts.get("fontsize", _D["text_size"])
     ha = opts.get("ha", "left")
@@ -144,10 +155,13 @@ def _artist_text(a, xs_, ys_, col):
     for x, y, s in zip(a["xs"], a["ys"], a["labels"]):
         if s is None or s == "":
             continue
-        px = xs_(x) + dx
-        py = ys_(y) + dy + va_offset
+        px, py = xs_(x), ys_(y)
         if not (math.isfinite(px) and math.isfinite(py)):
             continue
+        if warp is not None:
+            px, py = warp(px, py)
+        px += dx
+        py += dy + va_offset
         parts = []
         if bb is not None:
             parts.append(_text_bbox_rect(str(s), px, py, fontsize, anchor, bb))
@@ -202,7 +216,8 @@ add_artist(ArtistSpec(
     record=_text_record,
     xdomain=lambda a: a["xs"],
     ydomain=lambda a: a["ys"],
-    draw=lambda a, ctx: _artist_text(a, ctx.x_scale, ctx.y_scale, ctx.color),
+    draw=lambda a, ctx: _artist_text(a, ctx.x_scale, ctx.y_scale, ctx.color,
+                                     ctx.warp),
     layer="foreground",
     uses_color_cycle=False,
     default_color=_D["text_color"],
@@ -247,7 +262,8 @@ add_artist(ArtistSpec(
     record=_annotate_record,
     xdomain=_annotate_xdomain,
     ydomain=_annotate_ydomain,
-    draw=lambda a, ctx: _artist_annotate(a, ctx.x_scale, ctx.y_scale, ctx.color),
+    draw=lambda a, ctx: _artist_annotate(a, ctx.x_scale, ctx.y_scale, ctx.color,
+                                         ctx.warp),
     layer="foreground",
     uses_color_cycle=False,
     default_color=_D["text_color"],

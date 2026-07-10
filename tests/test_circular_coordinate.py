@@ -307,6 +307,24 @@ def ring_shapes():
     return c
 
 
+def ring_text_annotate():
+    # `text` / `annotate` under Circular: only the anchor points warp —
+    # glyphs stay upright, the annotate arrow is a straight screen-space
+    # connector, and dx/dy stay screen-space nudges.
+    pts_t = [0.05, 0.20, 0.40, 0.60, 0.80]
+    pts_v = [0.75, 0.45, 0.85, 0.35, 0.65]
+    names = ["a", "b", "c", "d", "e"]
+    c = pt.chart(title="text + annotate — ring", xlim=(0, 1), ylim=(0, 1))
+    c.coordinate(pt.CircularCoordinate())
+    c.scatter(data={"x": pts_t, "y": pts_v}, x="x", y="y",
+              color="#534AB7", size=3)
+    c.text(data={"x": pts_t, "y": pts_v, "name": names},
+           x="x", y="y", label="name", fontsize=8, ha="center", dy=-6)
+    c.annotate("peak", xy=(0.40, 0.85), xytext=(0.55, 0.15),
+               fontsize=8, ha="center", bbox=True)
+    return c
+
+
 def ring_heatmap():
     # Continuous-x heatmap under Circular → each cell rect warps into an
     # annular sector. Numeric `x` column wraps around the ring; the track
@@ -530,6 +548,7 @@ PLOTS = {
     "ring_inner_outer":            ring_inner_outer,
     "ring_references":             ring_references,
     "ring_shapes":                 ring_shapes,
+    "ring_text_annotate":          ring_text_annotate,
     "ring_heatmap":                ring_heatmap,
     "ring_heatmap_sectors":        ring_heatmap_sectors,
     "ring_x_sectors":              ring_x_sectors,

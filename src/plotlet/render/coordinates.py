@@ -603,6 +603,7 @@ declare_coord_support("Circular", [
     "regression", "boxplot", "violin", "density_1d",
     "axhline", "axvline", "axhspan", "axvspan", "hlines", "vlines",
     "rect", "polygon", "polyline",
+    "text", "annotate",
 ])
 
 register_coord_codec(CircularCoordinate)
