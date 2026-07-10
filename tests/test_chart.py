@@ -1251,12 +1251,24 @@ def chart_annotate():
                  title="annotate", xlabel="x", ylabel="y")
     c.line(data={"x": xs, "y": ys}, x="x", y="y")
     max_i = ys.index(max(ys))
+    # Label sits left of the peak (ha="right" → glyphs extend left from
+    # the anchor): margins only reserve chrome space, so a left-anchored
+    # label this close to the right edge would run off the canvas.
     c.annotate("global max",
                xy=(xs[max_i], ys[max_i]),
-               xytext=(xs[max_i] + 1.5, ys[max_i] + 0.3))
+               xytext=(xs[max_i] - 1.5, ys[max_i] + 0.3), ha="right")
     c.annotate("first zero",
                xy=(math.pi, 0),
                xytext=(math.pi - 2, 0.6), ha="center")
+    # dx/dy nudge the label end in screen space (arrow tail follows);
+    # rotation spins the text around its anchor, arrow unrotated.
+    min_i = ys.index(min(ys))
+    c.annotate("global min",
+               xy=(xs[min_i], ys[min_i]),
+               xytext=(xs[min_i], ys[min_i]), dx=14, dy=-10)
+    c.annotate("rotated",
+               xy=(6.0, ys[30]),
+               xytext=(6.0, ys[30] + 0.8), ha="center", rotation=30)
     return c
 
 

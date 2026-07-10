@@ -75,6 +75,9 @@ def _artist_annotate(a, xs_, ys_, col, warp=None):
     ha = opts.get("ha", "left")
     va = opts.get("va", "baseline")
     color = opts.get("color") or col or _D["text_color"]
+    dx = opts.get("dx", 0)
+    dy = opts.get("dy", 0)
+    rotation = opts.get("rotation", 0)
     anchor = _HA_TO_ANCHOR.get(ha, "start")
     if va == "top":      va_offset = fontsize * 0.78
     elif va == "center": va_offset = fontsize * 0.34
@@ -90,6 +93,11 @@ def _artist_annotate(a, xs_, ys_, col, warp=None):
     if warp is not None:
         px_xy, py_xy = warp(px_xy, py_xy)
         px_tx, py_tx = warp(px_tx, py_tx)
+    # dx/dy are screen-space nudges on the label end (post-warp, like
+    # `_artist_text`). The arrow tail moves with the label — the arrow
+    # attaches to the text, so a nudged label keeps its arrow.
+    px_tx += dx
+    py_tx += dy
 
     out = []
     if opts.get("arrow", True):
@@ -116,10 +124,18 @@ def _artist_annotate(a, xs_, ys_, col, warp=None):
                                     fill=color))
     bb = _resolve_bbox(opts.get("bbox"))
     text_y = py_tx + va_offset
+    parts = []
     if bb is not None:
-        out.append(_text_bbox_rect(a["text"], px_tx, text_y, fontsize, anchor, bb))
-    out.append(text_path(a["text"], px_tx, text_y,
-                          fontsize, anchor=anchor, color=color))
+        parts.append(_text_bbox_rect(a["text"], px_tx, text_y, fontsize, anchor, bb))
+    parts.append(text_path(a["text"], px_tx, text_y,
+                           fontsize, anchor=anchor, color=color))
+    if rotation:
+        # Same convention as `_artist_text`: positive = CCW, anchored at
+        # the ha/va alignment point. The arrow stays unrotated.
+        out.append(f'<g transform="rotate({-rotation:g},{coord(px_tx)},{coord(text_y)})">'
+                   + "".join(parts) + "</g>")
+    else:
+        out.extend(parts)
     return "".join(out)
 
 
