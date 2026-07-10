@@ -21,6 +21,8 @@ import math
 import numbers
 import re
 
+from scipy.stats import t as _t_dist
+
 from .registry import get_artist
 from .draw import TAB10, resolve_color
 from .draw import palette as _named_palette
@@ -501,8 +503,36 @@ def kde_1d(samples, grid, bw):
     return out
 
 
+def t_ci_mean(vals, level):
+    """Student-t confidence interval on the mean. Returns `(lo, hi)`;
+    degenerate input (n < 2) collapses to the point value."""
+    n = len(vals)
+    if n < 2:
+        m = vals[0] if vals else float("nan")
+        return m, m
+    m = sum(vals) / n
+    var = sum((x - m) ** 2 for x in vals) / (n - 1)
+    se = math.sqrt(var / n)
+    crit = _t_dist.ppf((1 + level) / 2, n - 1)
+    return m - crit * se, m + crit * se
+
+
+def bootstrap_ci(vals, estimator_fn, level, n_boot, rng):
+    """Percentile bootstrap CI for an arbitrary estimator. `rng` is a
+    seeded `random.Random` — determinism is the caller's job."""
+    if not vals:
+        return float("nan"), float("nan")
+    n = len(vals)
+    boots = [estimator_fn([vals[rng.randrange(n)] for _ in range(n)])
+             for _ in range(n_boot)]
+    boots.sort()
+    alpha = (1 - level) / 2
+    return (boots[max(0, int(alpha * n_boot))],
+            boots[min(n_boot - 1, int((1 - alpha) * n_boot))])
+
+
 __all__ = ["to_list", "to_list_2d", "broadcast", "histogram", "quantile",
            "resolve_aes", "palette_color", "dodge_positions",
            "categorical_groups", "collect_categories",
            "long_form_xy", "long_form_1d",
-           "silverman_bw", "kde_1d"]
+           "silverman_bw", "kde_1d", "t_ci_mean", "bootstrap_ci"]

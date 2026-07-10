@@ -7,34 +7,36 @@ visual cousin of hexbin for smaller, smoother samples.
 Differs from the cookbook contour recipe, which expects a pre-computed 2-D
 scalar grid. Here the grid is estimated from data.
 
-API: c.kde_2d(xs, ys)
+API: c.kde_2d(data=df, x='col', y='col')
+
+Aesthetics:
+  color=             literal contour color OR column name → one density
+                     per level, single-colored (seaborn kdeplot hue)
+  palette=           maps levels → colors when `color=` is a column
 
 Styling kwargs:
   n_grid=60          KDE evaluation grid resolution (n × n)
   bw=None            bandwidth override; defaults to Silverman's rule per axis
   levels=None        list of iso-density levels; defaults to 5 quantile levels
+  fill=False         True fills the level regions (seaborn kdeplot fill=True)
+                     instead of stroking iso-lines
   cmap=None          colormap name for coloring contours by level
-  color='#1f77b4'    fallback contour color when cmap is not set
+                     (mutually exclusive with column-driven color=)
+  alpha=None         fill opacity (fill=True only); defaults to 1 with cmap,
+                     0.25 for a single-color fill so levels stack visibly
   linewidth=1.2      contour stroke width
 """
 import math
 
 from ..registry import ArtistSpec, add_artist
-from ..draw import segment
+from ..draw import segment, rect
 from ..draw import colormap, ContinuousNorm
-from ..utils import to_list, silverman_bw
-
-
-_MS_CASES = {
-    0: [], 15: [],
-    1: [(0, 3)], 14: [(0, 3)],
-    2: [(0, 1)], 13: [(0, 1)],
-    3: [(1, 3)], 12: [(1, 3)],
-    4: [(1, 2)], 11: [(1, 2)],
-    5: [(0, 3), (1, 2)], 10: [(0, 1), (2, 3)],
-    6: [(0, 2)], 9: [(0, 2)],
-    7: [(2, 3)], 8: [(2, 3)],
-}
+from .._spec import _LEGSPEC
+from ..utils import to_list, silverman_bw, resolve_aes, long_form_xy
+from ._marching import MS_CASES as _MS_CASES
+from ._marching import edge_pt as _edge_pt
+from ._marching import filled_levels_svg
+from ._shared import group_color
 
 
 def _kde2d_grid(xs, ys, n_grid, bw_x, bw_y, x_lo, x_hi, y_lo, y_hi):
@@ -54,21 +56,6 @@ def _kde2d_grid(xs, ys, n_grid, bw_x, bw_y, x_lo, x_hi, y_lo, y_hi):
     return [[v * inv for v in row] for row in grid]
 
 
-def _edge_pt(edge, r, c, vtl, vtr, vbr, vbl, lvl):
-    if edge == 0:
-        t = (lvl - vtl) / (vtr - vtl) if vtr != vtl else 0.5
-        return (c + t, r)
-    if edge == 1:
-        t = (lvl - vtr) / (vbr - vtr) if vbr != vtr else 0.5
-        return (c + 1, r + t)
-    if edge == 2:
-        t = (lvl - vbl) / (vbr - vbl) if vbr != vbl else 0.5
-        return (c + t, r + 1)
-    t = (lvl - vtl) / (vbl - vtl) if vbl != vtl else 0.5
-    return (c, r + t)
-
-
-
 def _resolve_levels(grid, opts):
     """Resolve `levels` once at record time so draw and legend_gradient
     share a single source of truth. Mirrors the historical lazy fallback
@@ -83,20 +70,8 @@ def _resolve_levels(grid, opts):
     return [vmax * f for f in (0.1, 0.25, 0.5, 0.75, 0.9)]
 
 
-def _kde_2d_record(args, kw):
-    kw = dict(kw)
-    if args:
-        raise TypeError(
-            "kde_2d requires long-form input: "
-            "c.kde_2d(data=df, x='col', y='col')."
-        )
-    data = kw.pop("data", None)
-    x_col = kw.pop("x", None)
-    y_col = kw.pop("y", None)
-    if data is None or x_col is None or y_col is None:
-        raise TypeError("kde_2d requires data=, x=, y=.")
-    xs = to_list(data[x_col])
-    ys = to_list(data[y_col])
+def _kde_2d_build(xs, ys, kw):
+    """One estimated-density record from a materialized (xs, ys) sample."""
     n_grid = kw.get("n_grid", 60)
     if not xs:
         return {"type": "kde_2d", "_xs": xs, "_ys": ys, "_grid": [],
@@ -115,6 +90,43 @@ def _kde_2d_record(args, kw):
         record["_vmin"] = min(levels)
         record["_vmax"] = max(levels)
     return record
+
+
+def _kde_2d_record(args, kw):
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "kde_2d requires long-form input: "
+            "c.kde_2d(data=df, x='col', y='col')."
+        )
+    data = kw.pop("data", None)
+    x_col = kw.pop("x", None)
+    y_col = kw.pop("y", None)
+    if data is None or x_col is None or y_col is None:
+        raise TypeError("kde_2d requires data=, x=, y=.")
+    color = kw.pop("color", None)
+    color_kind, color_value = resolve_aes(data, color)
+    palette = kw.pop("palette", None)
+    if color_kind == "column":
+        if kw.get("cmap"):
+            raise TypeError(
+                "kde_2d: cmap= colors contours by density level; with "
+                "color= column grouping each group is single-colored — "
+                "pass palette= instead."
+            )
+        groups, xy = long_form_xy(data, x_col, y_col, color)
+        records = []
+        for j, (g, (xs, ys)) in enumerate(zip(groups, xy)):
+            opts = dict(kw)
+            opts["color"] = group_color(groups, palette, j, None)
+            opts["label"] = str(g)
+            records.append(_kde_2d_build(xs, ys, opts))
+        return records
+    if color_value is not None:
+        kw["color"] = color_value
+    xs = to_list(data[x_col])
+    ys = to_list(data[y_col])
+    return _kde_2d_build(xs, ys, kw)
 
 
 def _kde_2d_xdomain(a): return a["_xs"]
@@ -138,6 +150,13 @@ def _kde_2d_draw(a, ctx):
     x0, x1, y0, y1 = a["_extent"]
     dxd = (x1 - x0) / (n - 1)
     dyd = (y1 - y0) / (n - 1)
+    if a["opts"].get("fill"):
+        alpha = a["opts"].get("alpha", 1.0 if cmap_name else 0.25)
+        return filled_levels_svg(
+            g, n, n, levels, cmap_name=cmap_name,
+            color=color_opt or ctx.color or "#1f77b4", alpha=alpha,
+            x0d=x0, y0d=y0, dxd=dxd, dyd=dyd,
+            x_scale=ctx.x_scale, y_scale=ctx.y_scale)
     out = []
     for lvl in levels:
         if cmap_name:
@@ -183,12 +202,31 @@ def _kde_2d_legend_gradient(a):
     }
 
 
+def _kde_2d_legend_entries(a):
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    sw = _LEGSPEC["swatch_width"]
+    if a["opts"].get("fill"):
+        alpha = a["opts"].get("alpha", 0.25)
+        def paint(_a, _ctx, x0, y_mid):
+            col = _a.get("_color", _ctx.color)
+            return rect(x0, y_mid - 5, sw, 10, fill=col, alpha=alpha)
+    else:
+        lw = a["opts"].get("linewidth", 1.2)
+        def paint(_a, _ctx, x0, y_mid):
+            col = _a.get("_color", _ctx.color)
+            return segment(x0, y_mid, x0 + sw, y_mid, color=col, width=lw)
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
+
+
 add_artist(ArtistSpec(
     name="kde_2d",
     record=_kde_2d_record,
     xdomain=_kde_2d_xdomain,
     ydomain=_kde_2d_ydomain,
     draw=_kde_2d_draw,
+    legend_entries=_kde_2d_legend_entries,
     legend_gradient=_kde_2d_legend_gradient,
     uses_color_cycle=False,
     default_color="#1f77b4",

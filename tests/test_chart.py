@@ -1732,21 +1732,9 @@ def chart_freqpoly():
 
 
 def chart_contour():
-    import math
-    n = 60
-    grid = []
-    for i in range(n):
-        row = []
-        for j in range(n):
-            x = -3 + 6 * j / (n - 1)
-            y = -3 + 6 * i / (n - 1)
-            v = (math.exp(-(x * x + 1.5 * y * y) / 2)
-                 + 0.5 * math.exp(-((x - 1.5) ** 2 + (y + 1.5) ** 2) / 0.6))
-            row.append(v)
-        grid.append(row)
     c = pt.chart(data_width=300, data_height=300,
                  title="contour", xlabel="x", ylabel="y")
-    c.contour(grid, extent=(-3, 3, -3, 3), cmap="viridis",
+    c.contour(_peaks_grid(), extent=(-3, 3, -3, 3), cmap="viridis",
               levels=[0.05, 0.1, 0.2, 0.4, 0.6, 0.8])
     c.legend()
     return c
@@ -2168,6 +2156,207 @@ def chart_multiline_labels():
     return c
 
 
+def _peaks_grid(n=60):
+    """Two-bump analytic surface shared by the contour-fill baselines."""
+    grid = []
+    for i in range(n):
+        row = []
+        for j in range(n):
+            x = -3 + 6 * j / (n - 1)
+            y = -3 + 6 * i / (n - 1)
+            v = (math.exp(-(x * x + 1.5 * y * y) / 2)
+                 + 0.5 * math.exp(-((x - 1.5) ** 2 + (y + 1.5) ** 2) / 0.6))
+            row.append(v)
+        grid.append(row)
+    return grid
+
+
+def chart_contour_filled():
+    c = pt.chart(data_width=300, data_height=300,
+                 title="filled contour", xlabel="x", ylabel="y")
+    c.contour(_peaks_grid(), extent=(-3, 3, -3, 3), cmap="viridis",
+              levels=[0.05, 0.1, 0.2, 0.4, 0.6, 0.8], fill=True)
+    c.legend()
+    return c
+
+
+def chart_kde_2d_filled_color():
+    """kde_2d color= grouping: one single-colored filled density per level."""
+    rng = random.Random(23)
+    n = 150
+    rows_x, rows_y, rows_g = [], [], []
+    for g, (mx, my) in zip(["A", "B"], [(-1.0, 0.0), (1.3, 1.8)]):
+        for _ in range(n):
+            rows_x.append(rng.gauss(mx, 0.8))
+            rows_y.append(rng.gauss(my, 0.7))
+            rows_g.append(g)
+    df = {"x": rows_x, "y": rows_y, "g": rows_g}
+    c = pt.chart(data_width=300, data_height=260,
+                 title="grouped 2-D KDE (filled)", xlabel="x", ylabel="y",
+                 legend=True)
+    c.kde_2d(data=df, x="x", y="y", color="g", fill=True, n_grid=40)
+    c.legend()
+    return c
+
+
+def chart_hist2d():
+    rng = random.Random(24)
+    n = 3000
+    xs = [rng.gauss(0, 1) for _ in range(n)]
+    ys = [x * 0.6 + rng.gauss(0, 0.8) for x in xs]
+    c = pt.chart(data_width=300, data_height=260,
+                 title="2-D histogram", xlabel="x", ylabel="y")
+    c.hist2d(data={"x": xs, "y": ys}, x="x", y="y", bins=25)
+    return c | pt.legend(c)
+
+
+def chart_bar_count():
+    """stat='count' — seaborn countplot; rows per (category, group), stacked."""
+    rng = random.Random(25)
+    outcomes = ["responder", "partial", "non-responder"]
+    arms = ["placebo", "drug"]
+    rows_o, rows_a = [], []
+    for arm, weights in zip(arms, [(2, 3, 5), (5, 3, 2)]):
+        for _ in range(80):
+            rows_o.append(rng.choices(outcomes, weights=weights)[0])
+            rows_a.append(arm)
+    df = {"outcome": rows_o, "arm": rows_a}
+    c = pt.chart(data_width=300, data_height=220,
+                 title="bar stat='count'", ylabel="rows", legend=True)
+    c.bar(data=df, x="outcome", stat="count", fill="arm")
+    c.legend()
+    return c
+
+
+def chart_bar_mean_ci():
+    """stat='mean' — seaborn barplot; grouped means dodged with t CI bars."""
+    rng = random.Random(26)
+    rows_c, rows_g, rows_v = [], [], []
+    for cat, base in zip(["low", "mid", "high"], [3.0, 5.0, 8.0]):
+        for g, shift in zip(["ctrl", "trt"], [0.0, 1.2]):
+            for _ in range(15):
+                rows_c.append(cat); rows_g.append(g)
+                rows_v.append(rng.gauss(base + shift, 1.0))
+    df = {"dose": rows_c, "arm": rows_g, "resp": rows_v}
+    c = pt.chart(data_width=300, data_height=220,
+                 title="bar stat='mean' ± 95 % CI",
+                 xlabel="dose", ylabel="response", legend=True)
+    c.bar(data=df, x="dose", y="resp", stat="mean", fill="arm")
+    c.legend()
+    return c
+
+
+def chart_line_estimator():
+    """estimator='mean': replicate rows collapse per x with a CI band —
+    seaborn lineplot's aggregation, split by color level."""
+    rng = random.Random(27)
+    rows_t, rows_v, rows_g = [], [], []
+    for g, slope in zip(["ctrl", "trt"], [0.4, 1.0]):
+        for t in range(10):
+            for _ in range(12):
+                rows_t.append(t); rows_g.append(g)
+                rows_v.append(slope * t + rng.gauss(0, 1.0))
+    df = {"t": rows_t, "v": rows_v, "g": rows_g}
+    c = pt.chart(df, x="t", y="v",
+                 data_width=320, data_height=200,
+                 title="line estimator='mean' ± 95 % CI",
+                 xlabel="t", ylabel="v", legend=True)
+    c.line(color="g", estimator="mean")
+    c.legend()
+    return c
+
+
+def chart_regression_order2():
+    rng = random.Random(28)
+    xs = [i * 0.25 for i in range(48)]
+    ys = [0.5 * x * x - 2.5 * x + 1 + rng.gauss(0, 1.2) for x in xs]
+    c = pt.chart(data_width=300, data_height=220,
+                 title="polynomial regression (order=2)",
+                 xlabel="x", ylabel="y", legend=True)
+    c.scatter(data={"x": xs, "y": ys}, x="x", y="y", size=2, alpha=0.6,
+              label="data")
+    c.regression(data={"x": xs, "y": ys}, x="x", y="y", order=2,
+                 label="quadratic fit")
+    c.legend()
+    return c
+
+
+def chart_regression_robust():
+    """Huber IRLS shrugs off the outlier cluster that drags plain OLS."""
+    rng = random.Random(29)
+    xs = [i * 0.2 for i in range(40)]
+    ys = [1.0 + 0.8 * x + rng.gauss(0, 0.4) for x in xs]
+    for i in (5, 12, 19, 26):  # contaminate a few rows upward
+        ys[i] += 8.0
+    df = {"x": xs, "y": ys}
+    c = pt.chart(data_width=300, data_height=220,
+                 title="robust (Huber) vs OLS",
+                 xlabel="x", ylabel="y", legend=True)
+    c.scatter(data=df, x="x", y="y", size=2.5, alpha=0.6, color="#555555")
+    c.regression(data=df, x="x", y="y", color="C1", label="OLS")
+    c.regression(data=df, x="x", y="y", robust=True, n_boot=100,
+                 color="C0", label="Huber")
+    c.legend()
+    return c
+
+
+def chart_pointplot_color():
+    """pointplot color= grouping — one series + CI per level (seaborn hue)."""
+    rng = random.Random(30)
+    cats = ["1 wk", "2 wk", "4 wk", "8 wk"]
+    rows_t, rows_s, rows_a = [], [], []
+    for arm, slope in zip(["control", "drug"], [0.04, 0.45]):
+        for i, t in enumerate(cats):
+            for _ in range(20):
+                rows_t.append(t); rows_a.append(arm)
+                rows_s.append(rng.gauss(5.0 + slope * i, 1.0))
+    df = {"t": rows_t, "score": rows_s, "arm": rows_a}
+    c = pt.chart(data_width=320, data_height=200,
+                 title="pointplot color=", xlabel="timepoint",
+                 ylabel="score", legend=True)
+    c.xscale("category", order=cats)
+    c.pointplot(data=df, x="t", y="score", color="arm")
+    c.legend()
+    return c
+
+
+def chart_ridge_color():
+    """ridge color= grouping — overlaid sub-densities per row."""
+    rng = random.Random(32)
+    rows_m, rows_v, rows_g = [], [], []
+    for i, month in enumerate(["Jan", "Feb", "Mar", "Apr"]):
+        for g, shift in zip(["day", "night"], [0.0, 4.0]):
+            for _ in range(150):
+                rows_m.append(month); rows_g.append(g)
+                rows_v.append(rng.gauss(15 + i * 2 + shift, 2.5))
+    df = {"month": rows_m, "temp": rows_v, "period": rows_g}
+    c = pt.chart(data_width=320, data_height=260,
+                 title="grouped ridge", xlabel="temperature", legend=True)
+    c.ridge(data=df, x="month", y="temp", color="period", overlap=1.6)
+    c.yticks([])
+    c.legend()
+    return c
+
+
+def chart_qq_color():
+    """qq color= grouping — per-level quantiles and robust reference lines."""
+    rng = random.Random(33)
+    rows_v, rows_g = [], []
+    for _ in range(120):
+        rows_v.append(rng.gauss(0, 1)); rows_g.append("normal-ish")
+    for _ in range(120):
+        rows_v.append(rng.gauss(0, 1) + 0.8 * (rng.expovariate(1) - 1))
+        rows_g.append("skewed")
+    df = {"v": rows_v, "g": rows_g}
+    c = pt.chart(data_width=280, data_height=240,
+                 title="grouped Q-Q vs N(0, 1)",
+                 xlabel="theoretical quantile",
+                 ylabel="sample quantile", legend=True)
+    c.qq(data=df, sample="v", color="g")
+    c.legend()
+    return c
+
+
 PLOTS = {
     "table":               chart_table,
     "color":               chart_color,
@@ -2301,6 +2490,17 @@ PLOTS = {
     "line_linetype":         chart_line_linetype,
     "line_alpha":            chart_line_alpha,
     "multiline_labels":      chart_multiline_labels,
+    "contour_filled":        chart_contour_filled,
+    "kde_2d_filled_color":   chart_kde_2d_filled_color,
+    "hist2d":                chart_hist2d,
+    "bar_count":             chart_bar_count,
+    "bar_mean_ci":           chart_bar_mean_ci,
+    "line_estimator":        chart_line_estimator,
+    "regression_order2":     chart_regression_order2,
+    "regression_robust":     chart_regression_robust,
+    "pointplot_color":       chart_pointplot_color,
+    "ridge_color":           chart_ridge_color,
+    "qq_color":              chart_qq_color,
 }
 
 
@@ -2812,3 +3012,262 @@ def test_show_rejects_unknown_format():
     c.line(data={"x": [1, 2], "y": [1, 2]}, x="x", y="y")
     with pytest.raises(ValueError, match="png.*svg"):
         c.show(format="jpeg")
+
+
+# ---------------------------------------------------------------------------
+# bar stat= aggregation (no baselines)
+
+
+def test_bar_stat_count_heights():
+    df = {"cat": ["a", "a", "b", "a"]}
+    c = pt.chart(df)
+    c.bar(x="cat", stat="count")
+    svg = c.to_svg()
+    assert 'data-plotlet-y-max="3"' in svg
+    assert 'data-plotlet-y-min="1"' in svg
+
+
+def test_bar_stat_mean_ci_extends_domain():
+    import re
+    from plotlet.utils import t_ci_mean
+    vals = [1.0, 2.0, 3.0, 4.0]
+    df = {"cat": ["a"] * 4, "v": vals}
+
+    def ylim_hi(**kw):
+        c = pt.chart(df)
+        c.bar(x="cat", y="v", stat="mean", **kw)
+        m = re.search(r'data-plotlet-ylim="([^"]*)"', c.to_svg())
+        return float(m.group(1).split(",")[1])
+
+    _, ci_hi = t_ci_mean(vals, 0.95)   # mean 2.5, CI well past 4
+    assert ylim_hi() >= ci_hi
+    assert ylim_hi(ci=None) < ci_hi
+
+
+def test_bar_stat_validation():
+    df = {"cat": ["a", "b"], "v": [1, 2]}
+
+    def bar(**kw):
+        c = pt.chart(df)
+        c.bar(x="cat", **kw)
+        c.to_svg()
+
+    with pytest.raises(TypeError, match="drop y="):
+        bar(y="v", stat="count")
+    with pytest.raises(ValueError, match="unknown stat"):
+        bar(y="v", stat="max")
+    with pytest.raises(TypeError, match="ci= applies"):
+        bar(y="v", ci="t")
+    with pytest.raises(TypeError, match="drop yerr"):
+        bar(y="v", stat="mean", yerr=[0.1, 0.2])
+    with pytest.raises(ValueError, match="ci='x'"):
+        bar(y="v", stat="mean", ci="x")
+
+    df2 = {"cat": ["a", "a", "b", "b"], "g": ["x", "y", "x", "y"],
+           "v": [1, 2, 3, 4]}
+    c = pt.chart(df2)
+    c.bar(x="cat", y="v", stat="mean", fill="g", position="stack")
+    with pytest.raises(ValueError, match="stacked means"):
+        c.to_svg()
+
+
+# ---------------------------------------------------------------------------
+# line estimator= aggregation (no baselines)
+
+
+def test_line_estimator_aggregates():
+    df = {"x": [0, 0, 1, 1], "y": [1.0, 3.0, 2.0, 6.0]}
+    c = pt.chart(df)
+    c.line(x="x", y="y", estimator="mean", ci=None)
+    svg = c.to_svg()
+    assert 'data-plotlet-n="2"' in svg
+    assert 'data-plotlet-estimator="mean"' in svg
+    assert 'data-plotlet-y-max="4"' in svg   # mean of (2, 6)
+
+
+def test_line_ci_band_extends_domain():
+    import re
+    df = {"x": [0, 0, 0, 1, 1, 1], "y": [1, 2, 3, 4, 5, 6]}
+
+    def ylim_hi(**kw):
+        c = pt.chart(df)
+        c.line(x="x", y="y", estimator="mean", **kw)
+        m = re.search(r'data-plotlet-ylim="([^"]*)"', c.to_svg())
+        return float(m.group(1).split(",")[1])
+
+    assert ylim_hi() > 7        # t CI on mean(4,5,6) reaches ~7.5
+    assert ylim_hi(ci=None) < 7
+
+
+def test_line_estimator_validation():
+    df = {"x": [0, 1], "y": [1, 2]}
+
+    def line(fn="line", **kw):
+        c = pt.chart(df)
+        getattr(c, fn)(x="x", y="y", **kw)
+        c.to_svg()
+
+    with pytest.raises(TypeError, match="apply with estimator"):
+        line(ci="t")
+    with pytest.raises(ValueError, match="estimator="):
+        line(estimator="max")
+    with pytest.raises(ValueError, match="curve"):
+        line(fn="step", estimator="mean")
+    with pytest.raises(ValueError, match="ci='x'"):
+        line(estimator="mean", ci="x")
+
+
+# ---------------------------------------------------------------------------
+# regression order= / robust= (no baselines)
+
+
+def test_regression_order2_recovers_parabola():
+    from plotlet.artists.regression import _fit_generic
+    xs = [i * 0.5 for i in range(20)]
+    ys = [2.0 * x * x - 3.0 * x + 1.0 for x in xs]   # exact, no noise
+    fit = _fit_generic(xs, ys, {"order": 2})
+    for g, m in zip(fit["grid"], fit["mid"]):
+        assert abs(m - (2.0 * g * g - 3.0 * g + 1.0)) < 1e-6
+    # zero residual → the band collapses onto the line
+    assert all(abs(h - l) < 1e-6 for h, l in zip(fit["hi"], fit["lo"]))
+
+
+def test_regression_robust_ignores_outliers():
+    from plotlet.artists.regression import _fit_generic
+    xs = [i * 0.5 for i in range(30)]
+    ys = [1.0 + 2.0 * x for x in xs]
+    for i in (3, 11, 17):
+        ys[i] += 50.0
+    robust = _fit_generic(xs, ys, {"robust": True, "n_boot": 20})
+    ols = _fit_generic(xs, ys, {"order": 2})  # generic OLS path, distorted
+
+    def max_err(fit):
+        return max(abs(m - (1.0 + 2.0 * g))
+                   for g, m in zip(fit["grid"], fit["mid"]))
+
+    assert max_err(robust) < 0.5
+    assert max_err(ols) > 2.0
+
+
+def test_regression_order_validation():
+    df = {"x": [1, 2, 3], "y": [1, 2, 3]}
+    for bad in (0, 1.5, "2"):
+        c = pt.chart(df)
+        c.regression(x="x", y="y", order=bad)
+        with pytest.raises(ValueError, match="order="):
+            c.to_svg()
+
+
+# ---------------------------------------------------------------------------
+# hist2d (no baselines)
+
+
+def test_hist2d_counts_and_transparent_empties():
+    import re
+    df = {"x": [0.5, 0.5, 1.5, 2.5], "y": [0.5, 0.5, 0.5, 1.5]}
+    c = pt.chart(df)
+    c.hist2d(x="x", y="y", bins=([0, 1, 2, 3], [0, 1, 2]))
+    svg = c.to_svg()
+    assert 'data-plotlet-count-max="2"' in svg
+    assert 'data-plotlet-bins-x="3"' in svg
+    assert 'data-plotlet-bins-y="2"' in svg
+    # 3 occupied cells drawn, 3 empty cells transparent (no rect at all)
+    assert len(re.findall(r'fill="rgb\(', svg)) == 3
+
+
+def test_hist2d_validation():
+    df = {"x": [1, 2], "y": [1, 2]}
+    c = pt.chart(df)
+    c.hist2d(x="x", y="y", bins=5, binwidth=0.5)
+    with pytest.raises(TypeError, match="bins= or binwidth="):
+        c.to_svg()
+
+
+def test_hist2d_binwidth_pair():
+    df = {"x": [0.25, 1.25], "y": [0.5, 2.5]}
+    c = pt.chart(df)
+    c.hist2d(x="x", y="y", binwidth=(0.5, 1.0), binrange=((0, 2), (0, 3)))
+    svg = c.to_svg()
+    assert 'data-plotlet-bins-x="4"' in svg
+    assert 'data-plotlet-bins-y="3"' in svg
+
+
+# ---------------------------------------------------------------------------
+# filled contours (no baselines)
+
+
+def test_filled_level_polys():
+    from plotlet.artists._marching import filled_level_polys
+    # fully-inside 2x3 grid → one merged rectangle per cell row
+    polys = filled_level_polys([[1, 1, 1], [1, 1, 1]], 0.5, 2, 3)
+    assert polys == [[(0, 0), (2, 0), (2, 1), (0, 1)]]
+    # saddle (TL/BR inside) → two disconnected triangles, matching the
+    # iso-line topology
+    polys = filled_level_polys([[1.0, 0.0], [0.0, 1.0]], 0.5, 2, 2)
+    assert len(polys) == 2 and all(len(p) == 3 for p in polys)
+    # nothing above the level → nothing drawn
+    assert filled_level_polys([[0.0, 0.0], [0.0, 0.0]], 0.5, 2, 2) == []
+
+
+def test_contour_fill_replaces_lines():
+    import re
+    grid = [[0, 0, 0], [0, 1, 0], [0, 0, 0]]
+    c = pt.chart()
+    c.contour(grid, levels=[0.5], fill=True, cmap="viridis")
+    svg = c.to_svg()
+    body = re.search(
+        r'<g[^>]*data-plotlet-type="contour"[^>]*>(.*?)</g>', svg, re.S
+    ).group(1)
+    assert "<path" in body and "<line" not in body
+
+
+# ---------------------------------------------------------------------------
+# color= grouping: pointplot / ridge / kde_2d / qq (no baselines)
+
+
+def test_pointplot_color_series():
+    import re
+    df = {"t": ["a", "a", "b", "b"], "v": [1, 2, 3, 4], "g": ["x", "y", "x", "y"]}
+    c = pt.chart(df)
+    c.pointplot(x="t", y="v", color="g", ci=None)
+    fills = set(re.findall(r'<circle[^>]*fill="(#[0-9a-f]+)"', c.to_svg()))
+    assert {"#1f77b4", "#ff7f0e"} <= fills
+
+
+def test_ridge_color_series():
+    import re
+    df = {"m": ["Jan"] * 8, "v": [1, 2, 3, 4, 11, 12, 13, 14],
+          "g": ["day"] * 4 + ["night"] * 4}
+    c = pt.chart(df)
+    c.ridge(x="m", y="v", color="g")
+    fills = set(re.findall(r'<path[^>]*fill="(#[0-9a-f]+)"', c.to_svg()))
+    assert {"#1f77b4", "#ff7f0e"} <= fills
+
+
+def test_kde_2d_color_grouping():
+    df = {"x": [0.0, 0.1, 0.2, 5.0, 5.1, 5.2],
+          "y": [0.0, 0.1, 0.2, 5.0, 5.1, 5.2],
+          "g": ["a", "a", "a", "b", "b", "b"]}
+    c = pt.chart(df)
+    c.kde_2d(x="x", y="y", color="g", n_grid=12)
+    assert c.to_svg().count('data-plotlet-type="kde_2d"') == 2
+
+    c = pt.chart(df)
+    c.kde_2d(x="x", y="y", color="g", cmap="viridis")
+    with pytest.raises(TypeError, match="palette="):
+        c.to_svg()
+
+
+def test_qq_color_grouping():
+    import re
+    rng = random.Random(1)
+    df = {"v": [rng.gauss(0, 1) for _ in range(40)],
+          "g": ["a", "b"] * 20}
+    c = pt.chart(df)
+    c.qq(sample="v", color="g")
+    svg = c.to_svg()
+    assert svg.count('data-plotlet-type="qq"') == 2
+    # each group's robust reference line takes the group color
+    dashed = re.findall(r'<line[^>]*stroke="(#[0-9a-f]+)"[^>]*stroke-dasharray',
+                        svg)
+    assert {"#1f77b4", "#ff7f0e"} <= set(dashed)

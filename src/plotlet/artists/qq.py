@@ -5,12 +5,17 @@ standard normal; pass a `scipy.stats` distribution (or another sample)
 for an arbitrary reference.
 
 API:
-  c.qq(values, dist="normal")              # vs N(0, 1)
-  c.qq(values, dist=other_sample)          # two-sample
-  c.qq(values, dist=scipy.stats.t(df=5))   # arbitrary scipy.stats RV
+  c.qq(data=df, sample="col")                    # vs N(0, 1)
+  c.qq(data=df, sample="col", dist=other)        # two-sample / scipy RV
+  c.qq(data=df, sample="col", color="group")     # one series per level
 
 The dashed reference line passes through the 0.25/0.75 quantile pair —
-robust to outliers in the tails.
+robust to outliers in the tails. Ungrouped it stays neutral gray; with
+`color=` grouping each group's line takes the group color.
+
+Aesthetics:
+  color=          literal point color OR column name → one series per level
+  palette=        maps levels → colors when `color=` is a column
 
 Styling kwargs:
   dist="normal"   "normal" | another sample | scipy.stats RV
@@ -21,21 +26,12 @@ from scipy.stats import norm
 
 from ..registry import ArtistSpec, add_artist
 from ..draw import circle, segment
-from ..utils import to_list
+from ..utils import to_list, resolve_aes, long_form_1d
+from ._shared import group_color
 
 
-def _qq_record(args, kw):
-    kw = dict(kw)
-    if args:
-        raise TypeError(
-            "qq requires long-form input: "
-            "c.qq(data=df, sample='col')."
-        )
-    data = kw.pop("data", None)
-    sample_col = kw.pop("sample", None)
-    if data is None or sample_col is None:
-        raise TypeError("qq requires data=, sample= (dist= optional).")
-    sample = sorted(to_list(data[sample_col]))
+def _qq_build(values, kw):
+    sample = sorted(values)
     dist = kw.get("dist", "normal")
     n = len(sample)
     pp = [(i + 1) / (n + 1) for i in range(n)]
@@ -52,6 +48,35 @@ def _qq_record(args, kw):
             lo = int(pos); hi = min(lo + 1, m - 1)
             theo.append(other[lo] + (other[hi] - other[lo]) * (pos - lo))
     return {"type": "qq", "theo": theo, "sample": sample, "opts": kw}
+
+
+def _qq_record(args, kw):
+    kw = dict(kw)
+    if args:
+        raise TypeError(
+            "qq requires long-form input: "
+            "c.qq(data=df, sample='col')."
+        )
+    data = kw.pop("data", None)
+    sample_col = kw.pop("sample", None)
+    if data is None or sample_col is None:
+        raise TypeError("qq requires data=, sample= (dist= optional).")
+    color = kw.pop("color", None)
+    color_kind, color_value = resolve_aes(data, color)
+    palette = kw.pop("palette", None)
+    if color_kind == "column":
+        groups, vals = long_form_1d(data, sample_col, color)
+        records = []
+        for j, (g, v) in enumerate(zip(groups, vals)):
+            opts = dict(kw)
+            opts["color"] = group_color(groups, palette, j, None)
+            opts["label"] = str(g)
+            opts["_grouped"] = True
+            records.append(_qq_build(v, opts))
+        return records
+    if color_value is not None:
+        kw["color"] = color_value
+    return _qq_build(to_list(data[sample_col]), kw)
 
 
 def _qq_xdomain(a): return a["theo"]
@@ -78,11 +103,23 @@ def _qq_draw(a, ctx):
             pad = (x_hi - x_lo) * 0.05
             x0, x1e = x_lo - pad, x_hi + pad
             y0, y1e = intercept + slope * x0, intercept + slope * x1e
+            ref_col = col if a["opts"].get("_grouped") else "#888"
             out.append(segment(ctx.x_scale(x0), ctx.y_scale(y0),
                                ctx.x_scale(x1e), ctx.y_scale(y1e),
-                               color="#888", width=1, dash="4,3",
+                               color=ref_col, width=1, dash="4,3",
                                project=ctx.warp))
     return "".join(out)
+
+
+def _qq_legend_entries(a):
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    alpha = a["opts"].get("alpha", 0.7)
+    def paint(_a, _ctx, x0, y_mid):
+        col = _a.get("_color", _ctx.color)
+        return circle(x0 + 11, y_mid, 3, fill=col, alpha=alpha)
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
 add_artist(ArtistSpec(
@@ -91,4 +128,5 @@ add_artist(ArtistSpec(
     xdomain=_qq_xdomain,
     ydomain=_qq_ydomain,
     draw=_qq_draw,
+    legend_entries=_qq_legend_entries,
 ))

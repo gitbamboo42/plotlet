@@ -6,12 +6,22 @@
   c.bar(data=df, x="cat", y="val", fill="series", position="dodge")
   c.bar(data=df, x="cat", y="val", fill="series", position="fill")  # 100% stack
   c.bar(data=df, x="cat", y="mean", fill="series", yerr="sd")       # mean±err
+  c.bar(data=df, x="cat", stat="count")                             # countplot
+  c.bar(data=df, x="cat", y="raw", stat="mean")                     # mean±CI
 
 `position` defaults to `"stack"` whenever `fill=` is a column with more
-than one unique value — except with `yerr=`/`xerr=`, which default to
-`"dodge"` (error bars aren't defined for stacked bars). Duplicate
-(cat, group) rows are summed; with error bars they raise instead, since
-offsets don't aggregate the way sums do.
+than one unique value — except with `yerr=`/`xerr=` or `stat="mean"`,
+which default to `"dodge"` (error bars aren't defined for stacked bars,
+and stacked means are misleading). Duplicate (cat, group) rows are
+summed; with error bars they raise instead, since offsets don't
+aggregate the way sums do.
+
+Stats (seaborn countplot / barplot, ggplot geom_bar):
+  stat='identity'     y values used as given (duplicates summed)
+  stat='count'        bar height = number of rows per category; drop y=
+  stat='mean'         bar height = mean of y per category, with a CI
+                      error bar: ci='t' (default), 'boot', or None;
+                      level=0.95, n_boot=1000, seed=0 as in pointplot
 
 Aesthetics:
   fill=         literal color OR column name → grouped multi-series
@@ -34,16 +44,21 @@ Other styling kwargs:
   gap=0.1             slot-gap fraction between dodged bars
   label=None          legend label (overridden by column-driven grouping)
 """
+import random
+
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, resolve_aes, palette_color, dodge_positions
-from ..draw import TAB10, resolve_color
+from ..utils import (to_list, resolve_aes, dodge_positions,
+                     t_ci_mean, bootstrap_ci)
+from ..draw import resolve_color
 from .._spec import _D, _LEGSPEC
 from ..draw import rect as draw_rect
 from ..draw import errorbar_v, errorbar_h
 from .errorbar import _resolve_err
+from ._shared import group_color as _group_fill
 
 
 _POSITIONS = ("stack", "dodge", "fill")
+_STATS = ("identity", "count", "mean")
 
 
 def _aggregate_long(data, x_col, y_col, group_col):
@@ -91,6 +106,51 @@ def _aggregate_err(data, x_col, group_col, err, cats, groups):
     return err_lo, err_hi
 
 
+def _aggregate_stat(data, x_col, y_col, group_col, stat, ci,
+                    level, n_boot, seed):
+    """Row-level table → per-(group, cat) stat aggregation. `stat='count'`
+    counts rows per cell; `stat='mean'` averages y per cell (NaN/None rows
+    dropped), with `ci` supplying err_lo/err_hi offset grids shaped like
+    `series` (None when `ci` is None). Empty cells aggregate to 0 with no
+    error bar."""
+    xs = to_list(data[x_col])
+    gs = to_list(data[group_col]) if group_col is not None else [None] * len(xs)
+    ys = to_list(data[y_col]) if y_col is not None else [None] * len(xs)
+    cats, groups = [], []
+    for c in xs:
+        if c not in cats: cats.append(c)
+    for g in gs:
+        if g not in groups: groups.append(g)
+    cells = [[[] for _ in cats] for _ in groups]
+    cat_idx = {c: i for i, c in enumerate(cats)}
+    group_idx = {g: j for j, g in enumerate(groups)}
+    for x, y, g in zip(xs, ys, gs):
+        if stat == "mean" and (y is None or (isinstance(y, float) and y != y)):
+            continue
+        cells[group_idx[g]][cat_idx[x]].append(y)
+    if stat == "count":
+        return cats, groups, [[len(c) for c in row] for row in cells], None, None
+    series = [[(sum(c) / len(c) if c else 0.0) for c in row] for row in cells]
+    if ci is None:
+        return cats, groups, series, None, None
+    rng = random.Random(seed)
+    mean_fn = lambda v: sum(v) / len(v) if v else float("nan")
+    err_lo = [[0.0] * len(cats) for _ in groups]
+    err_hi = [[0.0] * len(cats) for _ in groups]
+    for j in range(len(groups)):
+        for i in range(len(cats)):
+            cell = cells[j][i]
+            if not cell:
+                continue
+            if ci == "t":
+                lo, hi = t_ci_mean(cell, level)
+            else:
+                lo, hi = bootstrap_ci(cell, mean_fn, level, n_boot, rng)
+            err_lo[j][i] = series[j][i] - lo
+            err_hi[j][i] = hi - series[j][i]
+    return cats, groups, series, err_lo, err_hi
+
+
 def _bar_record(args, kw):
     kw = dict(kw)
     if args:
@@ -101,16 +161,36 @@ def _bar_record(args, kw):
     data = kw.pop("data", None)
     x_col = kw.pop("x", None)
     y_col = kw.pop("y", None)
-    if data is None or x_col is None or y_col is None:
+    stat = kw.pop("stat", "identity")
+    if stat not in _STATS:
+        raise ValueError(
+            f"unknown stat={stat!r}; expected one of {_STATS}."
+        )
+    if data is None or x_col is None or (y_col is None and stat != "count"):
         raise TypeError(
             "bar requires data=, x=, y= (fill= optional)."
         )
+    if stat == "count" and y_col is not None:
+        raise TypeError(
+            "bar: stat='count' counts rows per category — drop y=."
+        )
+    ci = kw.pop("ci", "t" if stat == "mean" else None)
+    if ci is not None and stat != "mean":
+        raise TypeError("bar: ci= applies to stat='mean'.")
+    if ci not in (None, "t", "boot"):
+        raise ValueError(f"bar: ci={ci!r} — expected 't', 'boot', or None.")
     # `fill=` may be a literal color or a column name. Column → drives
     # grouping; literal → applied to every bar.
     fill = kw.pop("fill", None)
     fill_kind, fill_value = resolve_aes(data, fill)
     group_col = fill if fill_kind == "column" else None
-    cats, groups, series = _aggregate_long(data, x_col, y_col, group_col)
+    stat_err_lo = stat_err_hi = None
+    if stat == "identity":
+        cats, groups, series = _aggregate_long(data, x_col, y_col, group_col)
+    else:
+        cats, groups, series, stat_err_lo, stat_err_hi = _aggregate_stat(
+            data, x_col, y_col, group_col, stat, ci,
+            kw.get("level", 0.95), kw.get("n_boot", 1000), kw.get("seed", 0))
     if fill_kind == "literal":
         kw["_fill_literal"] = fill_value
     if group_col is not None and group_col == x_col:
@@ -123,6 +203,11 @@ def _bar_record(args, kw):
         )
     yerr = kw.pop("yerr", None)
     xerr = kw.pop("xerr", None)
+    if stat != "identity" and (yerr is not None or xerr is not None):
+        raise TypeError(
+            "bar: stat= aggregates for you — stat='mean' supplies error "
+            "bars from the CI; drop yerr=/xerr=."
+        )
     horizontal = kw.get("orientation") == "h"
     if yerr is not None and horizontal:
         raise TypeError("bar: horizontal bars take xerr= (the value axis is x).")
@@ -132,12 +217,19 @@ def _bar_record(args, kw):
 
     if len(series) == 1:
         default_pos = None
+    elif err is not None or stat == "mean":
+        default_pos = "dodge"
     else:
-        default_pos = "dodge" if err is not None else "stack"
+        default_pos = "stack"
     position = kw.pop("position", default_pos)
     if position is not None and position not in _POSITIONS:
         raise ValueError(
             f"unknown position={position!r}; expected one of {_POSITIONS}."
+        )
+    if stat == "mean" and position in ("stack", "fill"):
+        raise ValueError(
+            f"bar: stacked means are misleading — stat='mean' takes "
+            f"position='dodge', not {position!r}."
         )
     rec = {"type": "bar", "cats": cats, "groups": groups, "series": series,
            "_position": position, "opts": kw}
@@ -149,6 +241,8 @@ def _bar_record(args, kw):
             )
         rec["err_lo"], rec["err_hi"] = _aggregate_err(
             data, x_col, group_col, err, cats, groups)
+    elif stat_err_lo is not None:
+        rec["err_lo"], rec["err_hi"] = stat_err_lo, stat_err_hi
     return rec
 
 
@@ -190,14 +284,6 @@ def _bar_data_attrs(a):
         out["y-min"] = min(flat)
         out["y-max"] = max(flat)
     return out
-
-
-def _group_fill(groups, palette, j, fallback):
-    """Per-group fill: ungrouped → fallback; grouped → palette lookup
-    with TAB10 wraparound."""
-    if groups == [None]:
-        return fallback
-    return palette_color(palette, groups[j], j) or TAB10[j % 10]
 
 
 def _bar_draw(a, ctx):

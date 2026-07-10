@@ -12,40 +12,21 @@ to 5 evenly-spaced values between grid min/max.
 Styling kwargs:
   levels=None        list of iso-density level values
   extent=None        (x0, x1, y0, y1) data-space bounds; defaults to grid index
-  cmap=None          colormap name for colouring lines by level
+  fill=False         True fills the level regions (mpl contourf) instead of
+                     stroking iso-lines; lowest level painted first
+  cmap=None          colormap name for colouring lines/fills by level
   color=None         single fallback colour when cmap is unset
+  alpha=None         fill opacity (fill=True only); defaults to 1 with cmap,
+                     0.25 for a single-color fill so levels stack visibly
   linewidth=1.2      contour stroke width
 """
 from ..registry import ArtistSpec, add_artist
 from ..draw import segment
 from ..draw import colormap, ContinuousNorm
 from ..utils import to_list_2d
-
-
-_MS_CASES = {
-    0: [], 15: [],
-    1: [(0, 3)], 14: [(0, 3)],
-    2: [(0, 1)], 13: [(0, 1)],
-    3: [(1, 3)], 12: [(1, 3)],
-    4: [(1, 2)], 11: [(1, 2)],
-    5: [(0, 3), (1, 2)], 10: [(0, 1), (2, 3)],
-    6: [(0, 2)], 9: [(0, 2)],
-    7: [(2, 3)], 8: [(2, 3)],
-}
-
-
-def _edge_pt(edge, r, c, vtl, vtr, vbr, vbl, lvl):
-    if edge == 0:
-        t = (lvl - vtl) / (vtr - vtl) if vtr != vtl else 0.5
-        return (c + t, r)
-    if edge == 1:
-        t = (lvl - vtr) / (vbr - vtr) if vbr != vtr else 0.5
-        return (c + 1, r + t)
-    if edge == 2:
-        t = (lvl - vbl) / (vbr - vbl) if vbr != vbl else 0.5
-        return (c + t, r + 1)
-    t = (lvl - vtl) / (vbl - vtl) if vbl != vtl else 0.5
-    return (c, r + t)
+from ._marching import MS_CASES as _MS_CASES
+from ._marching import edge_pt as _edge_pt
+from ._marching import filled_levels_svg
 
 
 def _resolve_levels(grid, opts):
@@ -103,6 +84,13 @@ def _contour_draw(a, ctx):
         dyd = (y1d - y0d) / max(nr - 1, 1)
     else:
         x0d, y0d = 0, 0; dxd, dyd = 1, 1
+    if a["opts"].get("fill"):
+        alpha = a["opts"].get("alpha", 1.0 if cmap_name else 0.25)
+        return filled_levels_svg(
+            grid, nr, nc, levels, cmap_name=cmap_name,
+            color=color_opt or ctx.color or "#1f77b4", alpha=alpha,
+            x0d=x0d, y0d=y0d, dxd=dxd, dyd=dyd,
+            x_scale=ctx.x_scale, y_scale=ctx.y_scale)
     if cmap_name:
         cm = colormap(cmap_name)
         norm = ContinuousNorm(a["_vmin"], a["_vmax"], "linear")

@@ -245,16 +245,16 @@ universal and not repeated.
 
 | call | options |
 | --- | --- |
-| `.line(x=, y=, color=, group=, linestyle=, alpha=, **opts)` | `palette`, `alphas=(min, max)`, `label`, `linewidth`, `marker`, `size` (marker radius px), `curve` (`"linear"`, `"step-before"`, `"step-after"`, `"step-mid"`) — `linestyle=` dispatches: literal (`"-"`, `"--"`, `":"`, `"-."`, …) → fixed dash; column name → cycle dashes per level |
+| `.line(x=, y=, color=, group=, linestyle=, alpha=, **opts)` | `palette`, `alphas=(min, max)`, `label`, `linewidth`, `marker`, `size` (marker radius px), `curve` (`"linear"`, `"step-before"`, `"step-after"`, `"step-mid"`) — `linestyle=` dispatches: literal (`"-"`, `"--"`, `":"`, `"-."`, …) → fixed dash; column name → cycle dashes per level. `estimator="mean"\|"median"` collapses replicate rows per x with a CI band (`ci="t"\|"boot"\|None`, `level`, `n_boot`, `seed`, `band_alpha`) — seaborn lineplot |
 | `.step(x=, y=, where=, **opts)` | sugar over `line(curve=…)`; `where=` is `"pre"` / `"post"` (default) / `"mid"` |
 | `.scatter(x=, y=, color=, group=, alpha=, size=, style=, **opts)` | `palette`, `alphas=(min, max)`, `label`, `marker`, `sizes=(min, max)`, `size_legend={"breaks": [...], "labels": [...]}`, `cmap`, `vmin`, `vmax`, `norm` — `color=<col>` dispatches on dtype: numeric col → cmap, categorical → palette. `size=` dispatches: number → fixed radius (px), list → per-point, column → graded via `sizes=(lo, hi)` |
-| `.regression(x=, y=, color=, **opts)` | `palette`, `level=0.95`, `alpha=0.2`, `linewidth=1.8` — OLS fit + Student-t band |
+| `.regression(x=, y=, color=, **opts)` | `palette`, `level=0.95`, `alpha=0.2`, `linewidth=1.8` — OLS fit + Student-t band. `order=` fits a polynomial; `robust=True` a Huber IRLS fit with a bootstrap band (`n_boot=200`, `seed=0`) |
 | `.hist(x=, fill=, **opts)` | `color` (stroke), `palette`, `bins`, `density`, `histtype` (`"bar"` / `"step"` / `"stepfilled"`), `orientation` |
 | `.density_1d(x=, color=, **opts)` | `palette`, `bw`, `n_grid=200`, `fill=True/False`, `alpha` — Gaussian KDE |
 | `.ecdf(x=, color=, **opts)` | `palette`, `complement=False` (survival), `linewidth` |
 | `.rug(x=, color=, axis="x", **opts)` | `palette`, `length=0.04`, `alpha` — tick marks at observations |
 | `.freqpoly(x=, color=, **opts)` | `palette`, `bins`, `density` — line version of hist |
-| `.qq(values, dist="normal")` | `dist=` accepts any `scipy.stats` RV or another sample |
+| `.qq(sample=, color=, **opts)` | `dist=` accepts `"normal"`, any `scipy.stats` RV, or another sample; `color=<col>` → one series + reference line per level (`palette=`) |
 
 ### Categorical distributions
 
@@ -264,13 +264,13 @@ universal and not repeated.
 | `.violin(x=, y=, fill=, **opts)` | `color` (stroke), `palette`, `inner="box"\|"quartile"\|None`, `trim`, `bw_adjust`, `fill_alpha` |
 | `.swarm(x=, y=, fill=, **opts)` | `color` (outline), `palette`, `size`, `linewidth` — collision-resolved jitter |
 | `.strip(x=, y=, fill=, **opts)` | `color` (outline), `palette`, `size`, `jitter` — raw jittered points |
-| `.pointplot(cats, values_per_cat, **opts)` | `estimator="mean"`, `ci="t"\|"boot"\|None`, `level=0.95` |
+| `.pointplot(x=, y=, color=, **opts)` | `estimator="mean"`, `ci="t"\|"boot"\|None`, `level=0.95`; `color=<col>` → one series per level (`palette=`) |
 
 ### Bars, areas, errorbars
 
 | call | options |
 | --- | --- |
-| `.bar(x=, y=, fill=, position=, **opts)` | `color` (stroke), `palette`, `position="stack"\|"dodge"\|"fill"` for multi-series, `orientation`, `bottom`, `width`, `gap`; `yerr=`/`xerr=` (same specs as errorbar) draw whiskers at bar/slot centers with `ecolor`, `capsize` — defaults `position` to `"dodge"` and requires one row per (category, group) |
+| `.bar(x=, y=, fill=, position=, **opts)` | `color` (stroke), `palette`, `position="stack"\|"dodge"\|"fill"` for multi-series, `orientation`, `bottom`, `width`, `gap`; `yerr=`/`xerr=` (same specs as errorbar) draw whiskers at bar/slot centers with `ecolor`, `capsize` — defaults `position` to `"dodge"` and requires one row per (category, group). `stat="count"` (drop y=; seaborn countplot) or `stat="mean"` (mean per cell + CI error bars: `ci="t"\|"boot"\|None`, `level`, `n_boot`, `seed`; seaborn barplot) aggregate raw rows |
 | `.area(x=, y=, fill=, **opts)` | multi-series stacks when given a list-of-series or `fill=<col>`; `palette`, `base`, `curve`, `alpha` |
 | `.fill_between(x=, y1=, y2=, **opts)` | `color`, `alpha`, `curve`, `label` |
 | `.errorbar(x=, y=, yerr=, xerr=, **opts)` | scalar, sequence, or `(lower, upper)` tuple for asymmetric bars; `color=` column → grouped series (`palette=`), dodged on a categorical axis with bar-matching `width`/`gap` defaults |
@@ -280,9 +280,10 @@ universal and not repeated.
 | call | options |
 | --- | --- |
 | `.hexbin(xs, ys, **opts)` | `gridsize=20`, `cmap`, `mincnt`, `log_count` |
-| `.kde_2d(xs, ys, **opts)` | `bw`, `n_grid=60`, `levels`, `cmap` — iso-density contours |
-| `.contour(grid, **opts)` | `levels`, `extent=(x0, x1, y0, y1)`, `cmap` — pre-computed 2-D grid |
-| `.ridge(labels, samples_per_label, **opts)` | `overlap=1.4`, `bw`, `alpha` — joyplot |
+| `.hist2d(x=, y=, **opts)` | `bins=30`, `binwidth`, `binrange` (scalar or per-axis pair), `cmap`, `vmin`, `vmax` — rectangular bins colored by count, empty cells transparent |
+| `.kde_2d(x=, y=, color=, **opts)` | `bw`, `n_grid=60`, `levels`, `cmap`, `fill=True` (filled level regions), `alpha` — iso-density contours; `color=<col>` → one single-colored density per level (`palette=`) |
+| `.contour(grid, **opts)` | `levels`, `extent=(x0, x1, y0, y1)`, `cmap`, `fill=True` (mpl contourf), `alpha` — pre-computed 2-D grid |
+| `.ridge(x=, y=, color=, **opts)` | `overlap=1.4`, `bw`, `alpha` — joyplot; `color=<col>` → overlaid sub-densities per row (`palette=`) |
 
 ### Images, matrices, reference, shapes, text
 

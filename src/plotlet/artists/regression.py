@@ -4,35 +4,50 @@ Fits y ~ x by closed-form OLS, draws the fit line, and shades a confidence
 band using the exact Student-t critical value at n - 2 degrees of freedom.
 The scatter is not drawn here — overlay your own `c.scatter(xs, ys)`.
 
-  c.regression(xs, ys)                                  # single fit
   c.regression(data=df, x="col_x", y="col_y")           # long-form
   c.regression(data=df, x=..., y=..., color="group")    # one fit per group
+  c.regression(data=df, x=..., y=..., order=2)          # polynomial
+  c.regression(data=df, x=..., y=..., robust=True)      # Huber IRLS
 
 Styling kwargs:
   color=         line color (literal) or column name → one fit per level
   palette=       maps levels → colors when `color=` is a column
+  order=1        polynomial degree of the fit (seaborn regplot order=);
+                 the band generalizes to t_{α/2, n-p} with the full
+                 covariance term  se(ŷ) = σ·sqrt(xᵀ(XᵀX)⁻¹x)
+  robust=False   True → Huber-weighted IRLS fit that downweights
+                 outliers (seaborn regplot robust=). No analytic band
+                 exists, so the ribbon comes from a percentile bootstrap
+                 (n_boot=200, seed=0 — deterministic)
   level=0.95     confidence level for the band
   n_grid=80      grid resolution for evaluating the band
+  n_boot=200     bootstrap resamples for the robust band
+  seed=0         RNG seed for the robust bootstrap
   alpha=0.2      ribbon fill opacity
   linewidth=1.8  fit line stroke width
   label=None     legend label (single-fit only — multi-group auto-labels)
 
-Math:
+Math (order=1, robust=False — the closed-form fast path):
     slope b = Σ((x - x̄)(y - ȳ)) / Σ((x - x̄)²)
     intercept a = ȳ - b·x̄
     residual σ² = SSE / (n - 2)
     se(ŷ(x)) = σ · sqrt(1/n + (x - x̄)² / Σ(x - x̄)²)
     t · se for the band, t = t_{α/2, n-2}
+
+Polynomial/robust fits solve the normal equations on centered x
+(conditioning); Huber uses c=1.345 with MAD scale, IRLS to convergence.
 """
 import math
+import random
 
 from scipy.stats import t as _t_dist
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, long_form_xy, resolve_aes, palette_color
-from ..draw import TAB10, resolve_color
+from ..utils import long_form_xy, resolve_aes, quantile
+from ..draw import resolve_color
 from .._spec import _LEGSPEC
 from ..draw import polygon, polyline, rect, segment
+from ._shared import group_color as _group_color
 
 
 def _drop_nan_xy(xs, ys):
@@ -60,6 +75,127 @@ def _fit_ols(xs, ys):
     return a, b, xm, sxx, math.sqrt(sigma2), n
 
 
+# --- generic path: polynomial order and/or Huber-robust fits ---------------
+
+def _solve(A, b):
+    """Solve A·x = b by Gaussian elimination with partial pivoting.
+    A is a small p×p normal-equations matrix (p = order + 1)."""
+    n = len(A)
+    M = [row[:] + [b[i]] for i, row in enumerate(A)]
+    for col in range(n):
+        piv = max(range(col, n), key=lambda r: abs(M[r][col]))
+        M[col], M[piv] = M[piv], M[col]
+        if abs(M[col][col]) < 1e-12:
+            M[col][col] = 1e-12  # degenerate design (e.g. constant x)
+        for r in range(col + 1, n):
+            f = M[r][col] / M[col][col]
+            for k in range(col, n + 1):
+                M[r][k] -= f * M[col][k]
+    x = [0.0] * n
+    for r in range(n - 1, -1, -1):
+        s = M[r][n] - sum(M[r][k] * x[k] for k in range(r + 1, n))
+        x[r] = s / M[r][r]
+    return x
+
+
+def _peval(beta, t):
+    """Evaluate the polynomial Σ beta[k]·t^k (Horner)."""
+    v = 0.0
+    for b in reversed(beta):
+        v = v * t + b
+    return v
+
+
+def _wls(ts, ys, order, weights):
+    """Weighted least squares on centered x. Returns `(beta, XtX)` where
+    `XtX` is the (weighted) normal-equations matrix — callers invert it
+    for the covariance term."""
+    n = len(ts)
+    p = order + 1
+    w = weights if weights is not None else [1.0] * n
+    rows = [[t ** k for k in range(p)] for t in ts]
+    XtX = [[sum(w[i] * rows[i][a] * rows[i][b] for i in range(n))
+            for b in range(p)] for a in range(p)]
+    Xty = [sum(w[i] * rows[i][a] * ys[i] for i in range(n)) for a in range(p)]
+    return _solve(XtX, Xty), XtX
+
+
+def _mat_inv(A):
+    """Invert a small matrix by solving against identity columns."""
+    n = len(A)
+    cols = [_solve(A, [1.0 if r == c else 0.0 for r in range(n)])
+            for c in range(n)]
+    return [[cols[c][r] for c in range(n)] for r in range(n)]
+
+
+def _huber_fit(ts, ys, order, *, c=1.345, max_iter=30):
+    """Huber IRLS: reweight residuals beyond c·s (s = MAD scale) until
+    the coefficients stop moving."""
+    beta, _ = _wls(ts, ys, order, None)
+    for _ in range(max_iter):
+        resid = [y - _peval(beta, t) for t, y in zip(ts, ys)]
+        s = quantile([abs(r) for r in resid], 0.5) / 0.6745
+        if s <= 1e-12:
+            break
+        w = [1.0 if abs(r) <= c * s else c * s / abs(r) for r in resid]
+        new, _ = _wls(ts, ys, order, w)
+        moved = max(abs(nb - ob) for nb, ob in zip(new, beta))
+        beta = new
+        if moved < 1e-9 * (1 + max(abs(v) for v in beta)):
+            break
+    return beta
+
+
+def _fit_generic(xs, ys, opts):
+    """Polynomial / robust fit evaluated on the band grid at record time.
+    Returns `{"grid", "mid", "lo", "hi"}` in data space, or None when the
+    group is too small (needs n ≥ order + 2 for one residual df)."""
+    order = opts.get("order", 1)
+    robust = opts.get("robust", False)
+    level = opts.get("level", 0.95)
+    n_grid = opts.get("n_grid", 80)
+    n = len(xs)
+    p = order + 1
+    if n < p + 1:
+        return None
+    xm = sum(xs) / n
+    ts = [x - xm for x in xs]
+    lo_x, hi_x = min(xs), max(xs)
+    grid = [lo_x + (hi_x - lo_x) * i / (n_grid - 1) for i in range(n_grid)]
+    if robust:
+        beta = _huber_fit(ts, ys, order)
+        mid = [_peval(beta, g - xm) for g in grid]
+        rng = random.Random(opts.get("seed", 0))
+        n_boot = opts.get("n_boot", 200)
+        curves = []
+        for _ in range(n_boot):
+            idx = [rng.randrange(n) for _ in range(n)]
+            bb = _huber_fit([ts[i] for i in idx], [ys[i] for i in idx],
+                            order, max_iter=10)
+            curves.append([_peval(bb, g - xm) for g in grid])
+        a2 = (1 - level) / 2
+        lo = [quantile([c[i] for c in curves], a2) for i in range(n_grid)]
+        hi = [quantile([c[i] for c in curves], 1 - a2) for i in range(n_grid)]
+        return {"grid": grid, "mid": mid, "lo": lo, "hi": hi}
+    beta, XtX = _wls(ts, ys, order, None)
+    inv = _mat_inv(XtX)
+    resid = [y - _peval(beta, t) for t, y in zip(ts, ys)]
+    sigma = math.sqrt(sum(r * r for r in resid) / (n - p))
+    crit = _t_dist.ppf((1 + level) / 2, n - p)
+    mid, lo, hi = [], [], []
+    for g in grid:
+        t = g - xm
+        row = [t ** k for k in range(p)]
+        var = sum(row[a] * inv[a][b] * row[b]
+                  for a in range(p) for b in range(p))
+        yhat = _peval(beta, t)
+        se = sigma * math.sqrt(max(var, 0.0))
+        mid.append(yhat)
+        lo.append(yhat - crit * se)
+        hi.append(yhat + crit * se)
+    return {"grid": grid, "mid": mid, "lo": lo, "hi": hi}
+
+
 def _regression_record(args, kw):
     kw = dict(kw)
     if args:
@@ -80,7 +216,14 @@ def _regression_record(args, kw):
     groups, xy = long_form_xy(data, x_col, y_col, group_col)
     if color_kind == "literal" and color_value is not None:
         kw["_color_literal"] = color_value
+    order = kw.get("order", 1)
+    if not isinstance(order, int) or order < 1:
+        raise ValueError(f"regression: order={order!r} — must be an int ≥ 1.")
     cleaned = [_drop_nan_xy(xs, ys) for xs, ys in xy]
+    if order > 1 or kw.get("robust", False):
+        fits = [_fit_generic(xs, ys, kw) for xs, ys in cleaned]
+        return {"type": "regression", "groups": groups, "xy": cleaned,
+                "fits": fits, "_generic": True, "opts": kw}
     fits = [_fit_ols(xs, ys) for xs, ys in cleaned]
     return {"type": "regression", "groups": groups, "xy": cleaned,
             "fits": fits, "opts": kw}
@@ -91,6 +234,14 @@ def _regression_xdomain(a):
 
 
 def _regression_ydomain(a):
+    if a.get("_generic"):
+        out = []
+        for fit in a["fits"]:
+            if fit is None:
+                continue
+            out.append(min(fit["lo"]))
+            out.append(max(fit["hi"]))
+        return out
     level = a["opts"].get("level", 0.95)
     out = []
     for fit, (xs, _) in zip(a["fits"], a["xy"]):
@@ -105,12 +256,6 @@ def _regression_ydomain(a):
     return out
 
 
-def _group_color(groups, palette, j, fallback):
-    if groups == [None]:
-        return fallback
-    return palette_color(palette, groups[j], j) or TAB10[j % 10]
-
-
 def _regression_draw(a, ctx):
     palette = a["opts"].get("palette")
     fill_alpha = a["opts"].get("alpha", 0.2)
@@ -120,6 +265,22 @@ def _regression_draw(a, ctx):
     color_literal = resolve_color(a["opts"].get("_color_literal"))
     fallback = color_literal if color_literal is not None else ctx.color
     out = []
+    if a.get("_generic"):
+        for j, fit in enumerate(a["fits"]):
+            if fit is None:
+                continue
+            col = _group_color(a["groups"], palette, j, fallback)
+            pts_top = [(ctx.x_scale(x), ctx.y_scale(y))
+                       for x, y in zip(fit["grid"], fit["hi"])]
+            pts_bot = [(ctx.x_scale(x), ctx.y_scale(y))
+                       for x, y in zip(fit["grid"], fit["lo"])]
+            out.append(polygon(pts_top + pts_bot[::-1], fill=col,
+                               alpha=fill_alpha, project=ctx.warp))
+            line_pts = [(ctx.x_scale(x), ctx.y_scale(y))
+                        for x, y in zip(fit["grid"], fit["mid"])]
+            out.append(polyline(line_pts, color=col, width=lw,
+                                project=ctx.warp))
+        return "".join(out)
     for j, ((xs, _ys), fit) in enumerate(zip(a["xy"], a["fits"])):
         if fit is None or len(xs) < 3:
             continue

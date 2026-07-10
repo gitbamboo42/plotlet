@@ -7,7 +7,7 @@ where the related artists share enough structure to earn it.
 Single-artist files (one plot type each):
   scatter, line, bar, hist, imshow, heatmap, dendrogram, errorbar
   boxplot, violin, swarm, strip
-  pointplot, ecdf, rug, density_1d, regression, kde_2d, hexbin
+  pointplot, ecdf, rug, density_1d, regression, kde_2d, hexbin, hist2d
   freqpoly, contour, ridge, qq
 
 Category files (closely-related artists grouped):
@@ -40,6 +40,7 @@ from . import density_1d   # noqa: F401
 from . import regression   # noqa: F401
 from . import kde_2d       # noqa: F401
 from . import hexbin       # noqa: F401
+from . import hist2d       # noqa: F401
 from . import freqpoly     # noqa: F401
 from . import contour      # noqa: F401
 from . import ridge        # noqa: F401

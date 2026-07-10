@@ -8,6 +8,11 @@ CI options:
 
 API (long-form only):
   c.pointplot(data=df, x="cat", y="value")
+  c.pointplot(data=df, x="cat", y="value", color="group")   # one series per level
+
+Aesthetics:
+  color=             literal color OR column name → one series per level
+  palette=           maps levels → colors when `color=` is a column
 
 Styling kwargs:
   estimator='mean'   'median' for the central tendency
@@ -18,48 +23,15 @@ Styling kwargs:
   size=4             point radius in pixels
   capsize=4          half-width of CI cap tick in pixels
   linewidth=1.4      line and bar stroke width
-  label=None         legend label (no legend entry when absent)
+  label=None         legend label (overridden by column-driven grouping)
 """
-import math
 import random
 
-from scipy.stats import t as _t_dist
-
 from ..registry import ArtistSpec, add_artist
-from ..utils import categorical_groups
+from ..utils import (categorical_groups, resolve_aes, quantile,
+                     t_ci_mean, bootstrap_ci)
 from ..draw import segment, circle, polyline, errorbar_v
-
-
-def _t_ci_mean(vals, level):
-    n = len(vals)
-    if n < 2:
-        m = vals[0] if vals else float("nan")
-        return m, m
-    m = sum(vals) / n
-    var = sum((x - m) ** 2 for x in vals) / (n - 1)
-    se = math.sqrt(var / n)
-    crit = _t_dist.ppf((1 + level) / 2, n - 1)
-    return m - crit * se, m + crit * se
-
-
-def _bootstrap_ci(vals, estimator_fn, level, n_boot, rng):
-    if not vals:
-        return float("nan"), float("nan")
-    n = len(vals)
-    boots = [estimator_fn([vals[rng.randrange(n)] for _ in range(n)])
-             for _ in range(n_boot)]
-    boots.sort()
-    alpha = (1 - level) / 2
-    return (boots[max(0, int(alpha * n_boot))],
-            boots[min(n_boot - 1, int((1 - alpha) * n_boot))])
-
-
-def _median(xs):
-    s = sorted(xs)
-    n = len(s)
-    if n == 0:
-        return float("nan")
-    return s[n // 2] if n % 2 else 0.5 * (s[n // 2 - 1] + s[n // 2])
+from ._shared import group_color
 
 
 def _pointplot_record(args, kw):
@@ -73,72 +45,96 @@ def _pointplot_record(args, kw):
     y = kw.pop("y", None)
     if data is None or x is None or y is None:
         raise TypeError("pointplot requires data=, x=, y=.")
-    cats, _, vals = categorical_groups(data, x, y)
-    groups = [v[0] for v in vals]  # one value-list per category (no sub-grouping)
+    color = kw.pop("color", None)
+    color_kind, color_value = resolve_aes(data, color)
+    group_col = color if color_kind == "column" else None
+    if color_kind == "literal" and color_value is not None:
+        kw["color"] = color_value
+    cats, groups, vals = categorical_groups(data, x, y, group_col)
     estimator = kw.get("estimator", "mean")
     ci = kw.get("ci", "t")
     level = kw.get("level", 0.95)
     n_boot = kw.get("n_boot", 1000)
     rng = random.Random(kw.get("seed", 0))
     est_fn = ((lambda xs: sum(xs) / len(xs) if xs else float("nan"))
-              if estimator == "mean" else _median)
-    ests = [est_fn(g) for g in groups]
-    los, his = [], []
-    for g in groups:
-        if ci is None or not g:
-            los.append(float("nan")); his.append(float("nan"))
-        elif ci == "t" and estimator == "mean":
-            lo, hi = _t_ci_mean(g, level)
-            los.append(lo); his.append(hi)
-        else:
-            lo, hi = _bootstrap_ci(g, est_fn, level, n_boot, rng)
-            los.append(lo); his.append(hi)
-    return {"type": "pointplot", "cats": cats, "_ests": ests,
-            "_los": los, "_his": his, "opts": kw}
+              if estimator == "mean" else (lambda xs: quantile(xs, 0.5)))
+    ests = [[est_fn(vals[i][j]) for i in range(len(cats))]
+            for j in range(len(groups))]
+    los = [[None] * len(cats) for _ in groups]
+    his = [[None] * len(cats) for _ in groups]
+    for j in range(len(groups)):
+        for i in range(len(cats)):
+            g = vals[i][j]
+            if ci is None or not g:
+                los[j][i] = float("nan"); his[j][i] = float("nan")
+            elif ci == "t" and estimator == "mean":
+                los[j][i], his[j][i] = t_ci_mean(g, level)
+            else:
+                los[j][i], his[j][i] = bootstrap_ci(g, est_fn, level,
+                                                    n_boot, rng)
+    return {"type": "pointplot", "cats": cats, "groups": groups,
+            "_ests": ests, "_los": los, "_his": his, "opts": kw}
 
 
 def _pointplot_xdomain(a): return a["cats"]
 
 
 def _pointplot_ydomain(a):
-    out = list(a["_ests"])
-    out += [v for v in a["_los"] if v == v]
-    out += [v for v in a["_his"] if v == v]
+    out = [v for g in a["_ests"] for v in g]
+    out += [v for g in a["_los"] for v in g if v == v]
+    out += [v for g in a["_his"] for v in g if v == v]
     return out
 
 
 def _pointplot_draw(a, ctx):
-    col = ctx.color
-    r = a["opts"].get("size", 4)
-    capsize = a["opts"].get("capsize", 4)
-    lw = a["opts"].get("linewidth", 1.4)
+    opts = a["opts"]
+    groups = a["groups"]
+    palette = opts.get("palette")
+    r = opts.get("size", 4)
+    capsize = opts.get("capsize", 4)
+    lw = opts.get("linewidth", 1.4)
     out = []
-    pts = []
-    for cat, est, lo, hi in zip(a["cats"], a["_ests"], a["_los"], a["_his"]):
-        if est != est:
-            continue
-        cx = ctx.x_scale(cat)
-        py = ctx.y_scale(est)
-        if lo == lo and hi == hi:
-            out.append(errorbar_v(cx, ctx.y_scale(lo), ctx.y_scale(hi),
-                                  capsize=capsize, color=col, width=lw,
-                                  project=ctx.warp))
-        pts.append((cx, py))
-    out.append(polyline(pts, color=col, width=lw, project=ctx.warp))
-    for x, y in pts:
-        out.append(circle(x, y, r, fill=col, project=ctx.warp))
+    for j in range(len(groups)):
+        col = group_color(groups, palette, j, ctx.color)
+        pts = []
+        for cat, est, lo, hi in zip(a["cats"], a["_ests"][j],
+                                    a["_los"][j], a["_his"][j]):
+            if est != est:
+                continue
+            cx = ctx.x_scale(cat)
+            py = ctx.y_scale(est)
+            if lo == lo and hi == hi:
+                out.append(errorbar_v(cx, ctx.y_scale(lo), ctx.y_scale(hi),
+                                      capsize=capsize, color=col, width=lw,
+                                      project=ctx.warp))
+            pts.append((cx, py))
+        out.append(polyline(pts, color=col, width=lw, project=ctx.warp))
+        for x, y in pts:
+            out.append(circle(x, y, r, fill=col, project=ctx.warp))
     return "".join(out)
 
 
 def _pointplot_legend_entries(a):
-    label = a["opts"].get("label")
-    if not label:
-        return []
-    def paint(_a, _ctx, _x0, _y_mid):
-        col = _a.get("_color", _ctx.color)
-        return (segment(_x0, _y_mid, _x0 + 22, _y_mid, color=col, width=1.4)
-                + circle(_x0 + 11, _y_mid, 3, fill=col))
-    return [{"label": label, "color": None, "paint": paint}]
+    groups = a["groups"]
+    opts = a["opts"]
+    if groups == [None]:
+        label = opts.get("label")
+        if not label:
+            return []
+        def paint(_a, _ctx, _x0, _y_mid):
+            col = _a.get("_color", _ctx.color)
+            return (segment(_x0, _y_mid, _x0 + 22, _y_mid, color=col, width=1.4)
+                    + circle(_x0 + 11, _y_mid, 3, fill=col))
+        return [{"label": label, "color": None, "paint": paint}]
+    palette = opts.get("palette")
+    entries = []
+    for j, g in enumerate(groups):
+        col = group_color(groups, palette, j, a.get("_color"))
+        def paint(_a, _ctx, x0, y_mid, _col=col):
+            return (segment(x0, y_mid, x0 + 22, y_mid, color=_col, width=1.4)
+                    + circle(x0 + 11, y_mid, 3, fill=_col))
+        entries.append({"label": str(g), "color": col, "paint": paint})
+    return entries
 
 
 add_artist(ArtistSpec(

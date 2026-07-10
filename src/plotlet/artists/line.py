@@ -13,6 +13,17 @@
                                                         #   (no-op in Cartesian)
   c.step(data=df, x="col_x", y="col_y", where="post")  # step variant; where=
                                                         #   "pre" | "post" | "mid"
+  c.line(data=df, x="dose", y="resp",                  # aggregate replicate
+          estimator="mean")                             #   rows per x with a
+                                                        #   CI band (seaborn
+                                                        #   lineplot)
+
+Aggregation (estimator=): replicate rows sharing an x collapse to their
+mean/median, drawn with a shaded CI band. `ci="t"` (default) is the
+analytic t interval on the mean; `ci="boot"` a percentile bootstrap
+(any estimator); `ci=None` just the aggregated line. `level=0.95`,
+`n_boot=1000`, `seed=0`, `band_alpha=0.2` tune it. Applies per series
+after color=/group= splitting; needs curve='linear'.
 
 `linestyle=` dispatches on the value:
   * not-a-column string (`"--"`, `":"`, `"6,3,1,3"`) → literal dash
@@ -23,11 +34,12 @@ handled at the Chart layer — the artist itself always sees one series
 per record.
 """
 import math
+import random
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list
+from ..utils import quantile, t_ci_mean, bootstrap_ci
 from .._spec import _D
-from ..draw import coord, marker, path as draw_path, polyline
+from ..draw import coord, marker, path as draw_path, polygon, polyline
 from ._shared import (_xy_minmax, _line_legend_entries, _CURVE_VALUES,
                        _step_coords, expand_xy_long_form, DEFAULT_ALPHA_RANGE)
 
@@ -129,13 +141,74 @@ def _line_record(args, kw):
     alpha   = kw.pop("alpha", None)
     palette = kw.pop("palette", None)
     alphas  = kw.pop("alphas", DEFAULT_ALPHA_RANGE)
-    return expand_xy_long_form("line", data, x_col, y_col,
-                                color, group, ls, alpha,
-                                palette, alphas, kw)
+    estimator = kw.get("estimator")
+    if estimator not in (None, "mean", "median"):
+        raise ValueError(
+            f"line: estimator={estimator!r} — expected 'mean', 'median', "
+            f"or None."
+        )
+    if estimator is None and ("ci" in kw or "band_alpha" in kw):
+        raise TypeError("line: ci=/band_alpha= apply with estimator=.")
+    if estimator is not None and kw.get("curve", "linear") != "linear":
+        raise ValueError(
+            "line: estimator= aggregation draws a linear band — "
+            "it doesn't combine with curve=/step()."
+        )
+    records = expand_xy_long_form("line", data, x_col, y_col,
+                                   color, group, ls, alpha,
+                                   palette, alphas, kw)
+    if estimator is not None:
+        for rec in records:
+            _aggregate_series(rec, estimator)
+    return records
+
+
+def _aggregate_series(rec, estimator):
+    """Collapse replicate rows sharing an x to their estimator, in place.
+    x order: ascending when numeric, first-seen otherwise. NaN/None pairs
+    drop. `ci` attaches `_band_lo`/`_band_hi` alongside the aggregate."""
+    opts = rec["opts"]
+    ci = opts.get("ci", "t")
+    if ci not in (None, "t", "boot"):
+        raise ValueError(f"line: ci={ci!r} — expected 't', 'boot', or None.")
+    level = opts.get("level", 0.95)
+    n_boot = opts.get("n_boot", 1000)
+    rng = random.Random(opts.get("seed", 0))
+    cells = {}
+    for x, y in zip(rec["xs"], rec["ys"]):
+        if x is None or (isinstance(x, float) and x != x):
+            continue
+        if y is None or (isinstance(y, float) and y != y):
+            continue
+        cells.setdefault(x, []).append(y)
+    xs = list(cells)
+    if all(isinstance(x, (int, float)) for x in xs):
+        xs.sort()
+    est_fn = ((lambda v: sum(v) / len(v) if v else float("nan"))
+              if estimator == "mean" else (lambda v: quantile(v, 0.5)))
+    rec["xs"] = xs
+    rec["ys"] = [est_fn(cells[x]) for x in xs]
+    if ci is None:
+        return
+    los, his = [], []
+    for x in xs:
+        g = cells[x]
+        if ci == "t" and estimator == "mean":
+            lo, hi = t_ci_mean(g, level)
+        else:
+            lo, hi = bootstrap_ci(g, est_fn, level, n_boot, rng)
+        los.append(lo); his.append(hi)
+    rec["_band_lo"] = los
+    rec["_band_hi"] = his
 
 
 def _line_xdomain(a): return a["xs"]
-def _line_ydomain(a): return a["ys"]
+
+
+def _line_ydomain(a):
+    if "_band_lo" in a:
+        return list(a["ys"]) + a["_band_lo"] + a["_band_hi"]
+    return a["ys"]
 
 
 def _line_data_attrs(a):
@@ -148,12 +221,22 @@ def _line_data_attrs(a):
     curve = opts.get("curve")
     if curve and curve != "linear": out["curve"] = curve
     if opts.get("arc") is False: out["arc"] = False
+    if opts.get("estimator"): out["estimator"] = opts["estimator"]
     return out
 
 
 def _line_draw(a, ctx):
-    return _artist_line(a, ctx.x_scale, ctx.y_scale, ctx.color,
-                        a["xs"], a["ys"], warp=ctx.warp)
+    out = ""
+    if a.get("_band_lo"):
+        pts_top = [(ctx.x_scale(x), ctx.y_scale(y))
+                   for x, y in zip(a["xs"], a["_band_hi"])]
+        pts_bot = [(ctx.x_scale(x), ctx.y_scale(y))
+                   for x, y in zip(a["xs"], a["_band_lo"])]
+        out = polygon(pts_top + pts_bot[::-1], fill=ctx.color,
+                      alpha=a["opts"].get("band_alpha", 0.2),
+                      project=ctx.warp)
+    return out + _artist_line(a, ctx.x_scale, ctx.y_scale, ctx.color,
+                              a["xs"], a["ys"], warp=ctx.warp)
 
 
 add_artist(ArtistSpec(
