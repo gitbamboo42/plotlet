@@ -577,6 +577,21 @@ class CircularCoordinate:
         )
 
     def draw_x_frame(self, project, iw, ih, x_ticks_t, x_labels, frame_opts) -> str:
+        if self._is_full_ring:
+            # On a closed ring t=0 and t=1 are the same angle, so a tick at
+            # each end of a continuous domain overprints itself at the seam
+            # ("1.0" on top of "0.0"). Keep the first of any coincident pair
+            # — matplotlib polar likewise shows 0°, not 360°. Partial arcs
+            # keep both ends (different angles).
+            seen, ticks, labels = set(), [], []
+            for t, lbl in zip(x_ticks_t, x_labels):
+                key = round(t % 1.0, 9)
+                if key in seen:
+                    continue
+                seen.add(key)
+                ticks.append(t)
+                labels.append(lbl)
+            x_ticks_t, x_labels = ticks, labels
         cx, cy, R, _ri = _cc.geometry(self.r_inner, self.data_diameter,
                                       iw, ih, self.r_outer)
         return _cc.draw_x_chrome(cx, cy, R,
