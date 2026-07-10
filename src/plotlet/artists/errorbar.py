@@ -6,17 +6,25 @@ Long-form table input:
   c.errorbar(data=df, x="cat", y="mean", yerr=("lo", "hi"))     # offset (asym)
   c.errorbar(data=df, x="cat", y="mean", ymin="lo", ymax="hi")  # absolute bounds
   c.errorbar(data=df, x="t", y="mean", xerr="terr", yerr="sd")  # both axes
+  c.errorbar(data=df, x="cat", y="mean", yerr="sd", color="series")  # grouped
 
 `yerr=` / `xerr=` accept a column name, a scalar, or a `(lower, upper)`
 tuple of column names or scalars for asymmetric bars. `ymin=`/`ymax=`
 (and `xmin=`/`xmax=`) take column names for absolute bounds and are
 mutually exclusive with the matching `*err=`.
+
+`color=` may be a literal color or a column name. Column → one series
+per level (palette= maps levels to colors), and on a categorical axis
+the series dodge within each band. `width=0.8` / `gap=0.1` are the same
+band fractions as bar's, so a dodged errorbar lands on the same slot
+centers as `c.bar(..., position="dodge")` with matching values.
 """
 import math
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, all_numeric
-from ..draw import marker, segment, errorbar_v, errorbar_h
+from ..utils import (to_list, all_numeric, resolve_aes, palette_color,
+                     dodge_positions)
+from ..draw import TAB10, marker, segment, errorbar_v, errorbar_h
 from .._spec import _D, _LEGSPEC
 from ._shared import _xy_minmax
 
@@ -91,15 +99,35 @@ def _errorbar_record(args, kw):
     xlo, xhi = _resolve_bounds(data, xs, xmin, xmax, xlo, xhi, "x")
     ylo, yhi = _resolve_bounds(data, ys, ymin, ymax, ylo, yhi, "y")
 
-    return {"type": "errorbar",
-            "xs": xs, "ys": ys,
-            "xlo": xlo, "xhi": xhi, "ylo": ylo, "yhi": yhi,
-            "opts": kw}
+    # `color=` may be a literal color or a column name; column → grouped
+    # multi-series (one nested row list per level).
+    color_kind, _ = resolve_aes(data, kw.get("color"))
+    if color_kind != "column":
+        return {"type": "errorbar",
+                "xs": xs, "ys": ys,
+                "xlo": xlo, "xhi": xhi, "ylo": ylo, "yhi": yhi,
+                "opts": kw}
+    gs = to_list(data[kw.pop("color")])
+    groups = []
+    for g in gs:
+        if g not in groups:
+            groups.append(g)
+    group_idx = {g: j for j, g in enumerate(groups)}
+    split = {k: [[] for _ in groups]
+             for k in ("xs", "ys", "xlo", "xhi", "ylo", "yhi")}
+    for g, x, y, xl, xh, yl, yh in zip(gs, xs, ys, xlo, xhi, ylo, yhi):
+        j = group_idx[g]
+        split["xs"][j].append(x);  split["ys"][j].append(y)
+        split["xlo"][j].append(xl); split["xhi"][j].append(xh)
+        split["ylo"][j].append(yl); split["yhi"][j].append(yh)
+    return {"type": "errorbar", "groups": groups, **split, "opts": kw}
 
 
-def _artist_errorbar(a, xs_, ys_, col, warp=None):
-    xs, ys, opts = a["xs"], a["ys"], a["opts"]
-    xlo, xhi, ylo, yhi = a["xlo"], a["xhi"], a["ylo"], a["yhi"]
+def _errorbar_rows(xs, ys, xlo, xhi, ylo, yhi, opts, xs_, ys_, col, warp,
+                   px_of, py_of):
+    """Draw one series of rows. `px_of` / `py_of` place the point on each
+    axis — the plain scales, or a dodged lookup on the categorical axis;
+    whisker extents always use the plain value scales."""
     has_xerr = any(xlo) or any(xhi)
     has_yerr = any(ylo) or any(yhi)
     if has_xerr and not all_numeric(xs):
@@ -119,7 +147,7 @@ def _artist_errorbar(a, xs_, ys_, col, warp=None):
     alpha = opts.get("alpha", 1)
     out = []
     for x, y, dxl, dxh, dyl, dyh in zip(xs, ys, xlo, xhi, ylo, yhi):
-        px = xs_(x); py = ys_(y)
+        px = px_of(x); py = py_of(y)
         if not (math.isfinite(px) and math.isfinite(py)):
             continue
         if dyl or dyh:
@@ -135,35 +163,70 @@ def _artist_errorbar(a, xs_, ys_, col, warp=None):
     return "".join(out)
 
 
+def _group_color(a, j):
+    g = a["groups"][j]
+    return palette_color(a["opts"].get("palette"), g, j) or TAB10[j % 10]
+
+
+def _artist_errorbar(a, ctx):
+    xs_, ys_, warp = ctx.x_scale, ctx.y_scale, ctx.warp
+    opts = a["opts"]
+    groups = a.get("groups")
+    if groups is None:
+        return _errorbar_rows(a["xs"], a["ys"], a["xlo"], a["xhi"],
+                              a["ylo"], a["yhi"], opts, xs_, ys_,
+                              ctx.color, warp, xs_, ys_)
+    width = opts.get("width", 0.8)
+    gap = opts.get("gap", 0.1)
+    x_band = getattr(xs_, "bandwidth", None) is not None
+    y_band = getattr(ys_, "bandwidth", None) is not None
+    out = []
+    for j in range(len(groups)):
+        px_of, py_of = xs_, ys_
+        if x_band:
+            px_of = lambda x, _j=j: dodge_positions(
+                xs_, x, len(groups), _j, band_frac=width, gap=gap)[0]
+        elif y_band:
+            py_of = lambda y, _j=j: dodge_positions(
+                ys_, y, len(groups), _j, band_frac=width, gap=gap)[0]
+        out.append(_errorbar_rows(
+            a["xs"][j], a["ys"][j], a["xlo"][j], a["xhi"][j],
+            a["ylo"][j], a["yhi"][j], opts, xs_, ys_,
+            _group_color(a, j), warp, px_of, py_of))
+    return "".join(out)
+
+
+def _flat(a, key):
+    if a.get("groups") is None:
+        return a[key]
+    return [v for grp in a[key] for v in grp]
+
+
 def _errorbar_xdomain(a):
-    xs = a["xs"]
+    xs = _flat(a, "xs")
     if not all_numeric(xs):
         return list(xs)
-    xlo, xhi = a["xlo"], a["xhi"]
+    xlo, xhi = _flat(a, "xlo"), _flat(a, "xhi")
     return [x - lo for x, lo in zip(xs, xlo)] + [x + hi for x, hi in zip(xs, xhi)]
 
 
 def _errorbar_ydomain(a):
-    ys = a["ys"]
+    ys = _flat(a, "ys")
     if not all_numeric(ys):
         return list(ys)
-    ylo, yhi = a["ylo"], a["yhi"]
+    ylo, yhi = _flat(a, "ylo"), _flat(a, "yhi")
     return [y - lo for y, lo in zip(ys, ylo)] + [y + hi for y, hi in zip(ys, yhi)]
 
 
 def _errorbar_data_attrs(a):
-    out = {"n": len(a["xs"])}
-    out.update(_xy_minmax(a["xs"], a["ys"]))
+    out = {"n": len(_flat(a, "xs"))}
+    out.update(_xy_minmax(_flat(a, "xs"), _flat(a, "ys")))
     out["marker"] = a["opts"].get("marker", "o")
     return out
 
 
-def _errorbar_legend_entries(a):
-    label = a["opts"].get("label")
-    if not label:
-        return []
+def _legend_paint(col):
     def paint(a, ctx, x0, y_mid):
-        col = a["_color"]
         msize = a["opts"].get("size", ctx.defaults["markersize"])
         cx = x0 + _LEGSPEC["swatch_width"] / 2
         return (
@@ -171,7 +234,20 @@ def _errorbar_legend_entries(a):
                     color=col, width=_D["errorbar_linewidth"])
             + marker(a["opts"].get("marker", "o"), cx, y_mid, msize, col, 1)
         )
-    return [{"label": label, "color": a.get("_color"), "paint": paint}]
+    return paint
+
+
+def _errorbar_legend_entries(a):
+    groups = a.get("groups")
+    if groups is None:
+        label = a["opts"].get("label")
+        if not label:
+            return []
+        return [{"label": label, "color": a.get("_color"),
+                 "paint": _legend_paint(a.get("_color"))}]
+    return [{"label": str(g), "color": _group_color(a, j),
+             "paint": _legend_paint(_group_color(a, j))}
+            for j, g in enumerate(groups)]
 
 
 add_artist(ArtistSpec(
@@ -179,7 +255,7 @@ add_artist(ArtistSpec(
     record=_errorbar_record,
     xdomain=_errorbar_xdomain,
     ydomain=_errorbar_ydomain,
-    draw=lambda a, ctx: _artist_errorbar(a, ctx.x_scale, ctx.y_scale, ctx.color, ctx.warp),
+    draw=_artist_errorbar,
     legend_entries=_errorbar_legend_entries,
     data_attrs=_errorbar_data_attrs,
 ))

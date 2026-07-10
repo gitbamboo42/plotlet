@@ -1817,6 +1817,33 @@ def chart_bar_h_xerr():
     return c
 
 
+def chart_errorbar_grouped():
+    # color= column → one series per level, dodged within each band,
+    # per-group legend entries.
+    df = _bar_quarterly_df()
+    df["sd"] = [round(0.4 + 0.08 * v, 2) for v in df["value"]]
+    c = pt.chart(data_width=320, data_height=200,
+                 title="errorbar grouped (dodged)", ylabel="$M", legend=True)
+    c.errorbar(data=df, x="quarter", y="value", yerr="sd", color="series")
+    c.legend()
+    return c
+
+
+def chart_bar_errorbar_aligned():
+    # Composition check: an independently dodged errorbar lands on the
+    # same slot centers as bar position="dodge" (width/gap defaults
+    # match). Whiskers here are darker than the translucent bars.
+    df = _bar_quarterly_df()
+    df["sd"] = [round(0.4 + 0.08 * v, 2) for v in df["value"]]
+    c = pt.chart(data_width=320, data_height=200,
+                 title="bar + errorbar share dodge slots", ylabel="$M")
+    c.bar(data=df, x="quarter", y="value", fill="series", position="dodge",
+          alpha=0.45)
+    c.errorbar(data=df, x="quarter", y="value", yerr="sd", color="series",
+               marker=None)
+    return c
+
+
 def chart_scatter_long_color():
     import pandas as pd
     rng = random.Random(17)
@@ -2187,6 +2214,8 @@ PLOTS = {
     "bar_yerr":              chart_bar_yerr,
     "bar_dodge_yerr":        chart_bar_dodge_yerr,
     "bar_h_xerr":            chart_bar_h_xerr,
+    "errorbar_grouped":      chart_errorbar_grouped,
+    "bar_errorbar_aligned":  chart_bar_errorbar_aligned,
     "area_stack":            chart_area_stack,
     "scatter_long_color":    chart_scatter_long_color,
     "density_1d_long_color": chart_density_1d_long_color,
@@ -2202,6 +2231,22 @@ PLOTS = {
 @pytest.mark.parametrize("name,fn", list(PLOTS.items()), ids=list(PLOTS.keys()))
 def test_chart_baseline(name, fn, baseline_compare):
     baseline_compare("chart", name, fn().to_svg())
+
+
+def test_errorbar_dodge_aligns_with_bar_slots():
+    # The load-bearing composition contract: a grouped errorbar's stems
+    # land on the same pixel centers as dodged bars over the same table.
+    import re
+    svg = chart_bar_errorbar_aligned().to_svg()
+    centers = [float(m[0]) + float(m[1]) / 2 for m in re.findall(
+        r'<rect x="([0-9.]+)" y="[0-9.]+" width="([0-9.]+)" height="[0-9.]+"'
+        r' fill="#(?:1f77b4|ff7f0e|2ca02c)"', svg)]
+    stems = [float(m[0]) for m in re.findall(
+        r'<line x1="([0-9.]+)" x2="([0-9.]+)" y1="[0-9.]+" y2="[0-9.]+"'
+        r' stroke="#(?:1f77b4|ff7f0e|2ca02c)"', svg) if m[0] == m[1]]
+    assert len(centers) == 12 and len(stems) == 12
+    for s in stems:
+        assert min(abs(s - c) for c in centers) < 0.02
 
 
 def test_bar_err_rejects_stack():
