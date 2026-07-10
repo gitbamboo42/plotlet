@@ -145,7 +145,16 @@ def _bar_draw(a, ctx):
     horizontal = _bar_horizontal(a)
     cat_scale, val_scale = ((ctx.y_scale, ctx.x_scale) if horizontal
                             else (ctx.x_scale, ctx.y_scale))
-    band = cat_scale.bandwidth
+    band = getattr(cat_scale, "bandwidth", None)
+    if band is None:
+        axis = "y" if horizontal else "x"
+        raise TypeError(
+            f"bar places categories on a band {axis}-axis, but this "
+            f"chart's {axis}-axis resolved to a numeric scale (an "
+            f"explicit {axis}lim= does that) — there are no bands to "
+            f"size the bars. For bars at numeric positions, use the "
+            f"numeric_bar extension: import plotlet.extensions."
+            f"numeric_bar, then c.numeric_bar(...).")
     bottom = opts.get("bottom", 0)
     base_px = val_scale(bottom)
     alpha = opts.get("alpha", _D["bar_alpha"])
