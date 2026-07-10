@@ -348,10 +348,10 @@ def ring_heatmap_sectors():
             sx.append(p); sg.append(name)
             sy.append(0.5 + 0.4 * math.sin(6 * math.pi * p / slen))
 
-    sc = pt.chart(xlim=(0, 1), ylim=(0, 1), data_width=320, data_height=110)
+    sc = pt.chart(xlim=(0, 1), ylim=(0, 1), data_width=147, data_height=147)
     sc.scatter(data={"x": sx, "y": sy, "grp": sg}, x="x", y="y",
                color="#534AB7", size=2.5, alpha=0.8)
-    hm = pt.chart(xlim=(0, 1), ylim=(0, 1), data_width=320, data_height=240)
+    hm = pt.chart(xlim=(0, 1), ylim=(0, 1), data_width=320, data_height=320)
     hm.heatmap(data={"grp": grp, "x": xh, "t1": t1, "t2": t2},
                x="x", sector="grp", values=["t1", "t2"], cmap="viridis")
 

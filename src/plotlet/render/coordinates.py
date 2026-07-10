@@ -83,13 +83,46 @@ from ..registry import declare_coord_support
 
 
 
-def _circular_chrome_pad(st) -> float:
+def _circular_x_tick_labels(st, dw):
+    """The x-tick label strings the ring will actually draw.
+
+    Mirrors the render's resolution (``_resolve_panel_inputs``) exactly, so
+    the chrome reservation matches what's drawn — not a guess. Two cases the
+    naive estimate got wrong: an autoscaled ring's labels ("0.0" … "1.0")
+    are far wider than a ``max(xlim)`` estimate, and a *continuous-sector*
+    axis draws NO auto tick labels (they're meaningless on a global-offset
+    coord) — so reserving for phantom numeric ticks over-shrinks the ring.
+    """
+    from .core import (_x_descriptor, _auto_major_ticks,
+                       _resolve_tick_formatter)
+    x_axis = _x_descriptor(st)
+    x_scale = (x_axis.build(0, dw)
+               if (x_axis.kind == "category" or not x_axis.flip)
+               else x_axis.build(dw, 0))
+    x_ticks = (st["x_ticks"] if st["x_ticks"] is not None
+               else _auto_major_ticks(x_scale, max(2, min(8, int(dw // 65))),
+                                      st["x_step"], st["x_count"]))
+    x_fmt = _resolve_tick_formatter(st["x_format"], x_scale)
+    x_labels = (st["x_labels"] if st["x_labels"] is not None
+                else [x_fmt(t) for t in x_ticks])
+    # Continuous sectors: auto ticks are suppressed; explicit ticks are
+    # replicated per-sector. Same branch as `_resolve_panel_inputs`.
+    x_sec = st.get("x_sectors")
+    if x_sec is not None and x_sec.kind == "continuous":
+        _, x_labels = x_sec.expand_ticks(
+            x_ticks if st["x_ticks"] is not None else [],
+            x_labels if st["x_ticks"] is not None else [])
+    return x_labels
+
+
+def _circular_chrome_pad(st, dw) -> float:
     """Radial pixels of chrome past the outer arc for the outermost ring.
 
     Mirrors the stacking logic in ``emit_chrome`` / ``draw_x_sector_chrome``
     but works from the chart state dict (available after ``_build_panel_opts``)
-    rather than from a live scale.  Used by ``render_layout`` to decide how
-    much to expand the canvas so labels don't get clipped by the viewBox.
+    rather than from a live scale.  ``dw`` is the leaf's data width, used to
+    resolve the real tick labels. Used by ``render_layout`` to shrink the
+    ring just enough that labels don't get clipped by the viewBox.
 
     Returns 0 when no chrome is drawn outside the ring.
     """
@@ -104,22 +137,15 @@ def _circular_chrome_pad(st) -> float:
     x_ticks_v = st.get("x_ticks")   # None=auto, []=suppressed, [...]= explicit
 
     x_chrome = 0.0
-    has_lbl   = show_lbl and x_ticks_v != []
-    if has_lbl:
-        if x_ticks_v:                # explicit non-empty ticks
-            raw_lbl = st.get("x_labels")
-            labels = [str(l) for l in raw_lbl] if raw_lbl else [str(t) for t in x_ticks_v]
-        else:                        # auto ticks — estimate from xlim
-            xlim = st.get("xlim") or (0, 1)
-            max_val = max(abs(xlim[0]), abs(xlim[1]))
-            labels = [f"{max_val:.4g}"]
+    labels = (_circular_x_tick_labels(st, dw)
+              if (show_lbl and x_ticks_v != []) else [])
+    if labels:
         x_style  = st.get("x_fontstyle") or "normal"
         x_weight = st.get("x_fontweight") or "normal"
-        max_w  = max((measure_text(l, x_size, x_style, x_weight)
-                      for l in labels), default=0.0)
+        max_w  = max(measure_text(l, x_size, x_style, x_weight) for l in labels)
         x_chrome = tl + tp + max_w
     elif st.get("x_marks", True) and x_ticks_v != []:
-        x_chrome = tl                # marks only, no labels
+        x_chrome = tl                # marks only, no labels (or none drawn)
 
     # Sector labels stack outside tick chrome (same rule as linear)
     x_sec = st.get("x_sectors")
@@ -341,7 +367,8 @@ class CircularCoordinate:
         # chrome_pad is independent of R, so the probe can run before the
         # geometry is finalised.
         _, _probe_states = _build_panel_opts(root)
-        chrome_pad = _circular_chrome_pad(_probe_states[id(leaves[0])])
+        chrome_pad = _circular_chrome_pad(_probe_states[id(leaves[0])],
+                                          leaves[0]._data_width)
 
         # Compute an effective gap that shrinks R just enough for chrome to
         # fit within the original W×H canvas.  This keeps the size consistent
