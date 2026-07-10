@@ -392,6 +392,32 @@ def _resolve_minor_ticks(user_minor, scale, major_ticks):
     return list(user_minor)
 
 
+def _sector_pixel_spans(scale, sec):
+    """Per-sector pixel spans ``[(lo_px, hi_px), ...]`` along ``sec``'s
+    axis. Single source of the span geometry — sector walls, per-sector
+    spine breaks, and coord ring-arc breaks must all end at identical
+    pixels, so every consumer derives its spans here (a drifted copy is
+    how rings bleed through gap whitespace).
+
+    Continuous sectors read the sectored scale's own pixel strips, or
+    synthesize spans from data-coord boundaries when the scale carries
+    no gap. Categorical sectors span each group's member bands' outer
+    edges (band center ± bandwidth/2).
+    """
+    if sec.kind == "continuous":
+        if hasattr(scale, "sector_pixel_ranges"):
+            return scale.sector_pixel_ranges()
+        bs = sec.boundaries()
+        return [(scale(bs[i]), scale(bs[i + 1]))
+                for i in range(len(sec.names))]
+    bw = scale.bandwidth
+    spans = []
+    for members in sec.members:
+        px = [scale(m) for m in members]
+        spans.append((min(px) - bw / 2, max(px) + bw / 2))
+    return spans
+
+
 def _sector_walls(spans, *, cyclic=False):
     """Internal-boundary wall positions for a sectored axis.
 
@@ -650,22 +676,10 @@ def emit_chrome(*, st, inp, iw, ih,
         sec_dash = _side_dash("walls")
         sec_pad  = _SECTORSPEC["label_pad"]
         sec = x_sec
+        spans = _sector_pixel_spans(x_scale, sec)
         if sec.kind == "continuous":
-            if hasattr(x_scale, "sector_pixel_ranges"):
-                spans = x_scale.sector_pixel_ranges()
-            else:
-                # Plain linear (no sector gap) — synthesize spans from
-                # data-coord boundaries.
-                bs = sec.boundaries()
-                spans = [(x_scale(bs[i]), x_scale(bs[i + 1]))
-                         for i in range(len(sec.names))]
             label_xs = [x_scale(sec.center(n)) for n in sec.names]
         else:
-            bw = x_scale.bandwidth
-            spans = []
-            for members in sec.members:
-                xs = [x_scale(m) for m in members]
-                spans.append((min(xs) - bw / 2, max(xs) + bw / 2))
             label_xs = [(lo + hi) / 2 for lo, hi in spans]
         divider_xs = _sector_walls(spans)
         if has_x_sector_chrome:
@@ -756,20 +770,10 @@ def emit_chrome(*, st, inp, iw, ih,
         sec_dash = _side_dash("walls")
         sec_pad  = _SECTORSPEC["label_pad"]
         sec = y_sec
+        spans = _sector_pixel_spans(y_scale, sec)
         if sec.kind == "continuous":
-            if hasattr(y_scale, "sector_pixel_ranges"):
-                spans = y_scale.sector_pixel_ranges()
-            else:
-                bs = sec.boundaries()
-                spans = [(y_scale(bs[i]), y_scale(bs[i + 1]))
-                         for i in range(len(sec.names))]
             label_ys = [y_scale(sec.center(n)) for n in sec.names]
         else:
-            bh = y_scale.bandwidth
-            spans = []
-            for members in sec.members:
-                ys = [y_scale(m) for m in members]
-                spans.append((min(ys) - bh / 2, max(ys) + bh / 2))
             label_ys = [(lo + hi) / 2 for lo, hi in spans]
         divider_ys = _sector_walls(spans)
         if sec.divider and st["spine_walls"]:
@@ -812,16 +816,8 @@ def emit_chrome(*, st, inp, iw, ih,
         # through gap whitespace). Cartesian / non-sector renders ignore it.
         _y_sector_ts = None
         if has_x_sector_chrome and x_sec is not None:
-            if hasattr(x_scale, "sector_pixel_ranges"):
-                _spr = x_scale.sector_pixel_ranges()
-            elif x_sec.kind == "continuous":
-                bs = x_sec.boundaries()
-                _spr = [(x_scale(bs[i]), x_scale(bs[i + 1]))
-                        for i in range(len(x_sec.names))]
-            else:
-                _spr = None  # categorical+circular not supported
-            if _spr is not None:
-                _y_sector_ts = [(lo / iw, hi / iw) for lo, hi in _spr]
+            _y_sector_ts = [(lo / iw, hi / iw)
+                            for lo, hi in _sector_pixel_spans(x_scale, x_sec)]
         parts.append(coord_object.draw_frame(
             coord_project, iw, ih,
             _y_ticks_r, y_labels,

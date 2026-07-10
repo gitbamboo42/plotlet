@@ -261,6 +261,21 @@ def ring_x_sectors():
     return c
 
 
+def ring_cat_sectors():
+    # Categorical x-sectors on a ring: bars group into named wedges and
+    # the y rings break at the gaps (bounded per-sector arcs, matching
+    # the walls) instead of bleeding through the whitespace.
+    cats = list("abcdefgh")
+    vals = [3, 5, 2, 6, 4, 7, 3, 5]
+    c = pt.chart(title="categorical sectors — ring")
+    c.coordinate(pt.CircularCoordinate())
+    c.sectors({"G1": ["a", "b", "c"], "G2": ["d", "e"], "G3": ["f", "g", "h"]},
+              axis="x")
+    c.bar(data={"cat": cats, "val": vals}, x="cat", y="val",
+          fill="cat", palette="Set2")
+    return c
+
+
 def ring_inner_outer():
     # Custom inner radius — exercises the r_inner=0.55 path so the
     # geometry helper isn't accidentally collapsed to defaults.
@@ -545,6 +560,7 @@ PLOTS = {
     "ring_freqpoly":               ring_freqpoly,
     "ring_density_1d":             ring_density_1d,
     "ring_regression":             ring_regression,
+    "ring_cat_sectors":            ring_cat_sectors,
     "ring_inner_outer":            ring_inner_outer,
     "ring_references":             ring_references,
     "ring_shapes":                 ring_shapes,
