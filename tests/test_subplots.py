@@ -180,6 +180,26 @@ def height_hint_short_top():
     return (top / main).share_x()
 
 
+def share_x_mismatched_groups():
+    # Both panels declare categorical `groups=` on their own xscale, but
+    # the mappings (and split_gap) CONFLICT. The anchor — first leaf of
+    # the share class — wins for the whole class: one 14px gap after "c"
+    # in both panels; the bottom panel's a|bcdef grouping and 30px gap
+    # are ignored. Pins the anchor-wins policy of `_x_descriptor_multi`.
+    cats = list("abcdef")
+    top = pt.chart(title="anchor: abc|def, gap 14", data_height=100)
+    top.xscale("category",
+               groups={"a": 1, "b": 1, "c": 1, "d": 2, "e": 2, "f": 2},
+               split_gap=14)
+    top.bar(data={"cat": cats, "val": [3, 5, 2, 6, 4, 7]}, x="cat", y="val")
+    main = pt.chart(title="ignored: a|bcdef, gap 30", data_height=100)
+    main.xscale("category",
+                groups={"a": 1, "b": 2, "c": 2, "d": 2, "e": 2, "f": 2},
+                split_gap=30)
+    main.bar(data={"cat": cats, "val": [2, 4, 6, 1, 3, 5]}, x="cat", y="val")
+    return (top / main).share_x()
+
+
 def custom_gap_method():
     # `(a | b).gap(N)` overrides the default 20 px inter-panel gap.
     return (_sin(data_width=220) | _cos(data_width=220)).gap(4)
@@ -299,6 +319,7 @@ PLOTS = {
     "height_hint":         height_hint_short_top,
     "complex_grid":        complex_grid_shares,
     "share_x_scatter_heatmap": share_x_scatter_heatmap,
+    "share_x_mismatched_groups": share_x_mismatched_groups,
     "gap_method":          custom_gap_method,
     "gap_grid_kwarg":      custom_gap_grid_kwarg,
     "fit_to_canvas":       fit_to_canvas,

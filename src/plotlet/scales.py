@@ -13,8 +13,10 @@ resolution.
 """
 from __future__ import annotations
 
+import bisect
 import datetime
 import math
+import warnings
 from dataclasses import dataclass, field
 
 from ._spec import _D
@@ -99,12 +101,15 @@ class _SectoredLinearScale:
         self.gap_px = float(gap_px)
         n = len(self.sector_lengths)
         L_sum = sum(self.sector_lengths)
-        # data-coord left edges of each sector (in the no-gap domain)
+        # data-coord left/right edges of each sector (in the no-gap domain);
+        # rights are ascending, so __call__ can bisect them.
         self._sector_lefts_d = []
+        self._sector_rights_d = []
         cum = 0.0
         for L in self.sector_lengths:
             self._sector_lefts_d.append(cum)
             cum += L
+            self._sector_rights_d.append(cum)
         # pixel allocation: total px = |r1 - r0|; reserve (n-1)*gap_px,
         # split the remainder proportionally to sector_lengths.
         total_px = float(r1 - r0)
@@ -113,6 +118,10 @@ class _SectoredLinearScale:
         if data_px < 0:
             # Pathological: pixel range can't hold the requested gaps.
             # Fall back to plain proportional with no gap to avoid div/0.
+            warnings.warn(
+                f"sector gaps ({max(0, n - 1)} x {self.gap_px:g}px) exceed "
+                f"the {abs(total_px):g}px axis range; rendering without gaps"
+            )
             data_px = abs(total_px)
             self.gap_px = 0.0
         self._sector_lefts_px = []
@@ -137,12 +146,9 @@ class _SectoredLinearScale:
         if isinstance(v, SectoredValue):
             idx = v.sector_idx
         else:
-            idx = n - 1
-            for i in range(n):
-                right = self._sector_lefts_d[i] + self.sector_lengths[i]
-                if v <= right:
-                    idx = i
-                    break
+            # First sector whose right edge >= v (rights are ascending);
+            # past-the-end extrapolates from the last sector.
+            idx = min(bisect.bisect_left(self._sector_rights_d, v), n - 1)
         L_i = self.sector_lengths[idx]
         frac = ((v - self._sector_lefts_d[idx]) / L_i) if L_i > 0 else 0.0
         return self._sector_lefts_px[idx] + frac * self._sector_widths_px[idx]
