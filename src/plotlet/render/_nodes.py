@@ -229,11 +229,12 @@ def hydrate(ir):
 # Layout state methods must either be listed here (with a dispatch arm
 # in the loop below) or in `_LAYOUT_PASSTHROUGH` (consumed elsewhere —
 # `sectors` by the `_ancestor_calls` cascade at replay time, `title` by
-# the band emit in the layout engine / coord `render_layout`).
+# the band emit in the layout engine / coord `render_layout`, `heights`
+# by the container coord's `render_layout` band split).
 _LAYOUT_MATERIALIZED = frozenset({
     "share_x", "share_y", "coordinate", "gap", "align_x", "align_y",
 })
-_LAYOUT_PASSTHROUGH = frozenset({"sectors", "title"})
+_LAYOUT_PASSTHROUGH = frozenset({"sectors", "title", "heights"})
 
 
 def _walk_tree(root):

@@ -939,6 +939,24 @@ class Layout(_Renderable):
         self._calls.append(("align_y", [mode], {}))
         return self
 
+    def heights(self, weights) -> "Layout":
+        """Relative thickness of each child's band when this stack
+        renders under a container coordinate — e.g.
+        ``(sc / hm).coordinate(pt.CircularCoordinate()).heights([1, 2])``
+        gives the heatmap ring twice the scatter ring's radial depth.
+        One weight per leaf, outermost first; unset means equal bands.
+        Weights are dimensionless ratios (matplotlib's
+        ``height_ratios``); the absolute size comes from the coord
+        (``data_diameter``). Inert in a plain rectangular layout, where
+        each panel's own ``data_height`` sizes it bottom-up."""
+        vals = [float(v) for v in weights]
+        if not vals or any(v <= 0 for v in vals):
+            raise ValueError(
+                "Layout.heights(): pass one positive weight per ring, "
+                f"got {weights!r}")
+        self._calls.append(("heights", [vals], {}))
+        return self
+
     def gap(self, value: int | float | None = None, *,
             x: int | float | None = None,
             y: int | float | None = None) -> "Layout":

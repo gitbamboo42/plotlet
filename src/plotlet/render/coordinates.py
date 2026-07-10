@@ -120,9 +120,10 @@ def _circular_chrome_pad(st, dw) -> float:
 
     Mirrors the stacking logic in ``emit_chrome`` / ``draw_x_sector_chrome``
     but works from the chart state dict (available after ``_build_panel_opts``)
-    rather than from a live scale.  ``dw`` is the leaf's data width, used to
-    resolve the real tick labels. Used by ``render_layout`` to shrink the
-    ring just enough that labels don't get clipped by the viewBox.
+    rather than from a live scale.  ``dw`` is the t-axis pixel span (the
+    panel width auto ticks resolve against), used to resolve the real tick
+    labels. Used by ``render_layout`` to grow the canvas outward around
+    the data annulus so labels don't get clipped by the viewBox.
 
     Returns 0 when no chrome is drawn outside the ring.
     """
@@ -182,19 +183,24 @@ class CircularCoordinate:
 
     Parameters
     ----------
+    data_diameter : float or None, default None
+        Outer diameter of the data annulus in pixels — the circular
+        counterpart of a Cartesian chart's ``data_width``/``data_height``.
+        The set diameter is exactly what renders: chrome (tick labels,
+        sector labels) grows the canvas outward around it, the same way
+        Cartesian margins grow around the data rectangle. ``None`` takes
+        the ``size.data_diameter`` spec default. Chart-level
+        ``data_width``/``data_height`` play no role under this coord.
     r_inner : float, default 0.30
-        Where the chart's ``r=0`` lands, as a fraction of the canvas
-        outer radius. With ``r_outer=1.0`` (default) this is the ring's
-        inner edge; for nested rings, set ``r_inner`` / ``r_outer``
-        per chart to claim a sub-band of the canvas annulus.
+        Where the chart's ``r=0`` lands, as a fraction of the data
+        radius (``data_diameter / 2``). With ``r_outer=1.0`` (default)
+        this is the ring's inner edge; for nested rings, set ``r_inner``
+        / ``r_outer`` per chart to claim a sub-band of the annulus.
     r_outer : float, default 1.0
-        Where the chart's ``r=1`` lands, as a fraction of the canvas
-        outer radius. Combine with ``r_inner`` to nest multiple rings
+        Where the chart's ``r=1`` lands, as a fraction of the data
+        radius. Combine with ``r_inner`` to nest multiple rings
         inside one canvas (e.g. ``r_inner=0.5, r_outer=0.75`` for a
         middle band).
-    gap : float, default 0.05
-        Padding between outer ring edge and canvas edge, as a fraction
-        of half the canvas size.
     wrap_gap_deg : float or None, default None
         Angular gap (in degrees) at the 12 o'clock wrap-around boundary.
         ``None`` (default) auto-derives the angle from the x-sector gap so
@@ -224,13 +230,14 @@ class CircularCoordinate:
         ``c.sectors(...)`` on the inner chart explicitly to opt out).
     """
 
-    def __init__(self, r_inner: float = 0.30, r_outer: float = 1.0,
-                 gap: float = 0.05, wrap_gap_deg=None,
+    def __init__(self, data_diameter=None,
+                 r_inner: float = 0.30, r_outer: float = 1.0,
+                 wrap_gap_deg=None,
                  inner=None,
                  start_deg: float = 0.0, end_deg: float = 360.0):
+        self.data_diameter = data_diameter
         self.r_inner      = r_inner
         self.r_outer      = r_outer
-        self.gap          = gap
         self.wrap_gap_deg = wrap_gap_deg
         self.inner        = inner
         self.start_deg    = start_deg
@@ -241,16 +248,17 @@ class CircularCoordinate:
     def _to_dict(self) -> dict:
         # `inner` may be a Chart — encoded as a $ref by the serializer's
         # recursive value walker, not flattened here.
-        return {"r_inner": self.r_inner, "r_outer": self.r_outer,
-                "gap": self.gap, "wrap_gap_deg": self.wrap_gap_deg,
+        return {"data_diameter": self.data_diameter,
+                "r_inner": self.r_inner, "r_outer": self.r_outer,
+                "wrap_gap_deg": self.wrap_gap_deg,
                 "inner": self.inner,
                 "start_deg": self.start_deg, "end_deg": self.end_deg}
 
     @classmethod
     def _from_dict(cls, d: dict) -> "CircularCoordinate":
-        return cls(r_inner=d.get("r_inner", 0.30),
+        return cls(data_diameter=d.get("data_diameter"),
+                   r_inner=d.get("r_inner", 0.30),
                    r_outer=d.get("r_outer", 1.0),
-                   gap=d.get("gap", 0.05),
                    wrap_gap_deg=d.get("wrap_gap_deg"),
                    inner=d.get("inner"),
                    start_deg=d.get("start_deg", 0.0),
@@ -280,7 +288,7 @@ class CircularCoordinate:
 
     def __call__(self, artist: dict, iw: float, ih: float):
         cx, cy, r_hi_px, r_lo_px = _cc.geometry(
-            self.r_inner, self.gap, iw, ih, self.r_outer)
+            self.r_inner, self.data_diameter, iw, ih, self.r_outer)
         start_rad = self._start_rad
         end_rad   = self._end_rad
 
@@ -295,35 +303,77 @@ class CircularCoordinate:
     # Bodies live there so this module stays focused on the protocol +
     # small affine implementations.
 
-    def derive_leaf_coords(self, leaves) -> list:
+    def derive_leaf_coords(self, leaves, heights=None) -> list:
         """`Layout.coordinate(...)` overlay hook: produce a per-leaf
-        coord that claims a sub-band of this annulus proportional to
-        each leaf's ``data_height``. First leaf gets the outermost
-        band; later leaves nest inward. Inherits this coord's ``gap``,
-        ``wrap_gap_deg``, and arc range (``start_deg`` / ``end_deg``)."""
+        coord that claims a sub-band of this annulus. Band thickness is
+        proportional to ``heights`` (the layout's ``.heights([...])``
+        weights; equal split when None). First leaf gets the outermost
+        band; later leaves nest inward. Inherits this coord's
+        ``data_diameter``, ``wrap_gap_deg``, and arc range
+        (``start_deg`` / ``end_deg``)."""
         c_lo, c_hi = self.r_inner, self.r_outer
         span = c_hi - c_lo
-        total_h = sum(leaf._data_height for leaf in leaves) or 1.0
+        weights = (list(heights) if heights is not None
+                   else [1.0] * len(leaves))
+        total = sum(weights) or 1.0
         cum = 0.0
         result = []
-        for leaf in leaves:
-            prop = leaf._data_height / total_h
+        for w in weights:
+            prop = w / total
             r_hi = c_hi - cum
             r_lo = r_hi - prop * span
             cum += prop * span
             result.append(CircularCoordinate(
+                data_diameter=self.data_diameter,
                 r_inner=r_lo, r_outer=r_hi,
-                gap=self.gap, wrap_gap_deg=self.wrap_gap_deg,
+                wrap_gap_deg=self.wrap_gap_deg,
                 start_deg=self.start_deg, end_deg=self.end_deg,
             ))
         return result
+
+    def _resolved_diameter(self) -> float:
+        from .._spec import SPEC
+        return (self.data_diameter if self.data_diameter is not None
+                else SPEC["size"]["data_diameter"])
+
+    def _canvas_metrics(self, root, leaves):
+        """Resolve ``(D, W, probe_states)`` — the data diameter, the
+        square canvas edge (D + outward chrome on both sides), and the
+        panel-state probe reused by ``render_layout``. Chrome pad is a
+        fixpoint: auto-tick density reads the t-axis pixel span (= W),
+        which itself depends on the pad. Tick count is monotone in the
+        span and capped, so this settles in one or two rounds."""
+        from ._layout_engine import _build_panel_opts
+        D = self._resolved_diameter()
+        _, probe_states = _build_panel_opts(root)
+        st = probe_states[id(leaves[0])]
+        pad = _circular_chrome_pad(st, D)
+        for _ in range(4):
+            W = int(math.ceil(D + 2 * pad))
+            pad2 = _circular_chrome_pad(st, W)
+            if pad2 == pad:
+                break
+            pad = pad2
+        W = int(math.ceil(D + 2 * pad))
+        return D, W, probe_states
+
+    def layout_size(self, root) -> tuple[int, int]:
+        """The (W, H) this coord's `render_layout` will claim — consulted
+        by `_atomic_size` so a ring embedded in a parent rect layout packs
+        at its true footprint."""
+        from ._layout_engine import _title_band_h
+        leaves = list(root._iter_leaves())
+        if not leaves:
+            return 0, 0
+        _, W, _ = self._canvas_metrics(root, leaves)
+        return W, W + _title_band_h(root)
 
     def clip_path_d(self, iw: float, ih: float) -> str:
         # Clip to *this* chart's r-band [r_inner, r_outer] — not the full
         # canvas annulus. Otherwise nested rings can't constrain data to
         # their own band and overflow into the bands of other rings.
-        cx, cy, R, ri = _cc.geometry(self.r_inner, self.gap, iw, ih,
-                                     self.r_outer)
+        cx, cy, R, ri = _cc.geometry(self.r_inner, self.data_diameter,
+                                     iw, ih, self.r_outer)
         return _cc.clip_path_d(cx, cy, R, ri)
 
     def render_layout(self, root) -> tuple[int, int, str]:
@@ -354,33 +404,18 @@ class CircularCoordinate:
         leaves = list(root._iter_leaves())
         if not leaves:
             raise ValueError("Layout.coordinate(): no leaf charts to render")
-        W = max(leaf._data_width  for leaf in leaves)
-        H = max(leaf._data_height for leaf in leaves)
+        # The data annulus is exactly `data_diameter` across; chrome (tick
+        # labels, sector labels) grows the canvas outward around it — the
+        # circular counterpart of Cartesian margins around the data rect.
+        # The probe runs with full layout context so layout-level
+        # .sectors() propagates into the chrome measurement.
+        D, W, _probe_states = self._canvas_metrics(root, leaves)
+        H = W
         # Layout-level title: one band above the overlay canvas —
         # `_atomic_size` claims the same extra height for parent
-        # placement. Leaf bodies (and their recorded regions) shift
-        # down by the band.
+        # placement (via `layout_size`). Leaf bodies (and their recorded
+        # regions) shift down by the band.
         band = _title_band_h(root)
-
-        # Probe the outermost leaf's state (with full layout context so
-        # layout-level .sectors() propagates) to compute required chrome.
-        # chrome_pad is independent of R, so the probe can run before the
-        # geometry is finalised.
-        _, _probe_states = _build_panel_opts(root)
-        chrome_pad = _circular_chrome_pad(_probe_states[id(leaves[0])],
-                                          leaves[0]._data_width)
-
-        # Compute an effective gap that shrinks R just enough for chrome to
-        # fit within the original W×H canvas.  This keeps the size consistent
-        # with _atomic_size (which also returns W×H) so adjacent panels in a
-        # parent layout don't overlap.
-        _half = min(W, H) / 2.0
-        available = _half * (1.0 - (1.0 - self.gap) * self.r_outer)
-        if chrome_pad > available and _half * self.r_outer > 0:
-            effective_gap = 1.0 - (_half - chrome_pad) / (_half * self.r_outer)
-            effective_gap = min(max(effective_gap, self.gap), 0.99)
-        else:
-            effective_gap = self.gap
 
         # Resolve wrap_gap_deg=None → match the inter-sector gap visually.
         # The t-axis spans W pixels; a sector gap of gap_px pixels occupies
@@ -393,11 +428,23 @@ class CircularCoordinate:
         else:
             resolved_wrap_gap_deg = self.wrap_gap_deg
 
+        # Radial band split: the layout's `.heights([...])` weights;
+        # equal bands when unset.
+        heights = None
+        for _c in root._calls:
+            if _c[0] == "heights":
+                heights = _c[1][0]
+        if heights is not None and len(heights) != len(leaves):
+            raise ValueError(
+                f"Layout.heights(): {len(heights)} weights for "
+                f"{len(leaves)} rings")
+
         leaf_coords = CircularCoordinate(
+            data_diameter=D,
             r_inner=self.r_inner, r_outer=self.r_outer,
-            gap=effective_gap, wrap_gap_deg=resolved_wrap_gap_deg,
+            wrap_gap_deg=resolved_wrap_gap_deg,
             start_deg=self.start_deg, end_deg=self.end_deg,
-        ).derive_leaf_coords(leaves)
+        ).derive_leaf_coords(leaves, heights)
 
         def _render_leaf(leaf, coord, *, is_outermost=False, prepend=()):
             # `prepend` carries inherited entries (today: dampened sectors
@@ -410,9 +457,17 @@ class CircularCoordinate:
             if n_prepend:
                 leaf._calls[:0] = list(prepend)
             n0 = len(leaf._calls)
-            has_own_coord = any(c[0] == "coordinate" for c in leaf._calls)
-            if not has_own_coord:
+            own = next((c for c in leaf._calls if c[0] == "coordinate"),
+                       None)
+            if own is None:
                 leaf._calls.append(("coordinate", [coord], {}))
+            elif (isinstance(own[1][0], CircularCoordinate)
+                    and own[1][0].data_diameter is None):
+                # A leaf-declared coord shares this canvas — bake the
+                # resolved diameter in so its geometry matches the
+                # sibling bands (idempotent; leaves are rebuilt fresh
+                # per render).
+                own[1][0].data_diameter = D
             # title / x|y label are layout-level — suppress per leaf so
             # they don't stack. Spines flow through to draw_frame so
             # top/bottom drive the outer/inner arcs.
@@ -442,7 +497,8 @@ class CircularCoordinate:
             leaf._canvas_width  = W
             leaf._canvas_height = H
             # Circular chrome places labels at angular positions inside
-            # the gap zone — no Cartesian margin band needed. Zero margin
+            # the outward chrome pad — no Cartesian margin band needed.
+            # Zero margin
             # + a fresh `_build_panel_opts` bypasses margin recomputation,
             # avoiding a translate(N,0) offset that would misalign this
             # leaf with others rendered onto the same canvas.
@@ -498,8 +554,9 @@ class CircularCoordinate:
                 _kw["label"]   = False
                 inner_prepend.append(("sectors", list(_outer[1]), _kw))
             inner_coord = CircularCoordinate(
+                data_diameter=D,
                 r_inner=0.0, r_outer=self.r_inner,
-                gap=effective_gap, wrap_gap_deg=resolved_wrap_gap_deg,
+                wrap_gap_deg=resolved_wrap_gap_deg,
                 start_deg=self.start_deg, end_deg=self.end_deg,
             )
             bodies.append(_render_leaf(self.inner, inner_coord,
@@ -513,14 +570,15 @@ class CircularCoordinate:
 
     def draw_frame(self, project, iw, ih, y_ticks_r, y_labels, frame_opts) -> str:
         return _cc.draw_y_chrome(
-            *_cc.geometry(self.r_inner, self.gap, iw, ih, self.r_outer),
+            *_cc.geometry(self.r_inner, self.data_diameter, iw, ih,
+                          self.r_outer),
             self._start_rad, self._end_rad, self._is_full_ring,
             y_ticks_r, y_labels, frame_opts,
         )
 
     def draw_x_frame(self, project, iw, ih, x_ticks_t, x_labels, frame_opts) -> str:
-        cx, cy, R, _ri = _cc.geometry(self.r_inner, self.gap, iw, ih,
-                                      self.r_outer)
+        cx, cy, R, _ri = _cc.geometry(self.r_inner, self.data_diameter,
+                                      iw, ih, self.r_outer)
         return _cc.draw_x_chrome(cx, cy, R,
                                  self._start_rad, self._end_rad,
                                  x_ticks_t, x_labels, frame_opts)
@@ -528,7 +586,8 @@ class CircularCoordinate:
     def draw_x_sector_chrome(self, project, iw, ih,
                              sector_ts, label_ts, names, sec_opts) -> str:
         return _cc.draw_x_sector_chrome(
-            *_cc.geometry(self.r_inner, self.gap, iw, ih, self.r_outer),
+            *_cc.geometry(self.r_inner, self.data_diameter, iw, ih,
+                          self.r_outer),
             self._start_rad, self._end_rad, self._is_full_ring,
             sector_ts, label_ts, names, sec_opts,
         )

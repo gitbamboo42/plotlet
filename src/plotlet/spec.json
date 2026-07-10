@@ -3,6 +3,7 @@
   "size": {
     "data_width": 524,
     "data_height": 322,
+    "data_diameter": 320,
     "margin_floor": {"top": 0, "right": 0, "bottom": 0, "left": 0},
     "outer_margin": {"top": 4, "right": 4, "bottom": 4, "left": 4}
   },

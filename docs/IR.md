@@ -50,10 +50,12 @@ from the root, so two IRs of the same figure list nodes identically.
 ## Node kinds and init keys
 
 **`chart`** — data leaf. All keys optional; missing keys take spec
-defaults. `data_width`, `data_height` (px or unit strings), `margin`
-(dict with `left/right/top/bottom`), plus recorder-only state the
-render half ignores: `data` and chart-level aes (`x`, `y`, `color`,
-`palette`, ...) — those are already baked into the ops at record time.
+defaults. `data_width`, `data_height` (px or unit strings; unread under
+a container coord, which sizes from its own geometry — e.g.
+`CircularCoordinate.data_diameter`), `margin` (dict with
+`left/right/top/bottom`), plus recorder-only state the render half
+ignores: `data` and chart-level aes (`x`, `y`, `color`, `palette`, ...)
+— those are already baked into the ops at record time.
 
 **`legend`** — standalone legend leaf. Required: `canvas_width`,
 `canvas_height` (the canvas is the dimensional primitive; data dims are

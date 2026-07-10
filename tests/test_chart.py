@@ -1968,8 +1968,10 @@ def chart_circular_overlay():
 
     Three single-artist charts stacked with `/`. Under a CircularCoordinate
     container, `/` means "overlay each leaf into its own concentric band"
-    (not vertical stack). Auto-tiles the r-bands by `data_height`. The
-    per-band clip stops each ring's data from bleeding into neighbours.
+    (not vertical stack) — equal bands by default, `.heights([...])` to
+    weight them. The explicit `data_diameter` sizes the data annulus
+    exactly (non-default, exercising the knob). The per-band clip stops
+    each ring's data from bleeding into neighbours.
     """
     import math
     ts = [i / 60 for i in range(61)]
@@ -1977,27 +1979,22 @@ def chart_circular_overlay():
     bar_xs = [(i + 0.5) / 20 for i in range(20)]
     bar_ys = [0.2 + 0.6 * abs(math.cos(math.pi * x)) for x in bar_xs]
 
-    W = H = 240
-
-    outer = pt.chart(xlim=(0, 1), ylim=(0, 1),
-                     data_width=W, data_height=H)
+    outer = pt.chart(xlim=(0, 1), ylim=(0, 1))
     outer.line(data={"x": ts, "y": sine}, x="x", y="y",
                color="C0", width=1.5)
 
-    middle = pt.chart(xlim=(0, 1), ylim=(0, 1),
-                      data_width=W, data_height=H)
+    middle = pt.chart(xlim=(0, 1), ylim=(0, 1))
     middle.fill_between(data={"x": ts, "lo": [v - 0.1 for v in sine],
                               "hi": [v + 0.1 for v in sine]},
                         x="x", y1="lo", y2="hi",
                         fill="C2", alpha=0.3)
 
-    inner = pt.chart(xlim=(0, 1), ylim=(0, 1),
-                     data_width=W, data_height=H)
+    inner = pt.chart(xlim=(0, 1), ylim=(0, 1))
     inner.scatter(data={"x": ts, "y": sine}, x="x", y="y",
                   color="C3", size=2.5, alpha=0.7)
 
     return (outer / middle / inner).coordinate(
-        pt.CircularCoordinate(r_inner=0.20)
+        pt.CircularCoordinate(data_diameter=240, r_inner=0.20)
     )
 
 

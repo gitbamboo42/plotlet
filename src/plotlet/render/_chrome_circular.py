@@ -21,16 +21,22 @@ from ..draw import cap_height, descender, circle, coord, measure_text, path, seg
 # Geometry
 # ---------------------------------------------------------------------------
 
-def geometry(r_inner: float, gap: float, iw: float, ih: float,
+def geometry(r_inner: float, data_diameter, iw: float, ih: float,
              r_outer: float = 1.0):
-    """Compute ``(cx, cy, R, ri)`` for a ring inscribed in ``iw × ih``.
+    """Compute ``(cx, cy, R, ri)`` for a ring of ``data_diameter`` pixels
+    centered in ``iw × ih``.
 
-    ``R`` is the outer radius, ``ri`` the inner radius; both are gap-shrunk
-    from the canvas half-extent and scaled by ``r_outer`` / ``r_inner`` so
+    ``R`` is the outer radius, ``ri`` the inner radius; both are exact
+    fractions (``r_outer`` / ``r_inner``) of ``data_diameter / 2`` so
     nested charts (one ring in the outer band, chords in the inner disc)
-    each get a band that matches their artist projection.
+    each get a band that matches their artist projection. The canvas is
+    sized by the caller (``render_layout``) as data_diameter + chrome, so
+    the set diameter *is* the rendered data region — chrome grows the
+    canvas outward instead of shrinking the ring. ``data_diameter=None``
+    falls back to filling the canvas (``min(iw, ih)``).
     """
-    R_full = min(iw, ih) / 2 * (1.0 - gap)
+    R_full = (data_diameter if data_diameter is not None
+              else min(iw, ih)) / 2.0
     R  = R_full * r_outer
     ri = R_full * r_inner
     cx, cy = iw / 2, ih / 2

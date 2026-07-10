@@ -47,15 +47,24 @@ polar disc.
 
 ```python
 c.coordinate(pt.CircularCoordinate(
-    r_inner=0.3,        # where r=0 lands (fraction of canvas)
+    data_diameter=None, # outer diameter of the data annulus, px (spec default)
+    r_inner=0.3,        # where r=0 lands (fraction of the data radius)
     r_outer=1.0,        # where r=1 lands (use < 1 for nested rings)
-    gap=0.05,           # padding between outer ring and canvas edge
     wrap_gap_deg=None,  # angular gap at 12 o'clock; auto-derives
     inner=None,         # optional inner-disc Chart (chord artists)
     start_deg=0,        # t=0 angle (clockwise from 12 o'clock)
     end_deg=360,        # t=1 angle; pair with start_deg for a partial arc
 ))
 ```
+
+**Sizing.** `data_diameter` is the circular counterpart of a Cartesian
+chart's `data_width`/`data_height`: it sizes the data region itself, and
+chrome (tick labels, sector labels, the title band) grows the canvas
+outward around it — the set diameter is exactly what renders. Chart-level
+`data_width`/`data_height` play no role under this coord. In a multi-ring
+pile (`(a / b).coordinate(...)`) the annulus splits into one concentric
+band per chart — equal thickness by default, weighted with
+`.heights([...])` on the stack (outermost first, dimensionless ratios).
 
 **Partial arc.** `start_deg` and `end_deg` carve out a sub-arc instead of
 a closed ring — `start_deg=90, end_deg=360` sweeps 270° from 3 o'clock

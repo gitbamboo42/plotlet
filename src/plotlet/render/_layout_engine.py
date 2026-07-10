@@ -316,12 +316,15 @@ def _is_atomic(node) -> bool:
 
 def _atomic_size(node) -> tuple[int, int]:
     """Canvas size for an atomic node. Leaves use their declared
-    `_canvas_*`; coord-bearing Layouts match the (W, H) their coord's
-    `render_layout` will claim — max of inner data-leaf dims plus the
-    title band, the same formula CircularCoordinate uses for its
-    overlay canvas."""
+    `_canvas_*`; coord-bearing Layouts ask the coord (`layout_size`)
+    for the (W, H) its `render_layout` will claim, so the parent packs
+    the true footprint. Coords without the hook fall back to the
+    max-of-leaf-dims formula."""
     if not node._is_parent:
         return _leaf_rect_size(node)
+    coord = getattr(node, "_coordinate", None)
+    if coord is not None and hasattr(coord, "layout_size"):
+        return coord.layout_size(node)
     leaves = [l for l in node._iter_leaves() if l._leaf_kind == "data"]
     if not leaves:
         return 0, 0
