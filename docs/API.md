@@ -270,7 +270,7 @@ universal and not repeated.
 
 | call | options |
 | --- | --- |
-| `.bar(x=, y=, fill=, position=, **opts)` | `color` (stroke), `palette`, `position="stack"\|"dodge"\|"fill"` for multi-series, `orientation`, `bottom`, `width`, `gap` |
+| `.bar(x=, y=, fill=, position=, **opts)` | `color` (stroke), `palette`, `position="stack"\|"dodge"\|"fill"` for multi-series, `orientation`, `bottom`, `width`, `gap`; `yerr=`/`xerr=` (same specs as errorbar) draw whiskers at bar/slot centers with `ecolor`, `capsize` — defaults `position` to `"dodge"` and requires one row per (category, group) |
 | `.area(x=, y=, fill=, **opts)` | multi-series stacks when given a list-of-series or `fill=<col>`; `palette`, `base`, `curve`, `alpha` |
 | `.fill_between(x=, y1=, y2=, **opts)` | `color`, `alpha`, `curve`, `label` |
 | `.errorbar(x=, y=, yerr=, xerr=, **opts)` | scalar, sequence, or `(lower, upper)` tuple for asymmetric bars |

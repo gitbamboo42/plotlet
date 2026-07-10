@@ -5,14 +5,25 @@
   c.bar(data=df, x="cat", y="val", fill="series", position="stack") # grouped
   c.bar(data=df, x="cat", y="val", fill="series", position="dodge")
   c.bar(data=df, x="cat", y="val", fill="series", position="fill")  # 100% stack
+  c.bar(data=df, x="cat", y="mean", fill="series", yerr="sd")       # mean±err
 
 `position` defaults to `"stack"` whenever `fill=` is a column with more
-than one unique value. Duplicate (cat, group) rows are summed.
+than one unique value — except with `yerr=`/`xerr=`, which default to
+`"dodge"` (error bars aren't defined for stacked bars). Duplicate
+(cat, group) rows are summed; with error bars they raise instead, since
+offsets don't aggregate the way sums do.
 
 Aesthetics:
   fill=         literal color OR column name → grouped multi-series
   color=        stroke color (constant, default None = no stroke)
   palette=      maps group levels → colors when `fill=` is a column
+
+Error bars (same specs as the errorbar artist — column name, scalar, or
+a (lower, upper) tuple of either):
+  yerr=         value-axis error for vertical bars
+  xerr=         value-axis error for horizontal bars (orientation='h')
+  ecolor=<themed>     whisker color
+  capsize=<themed>    whisker cap width (px)
 
 Other styling kwargs:
   orientation='v'     'h' for horizontal bars
@@ -28,6 +39,8 @@ from ..utils import to_list, resolve_aes, palette_color, dodge_positions
 from ..draw import TAB10, resolve_color
 from .._spec import _D, _LEGSPEC
 from ..draw import rect as draw_rect
+from ..draw import errorbar_v, errorbar_h
+from .errorbar import _resolve_err
 
 
 _POSITIONS = ("stack", "dodge", "fill")
@@ -51,6 +64,31 @@ def _aggregate_long(data, x_col, y_col, group_col):
     for x, y, g in zip(xs, ys, gs):
         series[group_idx[g]][cat_idx[x]] += y
     return cats, groups, series
+
+
+def _aggregate_err(data, x_col, group_col, err, cats, groups):
+    """Row-level error spec → per-(group, cat) offset grids shaped like
+    `series`. Requires at most one row per cell — duplicate rows sum their
+    y values, and offsets have no matching aggregation."""
+    xs = to_list(data[x_col])
+    gs = to_list(data[group_col]) if group_col is not None else [None] * len(xs)
+    lo, hi = _resolve_err(data, err, len(xs))
+    cat_idx = {c: i for i, c in enumerate(cats)}
+    group_idx = {g: j for j, g in enumerate(groups)}
+    err_lo = [[0.0] * len(cats) for _ in groups]
+    err_hi = [[0.0] * len(cats) for _ in groups]
+    seen = set()
+    for x, g, l, h in zip(xs, gs, lo, hi):
+        cell = (group_idx[g], cat_idx[x])
+        if cell in seen:
+            raise ValueError(
+                "bar: yerr/xerr requires one row per (category, group) — "
+                "pre-aggregate the table."
+            )
+        seen.add(cell)
+        err_lo[cell[0]][cell[1]] = l
+        err_hi[cell[0]][cell[1]] = h
+    return err_lo, err_hi
 
 
 def _bar_record(args, kw):
@@ -83,13 +121,35 @@ def _bar_record(args, kw):
             "bar: bottom= must be a scalar baseline; for grouped bars "
             "pass fill='series_col' with position='stack'."
         )
-    position = kw.pop("position", "stack" if len(series) > 1 else None)
+    yerr = kw.pop("yerr", None)
+    xerr = kw.pop("xerr", None)
+    horizontal = kw.get("orientation") == "h"
+    if yerr is not None and horizontal:
+        raise TypeError("bar: horizontal bars take xerr= (the value axis is x).")
+    if xerr is not None and not horizontal:
+        raise TypeError("bar: vertical bars take yerr= (the value axis is y).")
+    err = xerr if horizontal else yerr
+
+    if len(series) == 1:
+        default_pos = None
+    else:
+        default_pos = "dodge" if err is not None else "stack"
+    position = kw.pop("position", default_pos)
     if position is not None and position not in _POSITIONS:
         raise ValueError(
             f"unknown position={position!r}; expected one of {_POSITIONS}."
         )
-    return {"type": "bar", "cats": cats, "groups": groups, "series": series,
-            "_position": position, "opts": kw}
+    rec = {"type": "bar", "cats": cats, "groups": groups, "series": series,
+           "_position": position, "opts": kw}
+    if err is not None:
+        if position in ("stack", "fill"):
+            raise ValueError(
+                f"bar: yerr/xerr isn't defined for position={position!r} — "
+                f"use position='dodge'."
+            )
+        rec["err_lo"], rec["err_hi"] = _aggregate_err(
+            data, x_col, group_col, err, cats, groups)
+    return rec
 
 
 def _bar_horizontal(a): return a["opts"].get("orientation") == "h"
@@ -106,6 +166,11 @@ def _bar_vals_for_domain(a):
         sums = [sum(s[i] for s in series) for i in range(len(a["cats"]))]
         return sums + [0]
     flat = [v for s in series for v in s]
+    if a.get("err_lo") is not None:
+        flat += [v - lo for s, slo in zip(series, a["err_lo"])
+                 for v, lo in zip(s, slo)]
+        flat += [v + hi for s, shi in zip(series, a["err_hi"])
+                 for v, hi in zip(s, shi)]
     return flat + [0, bottom]
 
 
@@ -169,11 +234,30 @@ def _bar_draw(a, ctx):
         totals = [sum(s[i] for s in series) or 1 for i in range(len(cats))]
         series = [[s[i] / totals[i] for i in range(len(cats))] for s in series]
 
+    err_lo, err_hi = a.get("err_lo"), a.get("err_hi")
+    ecolor = resolve_color(opts.get("ecolor", _D["bar_ecolor"]))
+    capsize = opts.get("capsize", _D["errorbar_capsize"])
+    elw = _D["errorbar_linewidth"]
+
     out = []
     def _emit(x, y, w, h, col):
         out.append(draw_rect(x, y, w, h, fill=col, stroke=stroke,
                              stroke_width=lw, dash=opts.get("linestyle"),
                              alpha=alpha, shape_rendering=sr, project=ctx.warp))
+
+    def _emit_err(cat_px, j, i, v):
+        if err_lo is None:
+            return
+        lo, hi = err_lo[j][i], err_hi[j][i]
+        if not (lo or hi):
+            return
+        p0, p1 = val_scale(v - lo), val_scale(v + hi)
+        if horizontal:
+            out.append(errorbar_h(cat_px, p0, p1, capsize=capsize,
+                                  color=ecolor, width=elw, project=ctx.warp))
+        else:
+            out.append(errorbar_v(cat_px, p0, p1, capsize=capsize,
+                                  color=ecolor, width=elw, project=ctx.warp))
 
     if multi and position in ("stack", "fill"):
         running = [0.0] * len(cats)
@@ -208,15 +292,17 @@ def _bar_draw(a, ctx):
                 else:
                     _emit(cp - slot_w / 2, min(base_px, vp),
                           slot_w, abs(vp - base_px), col)
+                _emit_err(cp, j, i, v)
     else:
         col = fill_fallback
-        for cat, v in zip(cats, series[0]):
+        for i, (cat, v) in enumerate(zip(cats, series[0])):
             cp = cat_scale(cat) - band / 2
             vp = val_scale(v)
             if horizontal:
                 _emit(min(base_px, vp), cp, abs(vp - base_px), band, col)
             else:
                 _emit(cp, min(base_px, vp), band, abs(vp - base_px), col)
+            _emit_err(cat_scale(cat), 0, i, v)
 
     return "".join(out)
 

@@ -81,6 +81,7 @@
     "text_size": 13,
     "errorbar_linewidth": 1.6,
     "errorbar_capsize": 5,
+    "bar_ecolor": "#222222",
     "text_bbox": {
       "facecolor": "#ffffff",
       "edgecolor": "none",

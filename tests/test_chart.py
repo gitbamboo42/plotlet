@@ -1782,6 +1782,41 @@ def chart_bar_long_fill():
     return c
 
 
+def chart_bar_yerr():
+    # Ungrouped bars with asymmetric error bars (tuple-of-columns spec);
+    # whiskers sit at band centers.
+    df = {"cat": ["a", "b", "c", "d"], "mean": [4.2, 5.6, 3.1, 6.4],
+          "lo": [0.5, 1.1, 0.4, 0.9], "hi": [0.8, 0.6, 1.2, 0.5]}
+    c = pt.chart(data_width=300, data_height=200,
+                 title="bar ± yerr (asymmetric)", ylabel="mean")
+    c.bar(data=df, x="cat", y="mean", fill="C0", yerr=("lo", "hi"))
+    return c
+
+
+def chart_bar_dodge_yerr():
+    # The canonical grouped mean±err figure. position defaults to
+    # "dodge" when yerr= is given; whiskers share the dodge slot centers.
+    df = _bar_quarterly_df()
+    df["sd"] = [round(0.4 + 0.08 * v, 2) for v in df["value"]]
+    c = pt.chart(data_width=320, data_height=200,
+                 title="bar dodge ± yerr", ylabel="$M", legend=True)
+    c.bar(data=df, x="quarter", y="value", fill="series", yerr="sd")
+    c.legend()
+    return c
+
+
+def chart_bar_h_xerr():
+    # Horizontal bars take xerr= (the value axis is x); also exercises
+    # ecolor= and capsize= overrides.
+    df = {"cat": ["alpha", "beta", "gamma"], "mean": [4.2, 5.6, 3.1],
+          "err": [0.5, 1.1, 0.4]}
+    c = pt.chart(data_width=300, data_height=180,
+                 title="bar horizontal ± xerr", xlabel="mean")
+    c.bar(data=df, x="cat", y="mean", orientation="h", xerr="err",
+          ecolor="gray", capsize=3)
+    return c
+
+
 def chart_scatter_long_color():
     import pandas as pd
     rng = random.Random(17)
@@ -2149,6 +2184,9 @@ PLOTS = {
     "named_palette":         chart_named_palette,
     "bar_fill":              chart_bar_fill,
     "bar_long_fill":         chart_bar_long_fill,
+    "bar_yerr":              chart_bar_yerr,
+    "bar_dodge_yerr":        chart_bar_dodge_yerr,
+    "bar_h_xerr":            chart_bar_h_xerr,
     "area_stack":            chart_area_stack,
     "scatter_long_color":    chart_scatter_long_color,
     "density_1d_long_color": chart_density_1d_long_color,
@@ -2164,6 +2202,36 @@ PLOTS = {
 @pytest.mark.parametrize("name,fn", list(PLOTS.items()), ids=list(PLOTS.keys()))
 def test_chart_baseline(name, fn, baseline_compare):
     baseline_compare("chart", name, fn().to_svg())
+
+
+def test_bar_err_rejects_stack():
+    df = _bar_quarterly_df()
+    df["sd"] = [0.5] * len(df["value"])
+    c = pt.chart()
+    c.bar(data=df, x="quarter", y="value", fill="series", yerr="sd",
+          position="stack")
+    with pytest.raises(ValueError, match="position='dodge'"):
+        c.to_svg()
+
+
+def test_bar_err_rejects_duplicate_rows():
+    df = {"cat": ["a", "a"], "v": [1, 2], "sd": [0.1, 0.2]}
+    c = pt.chart()
+    c.bar(data=df, x="cat", y="v", yerr="sd")
+    with pytest.raises(ValueError, match="one row per"):
+        c.to_svg()
+
+
+def test_bar_err_matches_orientation():
+    df = {"cat": ["a", "b"], "v": [1, 2], "sd": [0.1, 0.2]}
+    c = pt.chart()
+    c.bar(data=df, x="cat", y="v", xerr="sd")
+    with pytest.raises(TypeError, match="yerr"):
+        c.to_svg()
+    c = pt.chart()
+    c.bar(data=df, x="cat", y="v", orientation="h", yerr="sd")
+    with pytest.raises(TypeError, match="xerr"):
+        c.to_svg()
 
 
 # ---------------------------------------------------------------------------
