@@ -1388,6 +1388,77 @@ def chart_facet_wrap_two_rows():
     return g
 
 
+def chart_facet_grid_two_factor():
+    # row= x col= grid: one grid row per sex, one column per stage, shared
+    # axes. The (F, mid) combination has no rows -> blank cell.
+    random.seed(13)
+    df = {"x": [], "y": [], "sex": [], "stage": []}
+    for sex in ("M", "F"):
+        for stage in ("early", "mid", "late"):
+            if sex == "F" and stage == "mid":
+                continue
+            for _ in range(18):
+                df["x"].append(random.gauss(0, 1) + (1.5 if sex == "F" else 0))
+                df["y"].append(random.gauss(0, 1) + (2 if stage == "late" else 0))
+                df["sex"].append(sex)
+                df["stage"].append(stage)
+    g = pt.facet(df, row="sex", col="stage",
+                 data_width=150, data_height=110,
+                 xlabel="x", ylabel="y")
+    g.scatter(x="x", y="y", size=2)
+    return g
+
+
+def chart_hist_stack():
+    rng = random.Random(21)
+    df = {
+        "value": ([rng.gauss(0, 1) for _ in range(600)]
+                  + [rng.gauss(1.8, 0.7) for _ in range(400)]),
+        "group": ["ctrl"] * 600 + ["treat"] * 400,
+    }
+    c = pt.chart(df, title="hist stacked", xlabel="value", ylabel="count",
+                 legend=True)
+    c.hist(x="value", fill="group", bins=24, position="stack")
+    return c
+
+
+def chart_hist_dodge():
+    rng = random.Random(21)
+    df = {
+        "value": ([rng.gauss(0, 1) for _ in range(600)]
+                  + [rng.gauss(1.8, 0.7) for _ in range(400)]),
+        "group": ["ctrl"] * 600 + ["treat"] * 400,
+    }
+    c = pt.chart(df, title="hist dodged", xlabel="value", ylabel="count",
+                 legend=True)
+    c.hist(x="value", fill="group", bins=12, position="dodge")
+    return c
+
+
+def chart_hist_binwidth_cumulative():
+    rng = random.Random(22)
+    df = {"v": [rng.gauss(0, 1) for _ in range(500)]}
+    c = pt.chart(df, title="hist binwidth= + cumulative CDF",
+                 xlabel="v", ylabel="cdf")
+    c.hist(x="v", binwidth=0.25, binrange=(-3, 3),
+           cumulative=True, density=True, fill="C0")
+    return c
+
+
+def chart_aspect_equal():
+    # Data-space aspect lock: the ring reads as a circle because one
+    # x unit and one y unit render the same pixel length (the requested
+    # data_height is rederived from the resolved domains).
+    angles = [i * math.pi / 36 for i in range(72)]
+    df = {"x": [3 * math.cos(a) for a in angles],
+          "y": [3 * math.sin(a) for a in angles]}
+    c = pt.chart(df, title="aspect('equal') — circles stay circular",
+                 data_width=320, data_height=200, xlabel="x", ylabel="y")
+    c.scatter(x="x", y="y", size=2)
+    c.aspect("equal")
+    return c
+
+
 def chart_scatter_size():
     # size= maps a numeric column to per-point area.
     random.seed(1)
@@ -2174,6 +2245,11 @@ PLOTS = {
     "scatter_size_style_color": chart_scatter_size_style_color,
     "facet_scatter":       chart_facet_scatter,
     "facet_wrap_two_rows": chart_facet_wrap_two_rows,
+    "facet_grid_two_factor": chart_facet_grid_two_factor,
+    "hist_stack":          chart_hist_stack,
+    "hist_dodge":          chart_hist_dodge,
+    "hist_binwidth_cumulative": chart_hist_binwidth_cumulative,
+    "aspect_equal":        chart_aspect_equal,
     "symlog_x":            chart_symlog_x,
     "sqrt_y":              chart_sqrt_y,
     "reverse_y":           chart_reverse_y,
@@ -2277,6 +2353,214 @@ def test_bar_err_matches_orientation():
     c.bar(data=df, x="cat", y="v", orientation="h", yerr="sd")
     with pytest.raises(TypeError, match="xerr"):
         c.to_svg()
+
+
+# ---------------------------------------------------------------------------
+# hist binning vocabulary + position (no baselines)
+
+
+def test_hist_bin_helpers():
+    from plotlet.utils import hist_bin_edges, hist_bin_counts, hist_transform
+    assert hist_bin_edges([0, 10], bins=5) == [0, 2, 4, 6, 8, 10]
+    assert hist_bin_edges([0, 1], bins=[0, 1, 4]) == [0, 1, 4]
+    assert hist_bin_edges([0, 10], binwidth=2.5) == [0, 2.5, 5.0, 7.5, 10.0]
+    assert hist_bin_edges([-99, 99], bins=4, binrange=(0, 8)) == [0, 2, 4, 6, 8]
+    # out-of-range / None / NaN values drop; the last bin is right-inclusive
+    counts = hist_bin_counts(
+        [0.5, 1.5, 1.5, 8, 10, 10, -1, 11, None, float("nan")],
+        [0, 2, 4, 6, 8, 10])
+    assert counts == [3, 0, 0, 0, 3]
+    assert hist_bin_counts([1, 3], [0, 2, 4], weights=[2.0, 0.5]) == [2.0, 0.5]
+    assert hist_transform([1, 3], [0, 1, 2], cumulative=True) == [1, 4]
+    assert hist_transform([1, 3], [0, 1, 2],
+                          density=True, cumulative=True) == [0.25, 1.0]
+    assert hist_transform([1, 3], [0, 1, 3], density=True) == [0.25, 0.375]
+
+
+def test_hist_stack_extends_count_domain():
+    # One bin, groups of 3 and 2 rows: stacked bars pile to 5, so the
+    # count axis must reach it; overlaid bars top out at 3.
+    df = {"v": [0.5] * 3 + [0.6] * 2, "g": ["a"] * 3 + ["b"] * 2}
+
+    def ylim_hi(position):
+        c = pt.chart(df)
+        c.hist(x="v", fill="g", bins=[0, 1], position=position)
+        import re
+        m = re.search(r'data-plotlet-ylim="([^"]*)"', c.to_svg())
+        return float(m.group(1).split(",")[1])
+
+    assert ylim_hi("stack") >= 5
+    assert ylim_hi("overlay") < 5
+
+
+def test_hist_weights_column():
+    df = {"v": [0.5, 0.5, 1.5], "w": [2.0, 3.0, 5.0]}
+    c = pt.chart(df)
+    c.hist(x="v", bins=[0, 1, 2], weights="w")
+    assert 'data-plotlet-count-max="5"' in c.to_svg()
+
+
+def test_hist_rejects_bad_binning_combos():
+    def render(**kw):
+        c = pt.chart({"v": [1, 2, 3]})
+        c.hist(x="v", **kw)
+        c.to_svg()
+
+    with pytest.raises(TypeError, match="bins= or binwidth="):
+        render(bins=5, binwidth=0.5)
+    with pytest.raises(ValueError, match="strictly increasing"):
+        render(bins=[3, 2, 1])
+    with pytest.raises(TypeError, match="drop\\s+binrange"):
+        render(bins=[0, 1, 2], binrange=(0, 2))
+    with pytest.raises(ValueError, match="must be positive"):
+        render(binwidth=-1)
+    with pytest.raises(ValueError, match="lo < hi"):
+        render(binrange=(2, 1))
+    with pytest.raises(ValueError, match="histtype='bar'"):
+        render(fill=["a", "a", "b"], position="stack", histtype="step")
+    with pytest.raises(ValueError, match="weights= has 2 values"):
+        render(weights=[1, 2])
+
+
+# ---------------------------------------------------------------------------
+# two-factor facet grid (no baselines)
+
+
+def _facet_grid_df():
+    # 2x2 factor space with the (F, b) combination absent.
+    return {
+        "x": [1, 2, 3, 4, 5, 6],
+        "y": [1, 2, 3, 4, 5, 6],
+        "r": ["M", "M", "M", "M", "F", "F"],
+        "c": ["a", "a", "b", "b", "a", "a"],
+    }
+
+
+def test_facet_grid_missing_combo_is_blank():
+    g = pt.facet(_facet_grid_df(), row="r", col="c")
+    g.scatter(x="x", y="y")
+    assert g.to_svg().count('data-plotlet-kind="panel"') == 3
+
+
+def test_facet_single_factor_orientation():
+    import re
+
+    def panel_origins(**facet_kw):
+        g = pt.facet(_facet_grid_df(), **facet_kw)
+        g.scatter(x="x", y="y")
+        boxes = re.findall(r'data-plotlet-panel-bbox="([^"]*)"', g.to_svg())
+        return [tuple(float(v) for v in b.split(",")[:2]) for b in boxes]
+
+    rows = panel_origins(row="r")     # stacked: same x, distinct y
+    assert len(rows) == 2
+    assert rows[0][0] == rows[1][0] and rows[0][1] != rows[1][1]
+    cols = panel_origins(col="c")     # side by side: distinct x, same y
+    assert len(cols) == 2
+    assert cols[0][0] != cols[1][0] and cols[0][1] == cols[1][1]
+
+
+def test_facet_mode_validation():
+    df = _facet_grid_df()
+    with pytest.raises(TypeError, match="not both"):
+        pt.facet(df, by="r", col="c")
+    with pytest.raises(TypeError, match="requires by="):
+        pt.facet(df)
+    with pytest.raises(TypeError, match="col_wrap= applies to by="):
+        pt.facet(df, row="r", col_wrap=2)
+
+
+def test_facet_grid_json_roundtrip():
+    import json
+    from plotlet._journal import to_json, from_json
+
+    def build():
+        g = pt.facet(_facet_grid_df(), row="r", col="c")
+        g.scatter(x="x", y="y")
+        return g
+
+    node = from_json(json.loads(json.dumps(to_json(build()))))
+    assert node.to_svg() == build().to_svg()
+
+
+# ---------------------------------------------------------------------------
+# data-space aspect-ratio lock (no baselines)
+
+
+def _unit_px_ratio(svg):
+    """px-per-y-unit divided by px-per-x-unit for the (single) panel."""
+    import re
+    w, h = [float(v) for v in re.search(
+        r'data-plotlet-data-area="([^"]*)"', svg).group(1).split(",")[2:4]]
+    x0, x1 = [float(v) for v in re.search(
+        r'data-plotlet-xlim="([^"]*)"', svg).group(1).split(",")]
+    y0, y1 = [float(v) for v in re.search(
+        r'data-plotlet-ylim="([^"]*)"', svg).group(1).split(",")]
+    return (h / (y1 - y0)) / (w / (x1 - x0))
+
+
+def test_aspect_locks_unit_ratio():
+    df = {"x": [0, 10], "y": [0, 5]}
+    for r in (1.0, 2.0, 0.5):
+        c = pt.chart(df, data_width=300, data_height=137)
+        c.scatter(x="x", y="y")
+        c.aspect(r)
+        assert abs(_unit_px_ratio(c.to_svg()) - r) < 1e-9
+    c = pt.chart(df, data_width=300)
+    c.scatter(x="x", y="y")
+    c.aspect("equal")
+    assert abs(_unit_px_ratio(c.to_svg()) - 1.0) < 1e-9
+
+
+def test_aspect_survives_fit():
+    # The derived dim rounds to whole pixels, so after fit() the lock is
+    # exact to half a pixel over the panel, not to float precision.
+    c = pt.chart({"x": [0, 10], "y": [0, 5]}, data_width=300)
+    c.scatter(x="x", y="y")
+    c.aspect("equal")
+    assert abs(_unit_px_ratio(c.fit(canvas_width=180).to_svg()) - 1.0) < 0.01
+
+
+def test_aspect_anchor_height_propagates_to_share_class():
+    import re
+    a = pt.chart({"x": [0, 10], "y": [0, 5]}, data_width=200)
+    a.scatter(x="x", y="y")
+    a.aspect("equal")
+    b = pt.chart({"x": [0, 10], "y": [0, 5]}, data_width=200)
+    b.scatter(x="x", y="y")
+    svg = (a | b).share_y().to_svg()
+    heights = [box.split(",")[3] for box in
+               re.findall(r'data-plotlet-data-area="([^"]*)"', svg)]
+    assert len(heights) == 2 and heights[0] == heights[1]
+
+
+def test_aspect_validation():
+    c = pt.chart({"x": ["a", "b"], "y": [1, 2]})
+    c.bar(x="x", y="y")
+    c.aspect(1)
+    with pytest.raises(ValueError, match="same scale kind"):
+        c.to_svg()
+
+    c = pt.chart({"x": [1, 100], "y": [0, 5]})
+    c.scatter(x="x", y="y")
+    c.xscale("log")
+    c.aspect(1)
+    with pytest.raises(ValueError, match="same scale kind"):
+        c.to_svg()
+
+    c = pt.chart({"x": [0, 1], "y": [0, 1]})
+    c.scatter(x="x", y="y")
+    c.aspect(-2)
+    with pytest.raises(ValueError, match="positive"):
+        c.to_svg()
+
+    a = pt.chart({"x": [0, 1], "y": [0, 1]})
+    a.scatter(x="x", y="y")
+    b = pt.chart({"x": [0, 1], "y": [0, 1]})
+    b.scatter(x="x", y="y")
+    b.aspect(1)
+    fig = (a | b).share_x(True).share_y(True)
+    with pytest.raises(ValueError, match="sharing both axes"):
+        fig.to_svg()
 
 
 # ---------------------------------------------------------------------------

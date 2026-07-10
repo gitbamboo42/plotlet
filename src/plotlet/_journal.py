@@ -247,6 +247,8 @@ def to_journal(root) -> Journal:
         journal.append("new_facet_grid", nid, kwargs={
             "data": fg._data,
             "by": fg._by,
+            "row": fg._row,
+            "col": fg._col,
             "col_wrap": fg._col_wrap,
             "share_x": fg._share_x,
             "share_y": fg._share_y,

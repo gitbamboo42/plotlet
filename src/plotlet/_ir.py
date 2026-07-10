@@ -374,7 +374,9 @@ def _expand_facet(journal, root_nid: int):
             continue
         if entry["op"] == "new_facet_grid":
             kw = {k: _decode(v, {}) for k, v in entry["kwargs"].items()}
-            fg = FacetGrid(kw["data"], kw["by"], col_wrap=kw["col_wrap"],
+            fg = FacetGrid(kw["data"], by=kw["by"],
+                           row=kw["row"], col=kw["col"],
+                           col_wrap=kw["col_wrap"],
                            share_x=kw["share_x"], share_y=kw["share_y"],
                            chart_opts=kw["chart_opts"])
         else:

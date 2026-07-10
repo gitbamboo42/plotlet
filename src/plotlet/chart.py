@@ -58,7 +58,7 @@ _FRAME_METHODS = {
     "xscale", "yscale", "grid", "legend",
     "xticks", "yticks", "spines", "theme", "font",
     "x_expand", "y_expand", "clip", "facecolor",
-    "coordinate", "sectors",
+    "coordinate", "sectors", "aspect",
 }
 
 

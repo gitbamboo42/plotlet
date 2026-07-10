@@ -181,8 +181,11 @@ def label_band_sizes(st, inp, dw, dh):
     # then adds `pad.title` + its glyph-block height for its own block —
     # mirrors the inside-out walk in `emit_frame_labels` so reservation
     # matches positioning.
+    # The title renders even on a hidden-top joined edge (`hide_t` drops
+    # only the *redundant* axis chrome — a title is the panel's identity,
+    # e.g. facet labels on the lower rows of a shared-x grid).
     title_top = (_PADSPEC["title"] + text_block_height(st["title"], title_size)
-                 if (st["title"] and not inp.hide_t) else 0)
+                 if st["title"] else 0)
     top    = chrome["top"]    + (xlabel_band if inp.x_side == "top"    else 0) + title_top
     bottom = chrome["bottom"] + (xlabel_band if inp.x_side == "bottom" else 0)
     left   = chrome["left"]   + (ylabel_band if inp.y_side == "left"   else 0)
@@ -277,7 +280,7 @@ def emit_frame_labels(st, inp, iw, ih, chrome, *, top_legend_outset=0):
                                 label_size, anchor="middle",
                                 color=text_color, rotate=90, tag="ylabel"))
 
-    if st["title"] and not inp.hide_t:
+    if st["title"]:
         top_xlabel = xlabel_band if inp.x_side == "top" else 0
         outer = chrome["top"] + top_xlabel + top_legend_outset + _PADSPEC["title"]
         title_extra = text_block_height(st["title"], title_size) - title_size

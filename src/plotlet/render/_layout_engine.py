@@ -601,10 +601,62 @@ def _allocate(node, x: float, y: float, w: float, h: float, out: list):
 # or is forced to the orthogonal anchor's (both-axes case).
 # ---------------------------------------------------------------------------
 
-def _apply_share_scaling(leaves: list) -> None:
+def _aspect_span(desc, axis: str) -> float:
+    """Domain span of one axis in the units `aspect=` locks — linear
+    data units, or decades on a log scale."""
+    if desc.kind == "linear":
+        if desc.sector_lengths and desc.sector_gap_px:
+            raise ValueError(
+                "c.aspect(...) doesn't compose with sectored axes — the "
+                "inter-sector gaps break the unit-to-pixel proportion."
+            )
+        return desc.hi - desc.lo
+    if desc.kind == "log":
+        return math.log10(desc.hi / desc.lo)
+    raise ValueError(
+        f"c.aspect(...) needs linear or log scales on both axes; the "
+        f"{axis} axis resolved to {desc.kind!r}."
+    )
+
+
+def _aspect_dims(st, xd, yd, w: float, h: float, *,
+                 w_locked: bool, h_locked: bool) -> tuple[float, float]:
+    """Rederive one panel's data dims so `st["aspect"]` holds: one y data
+    unit spans `aspect` × the pixels of one x data unit. The width is the
+    free variable's anchor (body-first: `data_width` is what the user
+    declared) unless a share class already locks the height."""
+    r = st["aspect"]
+    if st.get("coordinate") is not None:
+        raise ValueError("c.aspect(...) applies to Cartesian panels only.")
+    if xd.kind != yd.kind:
+        raise ValueError(
+            f"c.aspect(...) needs the same scale kind on both axes; got "
+            f"x={xd.kind!r}, y={yd.kind!r}."
+        )
+    x_span = _aspect_span(xd, "x")
+    y_span = _aspect_span(yd, "y")
+    if x_span <= 0 or y_span <= 0:
+        return w, h
+    if w_locked and h_locked:
+        raise ValueError(
+            "c.aspect(...) conflicts with sharing both axes — the share "
+            "class already fixes both panel dimensions."
+        )
+    # The figure root rounds total W/H to integer px — round the derived
+    # dim here so the lock degrades by at most half a pixel, instead of
+    # the root rounding silently shaving the data region.
+    if h_locked:
+        return round(h * x_span / (r * y_span)), h
+    return w, round(r * w * y_span / x_span)
+
+
+def _apply_share_scaling(leaves: list, states: dict[int, dict],
+                         x_desc: dict, y_desc: dict) -> None:
     """Mutate non-anchor leaves' `_data_width` / `_data_height` to
-    coordinate with their share anchors. Reads from `_orig_data_*`
-    each call so the operation is idempotent across re-renders."""
+    coordinate with their share anchors, then rederive dims on leaves
+    with a `c.aspect(...)` lock (the descriptors carry the resolved
+    domains the lock needs). Reads from `_orig_data_*` each call so the
+    operation is idempotent across re-renders."""
     # Reset to the user's original dims first so scaling is computed from a
     # clean baseline regardless of prior renders.
     for leaf in leaves:
@@ -612,11 +664,13 @@ def _apply_share_scaling(leaves: list) -> None:
         leaf._data_height = leaf._orig_data_height
 
     # Apply scaling in topo order so anchors of chained share-classes
-    # have settled before sharers depend on them.
+    # have settled before sharers depend on them — an aspect-locked
+    # anchor's rederived height is what its sharers copy.
     for leaf in _topo_order(leaves):
         sx = leaf._share_x
         sy = leaf._share_y
-        if sx is None and sy is None:
+        aspect = states[id(leaf)]["aspect"]
+        if sx is None and sy is None and aspect is None:
             continue
         old_w = leaf._data_width
         old_h = leaf._data_height
@@ -634,12 +688,19 @@ def _apply_share_scaling(leaves: list) -> None:
                 new_h = old_h
             else:
                 new_h = old_h * (new_w / old_w) if old_w > 0 else old_h
-        else:  # sy is not None
+        elif sy is not None:
             new_h = sy._data_height
             if leaf._is_attached:
                 new_w = old_w
             else:
                 new_w = old_w * (new_h / old_h) if old_h > 0 else old_w
+        else:
+            new_w, new_h = old_w, old_h
+        if aspect is not None:
+            new_w, new_h = _aspect_dims(
+                states[id(leaf)], x_desc[id(leaf)], y_desc[id(leaf)],
+                new_w, new_h,
+                w_locked=sx is not None, h_locked=sy is not None)
         leaf._data_width  = new_w
         leaf._data_height = new_h
         # Refresh derived canvas dims so downstream `_measure` sees them.
@@ -876,7 +937,6 @@ def _build_panel_opts(root) -> tuple[dict[int, _PanelOpts], dict[int, dict]]:
     bypass `_render_layout` must materialize themselves first — same
     contract as `_measure`, `_allocate`, `_natural_size`."""
     leaves = [l for l in _iter_leaves(root) if l._leaf_kind == "data"]
-    _apply_share_scaling(leaves)
     # Replay each leaf under its own theme so state defaults (spine
     # visibility, tick direction) and any measurement reads pick up the
     # theme's values. Multi-panel layouts may mix themes; each leaf
@@ -898,7 +958,11 @@ def _build_panel_opts(root) -> tuple[dict[int, _PanelOpts], dict[int, dict]]:
             st = _replay(effective)
             st["insets"] = getattr(l, "_insets", [])
             states[id(l)] = st
+    # Descriptors before share scaling: both are pure data-space (no
+    # pixel dims involved), and the scaling pass needs the resolved
+    # domains to honor `c.aspect(...)` locks.
     x_desc, y_desc = _build_axis_descriptors(leaves, states)
+    _apply_share_scaling(leaves, states, x_desc, y_desc)
     panel_opts = {
         id(l): _PanelOpts(x_axis=x_desc[id(l)], y_axis=y_desc[id(l)])
         for l in leaves

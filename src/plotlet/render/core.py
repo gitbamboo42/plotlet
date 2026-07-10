@@ -39,7 +39,8 @@ from ..draw import measure_text
 from ..draw import coord, rect, segment, text_path
 from .. import _regions
 from . import _chrome
-from ..utils import histogram, collect_categories
+from ..utils import (hist_bin_edges, hist_bin_counts, hist_transform,
+                     collect_categories)
 from ..registry import RenderContext, get_artist, _COORD_SUPPORT
 
 # AI-readable SVG attrs — see docs/AI_ATTRS.md. Every plotlet SVG carries
@@ -320,7 +321,7 @@ _FRAME_OPS = frozenset({
     "xscale", "yscale", "grid", "legend",
     "xticks", "yticks", "spines", "theme", "font",
     "x_expand", "y_expand", "clip", "facecolor",
-    "coordinate", "sectors",
+    "coordinate", "sectors", "aspect",
 })
 
 
@@ -396,6 +397,13 @@ def _replay(calls):
         "clip": True,
         "facecolor": None,
         "coordinate": None,
+        # Data-space aspect-ratio lock (mpl `set_aspect` / ggplot
+        # `coord_fixed`). None = free; a number r pins one y data unit
+        # to r× the pixel length of one x data unit. The layout pre-pass
+        # rederives the panel's data dims from the resolved domains
+        # (`_apply_share_scaling`), so the lock survives share classes
+        # and `fit()`.
+        "aspect": None,
         # Sector partitions of the x and y axes — named, length- or
         # member-weighted regions. Continuous sectors remap artist x/y
         # values into a single global coordinate at record time;
@@ -507,6 +515,17 @@ def _replay(calls):
                 st["legend_ncols"] = kw["ncols"]
         elif name == "clip":   st["clip"] = bool(args[0]) if args else True
         elif name == "facecolor": st["facecolor"] = args[0] if args else None
+        elif name == "aspect":
+            v = args[0] if args else 1.0
+            if v == "equal":
+                v = 1.0
+            if (isinstance(v, bool) or not isinstance(v, (int, float))
+                    or v <= 0):
+                raise ValueError(
+                    f"c.aspect({v!r}) — pass \"equal\" or a positive "
+                    f"number (pixel length of one y unit per one x unit)."
+                )
+            st["aspect"] = float(v)
         elif name == "coordinate":
             st["coordinate"] = args[0]
             # Coord-supplied `y_ticks` default (Cartesian: no attribute →
@@ -744,46 +763,34 @@ def _enforce_floors(M):
 
 def _prebin_hist(st):
     """Compute hist bins on `st["artists"]` so they participate in domain
-    scanning. Multi-group overlays share bin edges. Idempotent (guarded by
-    `_bin_groups` presence)."""
+    scanning. All groups of one call share bin edges so the bars are
+    comparable (and stack/dodge/fill positions line up). Idempotent
+    (guarded by `_bin_groups` presence)."""
     for a in st["artists"]:
         if a["type"] != "hist" or "_bin_groups" in a:
             continue
         opts = a["opts"]
-        bins_n = opts.get("bins", 10)
-        density = opts.get("density", False)
         vals = a["vals"]
-        if len(vals) <= 1:
-            a["_bin_groups"] = [histogram(vals[0], bins_n, density=density)] \
-                               if vals else [[]]
-            continue
+        wgts = a.get("weights")
         all_vals = [v for g in vals for v in g
                     if v is not None and not (isinstance(v, float) and v != v)]
         if not all_vals:
             a["_bin_groups"] = [[] for _ in vals]
             continue
-        lo, hi = min(all_vals), max(all_vals)
-        if lo == hi: hi = lo + 1
-        n = bins_n if isinstance(bins_n, int) else 10
-        width = (hi - lo) / n
-        edges = [lo + i * width for i in range(n + 1)]
+        edges = hist_bin_edges(all_vals,
+                               bins=opts.get("bins", 10),
+                               binwidth=opts.get("binwidth"),
+                               binrange=opts.get("binrange"))
         bin_groups = []
-        for g in vals:
-            counts = [0] * n
-            cleaned = [v for v in g if v is not None
-                       and not (isinstance(v, float) and v != v)]
-            for v in cleaned:
-                if v == hi:
-                    counts[-1] += 1
-                else:
-                    i = int((v - lo) / width)
-                    if 0 <= i < n:
-                        counts[i] += 1
-            if density:
-                total = sum(counts) * width or 1
-                counts = [c / total for c in counts]
+        for j, g in enumerate(vals):
+            counts = hist_bin_counts(g, edges,
+                                     weights=wgts[j] if wgts else None)
+            counts = hist_transform(counts, edges,
+                                    density=opts.get("density", False),
+                                    cumulative=opts.get("cumulative", False))
             bin_groups.append([{"x0": edges[i], "x1": edges[i + 1],
-                                "count": counts[i]} for i in range(n)])
+                                "count": counts[i]}
+                               for i in range(len(counts))])
         a["_bin_groups"] = bin_groups
 
 
@@ -1461,7 +1468,7 @@ def _required_margin(st, dw, dh, po: "_PanelOpts") -> dict:
     # wide title shouldn't displace the ylabel from its natural slot.
     label_size = _FONTSPEC["label_size"]
     title_size = _FONTSPEC["title_size"]
-    if st["title"] and not inp.hide_t:
+    if st["title"]:
         title_overhang = max(0.0, (measure_text(st["title"], title_size) - dw) / 2.0)
         left  = max(left,  title_overhang)
         right = max(right, title_overhang)

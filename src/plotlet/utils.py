@@ -16,6 +16,7 @@ Example:
 
 The inverse-direction primitives (emit SVG strings) live in `plotlet.draw`.
 """
+import bisect
 import math
 import numbers
 import re
@@ -219,33 +220,66 @@ def broadcast(*vals):
     return out
 
 
-def histogram(data, bins, density=False):
-    """Equal-width binning. Returns list of {'x0', 'x1', 'count'} dicts.
-    With `density=True`, `count` is the probability density (count divided
-    by `total × bin_width`) so the integral over bins equals 1."""
-    data = [v for v in to_list(data)
-            if v is not None and not (isinstance(v, float) and math.isnan(v))]
-    if not data:
-        return []
-    lo, hi = min(data), max(data)
+def hist_bin_edges(data, *, bins=10, binwidth=None, binrange=None):
+    """Resolve histogram bin edges from the hist kwargs vocabulary.
+
+    `bins=` is an int count or an explicit edge sequence (returned as-is);
+    `binwidth=` overrides the count with fixed-width bins anchored at the
+    range start; `binrange=(lo, hi)` pins the binned span (values outside
+    it are dropped by `hist_bin_counts`)."""
+    if bins is not None and not isinstance(bins, int):
+        return [float(e) for e in to_list(bins)]
+    if binrange is not None:
+        lo, hi = float(binrange[0]), float(binrange[1])
+    else:
+        lo, hi = min(data), max(data)
     if lo == hi:
         hi = lo + 1
+    if binwidth is not None:
+        n = max(1, math.ceil((hi - lo) / binwidth - 1e-9))
+        return [lo + i * binwidth for i in range(n + 1)]
     n = bins if isinstance(bins, int) else 10
     width = (hi - lo) / n
-    counts = [0] * n
-    for v in data:
-        if v == hi:
-            counts[-1] += 1
-        else:
-            i = int((v - lo) / width)
-            if 0 <= i < n:
-                counts[i] += 1
+    # Last edge pinned to `hi` exactly — `lo + n * width` can drift a ULP.
+    return [lo + i * width for i in range(n)] + [hi]
+
+
+def hist_bin_counts(data, edges, weights=None):
+    """Count `data` into `edges` bins (right-inclusive last bin, values
+    outside `[edges[0], edges[-1]]` dropped — the mpl `range=` convention).
+    `weights=` sums per-value weights instead of counting; pairs whose
+    value or weight is None/NaN are skipped."""
+    def bad(v):
+        return v is None or (isinstance(v, float) and math.isnan(v))
+    counts = [0.0] * (len(edges) - 1)
+    lo, hi = edges[0], edges[-1]
+    for k, v in enumerate(data):
+        w = 1 if weights is None else weights[k]
+        if bad(v) or bad(w) or v < lo or v > hi:
+            continue
+        i = len(counts) - 1 if v == hi else bisect.bisect_right(edges, v) - 1
+        counts[i] += w
+    return counts
+
+
+def hist_transform(counts, edges, *, density=False, cumulative=False):
+    """Apply the hist `density=` / `cumulative=` transforms to raw counts.
+
+    density: count / (total × bin_width) — bars integrate to 1.
+    cumulative: running sum; combined with density the result is the
+    empirical CDF (last bin = 1), matching matplotlib."""
+    if cumulative:
+        total = sum(counts)
+        out, run = [], 0.0
+        for c in counts:
+            run += c
+            out.append(run / total if density and total else run)
+        return out
     if density:
         total = sum(counts)
-        scale = 1.0 / (total * width) if total and width else 0.0
-        counts = [c * scale for c in counts]
-    return [{"x0": lo + i * width, "x1": lo + (i + 1) * width, "count": counts[i]}
-            for i in range(n)]
+        return [c / (total * (e1 - e0)) if total and e1 != e0 else 0.0
+                for c, e0, e1 in zip(counts, edges, edges[1:])]
+    return list(counts)
 
 
 def quantile(xs, q, *, _skipna=True):
