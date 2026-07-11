@@ -27,6 +27,7 @@ from scipy.stats import norm
 from ..registry import ArtistSpec, add_artist
 from ..draw import circle, segment
 from ..utils import to_list, resolve_aes, long_form_1d
+from .._spec import _D
 
 
 def _qq_build(values, kw):
@@ -104,7 +105,7 @@ def _qq_draw(a, ctx):
             pad = (x_hi - x_lo) * 0.05
             x0, x1e = x_lo - pad, x_hi + pad
             y0, y1e = intercept + slope * x0, intercept + slope * x1e
-            ref_col = col if a.get("groups") else "#888"
+            ref_col = col if a.get("groups") else _D["qq_ref_color"]
             out.append(segment(ctx.x_scale(x0), ctx.y_scale(y0),
                                ctx.x_scale(x1e), ctx.y_scale(y1e),
                                color=ref_col, width=1, dash="4,3",

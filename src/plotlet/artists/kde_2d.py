@@ -31,6 +31,7 @@ import math
 from ..registry import ArtistSpec, add_artist
 from ..draw import segment, rect
 from ..draw import colormap, ContinuousNorm
+from ..draw import TAB10
 from .._spec import _LEGSPEC
 from ..utils import to_list, silverman_bw, resolve_aes, long_form_xy
 from ._marching import MS_CASES as _MS_CASES
@@ -156,7 +157,7 @@ def _kde_2d_draw(a, ctx):
         alpha = a["opts"].get("alpha", 1.0 if cmap_name else 0.25)
         return filled_levels_svg(
             g, n, n, levels, cmap_name=cmap_name,
-            color=color_opt or ctx.color or "#1f77b4", alpha=alpha,
+            color=color_opt or ctx.color or TAB10[0], alpha=alpha,
             x0d=x0, y0d=y0, dxd=dxd, dyd=dyd,
             x_scale=ctx.x_scale, y_scale=ctx.y_scale)
     out = []
@@ -165,7 +166,7 @@ def _kde_2d_draw(a, ctx):
             r, gn, b = cm(norm.to_unit(lvl))
             col = f"rgb({r},{gn},{b})"
         else:
-            col = color_opt or ctx.color or "#1f77b4"
+            col = color_opt or ctx.color or TAB10[0]
         for r in range(n - 1):
             for c in range(n - 1):
                 vtl = g[r][c]; vtr = g[r][c + 1]
@@ -231,5 +232,5 @@ add_artist(ArtistSpec(
     legend_entries=_kde_2d_legend_entries,
     legend_gradient=_kde_2d_legend_gradient,
     uses_color_cycle=False,
-    default_color="#1f77b4",
+    default_color=TAB10[0],
 ))

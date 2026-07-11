@@ -114,6 +114,16 @@ def _lut_hex(lut, i):
     return f"#{lut[j]:02x}{lut[j + 1]:02x}{lut[j + 2]:02x}"
 
 
+def auto_label_color(r, g, b):
+    """Black or white cell-label text, whichever contrasts with an
+    (r, g, b) 0–255 background — the shared `annot=` rule for heatmap
+    and imshow. Perceived luminance (ITU-R BT.601 weights) with a 0.55
+    cutoff: slightly above 0.5 so mid-tones prefer white text, which
+    reads better on saturated colormap mids."""
+    lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    return "#ffffff" if lum < 0.55 else "#000000"
+
+
 def palette(name, n=None):
     """Discrete color list (hex strings) by name.
 

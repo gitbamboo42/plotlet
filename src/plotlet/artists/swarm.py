@@ -23,9 +23,9 @@ Other styling kwargs:
 """
 from ..registry import ArtistSpec, add_artist
 from ..draw import circle
-from ..utils import (resolve_aes, palette_color,
-                     dodge_positions, categorical_groups, _drop_nan)
-from ..draw import TAB10, resolve_color
+from ..utils import (resolve_aes, dodge_positions, categorical_groups,
+                     _drop_nan, group_color as _group_fill)
+from ..draw import resolve_color
 from .._spec import _FRAME
 
 
@@ -75,12 +75,6 @@ def _swarm_xdomain(a):
 
 def _swarm_ydomain(a):
     return a["cats"] if _swarm_horizontal(a) else _swarm_values(a)
-
-
-def _group_fill(groups, palette, j, fallback):
-    if groups == [None]:
-        return fallback
-    return palette_color(palette, groups[j], j) or TAB10[j % 10]
 
 
 def _place_swarm(val_pixels, r):

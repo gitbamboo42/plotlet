@@ -27,9 +27,9 @@ Other styling kwargs:
   linewidth=0       outline stroke width (0 = no outline)
 """
 from ..registry import ArtistSpec, add_artist
-from ..utils import (resolve_aes, palette_color,
-                     dodge_positions, categorical_groups)
-from ..draw import TAB10, resolve_color
+from ..utils import (resolve_aes, dodge_positions, categorical_groups,
+                     group_color as _group_fill)
+from ..draw import resolve_color
 from ..draw import circle
 from .._spec import _FRAME
 
@@ -94,12 +94,6 @@ def _strip_xdomain(a):
 
 def _strip_ydomain(a):
     return a["cats"] if _strip_horizontal(a) else _strip_values(a)
-
-
-def _group_fill(groups, palette, j, fallback):
-    if groups == [None]:
-        return fallback
-    return palette_color(palette, groups[j], j) or TAB10[j % 10]
 
 
 def _strip_draw(a, ctx):

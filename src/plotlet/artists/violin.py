@@ -30,11 +30,11 @@ Other styling kwargs:
   bw_adjust=1.0         Silverman bandwidth multiplier (>1 smoother)
 """
 from ..registry import ArtistSpec, add_artist
-from ..utils import (quantile, resolve_aes, palette_color,
+from ..utils import (quantile, resolve_aes,
                      dodge_positions, categorical_groups,
                      silverman_bw, kde_1d)
-from ..utils import _drop_nan
-from ..draw import TAB10, resolve_color
+from ..utils import _drop_nan, group_color as _group_fill
+from ..draw import resolve_color
 from ..draw import polygon, rect, segment
 from .._spec import _FRAME, _FIGSPEC
 
@@ -86,12 +86,6 @@ def _violin_xdomain(a):
 
 def _violin_ydomain(a):
     return a["cats"] if _violin_horizontal(a) else _violin_values(a)
-
-
-def _group_fill(groups, palette, j, fallback):
-    if groups == [None]:
-        return fallback
-    return palette_color(palette, groups[j], j) or TAB10[j % 10]
 
 
 def _violin_draw(a, ctx):

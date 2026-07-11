@@ -83,13 +83,10 @@ def _to_list_column(values):
 
 
 def _split_by(data, by):
-    """Return [(label, subset_in_same_shape_as_data), ...] in first-seen order.
+    """Return [(label, subset_as_dict_of_lists), ...] in first-seen order.
 
-    pandas-style `.groupby` is preferred when available so the subsets keep
-    their original type; otherwise the data is materialized as a dict of
-    lists and sliced by index."""
-    if hasattr(data, "groupby"):
-        return [(k, sub) for k, sub in data.groupby(by, sort=False)]
+    `data` is always normalized (`DataFrameLite` / dict of lists) by the
+    time this runs — `facet()` normalizes on entry."""
     cols = {col: _to_list_column(data[col]) for col in _data_columns(data)}
     if by not in cols:
         raise KeyError(f"pt.facet: column {by!r} not found in data")
@@ -110,15 +107,6 @@ def _split_by_2(data, row_by, col_by):
     """Return (row_levels, col_levels, {(row, col): subset}); each level
     list is in first-seen order over the rows of `data`. Combinations
     that never occur are simply absent from the dict."""
-    if hasattr(data, "groupby"):
-        row_levels, col_levels, cells = [], [], {}
-        for (rv, cv), sub in data.groupby([row_by, col_by], sort=False):
-            if rv not in row_levels:
-                row_levels.append(rv)
-            if cv not in col_levels:
-                col_levels.append(cv)
-            cells[(rv, cv)] = sub
-        return row_levels, col_levels, cells
     cols = {c: _to_list_column(data[c]) for c in _data_columns(data)}
     for name in (row_by, col_by):
         if name not in cols:
@@ -240,8 +228,8 @@ class FacetGrid:
     def show(self, *, format: str = "png", scale: float = _REPR_SCALE):
         return self._materialize().show(format=format, scale=scale)
 
-    def save_svg(self, path):
-        self._materialize().save_svg(path)
+    def save_svg(self, path, *, clean: bool = False):
+        self._materialize().save_svg(path, clean=clean)
         return self
 
     def save_png(self, path, *, scale: float = 1.0):

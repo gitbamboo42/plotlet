@@ -291,6 +291,10 @@ def _hlines_data_attrs(a):
 
 
 def _hlines_record(args, kw):
+    if len(args) != 3:
+        raise TypeError(
+            "hlines takes exactly (y, xmin, xmax) — scalars or lists."
+        )
     ys, xmins, xmaxs = broadcast(args[0], args[1], args[2])
     return {"type": "hlines", "ys": ys, "xmins": xmins, "xmaxs": xmaxs, "opts": kw}
 
@@ -318,6 +322,10 @@ def _vlines_data_attrs(a):
 
 
 def _vlines_record(args, kw):
+    if len(args) != 3:
+        raise TypeError(
+            "vlines takes exactly (x, ymin, ymax) — scalars or lists."
+        )
     xs, ymins, ymaxs = broadcast(args[0], args[1], args[2])
     return {"type": "vlines", "xs": xs, "ymins": ymins, "ymaxs": ymaxs, "opts": kw}
 

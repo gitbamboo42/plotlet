@@ -33,10 +33,10 @@ Other styling kwargs:
 import math
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import (quantile, resolve_aes, palette_color,
+from ..utils import (quantile, resolve_aes,
                      dodge_positions, categorical_groups)
-from ..utils import _drop_nan
-from ..draw import TAB10, resolve_color
+from ..utils import _drop_nan, group_color as _group_fill
+from ..draw import resolve_color
 from ..draw import segment, rect, circle, errorbar_v, errorbar_h, polygon, marker
 from .._spec import _FRAME
 
@@ -98,14 +98,6 @@ def _boxplot_xdomain(a):
 
 def _boxplot_ydomain(a):
     return a["cats"] if _boxplot_horizontal(a) else _boxplot_values(a)
-
-
-def _group_fill(groups, palette, j, fallback):
-    """Per-group fill: ungrouped → fallback; grouped → palette lookup
-    with TAB10 wraparound."""
-    if groups == [None]:
-        return fallback
-    return palette_color(palette, groups[j], j) or TAB10[j % 10]
 
 
 def _boxplot_draw(a, ctx):

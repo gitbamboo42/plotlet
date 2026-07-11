@@ -245,9 +245,6 @@ add_artist(ArtistSpec(
 # share_x scaling.
 
 def _annotate_record(args, kw):
-    # Don't mutate `kw` — record() is called on every re-render against
-    # the original recorded dict, so a destructive `kw.pop` would lose
-    # xy/xytext on the second to_svg() call.
     text = args[0]
     if "xy" not in kw:
         raise TypeError("annotate() requires xy=(x, y)")

@@ -18,11 +18,11 @@ composition operators (`|`, `/`), output methods (`to_svg`, `show`,
 
 Composition operators:
 
-  * `a | b` → horizontal `Layout`. Flattens when LHS is already a
-    same-direction `Layout` (so `a | b | c` is a single 3-cell row, not
-    nested). Mutates LHS in place; LHS should not be reused after.
-
-  * `a / b` → vertical `Layout`. Same flattening rule.
+  * `a | b` → horizontal `Layout`; `a / b` → vertical. Always returns a
+    fresh outer `Layout` — never mutates either operand. Same-direction
+    nesting (`a | b | c`) is collapsed for the engine at render time by
+    `Layout._effective_children()`; the recorded tree keeps the AST
+    shape the user typed so the journal stays append-only.
 
 Rendering goes journal → IR → plot: `to_svg()` lowers the tree to the
 figure IR (`_ir.py`, contract in `docs/IR.md`) and hands it to the
@@ -46,7 +46,7 @@ import resvg_py
 
 from ._spec import _SIZESPEC, _MARGIN_FLOOR
 from ._tree import compute_share_classes, normalize_share_mode
-from .utils import _to_px, _normalize_data
+from .utils import _to_px, _normalize_data, _data_has_column
 from .registry import get_artist, all_artist_names
 
 
@@ -60,16 +60,6 @@ _FRAME_METHODS = {
     "x_expand", "y_expand", "clip", "facecolor",
     "coordinate", "sectors", "aspect",
 }
-
-
-def _has_column(data, name):
-    """True if `name` looks up as a column on `data`. Used by data
-    auto-injection — pandas/dict via ``in``, other types fall back to
-    "no" so the user passes ``data=`` explicitly."""
-    try:
-        return name in data
-    except (TypeError, KeyError):
-        return False
 
 
 # Notebook display renders PNG at 2x and pins the logical size in the
@@ -558,6 +548,11 @@ class Chart(_Renderable):
         if name in _FRAME_METHODS or spec is not None:
             def recorder(*args, **kwargs):
                 if spec is not None:
+                    if self._leaf_kind != "data":
+                        raise TypeError(
+                            f"{self._leaf_kind} leaves don't take artists — "
+                            f"draw {name}() on a pt.chart() and compose the two."
+                        )
                     # Chart-level aesthetic inheritance — fill in missing aes
                     # from `pt.chart(df, x=, y=, color=, palette=)`.
                     for k, v in self._aes.items():
@@ -570,7 +565,7 @@ class Chart(_Renderable):
                     # so adding a new artist with new endpoint kwargs needs
                     # no edit here.
                     if (self._data is not None and "data" not in kwargs
-                            and any(_has_column(self._data, v)
+                            and any(_data_has_column(self._data, v)
                                     for v in kwargs.values()
                                     if isinstance(v, str))):
                         kwargs["data"] = self._data

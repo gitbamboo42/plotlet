@@ -8,8 +8,8 @@ shared `x`). `area` stacks rows over `x`, optionally grouped by `fill=`.
   c.area(data=df, x="x", y="y", fill="series")                 # stacked
 """
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, resolve_aes, palette_color
-from ..draw import TAB10, resolve_color
+from ..utils import to_list, resolve_aes, group_color as _group_fill
+from ..draw import resolve_color
 from .._spec import _D, _LEGSPEC
 from ..draw import polygon as draw_polygon, rect as draw_rect
 from ._shared import (_xy_minmax, _line_legend_entries,
@@ -156,12 +156,6 @@ def _area_data_attrs(a):
     if curve and curve != "linear":
         out["curve"] = curve
     return out
-
-
-def _group_fill(groups, palette, j, fallback):
-    if groups == [None]:
-        return fallback
-    return palette_color(palette, groups[j], j) or TAB10[j % 10]
 
 
 def _area_draw(a, ctx):

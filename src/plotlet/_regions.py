@@ -105,6 +105,25 @@ def collecting():
         _CURRENT.reset(token)
 
 
+def active() -> bool:
+    """True when a sink is collecting — lets central code skip work
+    (e.g. a regions-only re-render) on the common no-sink path."""
+    return _CURRENT.get() is not None
+
+
+@contextmanager
+def suppressed():
+    """Deactivate any active sink for the duration. Used for renders
+    whose emission is measurement-only (an inset's first pass, run to
+    learn its margins) so their regions don't land at the wrong
+    offset."""
+    token = _CURRENT.set(None)
+    try:
+        yield
+    finally:
+        _CURRENT.reset(token)
+
+
 @contextmanager
 def translate(dx: float, dy: float):
     """Push a translate offset onto the sink's transform stack for the

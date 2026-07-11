@@ -30,7 +30,6 @@ from .._spec import (
     SPEC, _MARGIN_FLOOR, _FRAME, _GRIDSPEC, _FONTSPEC, _LEGSPEC,
     _LAYOUTSPEC, _PADSPEC, _D, _DASH,
 )
-_SECTORSPEC = SPEC["sectors"]
 from ..draw import resolve_color, TAB10
 from ..scales import (_nice_domain, _fmt_tick, _to_epoch,
                       _coerce_time_lim, _AxisDescriptor)
@@ -1324,7 +1323,7 @@ def _inline_legend_layout(st, env=None):
         lw, lh = _inline_gradient_block_size_h([d for _, d in cont])
     elif horizontal:
         # Discrete-only horizontal row. Entries arranged left-to-right.
-        entry_ws = [sw + 6 + measure_text(e["label"], tick_size) for _, e in disc]
+        entry_ws = [sw + _LEGSPEC["swatch_label_gap"] + measure_text(e["label"], tick_size) for _, e in disc]
         spacer = 2 * pad_x
         lw = 2 * pad_x + sum(entry_ws) + (len(disc) - 1) * spacer
         lh = row_h + 2 * pad_y
@@ -1344,7 +1343,7 @@ def _inline_legend_layout(st, env=None):
         from ._legend import (_entry_columns, _inline_gradient_block_size,
                               _partition_by_group)
         label_size = _FONTSPEC["label_size"]
-        sub_header_h = label_size + 4
+        sub_header_h = label_size + _LEGSPEC["header_pad"]
         sub_groups = _partition_by_group(disc, lambda ae: ae[1].get("group"))
         disc_w = 0.0
         disc_h = 0.0
@@ -1354,7 +1353,7 @@ def _inline_legend_layout(st, env=None):
                 disc_h += sub_header_h
             cols = _entry_columns(items, ncols)
             block_w = sum(
-                max(sw + 6 + measure_text(e["label"], tick_size) for _, e in col)
+                max(sw + _LEGSPEC["swatch_label_gap"] + measure_text(e["label"], tick_size) for _, e in col)
                 for col in cols
             ) + (len(cols) - 1) * _LEGSPEC["column_gap"]
             disc_w = max(disc_w, block_w)
@@ -1383,8 +1382,8 @@ def _resolve_panel_inputs(st, *, x_scale, y_scale, dw, dh, po):
     tick_size = _FONTSPEC["tick_size"]
 
     # Same tick-density rule on both call sites.
-    x_n = max(2, min(8, int(dw // 65)))
-    y_n = max(2, min(8, int(dh // 40)))
+    x_n = max(2, min(8, int(dw // _FRAME["tick_density_x_px"])))
+    y_n = max(2, min(8, int(dh // _FRAME["tick_density_y_px"])))
     x_ticks = (st["x_ticks"] if st["x_ticks"] is not None
                else _auto_major_ticks(x_scale, x_n, st["x_step"], st["x_count"]))
     y_ticks = (st["y_ticks"] if st["y_ticks"] is not None
@@ -1807,7 +1806,7 @@ def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal, gradient_h,
         ry = pad_y + row_h / 2
         for a, entry in disc:
             parts.append(_render_discrete_entry(entry, a, ctx_for, cx, ry))
-            cx += sw + 6 + measure_text(entry["label"], tick_size) + spacer
+            cx += sw + _LEGSPEC["swatch_label_gap"] + measure_text(entry["label"], tick_size) + spacer
         return ''.join(parts)
     # Vertical layout: gradient strips on top, discrete rows below.
     # Ticks face away from the data area — right-position gets
@@ -1828,7 +1827,7 @@ def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal, gradient_h,
         strip_x = pad_x
         cur_y = float(pad_y)
     for i, (_, desc) in enumerate(cont):
-        entry_h = (tick_size + 4 if desc.get("label") else 0) \
+        entry_h = (tick_size + _LEGSPEC["gradient_label_pad"] if desc.get("label") else 0) \
                   + _LEGSPEC["gradient_height"]
         parts.append(_render_continuous_entry(desc, strip_x, cur_y, tick_side))
         cur_y += entry_h
@@ -1843,7 +1842,7 @@ def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal, gradient_h,
     from ._legend import _entry_columns, _partition_by_group
     sub_groups = _partition_by_group(disc, lambda ae: ae[1].get("group"))
     label_size = _FONTSPEC["label_size"]
-    sub_header_h = label_size + 4
+    sub_header_h = label_size + _LEGSPEC["header_pad"]
     for si, (sub_name, sub_items) in enumerate(sub_groups):
         if sub_name:
             parts.append(text_path(str(sub_name), pad_x,
@@ -1858,7 +1857,7 @@ def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal, gradient_h,
             for i, (a, entry) in enumerate(col):
                 ry = cur_y + i * row_h + row_h / 2
                 parts.append(_render_discrete_entry(entry, a, ctx_for, cx, ry))
-            cx += (max(sw + 6 + measure_text(e["label"], tick_size)
+            cx += (max(sw + _LEGSPEC["swatch_label_gap"] + measure_text(e["label"], tick_size)
                        for _, e in col) + _LEGSPEC["column_gap"])
         cur_y += len(cols[0]) * row_h
         if si < len(sub_groups) - 1:
@@ -2205,14 +2204,23 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
         x_frac, y_frac, w_frac, h_frac = inset_rect
         # Render the inset first; this populates `_last_M_eff` so we can
         # offset the translate to align the inset's data region (not its
-        # canvas) with the requested axes-fraction rect.
-        inset_svg = inset_chart._to_svg_unchecked()
+        # canvas) with the requested axes-fraction rect. The sink is
+        # suppressed because the translate offset isn't known until this
+        # render finishes — regions are recorded by the re-render below.
+        with _regions.suppressed():
+            inset_svg = inset_chart._to_svg_unchecked()
         inset_M = inset_chart._last_M_eff or {"left": 0, "right": 0, "top": 0, "bottom": 0}
         # Bottom-left origin: y-frac 0 = bottom of data, 1 = top.
         # Subtract the inset's own margin so its data region (not its
         # canvas) lands at the requested fraction of the parent's data.
         tx = x_frac * iw - inset_M["left"]
         ty = (1 - y_frac - h_frac) * ih - inset_M["top"]
+        if _regions.active():
+            # Regions-only re-render at the now-known offset; rendering
+            # is deterministic, so the emission matches `inset_svg` and
+            # is discarded. Only runs under `regions()` collection.
+            with _regions.translate(tx, ty):
+                inset_chart._to_svg_unchecked()
         # Opaque background covering the inset's data area only — tick
         # labels in the inset's margins stay transparent.
         bg_x = inset_M["left"]

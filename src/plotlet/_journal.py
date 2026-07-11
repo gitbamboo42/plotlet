@@ -32,8 +32,9 @@ Ops:
                    legend sources) are encoded as {"$node": nid} and
                    resolved back on replay.
 
-Node ids: opaque monotonic ints from a process-global counter. Two
-journals never share ids by construction.
+Node ids: opaque monotonic ints from a per-journal counter starting at
+1 — two journals of the same plot get identical nids, so journal
+diffing is sane.
 
 Rendering goes journal → IR → plot: at render time the journal is
 lowered to the figure IR (`_ir.py`) — the per-node compiled form — and

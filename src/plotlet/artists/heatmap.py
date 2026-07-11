@@ -50,6 +50,7 @@ from ..draw import rect, text_path
 from ..draw import image_png
 from ..draw import colormap_lut, ContinuousNorm
 from ..draw import resolve_color
+from ..draw.colors import auto_label_color
 
 
 def _hex_to_rgb(h):
@@ -58,10 +59,6 @@ def _hex_to_rgb(h):
     if len(h) == 3:
         h = h[0] * 2 + h[1] * 2 + h[2] * 2
     return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-
-
-def _rel_luminance(r, g, b):
-    return (0.299 * r + 0.587 * g + 0.114 * b) / 255
 
 
 def _centers_to_edges(positions):
@@ -491,7 +488,7 @@ def _heatmap_annot(a, ctx, matrix, annot_arg, xgeom, ygeom, txt_col_at, fmt):
             f"doesn't match data ({nrows}x{ncols})"
         )
     color_opt = opts.get("annot_color", "auto")
-    fontsize = opts.get("annot_fontsize", 10)
+    fontsize = opts.get("annot_fontsize", _D["annot_fontsize"])
     out = []
     for r in range(nrows):
         y0, bh = ygeom[r]
@@ -520,7 +517,7 @@ def _heatmap_draw_categorical(a, ctx):
         return ""
     opts = a["opts"]
     palette = {k: resolve_color(v) for k, v in a["_palette"].items()}
-    absent_fill = resolve_color(opts.get("absent_fill", "#eeeeee"))
+    absent_fill = resolve_color(opts.get("absent_fill", _D["heatmap_absent_fill"]))
     lw = opts.get("linewidth", 0)
     lc = resolve_color(opts.get("linecolor", "white")) if lw else None
     out = []
@@ -552,8 +549,7 @@ def _heatmap_draw_categorical(a, ctx):
     def txt_col_at(r, c):
         v = matrix[r][c]
         fill_hex = palette.get(v, absent_fill) if v is not None else absent_fill
-        rr, gg, bb = _hex_to_rgb(fill_hex)
-        return "#ffffff" if _rel_luminance(rr, gg, bb) < 0.55 else "#000000"
+        return auto_label_color(*_hex_to_rgb(fill_hex))
     out.extend(_heatmap_annot(a, ctx, matrix, annot_arg, xgeom, ygeom,
                               txt_col_at, fmt=None))
     return "".join(out)
@@ -572,7 +568,7 @@ def _heatmap_draw(a, ctx):
                            kind=opts.get("norm", "linear"),
                            center=opts.get("center"))
     lut = colormap_lut(opts.get("cmap", _D["default_cmap"]))
-    absent_fill = resolve_color(opts.get("absent_fill", "#eeeeee"))
+    absent_fill = resolve_color(opts.get("absent_fill", _D["heatmap_absent_fill"]))
     absent_rgb  = _hex_to_rgb(absent_fill)
     lw = opts.get("linewidth", 0)
     lc = resolve_color(opts.get("linecolor", "white")) if lw else None
@@ -610,10 +606,9 @@ def _heatmap_draw(a, ctx):
     def txt_col_at(r, c):
         v = matrix[r][c]
         if v is None or v != v:
-            return "#ffffff" if _rel_luminance(*absent_rgb) < 0.55 else "#000000"
+            return auto_label_color(*absent_rgb)
         i = int(norm.to_unit(v) * 255 + 0.5) * 3
-        return "#ffffff" if _rel_luminance(lut[i], lut[i+1], lut[i+2]) < 0.55 \
-            else "#000000"
+        return auto_label_color(lut[i], lut[i + 1], lut[i + 2])
     out.extend(_heatmap_annot(a, ctx, matrix, annot_arg, xgeom, ygeom,
                               txt_col_at, fmt=opts.get("fmt", ".2g")))
     return "".join(out)

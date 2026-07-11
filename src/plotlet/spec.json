@@ -8,7 +8,8 @@
     "outer_margin": {"top": 4, "right": 4, "bottom": 4, "left": 4}
   },
   "figure": {
-    "background": "#fff"
+    "background": "#fff",
+    "root_font_size": 11
   },
   "font": {
     "family": "DejaVu Sans, Bitstream Vera Sans, Verdana, Arial, sans-serif",
@@ -34,6 +35,8 @@
     "minor_tick_ratio": 0.55,
     "tick_pad": 5,
     "tick_direction": "out",
+    "tick_density_x_px": 65,
+    "tick_density_y_px": 40,
     "x_side": "bottom",
     "y_side": "left",
     "spine_top": true,
@@ -83,6 +86,9 @@
     "tree_parent_height": 0.25,
     "tree_parent_gap": 0.10,
     "category_split_gap": 6.0,
+    "annot_fontsize": 10,
+    "heatmap_absent_fill": "#eeeeee",
+    "qq_ref_color": "#888",
     "text_color": "#222222",
     "text_size": 13,
     "errorbar_linewidth": 1.6,
@@ -106,6 +112,9 @@
     "pad_x": 11,
     "pad_y": 8,
     "swatch_width": 25,
+    "swatch_label_gap": 6,
+    "header_pad": 4,
+    "gradient_label_pad": 4,
     "background": "#ffffff",
     "opacity": 0.92,
     "border_offset": 8,

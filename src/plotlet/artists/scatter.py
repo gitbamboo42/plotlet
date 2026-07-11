@@ -8,7 +8,7 @@
   c.scatter(data=df, ..., alpha="cohort",                 # opacity per level
             alphas=(0.3, 1.0))
   c.scatter(data=df, ..., size=3)                         # fixed marker radius (px)
-  c.scatter(data=df, ..., size="mass", sizes=(2, 8))      # graded per-point radius
+  c.scatter(data=df, ..., size="mass", sizes=(2, 7))      # graded per-point radius
   c.scatter(data=df, ..., style="group")                  # per-level marker glyph
 
 `color=` dispatches on the value:

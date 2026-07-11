@@ -45,7 +45,7 @@ import math
 from graphlib import CycleError, TopologicalSorter
 from itertools import count
 
-from .._spec import (SPEC, _LAYOUTSPEC, _FONTSPEC, _PADSPEC,
+from .._spec import (SPEC, _FIGSPEC, _LAYOUTSPEC, _FONTSPEC, _PADSPEC,
                      active_font, active_theme)
 from .core import (
     _render_inner, _replay, _enforce_floors, _required_margin,
@@ -1172,11 +1172,6 @@ def _update_canvases_for_margins(leaves: list,
         leaf._last_M_eff = dict(M)
 
 
-def _effective_margin(leaf, po: _PanelOpts, w: float, h: float) -> dict:
-    """Margin used at render time. Data leaves read the coordinated margin
-    from `po.M_eff` (computed by `_compute_measured_margins` with hide-
-    aware `_required_margin`)."""
-    return dict(po.M_eff)
 
 
 def _render_layout(root, outer=None) -> str:
@@ -1211,9 +1206,10 @@ def _render_layout(root, outer=None) -> str:
         # is a real first-child <rect> — CSS `background` on the root
         # element is ignored by non-browser consumers (cairosvg).
         with _figure_style(root):
+            root_fs = _FIGSPEC["root_font_size"]
             return (f'<svg xmlns="http://www.w3.org/2000/svg" '
                     f'width="{Wt}" height="{Ht}" viewBox="0 0 {Wt} {Ht}" '
-                    f'font-family="{svg_family()}" font-size="11"'
+                    f'font-family="{svg_family()}" font-size="{root_fs}"'
                     f'{_figure_root_attrs()}>'
                     f'<rect width="{Wt}" height="{Ht}" '
                     f'fill="{SPEC["figure"]["background"]}"/>'
@@ -1252,9 +1248,10 @@ def _render_layout_rect(root, outer=None) -> str:
     # canvas. Multi-panel roots take neither, and each leaf's own
     # `_node_style` block below still owns its chrome.
     with _figure_style(root):
+        root_fs = _FIGSPEC["root_font_size"]
         parts = [
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{Wt}" height="{Ht}" '
-            f'viewBox="0 0 {Wt} {Ht}" font-family="{svg_family()}" font-size="11"'
+            f'viewBox="0 0 {Wt} {Ht}" font-family="{svg_family()}" font-size="{root_fs}"'
             f'{_figure_root_attrs()}>',
             # Real first-child <rect>, not CSS `background` on the root —
             # non-browser consumers (cairosvg) ignore the CSS property.
@@ -1304,7 +1301,9 @@ def _render_layout_rect(root, outer=None) -> str:
             parts.append('</g>')
             continue
         po = panel_opts[id(leaf)]
-        M_eff = _effective_margin(leaf, po, w, h)
+        # Coordinated margin from `_compute_measured_margins` (hide-aware
+        # `_required_margin`); copied so per-leaf mutation can't leak back.
+        M_eff = dict(po.M_eff)
         iw = w - M_eff["left"] - M_eff["right"]
         ih = h - M_eff["top"] - M_eff["bottom"]
         st = states[id(leaf)]

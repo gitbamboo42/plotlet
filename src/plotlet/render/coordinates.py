@@ -95,12 +95,13 @@ def _circular_x_tick_labels(st, dw):
     """
     from .core import (_x_descriptor, _auto_major_ticks,
                        _resolve_tick_formatter)
+    from .._spec import _FRAME
     x_axis = _x_descriptor(st)
     x_scale = (x_axis.build(0, dw)
                if (x_axis.kind == "category" or not x_axis.flip)
                else x_axis.build(dw, 0))
     x_ticks = (st["x_ticks"] if st["x_ticks"] is not None
-               else _auto_major_ticks(x_scale, max(2, min(8, int(dw // 65))),
+               else _auto_major_ticks(x_scale, max(2, min(8, int(dw // _FRAME["tick_density_x_px"]))),
                                       st["x_step"], st["x_count"]))
     x_fmt = _resolve_tick_formatter(st["x_format"], x_scale)
     x_labels = (st["x_labels"] if st["x_labels"] is not None

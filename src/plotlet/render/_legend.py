@@ -224,7 +224,7 @@ def _render_discrete_entry(entry: dict, a: dict, ctx_for,
             alpha = legend_opts.get("alpha", alpha)
         swatch = rect(x, y_mid - 5, sw, 10,
                       fill=entry["color"], alpha=alpha)
-    label = text_path(entry["label"], x + sw + 6, y_mid + 4,
+    label = text_path(entry["label"], x + sw + _LEGSPEC["swatch_label_gap"], y_mid + 4,
                       _FONTSPEC["tick_size"], anchor="start",
                       color=_FONTSPEC["color"], tag="legend-text")
     return swatch + label
@@ -251,7 +251,7 @@ def _render_continuous_entry(entry: dict, x: float, y: float,
     tick_size = _FONTSPEC["tick_size"]
     text_color = _FONTSPEC["color"]
     label_text = entry.get("label")
-    label_h = tick_size + 4 if label_text else 0
+    label_h = tick_size + _LEGSPEC["gradient_label_pad"] if label_text else 0
     if label_text:
         parts.append(text_path(label_text, x, y + tick_size,
                                 tick_size, anchor="start", color=text_color,
@@ -352,7 +352,7 @@ def _render_continuous_entry_h(entry: dict, x: float, y: float) -> str:
     norm, ticks, over_l, _ = _h_gradient_geometry(entry)
     x0 = x + over_l
     label_text = entry.get("label")
-    label_h = tick_size + 4 if label_text else 0
+    label_h = tick_size + _LEGSPEC["gradient_label_pad"] if label_text else 0
     if label_text:
         parts.append(text_path(label_text, x0, y + tick_size,
                                 tick_size, anchor="start", color=text_color,
@@ -392,7 +392,7 @@ def _h_gradient_entry_height(entry: dict) -> float:
     """Block height of one horizontal gradient entry — label band (if
     any) + strip thickness + tick + tick-label band."""
     tick_size = _FONTSPEC["tick_size"]
-    label_h = tick_size + 4 if entry.get("label") else 0
+    label_h = tick_size + _LEGSPEC["gradient_label_pad"] if entry.get("label") else 0
     return (label_h + _LEGSPEC["gradient_width"] + _FRAME["tick_length"]
             + _FRAME["tick_pad"] + tick_size)
 
@@ -438,7 +438,7 @@ def _inline_gradient_block_size(cont_entries: list[dict]) -> tuple[float, float]
         label = entry.get("label")
         if label:
             max_w = max(max_w, measure_text(label, tick_size))
-            total_h += tick_size + 4
+            total_h += tick_size + _LEGSPEC["gradient_label_pad"]
         ticks = (list(entry["ticks"]) if entry.get("ticks") is not None
                  else ContinuousNorm(entry["vmin"], entry["vmax"],
                                       kind=entry.get("norm", "linear"),
@@ -482,7 +482,7 @@ def _legend_content_size(leaf, sources: list,
     sw = _LEGSPEC["swatch_width"]
     tick_size = _FONTSPEC["tick_size"]
     label_size = _FONTSPEC["label_size"]
-    header_h = label_size + 4
+    header_h = label_size + _LEGSPEC["header_pad"]
     n_ticks = _adaptive_n_ticks(_LEGSPEC["gradient_height"])
 
     max_w = 0.0
@@ -495,7 +495,7 @@ def _legend_content_size(leaf, sources: list,
             label = entry.get("label")
             if label:
                 max_w = max(max_w, measure_text(label, tick_size))
-                total_h += tick_size + 4
+                total_h += tick_size + _LEGSPEC["gradient_label_pad"]
             ticks = (list(entry["ticks"]) if entry.get("ticks") is not None
                      else ContinuousNorm(entry["vmin"], entry["vmax"],
                                           kind=entry.get("norm", "linear"),
@@ -513,7 +513,7 @@ def _legend_content_size(leaf, sources: list,
                 total_h += header_h
             cols = _entry_columns(sub_entries, leaf._legend_ncols)
             block_w = sum(
-                max(sw + 6 + measure_text(e["label"], tick_size) for e in col)
+                max(sw + _LEGSPEC["swatch_label_gap"] + measure_text(e["label"], tick_size) for e in col)
                 for col in cols
             ) + (len(cols) - 1) * _LEGSPEC["column_gap"]
             max_w = max(max_w, block_w)
@@ -578,8 +578,29 @@ def _render_legend(leaf, w: float, h: float,
     tick_size = _FONTSPEC["tick_size"]
     label_size = _FONTSPEC["label_size"]
     text_color = _FONTSPEC["color"]
-    header_h = label_size + 4
+    header_h = label_size + _LEGSPEC["header_pad"]
 
+    # valign="middle" slides the whole block down by half the surplus.
+    # Computed up front (via the mirror `_legend_content_size`) so region
+    # bboxes recorded during emission can carry the same offset — a
+    # post-hoc <g translate> alone would leave them stale.
+    if valign == "middle":
+        content_h = _legend_content_size(leaf, sources, states)[1]
+        dy = max(0.0, (h - content_h) / 2)
+    else:
+        dy = 0.0
+
+    with _regions.translate(0, dy):
+        body = _emit_legend_body(groups, leaf, states, pad_x, pad_y, row_h,
+                                 sw, tick_size, label_size, text_color,
+                                 header_h)
+    if dy > 0:
+        body = f'<g transform="translate(0,{coord(dy)})">{body}</g>'
+    return body
+
+
+def _emit_legend_body(groups, leaf, states, pad_x, pad_y, row_h,
+                      sw, tick_size, label_size, text_color, header_h):
     parts = []
     cy = pad_y
     for gi, g in enumerate(groups):
@@ -589,7 +610,7 @@ def _render_legend(leaf, w: float, h: float,
                                     tag="legend-header"))
             cy += header_h
         for entry in g["cont"]:
-            entry_label_h = (tick_size + 4) if entry.get("label") else 0
+            entry_label_h = (tick_size + _LEGSPEC["gradient_label_pad"]) if entry.get("label") else 0
             parts.append(_render_continuous_entry(entry, pad_x, cy))
             cy += entry_label_h + _LEGSPEC["gradient_height"]
         if g["cont"] and g["disc"]:
@@ -613,7 +634,7 @@ def _render_legend(leaf, w: float, h: float,
                     ry = cy + i * row_h + row_h / 2
                     parts.append(_render_discrete_entry(entry, entry["_a"],
                                                         _swatch_ctx, cx, ry))
-                cx += (max(sw + 6 + measure_text(e["label"], tick_size)
+                cx += (max(sw + _LEGSPEC["swatch_label_gap"] + measure_text(e["label"], tick_size)
                            for e in col) + _LEGSPEC["column_gap"])
             cy += len(cols[0]) * row_h
             if si < len(sub_groups) - 1:
@@ -621,13 +642,4 @@ def _render_legend(leaf, w: float, h: float,
         if gi < len(groups) - 1:
             cy += _LEGSPEC["section_gap"]
 
-    body = ''.join(parts)
-    if valign == "middle":
-        # Content total height = cy (we incremented as we drew) + pad_y.
-        # If the leaf was allocated more space than that, slide it down
-        # by half the surplus so the block reads centered.
-        content_h = cy + pad_y
-        dy = max(0, (h - content_h) / 2)
-        if dy > 0:
-            body = f'<g transform="translate(0,{coord(dy)})">{body}</g>'
-    return body
+    return ''.join(parts)

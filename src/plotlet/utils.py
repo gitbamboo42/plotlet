@@ -80,8 +80,6 @@ def to_list(obj):
     """Convert numpy / pandas / arbitrary iterables to plain Python lists."""
     if hasattr(obj, "tolist"):
         return obj.tolist()
-    if isinstance(obj, (list, tuple)):
-        return list(obj)
     return list(obj)
 
 

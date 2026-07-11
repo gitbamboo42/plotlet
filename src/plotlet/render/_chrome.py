@@ -20,6 +20,7 @@ from ..draw import (resolve_color, text_path, segment,
                    measure_text, cap_height, descender, tick_band_height,
                    rotated_label_bbox, text_block_height)
 from .. import _regions
+from ..scales import _LogScale
 
 _SECTORSPEC = SPEC["sectors"]
 
@@ -395,9 +396,8 @@ def _auto_minor_ticks(scale, major_ticks):
     """Default minor-tick positions for `scale`. Linear-shaped scales:
     4 subdivisions between adjacent majors; log: integer multipliers
     (2..9) within each decade."""
-    kind = type(scale).__name__
     out = []
-    if kind == "_LogScale":
+    if isinstance(scale, _LogScale):
         a = math.floor(scale.l0)
         b = math.ceil(scale.l1)
         for k in range(int(a), int(b) + 1):

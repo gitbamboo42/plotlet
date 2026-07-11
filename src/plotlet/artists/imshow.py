@@ -7,10 +7,7 @@ from .._spec import _D
 from ..draw import rect, text_path
 from ..draw import image_png
 from ..draw import colormap_lut, ContinuousNorm
-
-
-def _rel_luminance(r, g, b):
-    return (0.299 * r + 0.587 * g + 0.114 * b) / 255
+from ..draw.colors import auto_label_color
 
 
 def _artist_imshow(a, xs_, ys_, col):
@@ -106,7 +103,7 @@ def _artist_imshow(a, xs_, ys_, col):
         labels_in_render_order = [label_source[i] for i in row_indices]
         fmt = opts.get("fmt", ".2g")
         color_opt = opts.get("annot_color", "auto")
-        fontsize = opts.get("annot_fontsize", 10)
+        fontsize = opts.get("annot_fontsize", _D["annot_fontsize"])
         for r, label_row in enumerate(labels_in_render_order):
             cy = sy_t + (r + 0.5) * ch
             data_row = rows_in_render_order[r]
@@ -122,10 +119,7 @@ def _artist_imshow(a, xs_, ys_, col):
                         txt_col = "#ffffff"
                     else:
                         i = int(norm.to_unit(v) * 255 + 0.5) * 3
-                        if _rel_luminance(lut[i], lut[i+1], lut[i+2]) < 0.55:
-                            txt_col = "#ffffff"
-                        else:
-                            txt_col = "#000000"
+                        txt_col = auto_label_color(lut[i], lut[i+1], lut[i+2])
                 else:
                     txt_col = color_opt
                 cx = sx_l + (c + 0.5) * cw
@@ -186,7 +180,7 @@ def _imshow_record(args, kw):
         else:
             vmin, vmax = (1.0, 10.0) if norm == "log" else (0.0, 1.0)
     return {"type": "imshow", "_data": d, "_nrows": nrows, "_ncols": ncols,
-            "_vmin": vmin, "_vmax": vmax, "data": d, "opts": kw}
+            "_vmin": vmin, "_vmax": vmax, "opts": kw}
 
 
 def _imshow_xdomain(a):

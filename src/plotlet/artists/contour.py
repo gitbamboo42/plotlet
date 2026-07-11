@@ -23,6 +23,7 @@ Styling kwargs:
 from ..registry import ArtistSpec, add_artist
 from ..draw import segment
 from ..draw import colormap, ContinuousNorm
+from ..draw import TAB10
 from ..utils import to_list_2d
 from ._marching import MS_CASES as _MS_CASES
 from ._marching import cell_has_nan as _cell_has_nan
@@ -89,7 +90,7 @@ def _contour_draw(a, ctx):
         alpha = a["opts"].get("alpha", 1.0 if cmap_name else 0.25)
         return filled_levels_svg(
             grid, nr, nc, levels, cmap_name=cmap_name,
-            color=color_opt or ctx.color or "#1f77b4", alpha=alpha,
+            color=color_opt or ctx.color or TAB10[0], alpha=alpha,
             x0d=x0d, y0d=y0d, dxd=dxd, dyd=dyd,
             x_scale=ctx.x_scale, y_scale=ctx.y_scale)
     if cmap_name:
@@ -103,7 +104,7 @@ def _contour_draw(a, ctx):
         elif color_opt:
             col = color_opt
         else:
-            col = ctx.color or "#1f77b4"
+            col = ctx.color or TAB10[0]
         for r in range(nr - 1):
             for c in range(nc - 1):
                 vtl = grid[r][c]; vtr = grid[r][c + 1]
@@ -153,5 +154,5 @@ add_artist(ArtistSpec(
     draw=_contour_draw,
     legend_gradient=_contour_legend_gradient,
     uses_color_cycle=False,
-    default_color="#1f77b4",
+    default_color=TAB10[0],
 ))
