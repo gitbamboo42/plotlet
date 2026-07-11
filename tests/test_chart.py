@@ -2817,6 +2817,26 @@ def test_aspect_validation():
         fig.to_svg()
 
 
+def test_facet_aspect_lock():
+    # facet defaults share_x=share_y=True and replays aspect() onto every
+    # panel; the forced anchor dims satisfy the lock (same union domains),
+    # so this must render — with the ratio holding in each panel.
+    import re
+    g = pt.facet(_facet_grid_df(), col="c")
+    g.scatter(x="x", y="y")
+    g.aspect("equal")
+    svg = g.to_svg()
+    areas = re.findall(r'data-plotlet-data-area="([^"]*)"', svg)
+    xlims = re.findall(r'data-plotlet-xlim="([^"]*)"', svg)
+    ylims = re.findall(r'data-plotlet-ylim="([^"]*)"', svg)
+    assert len(areas) == 2
+    for area, xl, yl in zip(areas, xlims, ylims):
+        w, h = [float(v) for v in area.split(",")[2:4]]
+        x0, x1 = [float(v) for v in xl.split(",")]
+        y0, y1 = [float(v) for v in yl.split(",")]
+        assert abs((h / (y1 - y0)) / (w / (x1 - x0)) - 1.0) < 0.01
+
+
 # ---------------------------------------------------------------------------
 # multi-line title / axis labels (no baselines)
 

@@ -638,9 +638,16 @@ def _aspect_dims(st, xd, yd, w: float, h: float, *,
     if x_span <= 0 or y_span <= 0:
         return w, h
     if w_locked and h_locked:
+        # Both dims are forced by share anchors. When the forced dims
+        # already satisfy the lock, accept them — the facet case: every
+        # panel copies the anchor's dims and reads the same class-union
+        # domains, so the anchor's own rederivation holds here too.
+        if abs(h - r * w * y_span / x_span) <= 0.5:
+            return w, h
         raise ValueError(
             "c.aspect(...) conflicts with sharing both axes — the share "
-            "class already fixes both panel dimensions."
+            "class fixes both panel dimensions, and they don't satisfy "
+            "the requested ratio."
         )
     # The figure root rounds total W/H to integer px — round the derived
     # dim here so the lock degrades by at most half a pixel, instead of
