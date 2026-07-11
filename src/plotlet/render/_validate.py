@@ -15,8 +15,10 @@ out in `docs/IR.md`:
     table (dependency order, the property hydration relies on)
   * references are kind-appropriate: insets live on leaf nodes and
     target chart nodes; legend sources are leaf nodes
-  * value envelopes are well-formed and `{"$coord": ...}` names resolve
-    in the coord registry
+  * value envelopes are well-formed; `{"$coord": ...}` names resolve
+    in the coord registry and carry a `container` flag matching the
+    registered class (stamped at record time — the flag is what lets
+    lowering place hoisted ops without touching the registry)
   * op names resolve: chart-family ops against the artist registry ∪
     the frame-method set ∪ `attach_*`; layout ops against the
     materialized ∪ passthrough sets
@@ -83,9 +85,30 @@ def _check_values(value, kinds: dict, where: str) -> None:
                 )
             from .._coord_registry import resolve_coord
             try:
-                resolve_coord(name)
+                cls = resolve_coord(name)
             except KeyError as e:
                 raise _err(f"{where}: {e.args[0]}") from None
+            # `container` is stamped by `to_journal` from the live class;
+            # lowering's hoist decision trusts it without touching the
+            # registry. Requiring it and cross-checking it here is what
+            # makes that trust safe: a class of the same name whose
+            # container-ness differs fails loudly instead of silently
+            # rendering a structurally different figure.
+            container = value.get("container")
+            if not isinstance(container, bool):
+                raise _err(
+                    f"{where}: $coord envelope for {name!r} is missing "
+                    f"the required 'container' flag (bool: does the "
+                    f"coord class define render_layout?)."
+                )
+            if container != hasattr(cls, "render_layout"):
+                raise _err(
+                    f"{where}: $coord envelope for {name!r} says "
+                    f"container={container}, but the registered class "
+                    f"{'defines' if not container else 'does not define'} "
+                    f"render_layout. The registered class differs from "
+                    f"the one this blob was recorded against."
+                )
             _check_values(value.get("kwargs", {}), kinds, where)
             return
         if "$sectors" in value:

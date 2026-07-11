@@ -160,10 +160,19 @@ def to_journal(root) -> Journal:
         hidden object pointers:
           - Chart / Layout / FacetGrid  → {"$node": nid}
           - Sectors                     → {"$sectors": ...}
-          - Registered coord            → {"$coord": name, "kwargs": ...}
+          - Registered coord            → {"$coord": name, "container": bool,
+                                            "kwargs": ...}
         Everything else (primitives, DataFrameLite, user dicts / lists)
         is passed through unchanged — pandas / numpy have already been
-        normalized at the recorder boundary."""
+        normalized at the recorder boundary.
+
+        `container` is stamped here, while the coord object is live:
+        True iff the class defines `render_layout`. Lowering's hoist
+        decision (`_ir._wrap_root`) reads the flag instead of resolving
+        the name, so op placement in the IR is a function of the blob
+        alone, not of which classes the decoding process has registered.
+        `render.validate` cross-checks the flag against the registered
+        class, so a stale or hand-authored lie fails loudly."""
         # Late import to avoid a cycle with chart.py at module load.
         from .chart import _Renderable
         from .sectors import Sectors
@@ -176,6 +185,7 @@ def to_journal(root) -> Journal:
         if type(value).__name__ in _COORD_REGISTRY:
             return {
                 "$coord": type(value).__name__,
+                "container": hasattr(type(value), "render_layout"),
                 "kwargs": _encode(value._to_dict()),
             }
         if isinstance(value, dict):

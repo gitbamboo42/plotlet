@@ -107,10 +107,11 @@ implements `render_layout`) additionally hoists `coordinate` and
 `title`, since the overlay path draws no leaf chrome. Composition-level
 state therefore never sits on a chart at the root position. Only the
 root wraps: charts inside layouts already have a layout home for
-composition state, and grid cells are charts by API contract. One
-consequence: for container coords the *placement* of the hoisted ops is
-registry-relative — deciding whether `coordinate`/`title` hoist requires
-resolving the `$coord` name at lowering time.
+composition state, and grid cells are charts by API contract. The hoist
+decision reads the `container` flag on the `$coord` envelope (stamped by
+`to_journal` from the live class), so op placement is a function of the
+blob alone — `validate` cross-checks the flag against the registered
+class and rejects a mismatch.
 
 ## Value envelopes
 
@@ -120,8 +121,10 @@ hydration:
 
     {"$node": <nid>}                     cross-node reference (attachments,
                                          coord inners, legend name keys)
-    {"$coord": <class name>, "kwargs"}   coord instance, via the coord
-                                         registry (`register_coord_codec`)
+    {"$coord": <class name>,             coord instance, via the coord
+     "container": <bool>, "kwargs"}     registry (`register_coord_codec`);
+                                         `container` = class defines
+                                         `render_layout`, required
     {"$sectors": {...}}                  Sectors value
 
 A dict containing the key `$node` must be exactly that single-key form.

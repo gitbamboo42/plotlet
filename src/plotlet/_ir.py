@@ -261,21 +261,19 @@ def _is_container_coord_op(op: dict) -> bool:
     """True when `op` is a `coordinate` call carrying a container-strategy
     coord — one that owns the whole composition render via
     `render_layout` (e.g. `CircularCoordinate`). Values arrive as
-    `{"$coord": name}` envelopes from `to_journal`; a live coord object
-    (hand-built journal) is duck-checked directly. Resolving the name is
-    a lazy front→render call — the price is that op *placement* (which
-    node ends up carrying `coordinate` / `title`) is registry-relative
-    for container coords (documented in docs/IR.md)."""
+    `{"$coord": name, "container": bool}` envelopes from `to_journal`,
+    which stamps the flag from the live class at record time; a live
+    coord object (hand-built journal) is duck-checked directly. Reading
+    the flag instead of resolving the name keeps op *placement* (which
+    node carries `coordinate` / `title`) a function of the blob alone.
+    A missing flag reads False here — `render.validate` requires it and
+    cross-checks it against the registered class, so the mismatch is
+    reported there, with context."""
     if op["op"] != "coordinate" or not op["args"]:
         return False
     coord = op["args"][0]
     if isinstance(coord, dict) and "$coord" in coord:
-        from ._coord_registry import resolve_coord
-        try:
-            cls = resolve_coord(coord["$coord"])
-        except KeyError:
-            return False  # unresolvable — validate reports it, with context
-        return hasattr(cls, "render_layout")
+        return coord.get("container") is True
     return hasattr(coord, "render_layout")
 
 

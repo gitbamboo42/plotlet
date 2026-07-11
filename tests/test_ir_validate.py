@@ -193,6 +193,38 @@ def test_unknown_coord():
     _expect(ir, "HexagonalCoordinate")
 
 
+def _circular_ir():
+    c = pt.chart({"x": [1, 2, 3], "y": [1, 4, 9]})
+    c.scatter(x="x", y="y")
+    lay = pt.grid([[c]])
+    lay.coordinate(pt.CircularCoordinate(r_inner=0.3))
+    return pt.to_ir(lay)
+
+
+def _coord_envelope(ir):
+    for node in ir.nodes:
+        for op in node.ops:
+            if op["op"] == "coordinate":
+                return op["args"][0]
+    raise AssertionError("no coordinate op in IR")
+
+
+def test_coord_container_flag_required():
+    ir = _circular_ir()
+    del _coord_envelope(ir)["container"]
+    _expect(ir, "missing the required 'container' flag")
+
+
+def test_coord_container_flag_must_match_registry():
+    # A blob recorded against one CircularCoordinate, validated in a
+    # process where the name resolves to a class of different
+    # container-ness, must fail loudly — flipping the recorded flag
+    # simulates exactly that divergence.
+    ir = _circular_ir()
+    _coord_envelope(ir)["container"] = False
+    _expect(ir, "container=False")
+
+
 def test_malformed_inset():
     ir = _chart_ir()
     _node(ir, "chart").insets.append({"rect": [0, 0, 1], "chart_nid": 1})
