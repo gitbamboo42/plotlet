@@ -40,11 +40,15 @@ def chrome_stack_extents(st, inp):
     and ``_render_inner`` (to position the outermost label past it).
     Keeps the two in lockstep without a DRY violation.
     """
+    # Spine gate mirrors emit_chrome: a hidden spine draws no tick marks,
+    # so it reserves no tick-mark band either.
     out_x = (_FRAME["tick_length"]
-             if (st["x_marks"] and inp.x_ticks and st["x_direction"] != "in")
+             if (st["x_marks"] and inp.x_ticks and st["x_direction"] != "in"
+                 and st[f"spine_{inp.x_side}"])
              else 0)
     out_y = (_FRAME["tick_length"]
-             if (st["y_marks"] and inp.y_ticks and st["y_direction"] != "in")
+             if (st["y_marks"] and inp.y_ticks and st["y_direction"] != "in"
+                 and st[f"spine_{inp.y_side}"])
              else 0)
 
     hide_x = inp.hide_b if inp.x_side == "bottom" else inp.hide_t
@@ -642,7 +646,11 @@ def emit_chrome(*, st, inp, iw, ih,
             x_endpoints = x_top_endpoints
             y_band_edge_sign = -1  # band grows upward from y=0
             x_band_y0 = 0
-        x_label_dy = (_FRAME["tick_pad"] if (x_dir == "in" or not x_marks)
+        # No visible outward mark (inward, disabled, or spine hidden) →
+        # labels sit flush at tick_pad past the spine line.
+        x_label_dy = (_FRAME["tick_pad"]
+                      if (x_dir == "in" or not x_marks
+                          or not st[f"spine_{x_side}"])
                       else _FRAME["tick_length"] + _FRAME["tick_pad"])
 
         for t, lbl in zip(x_ticks, x_labels):
@@ -893,7 +901,9 @@ def emit_chrome(*, st, inp, iw, ih,
         # y-ticks + labels — Cartesian. Like the x-block above, flip wholesale
         # by `y_side`: spine attachment, tick-mark endpoints, label anchor.
         y_side = inp.y_side
-        y_label_dx = (_FRAME["tick_pad"] if (y_dir == "in" or not y_marks)
+        y_label_dx = (_FRAME["tick_pad"]
+                      if (y_dir == "in" or not y_marks
+                          or not st[f"spine_{y_side}"])
                       else _FRAME["tick_length"] + _FRAME["tick_pad"])
         if y_side == "left":
             y_spine_side, y_hide_axis = "left", hide_l
