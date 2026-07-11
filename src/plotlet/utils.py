@@ -531,7 +531,8 @@ def bootstrap_ci(vals, estimator_fn, level, n_boot, rng):
             boots[min(n_boot - 1, int((1 - alpha) * n_boot))])
 
 
-__all__ = ["to_list", "to_list_2d", "broadcast", "histogram", "quantile",
+__all__ = ["to_list", "to_list_2d", "broadcast", "quantile",
+           "hist_bin_edges", "hist_bin_counts", "hist_transform",
            "resolve_aes", "palette_color", "dodge_positions",
            "categorical_groups", "collect_categories",
            "long_form_xy", "long_form_1d",

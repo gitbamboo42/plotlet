@@ -3293,6 +3293,14 @@ def test_hist2d_two_item_bins():
     assert 'data-plotlet-bins-y="5"' in svg
 
 
+def test_utils_all_names_exist():
+    # `from plotlet.utils import *` must not raise — every exported
+    # name has to exist (the removed `histogram` lingered here once)
+    import plotlet.utils as utils
+    for name in utils.__all__:
+        assert hasattr(utils, name), name
+
+
 def test_attach_above_promotes_subtitle():
     def build(**chart_kw):
         host = pt.chart({"x": [1, 2, 3], "y": [1, 2, 3]}, **chart_kw)
