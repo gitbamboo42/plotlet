@@ -6,9 +6,9 @@ font color. plotlet ships four:
 | theme     | look                                                                |
 |-----------|---------------------------------------------------------------------|
 | `classic` | white background, black spines on all four sides, no grid (default) |
-| `minimal` | white background, no spines, light dashed gridlines on by default   |
+| `minimal` | white background, no spines, light solid gridlines on by default    |
 | `dark`    | dark gray background, light spines, soft grid on by default         |
-| `void`    | white background, no spines, no ticks — for sparklines/insets       |
+| `void`    | white background, no spines, no tick marks (tick labels remain — pass `c.xticks([])` / `yticks([])` to drop those too) — for sparklines/insets |
 
 ## Using a theme
 
@@ -45,36 +45,33 @@ it too.
 
 ## What a theme controls
 
-The full set of keys a theme can override:
+A theme is a deep-merge over the whole spec, so **any** `spec.json` key
+is overridable — the sections you'll typically touch:
 
 ```jsonc
 {
-  "figure":   { "background": "#ffffff" },
-  "font":     { "family": "...", "color": "#000000",
-                "tick_size": 11, "label_size": 12, "title_size": 13 },
-  "frame":    { "color": "#000000", "width": 0.8,
-                "tick_length": 3.5, "tick_pad": 4,
-                "tick_direction": "out",
-                "x_side": "bottom", "y_side": "left",
-                "spine_top": true, "spine_right": true,
-                "spine_bottom": true, "spine_left": true },
-  "grid":     { "color": "#b0b0b0", "width": 0.5,
-                "dasharray": "2,3",
+  "figure":   { "background": "..." },
+  "font":     { "family": "...", "color": "...",
+                "tick_size": ..., "label_size": ..., "title_size": ... },
+  "frame":    { "color": "...", "width": ..., "tick_length": ...,
+                "tick_direction": "...", "x_side": "...",
+                "spine_top": true, /* …one flag per side */ },
+  "grid":     { "color": "...", "width": ..., "dasharray": "2,3",
                 "default_on": false },
-  "defaults": { "linewidth": 1.5, "markersize": 4, "scatter_alpha": 0.85,
-                "fill_alpha": 0.3, "bar_alpha": 1, "hist_alpha": 1,
-                "refline_color": "#000000", "refspan_alpha": 0.2,
-                "dendrogram_color": "#1a1a1a", "text_color": "#222222",
-                "errorbar_capsize": 4 /* … see src/plotlet/spec.json */ },
-  "legend":   { "background": "#ffffff", "opacity": 0.92,
-                "swatch_width": 22, "row_height": 16 /* … */ },
-  "linestyles": { "-": null, "--": "6,3", ":": "1,3", "-.": "6,3,1,3" }
+  "defaults": { "linewidth": ..., "markersize": ..., "fill_alpha": ...,
+                "refline_color": "...", /* …per-artist visual defaults */ },
+  "legend":   { "background": "...", "swatch_width": ..., /* … */ },
+  "linestyles": { "--": "6,3", /* …dash specs */ }
 }
 ```
 
-Any of these can be overridden by a theme. Unspecified keys fall through
-to `classic` — which is just `spec.json` with no overrides. The full
-default spec lives in [`src/plotlet/spec.json`](../src/plotlet/spec.json).
+The remaining sections (`size`, `pad`, `sectors`, `layout`) merge the
+same way — see the `size.data_width` warning below before touching
+geometry. `"dasharray": null` drops the dash (solid gridlines — how
+`minimal` gets its look). Unspecified keys fall through to `classic` —
+which is just `spec.json` with no overrides. The authoritative key set
+and the default values live in
+[`src/plotlet/spec.json`](../src/plotlet/spec.json).
 
 `font.family` doubles as the face selector: its first comma-separated
 segment takes the same values as `c.font(...)` — a bundled name or a

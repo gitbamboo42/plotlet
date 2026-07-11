@@ -7,7 +7,7 @@ colormap. Used wherever a c.scatter() would devolve into a black blob.
 Hexagons are sized and binned in pixel space so they always appear as regular
 hexagons that tile without gaps regardless of the canvas aspect ratio.
 
-API: c.hexbin(xs, ys)
+API: c.hexbin(data=df, x="col", y="col")
 
 Styling kwargs:
   gridsize=30    number of hex columns across the canvas width

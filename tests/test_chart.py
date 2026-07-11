@@ -662,7 +662,7 @@ def chart_heatmap_continuous_nan():
 
 
 def chart_heatmap_split():
-    # ComplexHeatmap-style row + column clusters via c.sectors. Both
+    # Annotated-heatmap row + column clusters via c.sectors. Both
     # grouping vectors are deliberately interleaved so the auto
     # cluster-and-gap reordering is exercised on both axes — rows regroup
     # to A,A,A / B,B,B / C,C and cols regroup to X,X,X / Y,Y,Y,Y,Y /

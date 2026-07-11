@@ -89,7 +89,7 @@ Op names are interpreted per kind:
   `sectors`, `theme`, ... — `_FRAME_OPS` in `render/core.py` is the
   authoritative set), or `attach_left/right/above/below`.
 - `layout` nodes: `share_x`, `share_y`, `align_x`, `align_y`, `gap`,
-  `coordinate`, `sectors`, `title` (`_LAYOUT_MATERIALIZED` ∪
+  `coordinate`, `sectors`, `title`, `heights` (`_LAYOUT_MATERIALIZED` ∪
   `_LAYOUT_PASSTHROUGH` in `render/_nodes.py`).
 
 **Interpretation is registry-relative.** The IR stores names, not
@@ -152,7 +152,9 @@ blob = ir.to_dict()         # JSON-safe; pt.from_ir(blob) inverts
 ```
 
 The render half's full seam (`render/__init__.py`): `render_svg`,
-`regions`, `natural_size`, `data_total_size`, `resolve`, `validate` —
-every function takes a `FigureIR`. Violations raise
+`regions`, `natural_size`, `data_total_size`, `resolve`, `validate`,
+plus `hydrate(ir)` / `materialize(tree)` for tools that walk or measure
+the render tree — every function takes a `FigureIR` (`materialize` the
+tree `hydrate` returns). Violations raise
 `ValueError("invalid FigureIR: ...")` naming the offending node and
 rule.

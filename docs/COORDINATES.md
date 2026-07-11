@@ -95,22 +95,18 @@ self-register via `declare_coord_support("Circular", [...])` from their
 own modules — `import plotlet.extensions.chord_links` activates the
 artist.
 
-**Supported artists.** Core: data marks (`scatter`, `line`, `step`,
-`hist`, `heatmap`, `fill_between`, `area`, `bar`, `errorbar`);
-statistical / distribution marks (`strip`, `swarm`, `boxplot`, `violin`,
-`pointplot`, `qq`, `rug`, `ecdf`, `freqpoly`, `density_1d`,
-`regression`); reference primitives (`axhline`, `axvline`, `axhspan`,
-`axvspan`, `hlines`, `vlines`); shape primitives (`rect`, `polygon`,
-`polyline`). Everything warps through the standard `draw.*` subdivision:
-segments become arcs, rects become annular sectors (a bar → a wedge, a
-box → an annular box), polygons curve along the ring; point marks
-re-anchor but keep their glyph shape. Not supported: 2-D field marks
-(`imshow`, `hexbin`, `kde_2d`, `contour`) and the stacked-baseline
+**Supported artists.** The authoritative list is the
+`declare_coord_support("Circular", [...])` block at the bottom of
+[`render/coordinates.py`](../src/plotlet/render/coordinates.py) — most
+of the standard vocabulary, including the reference and shape primitives
+and `text` / `annotate`. Everything warps through the standard `draw.*`
+subdivision: segments become arcs, rects become annular sectors (a bar →
+a wedge, a box → an annular box), polygons curve along the ring; point
+marks re-anchor but keep their glyph shape. Not supported: 2-D field
+marks (`imshow`, `hexbin`, `kde_2d`, `contour`) and the stacked-baseline
 `ridge` don't map to a 1-D-over-angle canvas; `dendrogram` awaits its
 own radial-tree treatment. Extensions: `numeric_bar`, `chord_links`,
-`chord_ribbon`, `annotation_strip` (each activates on import). The
-authoritative list is the `declare_coord_support("Circular", [...])`
-block at the bottom of [`coordinates.py`](../src/plotlet/coordinates.py).
+`chord_ribbon`, `annotation_strip` (each activates on import).
 
 **Per-artist coord knobs.** A few artists expose a kwarg that only
 matters under a non-Cartesian coord:
@@ -145,6 +141,7 @@ deeper integration:
 | `draw_x_frame(project, iw, ih, x_ticks_t, x_labels, frame_opts) -> str` | Replaces the Cartesian x-axis rendering. When present, the standard bottom-spine + x-tick block is skipped. |
 | `draw_x_sector_chrome(...)` | Replaces the Cartesian x-axis sector chrome (dividers + labels) when `c.sectors(axis="x")` is set. Required if `draw_x_frame` is implemented and sectors are used. |
 | `clip_path_d(iw, ih) -> str` | SVG path-data string for the data-area clip region. Defaults to the four-corner polygon (correct for affine coords); `CircularCoordinate` returns an annulus. |
+| `render_layout(root) -> (W, H, body)` | Makes the coord a **container coord**: it takes over layout rendering for the whole (sub)tree — `CircularCoordinate` overlays every leaf onto one canvas as concentric r-bands. Its presence drives the IR container flag and the title hoist (see [IR.md](IR.md)); coords without it render each panel in its own layout cell. |
 
 For **non-affine** coords (no `svg_transform`), supporting artists draw
 through `ctx.warp` — a Cartesian-pixel → coord-pixel closure passed to
@@ -195,10 +192,11 @@ pt.declare_coord_support("Flipped", ["scatter", "line", "bar"])
 ```
 
 For JSON round-trip, add `_to_dict` / `_from_dict` and register a codec
-(see `register_coord_codec` in `serialize.py`).
+via `pt.register_coord_codec(...)`.
 
 For the full worked example — frame chrome, sector chrome, clip path,
-inner sub-coord, serialization — read [`coordinates.py`](../src/plotlet/coordinates.py).
+inner sub-coord, serialization — read
+[`render/coordinates.py`](../src/plotlet/render/coordinates.py).
 That file is the authoritative reference for the protocol contract; the
 table above is a navigation aid.
 

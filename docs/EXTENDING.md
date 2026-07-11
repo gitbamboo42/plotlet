@@ -98,8 +98,10 @@ framework wraps your fragment in a `<g>` that carries `data-plotlet-*` attrs.
 | `polygon(points, *, fill, stroke, stroke_width, alpha, fill_alpha, stroke_alpha)` | Closed shape (auto-trailing `Z`) through `[(x, y), …]`. |
 | `errorbar_v(x, y_lo, y_hi, *, capsize, color, width, alpha)` | Vertical bar with two caps; `capsize=0` drops the caps. |
 | `errorbar_h(y, x_lo, x_hi, *, capsize, color, width, alpha)` | Horizontal bar with two caps. |
-| `marker(kind, x, y, size, color, alpha)` | One of `"o" "s" "^" "v" "x" "+"` at pixel `(x, y)`. |
+| `marker(kind, x, y, size, color, alpha, edgecolor=, edgewidth=)` | One of `"o" "s" "^" "v" "<" ">" "x" "+" "*" "D" "h"` at pixel `(x, y)`; `edgecolor=` outlines the filled kinds. |
 | `text_path(s, x, y, size, anchor, color, fontstyle=, fontweight=)` | Text as glyph paths (font-independent across machines); `fontstyle="italic"` / `fontweight="bold"` select the active family's real variant faces. |
+| `arc(x0, y0, x1, y1, *, height, **path_kwargs)` | Half-ellipse arc between two points; `height` sets the apex distance (sign picks the side). |
+| `split_rect(x, y, w, h, n, i, *, ...)` / `split_pie(x, y, w, h, n, i, *, ...)` | Sector `i` of a rect perimeter / pie divided into `n` sectors — glyphs for set-membership marks. |
 
 `dash=` accepts the short codes (`"--"`, `":"`, `"-."`) or a raw SVG
 dasharray (`"6,3"`). `fill_alpha` / `stroke_alpha` override `alpha` per
@@ -112,37 +114,19 @@ to a raw f-string. It's just SVG.
 
 ## ArtistSpec fields
 
-```python
-ArtistSpec(
-    name: str,
-    record: (args, kwargs) -> dict,           # required
-    draw: (artist_dict, ctx) -> str,          # required, returns SVG fragment
-    xdomain: (artist_dict) -> Iterable | None = lambda a: None,
-    ydomain: (artist_dict) -> Iterable | None = lambda a: None,
-    accepts_data_positional: bool = True,
-    layer: "background" | "data" | "foreground" = "data",
-    uses_color_cycle: bool = True,
-    default_color: str | None = None,
-    legend_entries: (a) -> list[dict] | None = None,
-    legend_gradient: (a) -> dict | None = None,
-    data_attrs: (a) -> dict | None = None,
-    flips_y_axis: (a) -> bool | None = None,
-    tight_domain: bool = False,
-    force_zero_x: bool | (a) -> bool = False,
-    force_zero_y: bool | (a) -> bool = False,
-    axis_order: (a) -> dict | None = None,
-    frame_defaults: (args, kwargs) -> list[tuple] | None = None,
-    crosses_sectors: bool = False,
-)
-```
+The authoritative field list, signatures, and defaults are the
+`ArtistSpec` dataclass in [`registry.py`](../src/plotlet/registry.py) —
+`name`, `record`, and `draw` are required; everything else is an opt-in
+behavior. What each opt-in is *for*:
 
 | Field | When you need it |
 |---|---|
 | `accepts_data_positional` | Default `True` — enables the `c.<artist>(df, x=, y=)` sugar that hoists a single positional arg into `kw["data"]`. Set `False` for matrix-input or single-primary-input artists (`heatmap`, `imshow`, `axhline`, `annotate`) so their `args[0]` doesn't get swallowed. Multi-positional artists (rect, polygon, …) are unaffected either way because the sugar only triggers on `len(args) == 1`. |
 | `xdomain` / `ydomain` | Your artist's data should drive axis limits. Return `None` for decorative artists (axhline, axvline). |
+| `xdomain_log` / `ydomain_log` | Domain contribution under a **log** scale when it must differ from the plain hook — e.g. a CI band whose non-positive bounds would poison a log domain. `None` (default) → the plain hook serves every scale kind. |
 | `layer` | `"background"` for fills (drawn first), `"foreground"` for reference lines (drawn last). Default `"data"`. |
 | `uses_color_cycle` | Set `False` for artists that pick their own color (reflines, image artists). Set `default_color` for the fallback. |
-| `legend_entries` | Return the legend entries this artist contributes (zero or more). Each entry is a `{"label": str, "color": str, "paint": callable}` dict where `paint(a, ctx, x0, y_mid) -> svg_fragment` draws the swatch. Most one-series-per-call artists return zero or one entry depending on whether `label=` was set. |
+| `legend_entries` | Return the legend entries this artist contributes (zero or more). Each entry is `{"label": str, "color": str}` plus optional `"alpha"`, `"group"` (clusters entries under one header), and `"paint"` — `paint(a, ctx, x0, y_mid) -> svg_fragment` overrides the default rect swatch. Most one-series-per-call artists return zero or one entry depending on whether `label=` was set. |
 | `legend_gradient` | For artists with a continuous color mapping. Returns `{"kind": "continuous", "cmap": ..., "vmin": ..., "vmax": ...}`. |
 | `data_attrs` | AI-readable type-specific attrs. Keys land on the artist's `<g>` as `data-plotlet-<key>`. Common attrs (type, index, label, color) are automatic — see [`AI_ATTRS.md`](AI_ATTRS.md). |
 | `flips_y_axis` | Return `True` when this artist needs the y-axis inverted (top → bottom). Used by `imshow` / `heatmap` so row 0 sits at the top. |
@@ -214,7 +198,7 @@ and `pt.linkage_split`.
 | `build_tree(args, kw, split)` | Standard input dispatch: pops `tree=` / `linkage_matrix=` / `data=` from `kw` and returns `(SplitTree, had_labels)`. Drop into your artist's `record`. |
 | `layout_tree(tree)` | `SplitTree` → `(blocks, offsets, final_labels)` ready for drawing. Per-block scipy.dendrogram + pooled height normalize. |
 | `layout_parent(tree)` | The optional centroid tree's `(icoord, dcoord, leaves)`, or `None` for single-block trees. |
-| `fit_parent(blocks, parent_layout, frac, gap_frac=)` | Shrinks per-block dcoords + drops parent leaves to each block's apex so both fit in one panel. |
+| `fit_parent(blocks, parent_layout, parent_frac, gap_frac=)` | Shrinks per-block dcoords + drops parent leaves to each block's apex so both fit in one panel. |
 | `leaf_position(scale, labels, disp)` | Float leaf-position → pixel; gap-aware on split scales. |
 | `block_apex_centers(scale, labels, offsets, blocks)` | x-center of each block's topmost merge bar — where parent leaves should land. |
 | `parent_leaf_px(midpoints, x)` | Interpolate between block midpoints for fractional parent-tree x values. |

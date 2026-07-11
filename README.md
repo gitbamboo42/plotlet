@@ -6,7 +6,7 @@ plotlet is a Python library for reproducible, multi-panel scientific figures. By
 
 Hands-on tour with executable examples:
 
-- [notebooks/00_introduction.ipynb](notebooks/00_introduction.ipynb) — long-form data, aesthetic inheritance, layering, composition
+- [notebooks/00_introduction.ipynb](notebooks/00_introduction.ipynb) — long-form data, aesthetic inheritance, layering, composition (more topic notebooks in [`notebooks/`](notebooks/))
 
 Reference docs in [`docs/`](docs/):
 
@@ -31,7 +31,7 @@ Compact, vendor-neutral onboarding docs live in [`skills/`](skills/):
 
 plotlet supports Python 3.10+.
 
-Required: `fonttools`, `scipy` (used by regression, qq, pointplot, dendrogram), `resvg_py` (PNG rendering — prebuilt wheels, no system libraries). numpy / pandas / polars inputs work transparently.
+Required: `fonttools`, `scipy` (regression, qq, CI error bands, clustering/dendrogram), `resvg_py` (PNG rendering — prebuilt wheels, no system libraries). numpy / pandas / polars inputs work transparently.
 
 Optional: `cairosvg` for PDF export (`pip install plotlet[pdf]`).
 

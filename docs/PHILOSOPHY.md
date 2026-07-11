@@ -28,7 +28,7 @@ per-extension cost low.
   - **2-D distributions:** hexbin, hist2d, kde_2d, contour, ridge, qq
   - **bars & areas:** bar (stack/dodge/fill), fill_between, area (stack), errorbar
   - **images & matrices:** imshow, heatmap, dendrogram
-  - **reference lines / shapes / text:** axhline/vline/span, axline, rect, polygon, text, annotate
+  - **reference lines / shapes / text:** axhline/vline/span, axline, hlines/vlines, rect, polygon, text, annotate
 - Text-as-paths rendering for cross-machine reproducibility
 - The locked visual contract (`spec.json`) and theming layer
 
@@ -62,7 +62,7 @@ Several features fall out of this rather than being designed separately:
 - **Themes.** `c.theme(...)` appends into the same journal. A user's `c.xlim(...)` after `c.theme(...)` naturally wins by journal order; no precedence rules to maintain.
 - **Facets.** `pt.facet(...)` is a chart-shaped recorder; one set of artist calls is replayed against each group's subset.
 - **Shared scales.** `share_x="col"` does a pre-pass replay to discover per-panel data domains, then unions them by column before the real render.
-- **Extension.** `add_artist(name, record=..., draw=...)` just registers a pair of pure functions; the journal needs no extension points.
+- **Extension.** `add_artist(ArtistSpec(name, record=..., draw=...))` just registers a pair of pure functions; the journal needs no extension points.
 
 The price is that `record()` runs before scales and colors exist, so
 artists can't resolve pixel positions or palettes at record time — see
@@ -87,8 +87,9 @@ Three claims:
    [`plotlet-extensions`](https://github.com/gitbamboo42/plotlet-extensions)
    package and [`plotlet-cookbook`](https://github.com/gitbamboo42/plotlet-cookbook) as copy-and-adapt examples. The
    boundary is explicit ("What's *not* in the core" above), the
-   extension API is `ArtistSpec` + three callbacks, and the replay model
-   means custom artists compose like built-in ones.
+   extension API is `ArtistSpec` — two required callbacks (`record`,
+   `draw`) plus opt-in hooks — and the replay model means custom
+   artists compose like built-in ones.
 
 The cost: if your plot type isn't shipped, you write it.
 

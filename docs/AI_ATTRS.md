@@ -14,7 +14,7 @@ on the root.
 
 | Attribute              | Example                | Notes                                      |
 |------------------------|------------------------|--------------------------------------------|
-| `data-plotlet-version` | `"0.5.0"`              | the plotlet release that emitted this SVG  |
+| `data-plotlet-version` | `"0.6.0"`              | the plotlet release that emitted this SVG  |
 | `data-plotlet-schema`  | `"2"`                  | bumped only when names change incompatibly |
 | `data-plotlet-kind`    | `"layout"`             | always `"layout"` — a lone chart is a 1x1 layout |
 
@@ -56,6 +56,13 @@ legend_position=...)`) live inside the panel `<g>` and don't carry
 these attrs — their geometry is part of the panel's chrome rather than
 a sibling leaf. Filter by `data-plotlet-kind` to distinguish.
 
+### Inset `<g>` (inset axes)
+
+`c.inset(...)` renders inside the parent panel's `<g>` as a nested
+`<g data-plotlet-kind="inset">` wrapping a complete inner SVG — the
+inset's own panel/artist attrs live inside it, so a consumer walking
+for panels should recurse into (or deliberately skip) inset groups.
+
 ### Artist `<g class="plotlet-artist">` (one per recorded artist)
 
 Common attrs (always emitted):
@@ -78,9 +85,17 @@ Type-specific attrs:
 | `fill_between`  | `n`, `x-min`, `x-max`, `y-min`, `y-max`, `curve`                             |
 | `area`          | `n`, `x-min`, `x-max`, `y-min`, `y-max`, `base`, `curve`                     |
 | `rect` / `polygon` | `n`, `x-min`, `x-max`, `y-min`, `y-max`                                   |
+| `errorbar`      | `n`, `x-min`, `x-max`, `y-min`, `y-max`, `marker`                            |
 | `axhline` / `axvline` | `y` / `x`                                                              |
 | `axhspan` / `axvspan` | `ymin`, `ymax` / `xmin`, `xmax`                                        |
-| `imshow`        | `rows`, `cols`, `vmin`, `vmax`, `cmap`, `extent`, `data-encoding` (`"rects"` below ~10000 cells, `"png"` above) |
+| `axline`        | `x1`, `y1` plus `slope` (point + slope form) or `x2`, `y2` (two-point form)  |
+| `hlines` / `vlines` | `n`, `x-min`, `x-max`, `y-min`, `y-max`                                  |
+| `text`          | `n`, `x-min`, `x-max`, `y-min`, `y-max`                                      |
+| `annotate`      | `x`, `y` (annotated point), `tx`, `ty` (text position), `text`               |
+| `imshow`        | `rows`, `cols`, `vmin`, `vmax`, `cmap`, `extent`, `data-encoding` (`"rects"` below ~10000 cells, `"png-embedded"` above); when non-default: `origin`, `norm`, `center`, `annot` (`"values"`/`"custom"`) |
+| `heatmap`       | `rows`, `cols`, `data-encoding` plus either `vmin`, `vmax`, `cmap` (value mode) or `mode="categorical"`, `categories` (palette mode); numeric-`x` charts add `x-axis="continuous"`, `x-extent`; when non-default: `norm`, `center`, `annot` |
+| `hist2d`        | `n` (raw obs), `bins-x`, `bins-y`, `count-max`                               |
+| `dendrogram`    | `orient`, `n-leaves`, `max-height`, `leaves` (concatenated scipy leaf order) |
 
 ### Categorical lists
 
@@ -132,7 +147,7 @@ print(c.to_svg())
 What an AI sees, semantically:
 
 ```
-SVG kind=layout plotlet=0.5.6 schema=2
+SVG kind=layout plotlet=0.6.0 schema=2
   PANEL title="Daily revenue" xlabel=day ylabel=USD
         xscale=linear xlim=1.0,4.0  yscale=linear ylim=10.0,15.0
     ARTIST 0 type=line label=actual color=#1f77b4

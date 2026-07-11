@@ -1,9 +1,8 @@
 """Text-rendering artists — `text` for data-anchored labels, `annotate`
 for a label connected to a point by an arrow.
 
-  c.text(x, y, "label")                          # single label (scalars)
-  c.text(xs, ys, ["A", "B", "C"])                # multiple labels (lists)
   c.text(data=df, x="x", y="y", label="name")    # long-form (column names)
+  c.annotate("peak", xy=(3, 14.7))               # one-off label
 
 Both render glyph paths from the bundled DejaVu Sans so output stays
 font-independent.
@@ -195,9 +194,8 @@ def _artist_text(a, xs_, ys_, col, warp=None):
 
 
 # --- text ---
-# Data-anchored labels. Accepts scalar `(x, y, s)` for a single label or
-# parallel lists for batched annotation. Strings broadcast: pass `s="*"`
-# with list `xs`/`ys` to mark every point with the same glyph.
+# Data-anchored labels, long-form only: one label per table row from the
+# `label=` column. One-off labels go through `annotate` instead.
 
 def _text_record(args, kw):
     kw = dict(kw)

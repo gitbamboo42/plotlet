@@ -8,10 +8,10 @@ polars / dict-of-lists / dict-of-arrays) and refer to columns by name
 artists). `data=` set on `pt.chart(...)` propagates to every mark, so
 per-call `data=` is optional once it's set at chart level. `heatmap` is
 also table-shaped (`data=df, x=, values=`, see below). The remaining
-shape marks (`imshow`, `contour`, `dendrogram`, `axhline`/`axvline`/`axline`,
-`rect`, `polygon`) take their natural positional input — there's no
-"column name" version for a 2-D matrix or a single y-value. All methods
-return `self`, so they chain.
+shape marks (`imshow`, `contour`, `dendrogram`, `rect` / `polygon` /
+`polyline`, the reference lines and spans, `annotate`) take their
+natural positional input — there's no "column name" version for a 2-D
+matrix or a single y-value. All methods return `self`, so they chain.
 
 ## Frame options
 
@@ -64,6 +64,21 @@ after composing.
 space; default `True` clips at the data boundary so off-axis data can't
 paint over tick labels.
 
+`c.spines(...)` styles the frame border: top-level `color=` / `width=` /
+`linestyle=` set the base style; `top=` / `right=` / `bottom=` / `left=` /
+`walls=` (the inter-sector walls) each take a bool (visibility) or a
+`{color, width, linestyle, visible}` dict. `c.facecolor(color)` fills the
+data-area background. `c.x_expand(lo, hi)` / `c.y_expand(...)` override
+the autoscale padding as fractions of the data span (one number pads both
+ends). `pt.chart(margin={"left": ..., "right": ..., "top": ...,
+"bottom": ...})` (all four sides) raises the per-side whitespace floor
+around the data area.
+
+`c.aspect("equal")` or `c.aspect(r)` locks the data-space aspect ratio
+(matplotlib `set_aspect`, ggplot `coord_fixed`): one y data unit renders
+at `r`× the pixel length of one x data unit. The lock survives share
+classes and `.fit()`.
+
 ### Coordinates
 
 `c.coordinate(pt.CircularCoordinate(...))` switches a panel to a non-Cartesian
@@ -76,7 +91,7 @@ in its supporting artists via `pt.declare_coord_support(name, [...])`;
 the renderer raises if you mix a coord with an artist not in that list.
 See [`plotlet-cookbook/circle/`](https://github.com/gitbamboo42/plotlet-cookbook/tree/main/circle) for a worked example and the
 protocol notes at the top of
-[`src/plotlet/coordinates.py`](../src/plotlet/coordinates.py).
+[`src/plotlet/render/coordinates.py`](../src/plotlet/render/coordinates.py).
 
 ### Scales
 
@@ -86,7 +101,7 @@ protocol notes at the top of
 | --- | --- |
 | `"linear"` | default |
 | `"log"` | log10; respect positive data |
-| `"category"` | for strings; auto-selected when data is string-valued. `c.xscale("category", order=[...], padding=0)` for explicit ordering. `padding=0` makes bands contiguous (heatmap-track look). For grouped categories with visual gaps, use `c.sectors({cluster: [members]}, axis="x")` — see [Sectors](#sectors) below. The dendrogram's `clusters=` kwarg is a parallel grouping vector that drives the two-level scipy cluster (per-block + centroid linkage); it doesn't push gap layout onto the scale — declare `c.sectors(...)` for that. |
+| `"category"` | for strings; auto-selected when data is string-valued. `c.xscale("category", order=[...], padding=0)` for explicit ordering. `padding=0` makes bands contiguous (heatmap-track look). For grouped categories with visual gaps, use `c.sectors({cluster: [members]}, axis="x")` — see [Sectors](#sectors) below. |
 | `"symlog"` | accepts `linthresh=` (default `1.0`) sizing the linear region around zero |
 | `"power"` | accepts `exponent=` |
 | `"sqrt"` | shorthand for `"power"` with `exponent=0.5` |
@@ -103,6 +118,12 @@ c.xticks([0, 5, 10], ["A","B","C"], rotation=45, fontsize=12,
          direction="out", marks=False)   # `[]` to hide
 c.yticks(...)                            # same shape
 ```
+
+`marks=False` hides the tick marks but keeps labels; `labels=False` is
+the counterpart — keep auto positions and marks, suppress the labels.
+`side="top"` (x) / `side="right"` (y) moves the axis — spine, tick
+marks, tick labels, and the axis title as a block — to the other edge
+(plotly's `side`, ggplot2's `position`).
 
 `fontstyle="italic"` / `fontweight="bold"` restyle the tick labels
 (sector-name labels on that axis inherit the style) with the real
@@ -253,11 +274,12 @@ interpolated through `alphas=(min, max)`, default `(0.3, 1.0)`).
 `":"`, `"-."`, …) or a column name (cycle dashes per level). Not on
 `scatter` since there's no line to dash.
 
-These chart-level aes can be set once on the constructor —
-`pt.chart(df, color=, group=, linestyle=, alpha=, fill=)` — and are
-inherited by `line`/`scatter` calls that don't override them. Other
-artists (boxplot, bar, hist, etc.) accept only the relevant subset for
-their geometry; chart-level aes they don't support pass through silently.
+Chart-level aes can be set once on the constructor —
+`pt.chart(df, x=, y=, color=, fill=, group=, linestyle=, palette=)` —
+and are inherited by calls that don't override them (`alpha=` is
+per-call only). Other artists (boxplot, bar, hist, etc.) accept only
+the relevant subset for their geometry; chart-level aes they don't
+support pass through silently.
 
 The tables list styling kwargs; the grouping/long-form pattern is
 universal and not repeated.
@@ -270,7 +292,7 @@ universal and not repeated.
 | `.step(x=, y=, where=, **opts)` | sugar over `line(curve=…)`; `where=` is `"pre"` / `"post"` (default) / `"mid"` |
 | `.scatter(x=, y=, color=, group=, alpha=, size=, style=, **opts)` | `palette`, `alphas=(min, max)`, `label`, `marker`, `sizes=(min, max)`, `size_legend={"breaks": [...], "labels": [...]}`, `cmap`, `vmin`, `vmax`, `norm` — `color=<col>` dispatches on dtype: numeric col → cmap, categorical → palette. `size=` dispatches: number → fixed radius (px), list → per-point, column → graded via `sizes=(lo, hi)` |
 | `.regression(x=, y=, color=, **opts)` | `palette`, `level=0.95`, `alpha=0.2`, `linewidth=1.8` — OLS fit + Student-t band. `order=` fits a polynomial; `robust=True` a Huber IRLS fit with a bootstrap band (`n_boot=200`, `seed=0`); `lowess=True` a LOWESS smoother (`frac=2/3`, `it=3`), line only — no band |
-| `.hist(x=, fill=, **opts)` | `color` (stroke), `palette`, `bins`, `density`, `histtype` (`"bar"` / `"step"` / `"stepfilled"`), `orientation` |
+| `.hist(x=, fill=, **opts)` | `color` (stroke), `palette`, `bins` (count or explicit edges), `binwidth`, `binrange=(lo, hi)`, `weights` (column or sequence — sum per bin instead of count), `density`, `cumulative`, `position="overlay"\|"stack"\|"fill"\|"dodge"` (multi-group layout; `histtype="bar"` only), `histtype` (`"bar"` / `"step"` / `"stepfilled"`), `orientation` |
 | `.density_1d(x=, color=, **opts)` | `palette`, `bw`, `n_grid=200`, `fill=True/False`, `alpha` — Gaussian KDE |
 | `.ecdf(x=, color=, **opts)` | `palette`, `complement=False` (survival), `linewidth` |
 | `.rug(x=, color=, axis="x", **opts)` | `palette`, `length=0.04`, `alpha` — tick marks at observations |
@@ -293,14 +315,14 @@ universal and not repeated.
 | --- | --- |
 | `.bar(x=, y=, fill=, position=, **opts)` | `color` (stroke), `palette`, `position="stack"\|"dodge"\|"fill"` for multi-series, `orientation`, `bottom`, `width`, `gap`; `yerr=`/`xerr=` (same specs as errorbar) draw whiskers at bar/slot centers with `ecolor`, `capsize` — defaults `position` to `"dodge"` and requires one row per (category, group). `stat="count"` (drop y=; seaborn countplot) or `stat="mean"` (mean per cell + CI error bars: `ci="t"\|"boot"\|None`, `level`, `n_boot`, `seed`; seaborn barplot) aggregate raw rows |
 | `.area(x=, y=, fill=, **opts)` | multi-series stacks when given a list-of-series or `fill=<col>`; `palette`, `base`, `curve`, `alpha` |
-| `.fill_between(x=, y1=, y2=, **opts)` | `color`, `alpha`, `curve`, `label` |
-| `.errorbar(x=, y=, yerr=, xerr=, **opts)` | scalar, sequence, or `(lower, upper)` tuple for asymmetric bars; `color=` column → grouped series (`palette=`), dodged on a categorical axis with bar-matching `width`/`gap` defaults |
+| `.fill_between(x=, y1=, y2=, **opts)` | `fill` (interior color — not `color=`), `alpha`, `curve`, `label` |
+| `.errorbar(x=, y=, yerr=, xerr=, **opts)` | scalar, sequence, or `(lower, upper)` tuple for asymmetric bars; `ymin=`/`ymax=` (and `xmin=`/`xmax=`) take columns for absolute bounds, mutually exclusive with the matching `*err=`; `color=` column → grouped series (`palette=`), dodged on a categorical axis with bar-matching `width`/`gap` defaults |
 
 ### 2-D distributions
 
 | call | options |
 | --- | --- |
-| `.hexbin(xs, ys, **opts)` | `gridsize=20`, `cmap`, `mincnt`, `log_count` |
+| `.hexbin(x=, y=, **opts)` | `gridsize=30`, `cmap`, `vmin`, `vmax` — hexagonal bins colored by count |
 | `.hist2d(x=, y=, **opts)` | `bins=30`, `binwidth`, `binrange` (scalar or per-axis pair), `cmap`, `vmin`, `vmax` — rectangular bins colored by count, empty cells transparent |
 | `.kde_2d(x=, y=, color=, **opts)` | `bw`, `n_grid=60`, `levels`, `cmap`, `fill=True` (filled level regions), `alpha` — iso-density contours; `color=<col>` → one single-colored density per level (`palette=`) |
 | `.contour(grid, **opts)` | `levels`, `extent=(x0, x1, y0, y1)`, `cmap`, `fill=True` (mpl contourf), `alpha` — pre-computed 2-D grid |
@@ -313,20 +335,21 @@ universal and not repeated.
 | `.imshow(data, **opts)` | `cmap` (~180 vendored, default `"viridis"`), `vmin`, `vmax`, `extent`, `annot`, `fmt`, `annot_color`, `annot_fontsize` |
 | `.heatmap(data=df, x=, values=, sector=, **opts)` | Tidy input: each table row → a heatmap column (x-position from the `x` column — numeric → continuous axis, string → categorical), each value column → a track row (`values=` selects/orders them, default = all non-`x`/`sector` columns). A numeric `x` is auto-sorted (row order carries no meaning); duplicate or NaN positions raise. Opts: `cmap`, `vmin`, `vmax`, `norm`, `center`, `palette`, `absent_fill`, `legend`, `annot`, `fmt`, `annot_color`, `annot_fontsize`, `linewidth`, `linecolor`, `border`. `sector=` (a column) + `c.sectors(...)` draws gaps; for categorical-x clusters call `c.sectors({cluster: [members]}, axis=...)` — see [Sectors](#sectors). A bare matrix is not accepted; reshape it into a table first. |
 | `.dendrogram(data, **opts)` | `orient="top"\|"left"\|"right"\|"bottom"`, `labels`, `method="single"\|"complete"\|"average"\|"ward"\|...` (scipy), `metric`, `linkage_matrix=<Z>` (raw scipy Z, skip clustering math), `tree=<SplitTree>` (skip clustering entirely), `clusters=[...]` (parallel grouping vector for two-level cluster), `parent=True\|<frac>` (render centroid tree above per-block trees). Visual gap whitespace lives on the panel as `c.sectors(...)` — see [Sectors](#sectors). |
-| `.axhline(y, **opts)` / `.axvline(x, **opts)` | `color`, `linewidth`, `linestyle`, `alpha`, axes-fraction `xmin`/`xmax` |
+| `.axhline(y, **opts)` / `.axvline(x, **opts)` | `color`, `linewidth`, `linestyle`, `alpha`, axes-fraction span limits (`xmin`/`xmax` on axhline, `ymin`/`ymax` on axvline) |
 | `.axline(xy1, xy2)` / `.axline(xy1, slope=)` | infinite line through two points or point + slope (matplotlib `axline`, ggplot `geom_abline`), clipped to the frame; `color`, `linewidth`, `linestyle`, `alpha`, `label`. `slope=` requires linear x and y scales |
 | `.axhspan(ymin, ymax, **opts)` / `.axvspan(xmin, xmax, **opts)` | `color`, `alpha`, `label` |
+| `.hlines(ys, xmins, xmaxs, **opts)` / `.vlines(xs, ymins, ymaxs, **opts)` | data-coordinate segments (scalars broadcast against sequences); unlike `axhline`/`axvline` they participate in autoscaling; `color`, `linewidth`, `linestyle`, `alpha`, `label` |
 | `.rect(x, y, w, h, **opts)` / `.polygon(xs, ys, **opts)` / `.polyline(xs, ys, **opts)` | data-coord shapes — `polygon` is closed-and-fillable, `polyline` is open stroke-only |
 | `.text(data=df, x=, y=, label=, **opts)` / `.annotate(text, xy=, xytext=, **opts)` | `ha`, `va`, `fontsize`, `arrow=True/False` |
 
 ### Notes
 
-- A column-driven grouping aes (`color=<col>` or `fill=<col>`) splits into one call per unique value with auto-labels and tab10 colors; the palette is overridable per-artist via `palette=` — a name string (`"Set2"`), a color list, or a `{category: color}` dict (see [Palettes](#palettes)).
+- Grouped series get auto-labels and tab10 colors; the palette is overridable per-artist via `palette=` — a name string (`"Set2"`), a color list, or a `{category: color}` dict (see [Palettes](#palettes)).
 - `color=` is the stroke and `fill=` is the fill — independent kwargs. So an outlined bar is `fill=<col>, color="black"`; previously inexpressible.
-- On `line` / `scatter`, `group=<col>` is the **invisible** split — finer-grained sub-records (one polyline per subject, say) without burning a color channel or a legend row. `alpha=<col>` interpolates opacity per level via `alphas=(min, max)`. `line` additionally has `linestyle=<col>` (dash cycle per level); not on `scatter`. When `color=` and `linestyle=` (or `alpha=`) map the *same* column, the existing color legend swatches inherit the dash / opacity — the canonical pattern for colorblind-safe or B&W-print redundancy.
+- When `color=` and `linestyle=` (or `alpha=`) map the *same* column, the existing color legend swatches inherit the dash / opacity — the canonical pattern for colorblind-safe or B&W-print redundancy.
 - Reference lines / spans default to black, are drawn outside the data color cycle, and don't participate in autoscaling.
 - On `scatter`, `size=<col>` maps a numeric column to per-point radius (px, rescaled into `sizes=(min, max)` — default `(2, 7)`); `style=<col>` cycles markers per unique value (`o`, `s`, `^`, `v`, `x`, `+`). `color`, `group`, `size`, `style`, `alpha` all compose.
-- `.imshow` emits one `<rect>` per cell for small grids (≤10000 cells, vector-clean at any zoom) and a base64 PNG above that. `.heatmap` is the tidy-table companion — each table row is a heatmap column (x-position from the `x` column), each value column a track row. A numeric `x` gives a continuous axis that `share_x`-aligns with a scatter/line; a string `x` gives categorical bands so a top/left dendrogram pairs cleanly via `share_x` / `share_y` (or `attach_above` / `attach_left`, which auto-share).
+- `.imshow` emits one `<rect>` per cell for small grids (≤10000 cells, vector-clean at any zoom) and a base64 PNG above that. On `.heatmap`, a numeric `x` gives a continuous axis that `share_x`-aligns with a scatter/line; a string `x` gives categorical bands so a top/left dendrogram pairs cleanly via `share_x` / `share_y` (or `attach_above` / `attach_left`, which auto-share).
 - On both, `annot=True` overlays each cell's value as a text label (correlation / confusion matrices). `annot=<2D array>` uses custom labels — numbers formatted via `fmt`, strings verbatim — so labels independent of cell values (e.g. significance asterisks over a correlation cmap) are a string-array away. `fmt=".2g"` is the format spec (passed to `format(value, fmt)`); palette-mode heatmap labels skip `fmt` and render verbatim (identifiers/counts, not measurements). `annot_color="auto"` picks black or white per cell via luminance; pass any CSS color for uniform text.
 - **Cluster gaps.** Heatmap row/column clusters are declared via `c.sectors({cluster: [members]}, axis="x" | "y")` on the panel — the category scale picks up the implied split positions and inserts a 6-px (default) gap at every block boundary, and the heatmap reorders cells at draw time to match the sector cat order. Pass the *same* grouping info as a parallel list to `.dendrogram(clusters=[...])` and it runs scipy *per block* for within-block leaf order plus once more on the per-block centroids for between-block order — a two-level cluster. The dendrogram exposes the resulting leaf order via `axis_order`, so the heatmap follows automatically when both share a category axis (`attach_above` / `attach_left`). `parent=True` on the dendrogram also renders the centroid tree above the per-block trees in the same panel. See [`plotlet-cookbook/heatmaps/`](https://github.com/gitbamboo42/plotlet-cookbook/tree/main/heatmaps) for the worked examples.
 
@@ -367,13 +390,31 @@ Deeper layout helpers — `layout_tree(tree)`, `layout_parent(tree)`, `fit_paren
 
 ```python
 pt.register_colormap("bwr2", ["#2166ac", "white", "#b2182b"])
-c.heatmap(data, x="col", y="row", value="z", cmap="bwr2", center=0)
+c.heatmap(data=df, x="col", cmap="bwr2", center=0)
 ```
 
 - Colors interpolate linearly in RGB, evenly spaced or at explicit `stops=` (positions in [0, 1], first 0 and last 1, strictly increasing).
 - The reversed `name + "_r"` variant registers alongside; the name then works everywhere a built-in does — `cmap=` kwargs, colorbars, `pt.palette(name, n)`.
 - Anchoring the midpoint at a data value is the norm's job: pass `center=` (or `vmin=`/`vmax=`) to the artist rather than encoding data values in stops.
 - Registration is per-process, like `register_theme` — a serialized journal naming a user colormap needs the same `register_colormap` call before re-rendering in a fresh process. Built-in names can't be shadowed.
+
+## Faceting
+
+```python
+g = pt.facet(df, by="species", col_wrap=3)
+g.scatter(x="bill_length", y="bill_depth")
+g.show()
+```
+
+`pt.facet(data, by=)` returns a chart-shaped recorder — same mark and
+frame methods — that splits `data` by group, replays your calls against
+each subset, and lays the panels out in a shared-scale grid (`share_x` /
+`share_y` on by default). `by=` wraps one variable into a near-square
+grid (`col_wrap=` fixes the column count); `row=` / `col=` lay a
+two-factor grid instead (the seaborn names; ggplot's `facet_grid`) —
+pass one form or the other, not both. Panel titles default to the group
+label; forwarded chart opts (`theme=`, `data_width=`, `xlabel=`, …)
+apply to every panel. See `help(pt.facet)` for details.
 
 ## Inset axes
 
