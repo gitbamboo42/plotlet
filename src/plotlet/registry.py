@@ -63,6 +63,12 @@ class ArtistSpec:
     draw: Callable[[dict, "RenderContext"], str]
     xdomain: Callable[[dict], Iterable[float] | None] = lambda a: None
     ydomain: Callable[[dict], Iterable[float] | None] = lambda a: None
+    # Domain contribution under a log scale, when it must differ from the
+    # plain hook — e.g. line's CI band votes on linear axes, but its
+    # non-positive bounds are unplottable on log and must not poison the
+    # domain. None → the plain hook serves every scale kind.
+    xdomain_log: Callable[[dict], Iterable[float] | None] | None = None
+    ydomain_log: Callable[[dict], Iterable[float] | None] | None = None
     layer: str = "data"  # "background" | "data" | "foreground"
     uses_color_cycle: bool = True
     default_color: str | None = None  # used when uses_color_cycle is False

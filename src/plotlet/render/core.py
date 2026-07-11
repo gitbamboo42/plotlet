@@ -614,17 +614,22 @@ def _replay(calls):
 # Domain helpers — shared by the panel renderer and the layout pre-pass.
 # ---------------------------------------------------------------------------
 
-def _scan_domain(artists, axis):
+def _scan_domain(artists, axis, scale_kind="linear"):
     """Collect all values an artist contributes to a given axis ('x' or 'y').
 
     `datetime.date` / `datetime.datetime` values are coerced to POSIX seconds
-    (UTC) so the rest of the autoscaling pipeline can stay numeric."""
+    (UTC) so the rest of the autoscaling pipeline can stay numeric. On a log
+    scale, an artist's `*domain_log` hook (when set) replaces the plain one."""
     lo, hi = math.inf, -math.inf
     for a in artists:
         spec = get_artist(a["type"])
         if spec is None:
             continue
         fn = spec.xdomain if axis == "x" else spec.ydomain
+        if scale_kind == "log":
+            log_fn = spec.xdomain_log if axis == "x" else spec.ydomain_log
+            if log_fn is not None:
+                fn = log_fn
         vals = fn(a)
         if vals is None:
             continue
@@ -968,11 +973,11 @@ def _x_descriptor(st) -> _AxisDescriptor:
                                groups=groups)
 
     is_time = st["xscale"] == "time" or _is_temporal_axis(artists, "x")
-    x_lo, x_hi = _scan_domain(artists, "x")
+    x_scale_kind = "time" if is_time else st["xscale"]
+    x_lo, x_hi = _scan_domain(artists, "x", x_scale_kind)
     x_tight = _axis_is_tight(artists, "x")
     x_force_zero = _any_artist_force_zero(artists, "x")
     xlim = _coerce_time_lim(st["xlim"]) if is_time else st["xlim"]
-    x_scale_kind = "time" if is_time else st["xscale"]
     x_min, x_max = _resolve_domain(x_lo, x_hi, xlim, x_scale_kind,
                                     force_zero=x_force_zero,
                                     tight=x_tight,
@@ -1071,11 +1076,11 @@ def _y_descriptor(st) -> _AxisDescriptor:
                                groups=groups)
 
     is_time = st["yscale"] == "time" or _is_temporal_axis(artists, "y")
+    y_scale_kind = "time" if is_time else st["yscale"]
     force_zero = _any_artist_force_zero(artists, "y")
-    y_lo, y_hi = _scan_domain(artists, "y")
+    y_lo, y_hi = _scan_domain(artists, "y", y_scale_kind)
     y_tight = _axis_is_tight(artists, "y")
     ylim = _coerce_time_lim(st["ylim"]) if is_time else st["ylim"]
-    y_scale_kind = "time" if is_time else st["yscale"]
     y_min, y_max = _resolve_domain(y_lo, y_hi, ylim, y_scale_kind,
                                     force_zero=force_zero,
                                     tight=y_tight,
@@ -1147,11 +1152,11 @@ def _x_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
                                splits=splits, split_gap=split_gap,
                                groups=groups)
     is_time = anchor["xscale"] == "time" or _is_temporal_axis(all_artists, "x")
-    x_lo, x_hi = _scan_domain(all_artists, "x")
+    x_scale_kind = "time" if is_time else anchor["xscale"]
+    x_lo, x_hi = _scan_domain(all_artists, "x", x_scale_kind)
     x_tight = _axis_is_tight(all_artists, "x")
     x_force_zero = _any_artist_force_zero(all_artists, "x")
     xlim = _coerce_time_lim(anchor["xlim"]) if is_time else anchor["xlim"]
-    x_scale_kind = "time" if is_time else anchor["xscale"]
     x_min, x_max = _resolve_domain(x_lo, x_hi, xlim, x_scale_kind,
                                     force_zero=x_force_zero,
                                     tight=x_tight,
@@ -1202,11 +1207,11 @@ def _y_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
                                splits=splits, split_gap=split_gap,
                                groups=groups)
     is_time = anchor["yscale"] == "time" or _is_temporal_axis(all_artists, "y")
+    y_scale_kind = "time" if is_time else anchor["yscale"]
     force_zero = _any_artist_force_zero(all_artists, "y")
-    y_lo, y_hi = _scan_domain(all_artists, "y")
+    y_lo, y_hi = _scan_domain(all_artists, "y", y_scale_kind)
     y_tight = _axis_is_tight(all_artists, "y")
     ylim = _coerce_time_lim(anchor["ylim"]) if is_time else anchor["ylim"]
-    y_scale_kind = "time" if is_time else anchor["yscale"]
     y_min, y_max = _resolve_domain(y_lo, y_hi, ylim, y_scale_kind,
                                     force_zero=force_zero,
                                     tight=y_tight,

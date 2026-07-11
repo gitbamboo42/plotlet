@@ -3173,6 +3173,24 @@ def test_line_ci_band_extends_domain():
     assert ylim_hi(ci=None) < 7
 
 
+def test_line_ci_band_clips_on_log_scale():
+    import re
+    # all-positive data whose t CI lower bound goes negative
+    df = {"x": [0, 0, 0, 1, 1, 1], "y": [1.0, 10.0, 100.0, 2.0, 20.0, 200.0]}
+    c = pt.chart(df)
+    c.line(x="x", y="y", estimator="mean")
+    c.yscale("log")
+    svg = c.to_svg()                       # must not raise, no NaN paths
+    assert "nan" not in svg
+    y0 = float(re.search(
+        r'data-plotlet-ylim="([^"]*)"', svg).group(1).split(",")[0])
+    assert y0 > 0                          # negative band bound didn't vote
+    # the band polygon still draws, clipped at the axis floor
+    body = re.search(r'<g[^>]*data-plotlet-type="line"[^>]*>(.*?)</g>',
+                     svg, re.S).group(1)
+    assert re.search(r'<path[^>]*opacity="0.20"', body)
+
+
 def test_line_estimator_validation():
     df = {"x": [0, 1], "y": [1, 2]}
 

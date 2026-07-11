@@ -211,6 +211,16 @@ def _line_ydomain(a):
     return a["ys"]
 
 
+def _line_ydomain_log(a):
+    """Log-axis vote: the CI band's non-positive bounds are unplottable
+    on log and must not poison the domain — only the plottable part of
+    the band votes (mpl/seaborn clip the band at the axis instead)."""
+    if "_band_lo" in a:
+        return (list(a["ys"])
+                + [v for v in a["_band_lo"] + a["_band_hi"] if v > 0])
+    return a["ys"]
+
+
 def _line_data_attrs(a):
     xs, ys = a["xs"], a["ys"]
     out = {"n": len(xs)}
@@ -225,12 +235,22 @@ def _line_data_attrs(a):
     return out
 
 
+def _band_y_px(y_scale, v):
+    """Pixel for one band bound. A bound the scale can't plot (log,
+    v <= 0) clips to the axis floor — one NaN coordinate would make
+    browsers drop the whole band polygon."""
+    p = y_scale(v)
+    if p == p:
+        return p
+    return y_scale(y_scale.d0)
+
+
 def _line_draw(a, ctx):
     out = ""
     if a.get("_band_lo"):
-        pts_top = [(ctx.x_scale(x), ctx.y_scale(y))
+        pts_top = [(ctx.x_scale(x), _band_y_px(ctx.y_scale, y))
                    for x, y in zip(a["xs"], a["_band_hi"])]
-        pts_bot = [(ctx.x_scale(x), ctx.y_scale(y))
+        pts_bot = [(ctx.x_scale(x), _band_y_px(ctx.y_scale, y))
                    for x, y in zip(a["xs"], a["_band_lo"])]
         out = polygon(pts_top + pts_bot[::-1], fill=ctx.color,
                       alpha=a["opts"].get("band_alpha", 0.2),
@@ -244,6 +264,7 @@ add_artist(ArtistSpec(
     record=_line_record,
     xdomain=_line_xdomain,
     ydomain=_line_ydomain,
+    ydomain_log=_line_ydomain_log,
     draw=_line_draw,
     legend_entries=_line_legend_entries,
     data_attrs=_line_data_attrs,
@@ -269,6 +290,7 @@ add_artist(ArtistSpec(
     record=_step_record,
     xdomain=_line_xdomain,
     ydomain=_line_ydomain,
+    ydomain_log=_line_ydomain_log,
     draw=_line_draw,
     legend_entries=_line_legend_entries,
     data_attrs=_line_data_attrs,
