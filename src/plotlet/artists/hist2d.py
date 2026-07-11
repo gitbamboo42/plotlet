@@ -31,12 +31,16 @@ from .._spec import _D
 
 
 def _bins_per_axis(value):
-    """Split `bins=` into (x, y) parts. A 2-item value whose items are
-    ints or edge sequences is a per-axis pair; anything else (an int, a
-    longer shared-edge sequence) applies to both axes."""
+    """Split `bins=` into (x, y) parts. A 2-item value is a per-axis
+    pair only when both items work as one — a bin count (int >= 1, the
+    numpy `[int, int]` convention) or an edge sequence. Anything else
+    (an int, a shared-edge sequence — including a 2-item one like
+    `[0, 5]`, whose 0 can't be a count) applies to both axes."""
+    def per_axis(v):
+        return ((isinstance(v, int) and not isinstance(v, bool) and v >= 1)
+                or hasattr(v, "__iter__"))
     if (isinstance(value, (list, tuple)) and len(value) == 2
-            and all(isinstance(v, int) or hasattr(v, "__iter__")
-                    for v in value)):
+            and all(per_axis(v) for v in value)):
         return value[0], value[1]
     return value, value
 

@@ -3275,6 +3275,24 @@ def test_hist2d_validation():
         c.to_svg()
 
 
+def test_hist2d_two_item_bins():
+    # bins=[0, 5] is a shared edge sequence (0 can't be a bin count) —
+    # the int form must mean the same as the float form, not (0, 5) counts
+    df = {"x": [1.0, 2.0, 4.0], "y": [1.0, 2.0, 4.0]}
+    for edges in ([0, 5], [0.0, 5.0]):
+        c = pt.chart(df)
+        c.hist2d(x="x", y="y", bins=edges)
+        svg = c.to_svg()
+        assert 'data-plotlet-bins-x="1"' in svg
+        assert 'data-plotlet-count-max="3"' in svg
+    # a valid 2-int pair keeps the numpy (x_bins, y_bins) meaning
+    c = pt.chart(df)
+    c.hist2d(x="x", y="y", bins=[2, 5])
+    svg = c.to_svg()
+    assert 'data-plotlet-bins-x="2"' in svg
+    assert 'data-plotlet-bins-y="5"' in svg
+
+
 def test_hist2d_binwidth_pair():
     df = {"x": [0.25, 1.25], "y": [0.5, 2.5]}
     c = pt.chart(df)
