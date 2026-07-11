@@ -262,28 +262,35 @@ def annotate_joined_pairs(leaves: list,
 
 
 def promote_titles(leaves: list, states: dict[int, dict]) -> None:
-    """`c.title("...")` is a figure-title gesture: it should render above
-    everything stacked on top of `c`, not buried inside `c`'s own title
-    margin under the attached panels. When `c` has `_attached_above` and
-    sets a title, move the title's render state to the outermost
-    attached_above chart so the layout reserves margin in the right
-    panel. The host's own state has the title cleared so the renderer
-    doesn't draw it twice.
+    """`c.title("...")` / `c.subtitle("...")` are figure-header gestures:
+    they should render above everything stacked on top of `c`, not buried
+    inside `c`'s own title margin under the attached panels. When `c` has
+    `_attached_above` and sets either, move that render state to the
+    outermost attached_above chart so the layout reserves margin in the
+    right panel. The host's own state is cleared so the renderer doesn't
+    draw them twice.
 
-    Only the top side is promoted — title is conventionally above the
-    data. xlabel/ylabel are not symmetric concepts (axis labels belong
-    to the axis they describe, not to the figure), so they stay put.
+    Only the top side is promoted — title and subtitle are conventionally
+    above the data. xlabel/ylabel are not symmetric concepts (axis labels
+    belong to the axis they describe, not to the figure), so they stay
+    put; caption is the outermost *bottom* element and stays with its
+    host for the same reason.
     """
     for leaf in leaves:
         if not leaf._attached_above:
             continue
         host_st = states.get(id(leaf))
-        if host_st is None or not host_st.get("title"):
+        if host_st is None:
             continue
-        # Index 0 = innermost, last = outermost — title goes to the very top.
+        if not (host_st.get("title") or host_st.get("subtitle")):
+            continue
+        # Index 0 = innermost, last = outermost — the header goes to the
+        # very top.
         outermost = leaf._attached_above[-1]
         outer_st = states.get(id(outermost))
         if outer_st is None:
             continue
-        outer_st["title"] = host_st["title"]
-        host_st["title"] = ""
+        for key in ("title", "subtitle"):
+            if host_st.get(key):
+                outer_st[key] = host_st[key]
+                host_st[key] = ""

@@ -3293,6 +3293,33 @@ def test_hist2d_two_item_bins():
     assert 'data-plotlet-bins-y="5"' in svg
 
 
+def test_attach_above_promotes_subtitle():
+    def build(**chart_kw):
+        host = pt.chart({"x": [1, 2, 3], "y": [1, 2, 3]}, **chart_kw)
+        host.scatter(x="x", y="y")
+        top = pt.chart(data_height=30)
+        top.line(data={"x": [1, 2, 3], "y": [1, 2, 1]}, x="x", y="y")
+        host.attach_above(top)
+        return host.regions()
+
+    def named(regions, name):
+        return [r for r in regions if r["name"] == name]
+
+    def panels_top(regions):
+        return min(r["bbox"][1] for r in named(regions, "panel"))
+
+    # title + subtitle promote together above the attached panel
+    regions = build(title="Tmain", subtitle="Ssub")
+    (sub,) = named(regions, "subtitle")      # promoted, not drawn twice
+    (title,) = named(regions, "title")
+    assert sub["bbox"][1] < panels_top(regions)
+    assert title["bbox"][1] < sub["bbox"][1]
+    # a subtitle-only host promotes too
+    regions = build(subtitle="Ssub")
+    (sub,) = named(regions, "subtitle")
+    assert sub["bbox"][1] < panels_top(regions)
+
+
 def test_hist2d_cell_color_matches_legend_norm():
     # vmin=0 must reach the norm untouched — the old `vmin or 1e-9`
     # rewrite nudged count=1 with vmax=2 across the t=0.5 LUT boundary,
