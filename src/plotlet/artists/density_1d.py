@@ -20,11 +20,11 @@ Other styling kwargs:
   label=None     legend label (single-series only)
 """
 from ..registry import ArtistSpec, add_artist
-from ..utils import (to_list, long_form_1d, resolve_aes, palette_color,
-                     silverman_bw, kde_1d)
-from ..draw import TAB10, resolve_color
+from ..utils import to_list, long_form_1d, resolve_aes, silverman_bw, kde_1d
+from ..draw import resolve_color
 from .._spec import _LEGSPEC
 from ..draw import polygon, polyline, segment
+from ._shared import group_color
 
 
 def _density_1d_record(args, kw):
@@ -78,12 +78,6 @@ def _density_1d_ydomain(a):
     return [v for d in a["_ds"] for v in d] + [0]
 
 
-def _group_color(groups, palette, j, fallback):
-    if groups == [None]:
-        return fallback
-    return palette_color(palette, groups[j], j) or TAB10[j % 10]
-
-
 def _density_1d_draw(a, ctx):
     palette = a["opts"].get("palette")
     lw = a["opts"].get("linewidth", 1.6)
@@ -94,7 +88,7 @@ def _density_1d_draw(a, ctx):
     out = []
     for j, (grid, d) in enumerate(zip(a["_grids"], a["_ds"])):
         if not grid: continue
-        col = _group_color(a["groups"], palette, j, fallback)
+        col = group_color(a["groups"], palette, j, fallback)
         pts = [(ctx.x_scale(x), ctx.y_scale(y)) for x, y in zip(grid, d)]
         if fill_flag and pts:
             y0 = ctx.y_scale(0)
@@ -120,7 +114,7 @@ def _density_1d_legend_entries(a):
     palette = opts.get("palette")
     entries = []
     for j, g in enumerate(groups):
-        col = _group_color(groups, palette, j, a.get("_color"))
+        col = group_color(groups, palette, j, a.get("_color"))
         def paint(_a, _ctx, x0, y_mid, _col=col):
             return segment(x0, y_mid, x0 + sw, y_mid, color=_col, width=lw)
         entries.append({"label": str(g), "color": col, "paint": paint})

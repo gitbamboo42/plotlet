@@ -21,8 +21,9 @@ import math
 
 from ..registry import ArtistSpec, add_artist
 from ..draw import segment
-from ..utils import to_list, long_form_1d, resolve_aes, palette_color
-from ..draw import TAB10, resolve_color
+from ..utils import to_list, long_form_1d, resolve_aes
+from ..draw import resolve_color
+from ._shared import group_color
 
 
 def _rug_record(args, kw):
@@ -60,12 +61,6 @@ def _rug_ydomain(a):
     return [v for g in a["vals"] for v in g]
 
 
-def _group_color(groups, palette, j, fallback):
-    if groups == [None]:
-        return fallback
-    return palette_color(palette, groups[j], j) or TAB10[j % 10]
-
-
 def _rug_draw(a, ctx):
     palette = a["opts"].get("palette")
     lw = a["opts"].get("linewidth", 0.8)
@@ -76,7 +71,7 @@ def _rug_draw(a, ctx):
     axis = _rug_axis(a)
     out = []
     for j, vals in enumerate(a["vals"]):
-        col = _group_color(a["groups"], palette, j, fallback)
+        col = group_color(a["groups"], palette, j, fallback)
         if axis == "x":
             y_base = ctx.ih
             y_top = y_base - length * ctx.ih

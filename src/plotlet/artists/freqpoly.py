@@ -19,9 +19,10 @@ Other styling kwargs:
   label=None      legend label (single-series only)
 """
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, long_form_1d, resolve_aes, palette_color
+from ..utils import to_list, long_form_1d, resolve_aes
 from ..utils import _drop_nan
-from ..draw import TAB10, resolve_color
+from ..draw import resolve_color
+from ._shared import group_color
 from .._spec import _LEGSPEC
 from ..draw import polyline, segment
 
@@ -90,12 +91,6 @@ def _freqpoly_ydomain(a):
     return [v for hs in a["_heights_groups"] for v in hs] + [0]
 
 
-def _group_color(groups, palette, j, fallback):
-    if groups == [None]:
-        return fallback
-    return palette_color(palette, groups[j], j) or TAB10[j % 10]
-
-
 def _freqpoly_draw(a, ctx):
     palette = a["opts"].get("palette")
     lw = a["opts"].get("linewidth", 1.6)
@@ -105,7 +100,7 @@ def _freqpoly_draw(a, ctx):
     for j, (centers, heights) in enumerate(zip(a["_centers_groups"],
                                                 a["_heights_groups"])):
         if not centers: continue
-        col = _group_color(a["groups"], palette, j, fallback)
+        col = group_color(a["groups"], palette, j, fallback)
         xs = [a["_lo"] - a["_w"] / 2] + centers + [a["_hi"] + a["_w"] / 2]
         ys = [0] + list(heights) + [0]
         pts = [(ctx.x_scale(x), ctx.y_scale(y)) for x, y in zip(xs, ys)]
@@ -129,7 +124,7 @@ def _freqpoly_legend_entries(a):
     palette = opts.get("palette")
     entries = []
     for j, g in enumerate(groups):
-        col = _group_color(groups, palette, j, a.get("_color"))
+        col = group_color(groups, palette, j, a.get("_color"))
         def paint(_a, _ctx, x0, y_mid, _col=col):
             return segment(x0, y_mid, x0 + sw, y_mid, color=_col, width=lw)
         entries.append({"label": str(g), "color": col, "paint": paint})

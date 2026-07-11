@@ -19,8 +19,9 @@ Other styling kwargs:
 """
 from ..registry import ArtistSpec, add_artist
 from ..draw import polyline, segment
-from ..utils import to_list, long_form_1d, resolve_aes, palette_color
-from ..draw import TAB10, resolve_color
+from ..utils import to_list, long_form_1d, resolve_aes
+from ..draw import resolve_color
+from ._shared import group_color
 from .._spec import _LEGSPEC
 
 
@@ -54,12 +55,6 @@ def _ecdf_xdomain(a):
 def _ecdf_ydomain(a): return [0, 1]
 
 
-def _group_color(groups, palette, j, fallback):
-    if groups == [None]:
-        return fallback
-    return palette_color(palette, groups[j], j) or TAB10[j % 10]
-
-
 def _ecdf_draw(a, ctx):
     palette = a["opts"].get("palette")
     lw = a["opts"].get("linewidth", 1.5)
@@ -70,7 +65,7 @@ def _ecdf_draw(a, ctx):
     for j, data in enumerate(a["vals"]):
         n = len(data)
         if n == 0: continue
-        col = _group_color(a["groups"], palette, j, fallback)
+        col = group_color(a["groups"], palette, j, fallback)
         pts = []
         prev_y = 1 if complement else 0
         pts.append((ctx.x_scale(data[0]), ctx.y_scale(prev_y)))
@@ -101,7 +96,7 @@ def _ecdf_legend_entries(a):
     palette = opts.get("palette")
     entries = []
     for j, g in enumerate(groups):
-        col = _group_color(groups, palette, j, a.get("_color"))
+        col = group_color(groups, palette, j, a.get("_color"))
         def paint(_a, _ctx, x0, y_mid, _col=col):
             return segment(x0, y_mid, x0 + sw, y_mid, color=_col, width=lw)
         entries.append({"label": str(g), "color": col, "paint": paint})
