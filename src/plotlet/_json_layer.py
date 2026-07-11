@@ -59,7 +59,10 @@ def json_safe(value: Any) -> Any:
     if isinstance(value, tuple):
         return {"$tuple": [json_safe(v) for v in value]}
     if isinstance(value, (set, frozenset)):
-        return {"$set": [json_safe(v) for v in value]}
+        # Iteration order is hash order, which varies across processes
+        # (PYTHONHASHSEED) — sort the serialized elements so $set
+        # payloads are byte-stable.
+        return {"$set": sorted((json_safe(v) for v in value), key=repr)}
     if isinstance(value, dict):
         if all(isinstance(k, str) for k in value):
             return {k: json_safe(v) for k, v in value.items()}

@@ -190,7 +190,7 @@ def _bar_record(args, kw):
     else:
         cats, groups, series, stat_err_lo, stat_err_hi = _aggregate_stat(
             data, x_col, y_col, group_col, stat, ci,
-            kw.get("level", 0.95), kw.get("n_boot", 1000), kw.get("seed", 0))
+            kw.pop("level", 0.95), kw.pop("n_boot", 1000), kw.pop("seed", 0))
     if fill_kind == "literal":
         kw["_fill_literal"] = fill_value
     if group_col is not None and group_col == x_col:

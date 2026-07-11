@@ -8,6 +8,26 @@ when a chart's `theme=` is applied, [`active_theme(name)`](#active_theme)
 mutates the inner contents of these dicts so every module sees the
 override without an import-time refactor. The previous contents are
 restored when the context exits.
+
+Decision note — module-level mutation vs the no-global-state policy
+-------------------------------------------------------------------
+The policy ("no global state: themes per-chart, deterministic") is about
+what a *user* can observe: no chart's theme leaks into another, and the
+same script renders byte-identical SVG everywhere. This module satisfies
+that with scoped mutation, not with parameter threading:
+
+- `active_theme` / `active_font` wrap each leaf's render and measurement
+  walk in `_layout_engine`; restore runs in `try/finally`, so an
+  exception inside a render still restores. `load_theme(name)` is
+  evaluated before any mutation, so an unknown theme raises without
+  touching the spec.
+- Rendering is synchronous and single-threaded, so the swap is
+  invisible from outside a render call. The known limit: rendering two
+  charts concurrently from *user* threads would interleave spec
+  mutations. Accepted deliberately — threading a spec object through
+  every draw/measure call in every render module buys thread safety
+  nobody has asked for at the cost of noise on every signature. Revisit
+  if a concurrent-render use case actually appears.
 """
 from __future__ import annotations
 

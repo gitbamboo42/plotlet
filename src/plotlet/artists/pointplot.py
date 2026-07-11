@@ -51,12 +51,12 @@ def _pointplot_record(args, kw):
     if color_kind == "literal" and color_value is not None:
         kw["color"] = color_value
     cats, groups, vals = categorical_groups(data, x, y, group_col)
-    estimator = kw.get("estimator", "mean")
-    ci = kw.get("ci", "t")
+    estimator = kw.pop("estimator", "mean")
+    ci = kw.pop("ci", "t")
     validate_ci("pointplot", ci)
-    level = kw.get("level", 0.95)
-    n_boot = kw.get("n_boot", 1000)
-    rng = random.Random(kw.get("seed", 0))
+    level = kw.pop("level", 0.95)
+    n_boot = kw.pop("n_boot", 1000)
+    rng = random.Random(kw.pop("seed", 0))
     est_fn = ((lambda xs: sum(xs) / len(xs) if xs else float("nan"))
               if estimator == "mean" else (lambda xs: quantile(xs, 0.5)))
     ests = [[est_fn(vals[i][j]) for i in range(len(cats))]
