@@ -93,10 +93,10 @@ def _circular_x_tick_labels(st, dw):
     axis draws NO auto tick labels (they're meaningless on a global-offset
     coord) — so reserving for phantom numeric ticks over-shrinks the ring.
     """
-    from .core import (_x_descriptor, _auto_major_ticks,
+    from .core import (_axis_descriptor, _auto_major_ticks,
                        _resolve_tick_formatter)
     from .._spec import _FRAME
-    x_axis = _x_descriptor(st)
+    x_axis = _axis_descriptor([st], "x")
     x_scale = (x_axis.build(0, dw)
                if (x_axis.kind == "category" or not x_axis.flip)
                else x_axis.build(dw, 0))

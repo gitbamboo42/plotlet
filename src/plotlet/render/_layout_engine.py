@@ -49,7 +49,7 @@ from .._spec import (SPEC, _FIGSPEC, _LAYOUTSPEC, _FONTSPEC, _PADSPEC,
                      active_font, active_theme)
 from .core import (
     _render_inner, _replay, _enforce_floors, _required_margin,
-    _x_descriptor_multi, _y_descriptor_multi,
+    _axis_descriptor,
     _PanelOpts,
     _figure_root_attrs, _panel_open,
 )
@@ -769,9 +769,9 @@ def _build_axis_descriptors(leaves: list,
     y_desc: dict[int, _AxisDescriptor] = {}
     # Group by share-root for each axis; each group gets one descriptor
     # built from the union of all member states.
-    for axis, attr, multi_fn, out in (
-        ("x", "_share_x", _x_descriptor_multi, x_desc),
-        ("y", "_share_y", _y_descriptor_multi, y_desc),
+    for axis, attr, out in (
+        ("x", "_share_x", x_desc),
+        ("y", "_share_y", y_desc),
     ):
         classes: dict[int, list] = {}
         for leaf in leaves:
@@ -781,7 +781,7 @@ def _build_axis_descriptors(leaves: list,
             anchor = next((l for l in class_leaves if getattr(l, attr) is None),
                           class_leaves[0])
             ordered = [anchor] + [l for l in class_leaves if l is not anchor]
-            desc = multi_fn([states[id(l)] for l in ordered])
+            desc = _axis_descriptor([states[id(l)] for l in ordered], axis)
             for l in class_leaves:
                 out[id(l)] = desc
     return x_desc, y_desc

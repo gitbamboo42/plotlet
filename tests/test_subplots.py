@@ -185,7 +185,7 @@ def share_x_mismatched_groups():
     # the mappings (and split_gap) CONFLICT. The anchor — first leaf of
     # the share class — wins for the whole class: one 14px gap after "c"
     # in both panels; the bottom panel's a|bcdef grouping and 30px gap
-    # are ignored. Pins the anchor-wins policy of `_x_descriptor_multi`.
+    # are ignored. Pins the anchor-wins policy of `_axis_descriptor`.
     cats = list("abcdef")
     top = pt.chart(title="anchor: abc|def, gap 14", data_height=100)
     top.xscale("category",

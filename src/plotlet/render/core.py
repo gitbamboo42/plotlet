@@ -933,8 +933,16 @@ def _continuous_sector_extras(sec):
     return tuple(sec.lengths), float(sec.gap)
 
 
-def _x_descriptor(st) -> _AxisDescriptor:
-    """Compute this panel's natural x-axis descriptor from its own state.
+def _axis_descriptor(states: list[dict], axis: str) -> _AxisDescriptor:
+    """Compute the descriptor for `axis` ("x" or "y") over a share-
+    equivalence class of panel states; a standalone panel passes a list
+    of one.
+
+    The first state is the anchor — its scale, lim, order, padding,
+    reverse/linthresh/exponent, and sectors win for policy. The
+    auto-scanned data range is the union of artists across all states,
+    so `force_zero` (bar/hist) and `flips_y_axis` fire if any leaf in
+    the class contributes such an artist.
 
     Categorical cat-order precedence (sectors' ``groups=`` derives splits
     in the final cat order, so split positions are correct under any
@@ -943,56 +951,66 @@ def _x_descriptor(st) -> _AxisDescriptor:
       2. an artist's ``axis_order`` hook (e.g. dendrogram's leaf order)
       3. an artist ``frame_defaults`` ``xscale(order=[...])`` (e.g. heatmap's
          first-seen clustered order) → x_order_default
-      4. categorical ``c.sectors(...)`` on x → flat sector-member order
-      5. ``collect_categories`` → first-appearance of unique x values
+      4. categorical ``c.sectors(...)`` on the axis → flat sector-member order
+      5. ``collect_categories`` → first-appearance of unique values
     """
-    _prebin_hist(st)
-    artists = st["artists"]
-    sec = st["x_sectors"]
+    if len(states) > 1:
+        _check_share_kinds_compatible(states, axis)
+    for st in states:
+        _prebin_hist(st)
+    anchor = states[0]
+    artists = [a for st in states for a in st["artists"]]
+    sec = anchor[f"{axis}_sectors"]
     sec_cat = sec is not None and sec.kind == "categorical"
-    explicit_cat = st["xscale"] == "category"
-    auto_cat = _is_categorical_axis(artists, "x")
+    explicit_cat = anchor[f"{axis}scale"] == "category"
+    auto_cat = _is_categorical_axis(artists, axis)
 
     if sec_cat or explicit_cat or auto_cat:
-        if st["x_order"] is not None:
-            cats = list(st["x_order"])
+        if anchor[f"{axis}_order"] is not None:
+            cats = list(anchor[f"{axis}_order"])
         else:
-            order = _artist_axis_order(artists, "x") or st["x_order_default"]
+            order = (_artist_axis_order(artists, axis)
+                     or anchor[f"{axis}_order_default"])
             if order:
                 cats = order
             elif sec_cat:
                 cats = list(sec.cats())
             else:
-                cats = collect_categories(artists, "x")
+                cats = collect_categories(artists, axis)
         if sec_cat:
             groups, split_gap = _categorical_sector_extras(sec)
             splits = None
         else:
-            splits, groups = st["x_splits"], st["x_groups"]
-            split_gap = st["x_split_gap"]
-        padding = _D["category_padding"] if st["x_padding"] is None else st["x_padding"]
+            splits, groups = anchor[f"{axis}_splits"], anchor[f"{axis}_groups"]
+            split_gap = anchor[f"{axis}_split_gap"]
+        padding = _resolve_shared_padding(states, f"{axis}_padding")
         return _AxisDescriptor(kind="category", cats=cats, padding=padding,
                                splits=splits, split_gap=split_gap,
                                groups=groups)
 
-    is_time = st["xscale"] == "time" or _is_temporal_axis(artists, "x")
-    x_scale_kind = "time" if is_time else st["xscale"]
-    x_lo, x_hi = _scan_domain(artists, "x", x_scale_kind)
-    x_tight = _axis_is_tight(artists, "x")
-    x_force_zero = _any_artist_force_zero(artists, "x")
-    xlim = _coerce_time_lim(st["xlim"]) if is_time else st["xlim"]
-    x_min, x_max = _resolve_domain(x_lo, x_hi, xlim, x_scale_kind,
-                                    force_zero=x_force_zero,
-                                    tight=x_tight,
-                                    expand=_resolve_expand(st["x_expand"], x_tight, "x"))
+    is_time = anchor[f"{axis}scale"] == "time" or _is_temporal_axis(artists, axis)
+    scale_kind = "time" if is_time else anchor[f"{axis}scale"]
+    lo, hi = _scan_domain(artists, axis, scale_kind)
+    tight = _axis_is_tight(artists, axis)
+    force_zero = _any_artist_force_zero(artists, axis)
+    lim = anchor[f"{axis}lim"]
+    if is_time:
+        lim = _coerce_time_lim(lim)
+    lo, hi = _resolve_domain(lo, hi, lim, scale_kind,
+                             force_zero=force_zero,
+                             tight=tight,
+                             expand=_resolve_expand(anchor[f"{axis}_expand"], tight, axis))
+    flip = anchor[f"{axis}_reverse"]
+    if axis == "y":
+        flip = _any_artist_flips_y(artists) or flip
     # Continuous sector gap: route the px gap to _SectoredLinearScale via
     # _AxisDescriptor — same shape as how categorical does it through
     # _CategoryScale.split_gap.
     sec_lengths, sec_gap_px = _continuous_sector_extras(sec)
-    return _AxisDescriptor(kind=x_scale_kind, lo=x_min, hi=x_max,
-                           flip=st["x_reverse"],
-                           linthresh=st["x_linthresh"],
-                           exponent=st["x_exponent"],
+    return _AxisDescriptor(kind=scale_kind, lo=lo, hi=hi,
+                           flip=flip,
+                           linthresh=anchor[f"{axis}_linthresh"],
+                           exponent=anchor[f"{axis}_exponent"],
                            sector_lengths=sec_lengths,
                            sector_gap_px=sec_gap_px)
 
@@ -1043,60 +1061,6 @@ def _axis_is_tight(artists, axis: str) -> bool:
     return saw_contributor
 
 
-def _y_descriptor(st) -> _AxisDescriptor:
-    """Compute this panel's natural y-axis descriptor from its own state.
-
-    Categorical precedence mirrors `_x_descriptor`. `force_zero` still
-    fires for bar/hist so numeric y-axes anchor at 0.
-    """
-    _prebin_hist(st)
-    artists = st["artists"]
-    sec = st["y_sectors"]
-    sec_cat = sec is not None and sec.kind == "categorical"
-    explicit_cat = st["yscale"] == "category"
-    auto_cat = _is_categorical_axis(artists, "y")
-
-    if sec_cat or explicit_cat or auto_cat:
-        if st["y_order"] is not None:
-            cats = list(st["y_order"])
-        else:
-            order = _artist_axis_order(artists, "y") or st["y_order_default"]
-            if order:
-                cats = order
-            elif sec_cat:
-                cats = list(sec.cats())
-            else:
-                cats = collect_categories(artists, "y")
-        if sec_cat:
-            groups, split_gap = _categorical_sector_extras(sec)
-            splits = None
-        else:
-            splits, groups = st["y_splits"], st["y_groups"]
-            split_gap = st["y_split_gap"]
-        padding = _D["category_padding"] if st["y_padding"] is None else st["y_padding"]
-        return _AxisDescriptor(kind="category", cats=cats, padding=padding,
-                               splits=splits, split_gap=split_gap,
-                               groups=groups)
-
-    is_time = st["yscale"] == "time" or _is_temporal_axis(artists, "y")
-    y_scale_kind = "time" if is_time else st["yscale"]
-    force_zero = _any_artist_force_zero(artists, "y")
-    y_lo, y_hi = _scan_domain(artists, "y", y_scale_kind)
-    y_tight = _axis_is_tight(artists, "y")
-    ylim = _coerce_time_lim(st["ylim"]) if is_time else st["ylim"]
-    y_min, y_max = _resolve_domain(y_lo, y_hi, ylim, y_scale_kind,
-                                    force_zero=force_zero,
-                                    tight=y_tight,
-                                    expand=_resolve_expand(st["y_expand"], y_tight, "y"))
-    sec_lengths, sec_gap_px = _continuous_sector_extras(sec)
-    return _AxisDescriptor(kind=y_scale_kind, lo=y_min, hi=y_max,
-                           flip=_any_artist_flips_y(artists) or st["y_reverse"],
-                           linthresh=st["y_linthresh"],
-                           exponent=st["y_exponent"],
-                           sector_lengths=sec_lengths,
-                           sector_gap_px=sec_gap_px)
-
-
 def _resolve_shared_padding(states: list[dict], key: str) -> float:
     """Category padding for a share-equivalence class.
 
@@ -1112,120 +1076,6 @@ def _resolve_shared_padding(states: list[dict], key: str) -> float:
     if others:
         return min(others)
     return _D["category_padding"]
-
-
-def _x_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
-    """Build an x-axis descriptor for a share-equivalence class.
-
-    The first state in `states` is the anchor — its xscale, xlim, x_order,
-    and x_padding settings win. Auto-scanned data range is the union of
-    artists across all states. Single-state input is equivalent to
-    `_x_descriptor(states[0])`."""
-    if len(states) == 1:
-        return _x_descriptor(states[0])
-    _check_share_kinds_compatible(states, "x")
-    for st in states:
-        _prebin_hist(st)
-    anchor = states[0]
-    all_artists = [a for st in states for a in st["artists"]]
-    sec = anchor["x_sectors"]
-    sec_cat = sec is not None and sec.kind == "categorical"
-    explicit_cat = anchor["xscale"] == "category"
-    auto_cat = _is_categorical_axis(all_artists, "x")
-    if sec_cat or explicit_cat or auto_cat:
-        if anchor["x_order"] is not None:
-            cats = list(anchor["x_order"])
-        else:
-            order = (_artist_axis_order(all_artists, "x")
-                     or anchor["x_order_default"])
-            if order:
-                cats = order
-            elif sec_cat:
-                cats = list(sec.cats())
-            else:
-                cats = collect_categories(all_artists, "x")
-        if sec_cat:
-            groups, split_gap = _categorical_sector_extras(sec)
-            splits = None
-        else:
-            splits, groups = anchor["x_splits"], anchor["x_groups"]
-            split_gap = anchor["x_split_gap"]
-        padding = _resolve_shared_padding(states, "x_padding")
-        return _AxisDescriptor(kind="category", cats=cats, padding=padding,
-                               splits=splits, split_gap=split_gap,
-                               groups=groups)
-    is_time = anchor["xscale"] == "time" or _is_temporal_axis(all_artists, "x")
-    x_scale_kind = "time" if is_time else anchor["xscale"]
-    x_lo, x_hi = _scan_domain(all_artists, "x", x_scale_kind)
-    x_tight = _axis_is_tight(all_artists, "x")
-    x_force_zero = _any_artist_force_zero(all_artists, "x")
-    xlim = _coerce_time_lim(anchor["xlim"]) if is_time else anchor["xlim"]
-    x_min, x_max = _resolve_domain(x_lo, x_hi, xlim, x_scale_kind,
-                                    force_zero=x_force_zero,
-                                    tight=x_tight,
-                                    expand=_resolve_expand(anchor["x_expand"], x_tight, "x"))
-    sec_lengths, sec_gap_px = _continuous_sector_extras(sec)
-    return _AxisDescriptor(kind=x_scale_kind, lo=x_min, hi=x_max,
-                           flip=anchor["x_reverse"],
-                           linthresh=anchor["x_linthresh"],
-                           exponent=anchor["x_exponent"],
-                           sector_lengths=sec_lengths,
-                           sector_gap_px=sec_gap_px)
-
-
-def _y_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
-    """y-axis counterpart to `_x_descriptor_multi`. force_zero fires if any
-    leaf in the share class plots bar or hist artists."""
-    if len(states) == 1:
-        return _y_descriptor(states[0])
-    _check_share_kinds_compatible(states, "y")
-    for st in states:
-        _prebin_hist(st)
-    anchor = states[0]
-    all_artists = [a for st in states for a in st["artists"]]
-    sec = anchor["y_sectors"]
-    sec_cat = sec is not None and sec.kind == "categorical"
-    explicit_cat = anchor["yscale"] == "category"
-    auto_cat = _is_categorical_axis(all_artists, "y")
-    if sec_cat or explicit_cat or auto_cat:
-        if anchor["y_order"] is not None:
-            cats = list(anchor["y_order"])
-        else:
-            order = (_artist_axis_order(all_artists, "y")
-                     or anchor["y_order_default"])
-            if order:
-                cats = order
-            elif sec_cat:
-                cats = list(sec.cats())
-            else:
-                cats = collect_categories(all_artists, "y")
-        if sec_cat:
-            groups, split_gap = _categorical_sector_extras(sec)
-            splits = None
-        else:
-            splits, groups = anchor["y_splits"], anchor["y_groups"]
-            split_gap = anchor["y_split_gap"]
-        padding = _resolve_shared_padding(states, "y_padding")
-        return _AxisDescriptor(kind="category", cats=cats, padding=padding,
-                               splits=splits, split_gap=split_gap,
-                               groups=groups)
-    is_time = anchor["yscale"] == "time" or _is_temporal_axis(all_artists, "y")
-    y_scale_kind = "time" if is_time else anchor["yscale"]
-    force_zero = _any_artist_force_zero(all_artists, "y")
-    y_lo, y_hi = _scan_domain(all_artists, "y", y_scale_kind)
-    y_tight = _axis_is_tight(all_artists, "y")
-    ylim = _coerce_time_lim(anchor["ylim"]) if is_time else anchor["ylim"]
-    y_min, y_max = _resolve_domain(y_lo, y_hi, ylim, y_scale_kind,
-                                    force_zero=force_zero,
-                                    tight=y_tight,
-                                    expand=_resolve_expand(anchor["y_expand"], y_tight, "y"))
-    sec_lengths, sec_gap_px = _continuous_sector_extras(sec)
-    return _AxisDescriptor(kind=y_scale_kind, lo=y_min, hi=y_max,
-                           flip=_any_artist_flips_y(all_artists) or anchor["y_reverse"],
-                           linthresh=anchor["y_linthresh"],
-                           exponent=anchor["y_exponent"],
-                           sector_lengths=sec_lengths,
-                           sector_gap_px=sec_gap_px)
 
 
 def _inline_legend_layout(st, env=None):
@@ -1502,8 +1352,8 @@ def _required_margin(st, dw, dh, po: "_PanelOpts") -> dict:
     # are decided up front, no iteration needed. Reservation pass uses the
     # per-panel descriptor (not the layout-coordinated one); render pass
     # picks the coordinated one via `_build_xy_scales` instead.
-    x_axis = _x_descriptor(st)
-    y_axis = _y_descriptor(st)
+    x_axis = _axis_descriptor([st], "x")
+    y_axis = _axis_descriptor([st], "y")
     if x_axis.kind == "category" or not x_axis.flip:
         x_scale = x_axis.build(0, dw)
     else:
