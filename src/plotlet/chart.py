@@ -1159,6 +1159,11 @@ def _scale_data_dims(node, s: float) -> None:
             node._orig_data_height = new_h
             node._canvas_width  = new_w + node._margin["left"] + node._margin["right"]
             node._canvas_height = new_h + node._margin["top"]  + node._margin["bottom"]
+            # Insets render at their own absolute size but are placed by
+            # an axes-fraction rect — scale them along with the host so
+            # they keep occupying their declared fraction of the panel.
+            for _rect, inset_chart in node._insets:
+                _scale_data_dims(inset_chart, s)
         return
     for child in node._children:
         if child is not None:

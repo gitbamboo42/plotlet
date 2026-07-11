@@ -1,8 +1,16 @@
-"""Minimal PNG encoder — RGB only, stdlib zlib.
+"""Minimal PNG encoder — RGB only, stdlib-only.
 
 Used by the raster fallbacks (`imshow`, large heatmaps) to embed images
 as a single base64 data URI rather than thousands of `<rect>` elements.
 Hand-rolled to avoid a Pillow dep.
+
+The zlib stream is hand-assembled from *stored* (uncompressed) deflate
+blocks rather than `zlib.compress`: compressed output is not pinned by
+the DEFLATE spec and differs between zlib and zlib-ng (the system zlib
+on some distros), which would break byte-identical SVG across machines.
+Stored blocks have exactly one encoding. The buffers are cell-count
+sized (one pixel per heatmap cell), so forgoing compression costs
+little.
 """
 from __future__ import annotations
 
@@ -36,8 +44,24 @@ def encode_rgb(pixels: bytes, width: int, height: int) -> bytes:
         raw.extend(pixels[y * stride : (y + 1) * stride])
 
     return (sig + _chunk(b"IHDR", ihdr)
-            + _chunk(b"IDAT", zlib.compress(bytes(raw)))
+            + _chunk(b"IDAT", _zlib_stored(bytes(raw)))
             + _chunk(b"IEND", b""))
+
+
+def _zlib_stored(data: bytes) -> bytes:
+    """A zlib stream of stored (BTYPE=00) deflate blocks — one canonical
+    encoding, no compressor freedom. 0x78 0x01: CMF = deflate/32K window,
+    FLG chosen so (CMF·256 + FLG) % 31 == 0."""
+    out = bytearray(b"\x78\x01")
+    n = len(data)
+    for i in range(0, n or 1, 65535):
+        block = data[i:i + 65535]
+        final = 1 if i + 65535 >= n else 0
+        out.append(final)
+        out += struct.pack("<HH", len(block), len(block) ^ 0xFFFF)
+        out += block
+    out += struct.pack(">I", zlib.adler32(data) & 0xFFFFFFFF)
+    return bytes(out)
 
 
 def image_png(x, y, w, h, pixels, width, height):

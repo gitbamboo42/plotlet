@@ -3154,6 +3154,45 @@ def test_category_metadata_survives_cdata_breakout():
     assert "script" not in cleaned
 
 
+def test_fit_scales_insets():
+    # Insets are placed by an axes-fraction rect but sized absolutely —
+    # fit() must scale them with the host or they overflow their
+    # declared fraction of the shrunken panel.
+    c = pt.chart({"x": [1, 2, 3], "y": [1, 4, 9]},
+                 data_width=400, data_height=300)
+    c.line(x="x", y="y")
+    ins = c.inset((0.6, 0.6, 0.35, 0.35))
+    ins.line(data={"x": [1, 2], "y": [2, 1]}, x="x", y="y")
+
+    fitted = c.fit(canvas_width=250)
+    host_ratio = fitted._data_width / c._data_width
+    inset_ratio = fitted._insets[0][1]._data_width / ins._data_width
+    assert abs(host_ratio - inset_ratio) < 0.05
+
+
+def test_hexbin_colorbar_matches_drawn_counts():
+    # The colorbar must label the range the cells were actually colored
+    # with. It used to default to a record-time density guess
+    # (n / (gridsize²/4)) — for clustered data the real max is far
+    # higher, so the legend silently labeled the wrong range.
+    c = pt.chart({"x": [1.0] * 100, "y": [2.0] * 100}, legend=True)
+    c.hexbin(x="x", y="y")   # every point lands in one cell: true max 100
+    labels = [r["meta"].get("text") for r in c.regions()
+              if r["kind"] == "text" and r["name"] == "legend-text"]
+    assert labels == ["0", "50", "100"]
+
+
+def test_swarm_drops_nan():
+    # NaN has no position: it used to emit cy="nan" circles and degrade
+    # collision placement of every neighboring point.
+    nan = float("nan")
+    c = pt.chart({"cat": ["a", "a", "a", "b"], "v": [1.0, nan, 2.0, nan]})
+    c.swarm(x="cat", y="v")
+    svg = c.to_svg()
+    assert "nan" not in svg
+    assert svg.count("<circle") == 2
+
+
 def test_log_scale_single_point_domain():
     # lo == hi padding must stay positive on log scales — the linear
     # ±0.5 pad used to push a value < 0.5 to a negative bound and crash

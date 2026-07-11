@@ -24,7 +24,7 @@ Other styling kwargs:
 from ..registry import ArtistSpec, add_artist
 from ..draw import circle
 from ..utils import (resolve_aes, palette_color,
-                     dodge_positions, categorical_groups)
+                     dodge_positions, categorical_groups, _drop_nan)
 from ..draw import TAB10, resolve_color
 from .._spec import _FRAME
 
@@ -64,7 +64,9 @@ def _swarm_record(args, kw):
 
 def _swarm_horizontal(a): return a["opts"].get("orientation") == "h"
 def _swarm_values(a):
-    return [v for row in a["vals"] for g in row for v in g]
+    # NaN dropped here and in draw — it has no position, and one NaN
+    # poisons min/max domain resolution.
+    return _drop_nan([v for row in a["vals"] for g in row for v in g])
 
 
 def _swarm_xdomain(a):
@@ -130,7 +132,7 @@ def _swarm_draw(a, ctx):
     out = []
     for i, cat in enumerate(cats):
         for j in range(n_groups):
-            vs = vals[i][j]
+            vs = _drop_nan(vals[i][j])
             if not vs:
                 continue
             col = _group_fill(groups, palette, j, fill_fallback)

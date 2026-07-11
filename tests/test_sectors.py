@@ -166,6 +166,36 @@ def sectors_categorical_y_heatmap():
 # Data-model tests for the categorical kind.
 # ---------------------------------------------------------------------------
 
+def test_sector_labels_follow_axis_side():
+    # Sector labels flip to whichever edge the tick band uses. They used
+    # to hardcode left/bottom: with yticks(side="right") the margin was
+    # reserved on the right but the labels drew at negative x, off-canvas.
+    def make(tick_side):
+        c = pt.chart({"cat": ["a", "b", "c", "d"], "v": [1, 2, 3, 4]},
+                     data_width=280, data_height=160)
+        c.bar(x="cat", y="v")
+        c.sectors({"g1": ["a", "b"], "g2": ["c", "d"]}, axis="x")
+        c.xticks(side=tick_side)
+        c.yticks(side="right" if tick_side == "top" else "left")
+        c.sectors({"lo": 1, "hi": 1}, column="band", axis="y")
+        return c
+
+    for tick_side in ("bottom", "top"):
+        regs = make(tick_side).regions()
+        panel = next(r for r in regs if r["name"] == "panel")
+        px, py, pw, ph = panel["bbox"]
+        secs = [r for r in regs if r["name"] == "sector-label"]
+        assert secs, "sector labels missing"
+        for r in secs:
+            x, y, w, h = r["bbox"]
+            assert x >= 0 and y >= 0, "sector label off-canvas"
+            if r["meta"].get("text") in ("g1", "g2"):   # x-axis sectors
+                ok = y >= py + ph if tick_side == "bottom" else y + h <= py
+            else:                                        # y-axis sectors
+                ok = x + w <= px if tick_side == "bottom" else x >= px + pw
+            assert ok, (tick_side, r["meta"].get("text"), r["bbox"])
+
+
 def test_sectors_categorical_basic():
     s = Sectors.coerce(
         {"groupA": ["c1", "c2"], "groupB": ["c3", "c4", "c5"]},

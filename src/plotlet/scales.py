@@ -291,6 +291,13 @@ class _CategoryScale:
 
     def __init__(self, cats, r0, r1, padding, splits=None, gap=0.0, groups=None):
         self.cats = list(cats)
+        # `list.index` is O(n) per lookup — O(n²) per axis when a heatmap
+        # resolves every band. Thousand-row matrices are the target
+        # workload, so lookups go through a dict. setdefault keeps the
+        # first occurrence, matching `list.index` if cats ever duplicate.
+        self._cat_index = {}
+        for i, c in enumerate(self.cats):
+            self._cat_index.setdefault(c, i)
         self.r0, self.r1 = r0, r1
         self.padding = padding
         n = len(self.cats) or 1
@@ -328,9 +335,8 @@ class _CategoryScale:
         return self.gap * sum(1 for b in self.splits if b <= i)
 
     def __call__(self, cat):
-        try:
-            i = self.cats.index(cat)
-        except ValueError:
+        i = self._cat_index.get(cat)
+        if i is None:
             return float("nan")
         return self._center + i * self.step + self._gap_before(i)
 

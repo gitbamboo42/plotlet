@@ -1229,7 +1229,7 @@ def _y_descriptor_multi(states: list[dict]) -> _AxisDescriptor:
                            sector_gap_px=sec_gap_px)
 
 
-def _inline_legend_layout(st):
+def _inline_legend_layout(st, env=None):
     """Geometry for the in-frame legend a leaf paints.
 
     Returns a dict with `disc` (list of `(artist, entry)` pairs from
@@ -1248,7 +1248,13 @@ def _inline_legend_layout(st):
 
     Called by `_required_margin` (to reserve outside-legend margin space)
     and by `_render_inner`'s legend block (to paint), so the two stay in
-    sync — change geometry here, both paths follow."""
+    sync — change geometry here, both paths follow.
+
+    `env` carries the panel's scales and data dims (x_scale, y_scale,
+    iw, ih), stamped onto the artist copy as `_env` so a gradient hook
+    whose range depends on render geometry (hexbin's pixel-space bin
+    counts) can label exactly what draw will paint. The standalone
+    `pt.legend()` leaf harvests without a panel and passes no env."""
     if not st["legend"]:
         return None
     from ._legend import _legend_source_artist, _manual_entry
@@ -1260,6 +1266,8 @@ def _inline_legend_layout(st):
             continue
         a = _legend_source_artist(a)
         if spec.legend_gradient is not None:
+            if env is not None:
+                a = {**a, "_env": env}
             desc = spec.legend_gradient(a)
             if desc is not None:
                 cont.append((a, desc))
@@ -1564,7 +1572,8 @@ def _required_margin(st, dw, dh, po: "_PanelOpts") -> dict:
     # legend block sits beyond the title/labels rather than overlapping
     # them. Inside-corner positions paint over the data area and reserve
     # nothing extra.
-    leg = _inline_legend_layout(st)
+    leg = _inline_legend_layout(st, env=SimpleNamespace(
+        x_scale=x_scale, y_scale=y_scale, iw=dw, ih=dh))
     if leg is not None and leg["position"] not in _INSIDE_POSITIONS:
         lw, lh = leg["lw"], leg["lh"]
         pos = leg["position"]
@@ -1910,7 +1919,8 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
     # legend sits between the title and the data area — the title's y
     # offset depends on it. For other positions / inside / no legend, the
     # title stays at `_PADSPEC["title"]`.
-    leg = _inline_legend_layout(st)
+    leg = _inline_legend_layout(st, env=SimpleNamespace(
+        x_scale=x_scale, y_scale=y_scale, iw=iw, ih=ih))
     legend_pos = leg["position"] if leg is not None else None
     legend_gap = _LAYOUTSPEC["legend_gap"]
     # `inner_gap_top` is the data-side gap below the top-position legend

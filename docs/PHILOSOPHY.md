@@ -24,8 +24,8 @@ per-extension cost low.
 - The standard plotting vocabulary:
   - **xy:** scatter, line, regression
   - **categorical distributions:** boxplot, violin, swarm, strip, pointplot
-  - **1-D distributions:** hist, density_1d, ecdf, rug, freqpoly
-  - **2-D distributions:** hexbin, hist2d, kde_2d, contour, ridge, qq
+  - **1-D distributions:** hist, density_1d, ecdf, rug, freqpoly, qq
+  - **2-D distributions:** hexbin, hist2d, kde_2d, contour, ridge
   - **bars & areas:** bar (stack/dodge/fill), fill_between, area (stack), errorbar
   - **images & matrices:** imshow, heatmap, dendrogram
   - **reference lines / shapes / text:** axhline/vline/span, axline, hlines/vlines, rect, polygon, text, annotate

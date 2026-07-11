@@ -52,26 +52,24 @@ def _hexbin_xdomain(a): return a["xs"]
 def _hexbin_ydomain(a): return a["ys"]
 
 
-def _hexbin_draw(a, ctx):
-    xs = a["xs"]
-    ys = a["ys"]
-    if not xs:
-        return ""
-
+def _hexbin_bins(a, x_scale, y_scale, iw):
+    """Pixel-space hex binning: `(col, row) -> count`. Shared by draw and
+    the legend gradient so the colorbar labels the same range the cells
+    were colored with."""
     gridsize = a["opts"].get("gridsize", 30)
 
     # Flat-top hexagon radius in pixels: gridsize columns → canvas width.
     # Column center-to-center spacing = 3/2 * r, so r = iw / (gridsize * 1.5).
-    r_px = ctx.iw / (gridsize * 1.5)
+    r_px = iw / (gridsize * 1.5)
     dx_px = 1.5 * r_px              # horizontal column spacing
     dy_px = r_px * math.sqrt(3)     # vertical row spacing (same column)
     dy_half = dy_px / 2             # alternating-column vertical offset
 
     # Bin each point into the nearest hex center in pixel space.
     bins: dict[tuple[int, int], int] = {}
-    for x, y in zip(xs, ys):
-        px = ctx.x_scale(x)
-        py = ctx.y_scale(y)
+    for x, y in zip(a["xs"], a["ys"]):
+        px = x_scale(x)
+        py = y_scale(y)
         col0 = round(px / dx_px)
         # Check a 3×3 neighbourhood of candidate columns to find the nearest center.
         best_key = (col0, 0)
@@ -87,6 +85,19 @@ def _hexbin_draw(a, ctx):
                     best_d2 = d2
                     best_key = (cc, rr)
         bins[best_key] = bins.get(best_key, 0) + 1
+    return bins
+
+
+def _hexbin_draw(a, ctx):
+    if not a["xs"]:
+        return ""
+
+    gridsize = a["opts"].get("gridsize", 30)
+    r_px = ctx.iw / (gridsize * 1.5)
+    dx_px = 1.5 * r_px
+    dy_px = r_px * math.sqrt(3)
+    dy_half = dy_px / 2
+    bins = _hexbin_bins(a, ctx.x_scale, ctx.y_scale, ctx.iw)
 
     cm = colormap(a["opts"].get("cmap", _D["default_cmap"]))
     counts = list(bins.values())
@@ -109,10 +120,20 @@ def _hexbin_draw(a, ctx):
 
 
 def _hexbin_legend_gradient(a):
+    vmax = a["opts"].get("vmax")
+    if vmax is None:
+        env = a.get("_env")   # panel scales, stamped by the render core
+        if env is not None and a["xs"]:
+            bins = _hexbin_bins(a, env.x_scale, env.y_scale, env.iw)
+            vmax = max(bins.values())
+        else:
+            # Standalone pt.legend() leaf: no panel to bin against, so
+            # the record-time estimate is the best available.
+            vmax = a["_rough_max"]
     return {"kind": "continuous",
             "cmap": a["opts"].get("cmap", _D["default_cmap"]),
             "vmin": a["opts"].get("vmin", 0),
-            "vmax": a["opts"].get("vmax", a["_rough_max"]),
+            "vmax": vmax,
             "norm": "linear", "label": "count"}
 
 

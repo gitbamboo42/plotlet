@@ -772,33 +772,41 @@ def emit_chrome(*, st, inp, iw, ih,
                     parts.append(segment(x, 0, x, ih,
                                          color=sec_col, width=sec_w, dash=sec_dash,
                                          tag="sector-divider"))
-            if sec.label and not suppress_xt and not hide_b:
+            _x_sec_hide = hide_b if inp.x_side == "bottom" else hide_t
+            if sec.label and not suppress_xt and not _x_sec_hide:
                 # Sector label band sits flush against the spine when no
-                # tick band is above it (continuous-no-user-ticks case);
-                # otherwise it stacks below the tick band. Same rule for
-                # categorical (always has cat labels above) and continuous
+                # tick band is between them (continuous-no-user-ticks case);
+                # otherwise it stacks past the tick band. Same rule for
+                # categorical (always has cat labels) and continuous
                 # (has labels only when user supplied xticks). Uses the
                 # rotation-aware tick band height — must match the
-                # reservation in `_required_margin`.
+                # reservation in `_required_margin`. The whole band flips
+                # to the top edge with `xticks(side="top")`, like the
+                # tick-label block above.
                 _sec_x_size = sec.fontsize if sec.fontsize is not None else _SECTORSPEC["label_size"]
                 _sec_x_rot  = sec.rotation if sec.rotation is not None else 0
                 has_xtl = any(str(l) for l in x_labels)
-                # sec_baseline mirrors the _tick_label y_lbl formula:
-                # cap_height * cos(rot) gives the y-offset from the band top to
-                # the anchor — 0 at 90° (anchor is at the top, text hangs down),
-                # cap_height at 0° (baseline sits one cap below the band top).
-                _sec_cap_offset = cap_height(_sec_x_size) * math.cos(math.radians(_sec_x_rot))
+                _sec_band = _FRAME["tick_pad"]
                 if has_xtl:
-                    sec_baseline = (ih + _FRAME["tick_pad"]
-                                    + tick_band_height(x_labels, x_size, x_rot,
-                                                       x_style, x_weight)
-                                    + sec_pad + _sec_cap_offset)
+                    _sec_band += tick_band_height(x_labels, x_size, x_rot,
+                                                  x_style, x_weight) + sec_pad
+                if inp.x_side == "bottom":
+                    # cap_height * cos(rot) is the y-offset from the band top
+                    # to the anchor — 0 at 90° (anchor at top, text hangs
+                    # down), cap_height at 0° (baseline one cap below).
+                    sec_baseline = (ih + _sec_band
+                                    + cap_height(_sec_x_size)
+                                    * math.cos(math.radians(_sec_x_rot)))
                 else:
-                    sec_baseline = ih + _FRAME["tick_pad"] + _sec_cap_offset
+                    # Top-edge mirror of the tick-label formula: text sits
+                    # above the band edge, hanging by its descender.
+                    sec_baseline = (-_sec_band
+                                    - descender(_sec_x_size)
+                                    * math.cos(math.radians(_sec_x_rot)))
                 for name, cx in zip(sec.names, label_xs):
                     parts.append(_tick_label(str(name), cx, sec_baseline,
                                              _sec_x_size, _sec_x_rot, axis="x",
-                                             side="bottom",
+                                             side=inp.x_side,
                                              fontstyle=x_style, fontweight=x_weight,
                                              decoration=x_decor,
                                              tag="sector-label"))
@@ -818,25 +826,30 @@ def emit_chrome(*, st, inp, iw, ih,
                 parts.append(segment(0, y, iw, y,
                                      color=sec_col, width=sec_w, dash=sec_dash,
                                      tag="sector-divider"))
-        if sec.label and not suppress_yt and not hide_l:
+        _y_sec_hide = hide_l if inp.y_side == "left" else hide_r
+        if sec.label and not suppress_yt and not _y_sec_hide:
             # Sector label column sits flush against the spine when no
             # tick label column exists to its inside; otherwise it stacks
             # past the tick labels. Same rule for categorical (always has
             # cat labels) and continuous (has labels only when user
-            # supplied yticks).
+            # supplied yticks). The whole column flips to the right edge
+            # with `yticks(side="right")`, like the tick-label block below.
             _sec_y_size = sec.fontsize if sec.fontsize is not None else _SECTORSPEC["label_size"]
             has_ytl = any(str(l) for l in y_labels)
+            _sec_band = _FRAME["tick_pad"]
             if has_ytl:
                 ytl_w = max((measure_text(str(l), y_size, y_style, y_weight)
                              for l in y_labels), default=0.0)
-                y_label_x = -(_FRAME["tick_pad"] + ytl_w + sec_pad)
+                _sec_band += ytl_w + sec_pad
+            if inp.y_side == "left":
+                y_label_x = -_sec_band
             else:
-                y_label_x = -_FRAME["tick_pad"]
+                y_label_x = iw + _sec_band
             for name, cy in zip(sec.names, label_ys):
                 parts.append(_tick_label(str(name), y_label_x,
                                          cy + cap_height(_sec_y_size) / 2,
                                          _sec_y_size, 0, axis="y",
-                                         side="left",
+                                         side=inp.y_side,
                                          fontstyle=y_style, fontweight=y_weight,
                                          decoration=y_decor,
                                          tag="sector-label"))

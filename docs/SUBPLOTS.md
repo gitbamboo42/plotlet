@@ -8,7 +8,7 @@ plotlet composes charts via three primitives:
 | `a / b` | vertical stack |
 | `pt.grid([[A, B], [C, D]])` | 2-D grid; `None` for blank cells |
 
-All three return a **parent `Chart`** — same type as a leaf. Call `.show()` on the parent to render the whole SVG. A chart can be in **at most one parent**; composing a chart that already has a parent raises at composition time.
+All three return a parent **`Layout`** — it renders, saves, and composes like a `Chart`, but is its own type. Call `.show()` on the parent to render the whole SVG. A chart can be in **at most one parent**; composing a chart that already has a parent raises at composition time.
 
 ## Quick patterns
 

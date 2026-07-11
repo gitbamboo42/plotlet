@@ -48,10 +48,6 @@ dev = [
 test = [
   "pytest>=7",
   "pandas",
-  "statsmodels>=0.13",
-]
-loess = [
-  "statsmodels>=0.13",
 ]
 pdf = [
   "cairosvg",

@@ -51,8 +51,8 @@ skip these when scanning for data panels.
 |------------------------------|-----------------|-------|
 | `data-plotlet-legend-bbox`   | `"640,32,80,256"` | `"x,y,w,h"` of the legend's allocated rect in figure-SVG coords |
 
-Inline legends (rendered inside a panel via `chart(legend=True,
-legend_position=...)`) live inside the panel `<g>` and don't carry
+Inline legends (rendered inside a panel via `c.legend(True,
+position=...)`) live inside the panel `<g>` and don't carry
 these attrs — their geometry is part of the panel's chrome rather than
 a sibling leaf. Filter by `data-plotlet-kind` to distinguish.
 
