@@ -361,21 +361,37 @@ def group_color(groups, palette, j, fallback):
     return palette_color(palette, groups[j], j) or TAB10[j % 10]
 
 
+# Dodge defaults shared by bar, hist, and errorbar's dodged grouping —
+# one definition, so slot geometry across the three can't drift and
+# dodged errorbars keep landing on bar slot centers.
+DODGE_WIDTH = 0.8
+DODGE_GAP = 0.1
+
+
+def dodge_slot(center, band, n_groups, j, *, width, gap):
+    """Centered-dodge slot `j` of `n_groups` within a pixel band of size
+    `band` around `center` → `(slot_center, box_size)`. The geometry core
+    of `dodge_positions`, usable directly when the band is an explicit
+    pixel interval (hist bins) rather than a category on a band scale.
+    `width` is the total dodge-group size as a fraction of the band;
+    `gap` the fraction of each slot left as spacing between adjacent
+    boxes (ignored when `n_groups == 1`)."""
+    slot = band * width / n_groups
+    box = slot * (1 - gap) if n_groups > 1 else slot
+    return center + (j - (n_groups - 1) / 2) * slot, box
+
+
 def dodge_positions(cat_scale, cat, n_groups, j, *, band_frac=0.6, gap=0.1):
     """Compute the centered-dodge position and box size for sub-box `j`
     of `n_groups` within category `cat`.
 
     `cat_scale` is the scale of whichever axis holds the categories
-    (x_scale in vertical mode, y_scale in horizontal). `band_frac` is
-    the total dodge-group size as a fraction of the category band; `gap`
-    is the fraction of each slot left as spacing between adjacent boxes
-    (ignored when `n_groups == 1`). Returns `(center, box_size)` in pixel
-    coordinates along the categorical axis."""
+    (x_scale in vertical mode, y_scale in horizontal). Returns
+    `(center, box_size)` in pixel coordinates along the categorical
+    axis. See `dodge_slot` for the band/width/gap geometry."""
     band = getattr(cat_scale, "bandwidth", 1.0)
-    slot_w = band * band_frac / n_groups
-    box_w = slot_w * (1 - gap) if n_groups > 1 else slot_w
-    center = cat_scale(cat) + (j - (n_groups - 1) / 2) * slot_w
-    return center, box_w
+    return dodge_slot(cat_scale(cat), band, n_groups, j,
+                      width=band_frac, gap=gap)
 
 
 def categorical_groups(data, x_col, y_col, group_col=None):
@@ -575,7 +591,8 @@ def ci_bounds(cells, est_fn, estimator, ci, level, n_boot, rng):
 
 __all__ = ["to_list", "to_list_2d", "broadcast", "quantile",
            "hist_bin_edges", "hist_bin_counts", "hist_transform",
-           "resolve_aes", "palette_color", "group_color", "dodge_positions",
+           "resolve_aes", "palette_color", "group_color",
+           "dodge_positions", "dodge_slot",
            "categorical_groups", "collect_categories",
            "long_form_xy", "long_form_1d",
            "silverman_bw", "kde_1d", "t_ci_mean", "bootstrap_ci",

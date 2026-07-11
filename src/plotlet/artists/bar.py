@@ -48,12 +48,13 @@ import random
 
 from ..registry import ArtistSpec, add_artist
 from ..utils import (to_list, resolve_aes, dodge_positions,
-                     validate_ci, ci_bounds)
+                     validate_ci, ci_bounds, DODGE_WIDTH, DODGE_GAP)
 from ..draw import resolve_color
 from .._spec import _D, _LEGSPEC
 from ..draw import rect as draw_rect
 from ..draw import errorbar_v, errorbar_h
 from .errorbar import _resolve_err
+from ._shared import band_rect
 from ..utils import group_color as _group_fill
 
 
@@ -352,16 +353,12 @@ def _bar_draw(a, ctx):
                 cp = cat_scale(cat) - band / 2
                 bot_px = val_scale(running[i])
                 top_px = val_scale(running[i] + v)
-                if horizontal:
-                    _emit(min(bot_px, top_px), cp,
-                          abs(top_px - bot_px), band, col)
-                else:
-                    _emit(cp, min(bot_px, top_px),
-                          band, abs(top_px - bot_px), col)
+                _emit(*band_rect(cp, band, bot_px, top_px,
+                                 horizontal=horizontal), col)
                 running[i] += v
     elif multi and position == "dodge":
-        width = opts.get("width", 0.8)
-        gap = opts.get("gap", 0.1)
+        width = opts.get("width", DODGE_WIDTH)
+        gap = opts.get("gap", DODGE_GAP)
         redundant = opts.get("_redundant_grouping", False)
         for j, s in enumerate(series):
             col = _group_fill(groups, palette, j, fill_fallback)
@@ -371,22 +368,16 @@ def _bar_draw(a, ctx):
                                              0 if redundant else j,
                                              band_frac=width, gap=gap)
                 vp = val_scale(v)
-                if horizontal:
-                    _emit(min(base_px, vp), cp - slot_w / 2,
-                          abs(vp - base_px), slot_w, col)
-                else:
-                    _emit(cp - slot_w / 2, min(base_px, vp),
-                          slot_w, abs(vp - base_px), col)
+                _emit(*band_rect(cp - slot_w / 2, slot_w, base_px, vp,
+                                 horizontal=horizontal), col)
                 _emit_err(cp, j, i, v)
     else:
         col = fill_fallback
         for i, (cat, v) in enumerate(zip(cats, series[0])):
             cp = cat_scale(cat) - band / 2
             vp = val_scale(v)
-            if horizontal:
-                _emit(min(base_px, vp), cp, abs(vp - base_px), band, col)
-            else:
-                _emit(cp, min(base_px, vp), band, abs(vp - base_px), col)
+            _emit(*band_rect(cp, band, base_px, vp,
+                             horizontal=horizontal), col)
             _emit_err(cat_scale(cat), 0, i, v)
 
     return "".join(out)

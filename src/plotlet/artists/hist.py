@@ -35,7 +35,8 @@ Other styling kwargs:
   linewidth=<themed>  stroke width (used only when color is set)
 """
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, resolve_aes
+from ..utils import to_list, resolve_aes, dodge_slot, DODGE_WIDTH, DODGE_GAP
+from ._shared import band_rect
 from ..draw import resolve_color
 from .._spec import _D, _LEGSPEC
 from ..draw import coord, path as draw_path, polygon as draw_polygon, rect as draw_rect
@@ -265,11 +266,8 @@ def _hist_draw_stacked(a, ctx, bin_groups, fills, *, normalize):
             bp_lo += half_gap; bp_hi -= half_gap
             bin_size = max(0, bp_hi - bp_lo)
             c0 = count_scale(running[i]); c1 = count_scale(running[i] + v)
-            count_lo, count_hi = min(c0, c1), max(c0, c1)
-            if horizontal:
-                x, y, w, h = count_lo, bp_lo, count_hi - count_lo, bin_size
-            else:
-                x, y, w, h = bp_lo, count_lo, bin_size, count_hi - count_lo
+            x, y, w, h = band_rect(bp_lo, bin_size, c0, c1,
+                                   horizontal=horizontal)
             out.append(draw_rect(x, y, w, h, fill=fills[j],
                                  stroke=style["stroke"], stroke_width=lw,
                                  dash=style["dash"], alpha=style["alpha"],
@@ -294,14 +292,15 @@ def _hist_draw_dodged(a, ctx, bin_groups, fills):
             bp0 = bin_scale(b["x0"]); bp1 = bin_scale(b["x1"])
             bp_lo, bp_hi = min(bp0, bp1), max(bp0, bp1)
             bp_lo += half_gap; bp_hi -= half_gap
-            slot = max(0, bp_hi - bp_lo) / k
-            s_lo = bp_lo + j * slot
+            # bar's dodge geometry: gapped slots within DODGE_WIDTH of
+            # the bin band, centered — so dodged hist reads like dodged
+            # bars, not flush full-bin strips.
+            sc, box = dodge_slot((bp_lo + bp_hi) / 2,
+                                 max(0, bp_hi - bp_lo), k, j,
+                                 width=DODGE_WIDTH, gap=DODGE_GAP)
             cp = count_scale(b["count"])
-            count_lo, count_hi = min(base, cp), max(base, cp)
-            if horizontal:
-                x, y, w, h = count_lo, s_lo, count_hi - count_lo, slot
-            else:
-                x, y, w, h = s_lo, count_lo, slot, count_hi - count_lo
+            x, y, w, h = band_rect(sc - box / 2, box, base, cp,
+                                   horizontal=horizontal)
             out.append(draw_rect(x, y, w, h, fill=fills[j],
                                  stroke=style["stroke"], stroke_width=lw,
                                  dash=style["dash"], alpha=style["alpha"],

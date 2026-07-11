@@ -23,7 +23,7 @@ import math
 
 from ..registry import ArtistSpec, add_artist
 from ..utils import (to_list, all_numeric, resolve_aes, group_color,
-                     dodge_positions)
+                     dodge_positions, DODGE_WIDTH, DODGE_GAP)
 from ..draw import marker, segment, errorbar_v, errorbar_h
 from .._spec import _D, _LEGSPEC
 from ._shared import _xy_minmax
@@ -171,8 +171,8 @@ def _artist_errorbar(a, ctx):
         return _errorbar_rows(a["xs"], a["ys"], a["xlo"], a["xhi"],
                               a["ylo"], a["yhi"], opts, xs_, ys_,
                               ctx.color, warp, xs_, ys_)
-    width = opts.get("width", 0.8)
-    gap = opts.get("gap", 0.1)
+    width = opts.get("width", DODGE_WIDTH)
+    gap = opts.get("gap", DODGE_GAP)
     x_band = getattr(xs_, "bandwidth", None) is not None
     y_band = getattr(ys_, "bandwidth", None) is not None
     out = []

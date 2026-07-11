@@ -15,6 +15,19 @@ LINESTYLE_CYCLE = (None, "--", ":", "-.")
 DEFAULT_ALPHA_RANGE = (0.3, 1.0)
 
 
+def band_rect(band_lo, band_size, p0, p1, *, horizontal):
+    """One positioned rect in (band, value) pixel space → `(x, y, w, h)`
+    for `draw.rect`. `band_lo`/`band_size` span the categorical/bin axis;
+    `p0`/`p1` are the value-axis pixel pair in either order (stack run,
+    base→value). `horizontal` swaps which screen axis is which. Shared by
+    bar's and hist's stack/fill/dodge loops so their rect geometry can't
+    drift apart."""
+    lo, hi = (p0, p1) if p0 <= p1 else (p1, p0)
+    if horizontal:
+        return lo, band_lo, hi - lo, band_size
+    return band_lo, lo, band_size, hi - lo
+
+
 def _alpha_for_level(idx, n_levels, alphas):
     """Map a discrete level index to an alpha within `alphas` (a `(lo, hi)`
     tuple). One level → high end; otherwise linearly spaced."""
