@@ -48,7 +48,7 @@ import random
 
 from ..registry import ArtistSpec, add_artist
 from ..utils import (to_list, resolve_aes, dodge_positions,
-                     t_ci_mean, bootstrap_ci)
+                     validate_ci, ci_bounds)
 from ..draw import resolve_color
 from .._spec import _D, _LEGSPEC
 from ..draw import rect as draw_rect
@@ -135,17 +135,17 @@ def _aggregate_stat(data, x_col, y_col, group_col, stat, ci,
         return cats, groups, series, None, None
     rng = random.Random(seed)
     mean_fn = lambda v: sum(v) / len(v) if v else float("nan")
+    los, his = ci_bounds([c for row in cells for c in row], mean_fn, "mean",
+                         ci, level, n_boot, rng)
+    # Bounds → whisker offsets around the drawn bar top; a bound-less
+    # (empty) cell keeps a zero offset, so the 0-height bar has no whisker.
     err_lo = [[0.0] * len(cats) for _ in groups]
     err_hi = [[0.0] * len(cats) for _ in groups]
     for j in range(len(groups)):
         for i in range(len(cats)):
-            cell = cells[j][i]
-            if not cell:
+            lo, hi = los[j * len(cats) + i], his[j * len(cats) + i]
+            if lo != lo:
                 continue
-            if ci == "t":
-                lo, hi = t_ci_mean(cell, level)
-            else:
-                lo, hi = bootstrap_ci(cell, mean_fn, level, n_boot, rng)
             err_lo[j][i] = series[j][i] - lo
             err_hi[j][i] = hi - series[j][i]
     return cats, groups, series, err_lo, err_hi
@@ -177,8 +177,7 @@ def _bar_record(args, kw):
     ci = kw.pop("ci", "t" if stat == "mean" else None)
     if ci is not None and stat != "mean":
         raise TypeError("bar: ci= applies to stat='mean'.")
-    if ci not in (None, "t", "boot"):
-        raise ValueError(f"bar: ci={ci!r} — expected 't', 'boot', or None.")
+    validate_ci("bar", ci)
     # `fill=` may be a literal color or a column name. Column → drives
     # grouping; literal → applied to every bar.
     fill = kw.pop("fill", None)

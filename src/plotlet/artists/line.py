@@ -37,7 +37,7 @@ import math
 import random
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import quantile, t_ci_mean, bootstrap_ci
+from ..utils import quantile, validate_ci, ci_bounds
 from .._spec import _D
 from ..draw import coord, marker, path as draw_path, polygon, polyline
 from ._shared import (_xy_minmax, _line_legend_entries, _CURVE_VALUES,
@@ -169,8 +169,7 @@ def _aggregate_series(rec, estimator):
     drop. `ci` attaches `_band_lo`/`_band_hi` alongside the aggregate."""
     opts = rec["opts"]
     ci = opts.get("ci", "t")
-    if ci not in (None, "t", "boot"):
-        raise ValueError(f"line: ci={ci!r} — expected 't', 'boot', or None.")
+    validate_ci("line", ci)
     level = opts.get("level", 0.95)
     n_boot = opts.get("n_boot", 1000)
     rng = random.Random(opts.get("seed", 0))
@@ -190,14 +189,8 @@ def _aggregate_series(rec, estimator):
     rec["ys"] = [est_fn(cells[x]) for x in xs]
     if ci is None:
         return
-    los, his = [], []
-    for x in xs:
-        g = cells[x]
-        if ci == "t" and estimator == "mean":
-            lo, hi = t_ci_mean(g, level)
-        else:
-            lo, hi = bootstrap_ci(g, est_fn, level, n_boot, rng)
-        los.append(lo); his.append(hi)
+    los, his = ci_bounds([cells[x] for x in xs], est_fn, estimator,
+                         ci, level, n_boot, rng)
     rec["_band_lo"] = los
     rec["_band_hi"] = his
 

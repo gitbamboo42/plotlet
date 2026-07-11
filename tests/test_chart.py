@@ -3407,6 +3407,15 @@ def test_contour_nan_cells_masked():
 # color= grouping: pointplot / ridge / kde_2d / qq (no baselines)
 
 
+def test_pointplot_rejects_unknown_ci():
+    # pointplot used to fall through to the bootstrap branch on any
+    # unknown ci=; it now shares bar/line's validation
+    c = pt.chart({"t": ["a", "a"], "v": [1, 2]})
+    c.pointplot(x="t", y="v", ci="x")
+    with pytest.raises(ValueError, match="ci='x'"):
+        c.to_svg()
+
+
 def test_pointplot_color_series():
     import re
     df = {"t": ["a", "a", "b", "b"], "v": [1, 2, 3, 4], "g": ["x", "y", "x", "y"]}

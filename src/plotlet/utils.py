@@ -542,9 +542,41 @@ def bootstrap_ci(vals, estimator_fn, level, n_boot, rng):
             boots[min(n_boot - 1, int((1 - alpha) * n_boot))])
 
 
+def validate_ci(artist, ci):
+    """Reject an unknown `ci=` with the shared message. Every artist that
+    aggregates with a CI (bar stat=, line estimator=, pointplot) calls
+    this at record entry, so the vocabulary can't drift per artist."""
+    if ci not in (None, "t", "boot"):
+        raise ValueError(f"{artist}: ci={ci!r} — expected 't', 'boot', or None.")
+
+
+def ci_bounds(cells, est_fn, estimator, ci, level, n_boot, rng):
+    """Confidence bounds per cell of replicate samples — the one
+    estimator → (t | bootstrap) dispatch behind bar `stat=`, line
+    `estimator=`, and pointplot. `ci="t"` with the mean gets the
+    analytic t interval; any other (ci, estimator) pair bootstraps
+    `est_fn`. Returns `(los, his)` aligned with `cells`; empty cells
+    (and `ci=None`) yield `(nan, nan)` bounds — how a bound-less cell
+    presents (0-height bar, missing point) is the caller's decision.
+    `rng` advances only on bootstrapped non-empty cells, in cell order."""
+    nan = float("nan")
+    los, his = [], []
+    for cell in cells:
+        if ci is None or not cell:
+            lo, hi = nan, nan
+        elif ci == "t" and estimator == "mean":
+            lo, hi = t_ci_mean(cell, level)
+        else:
+            lo, hi = bootstrap_ci(cell, est_fn, level, n_boot, rng)
+        los.append(lo)
+        his.append(hi)
+    return los, his
+
+
 __all__ = ["to_list", "to_list_2d", "broadcast", "quantile",
            "hist_bin_edges", "hist_bin_counts", "hist_transform",
            "resolve_aes", "palette_color", "group_color", "dodge_positions",
            "categorical_groups", "collect_categories",
            "long_form_xy", "long_form_1d",
-           "silverman_bw", "kde_1d", "t_ci_mean", "bootstrap_ci"]
+           "silverman_bw", "kde_1d", "t_ci_mean", "bootstrap_ci",
+           "validate_ci", "ci_bounds"]

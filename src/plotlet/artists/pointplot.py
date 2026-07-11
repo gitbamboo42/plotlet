@@ -29,7 +29,7 @@ import random
 
 from ..registry import ArtistSpec, add_artist
 from ..utils import (categorical_groups, resolve_aes, quantile,
-                     t_ci_mean, bootstrap_ci)
+                     validate_ci, ci_bounds)
 from ..draw import segment, circle, polyline, errorbar_v
 from ..utils import group_color
 
@@ -53,6 +53,7 @@ def _pointplot_record(args, kw):
     cats, groups, vals = categorical_groups(data, x, y, group_col)
     estimator = kw.get("estimator", "mean")
     ci = kw.get("ci", "t")
+    validate_ci("pointplot", ci)
     level = kw.get("level", 0.95)
     n_boot = kw.get("n_boot", 1000)
     rng = random.Random(kw.get("seed", 0))
@@ -60,18 +61,14 @@ def _pointplot_record(args, kw):
               if estimator == "mean" else (lambda xs: quantile(xs, 0.5)))
     ests = [[est_fn(vals[i][j]) for i in range(len(cats))]
             for j in range(len(groups))]
-    los = [[None] * len(cats) for _ in groups]
-    his = [[None] * len(cats) for _ in groups]
-    for j in range(len(groups)):
-        for i in range(len(cats)):
-            g = vals[i][j]
-            if ci is None or not g:
-                los[j][i] = float("nan"); his[j][i] = float("nan")
-            elif ci == "t" and estimator == "mean":
-                los[j][i], his[j][i] = t_ci_mean(g, level)
-            else:
-                los[j][i], his[j][i] = bootstrap_ci(g, est_fn, level,
-                                                    n_boot, rng)
+    # `vals` is cats-major; flatten group-major so bounds line up with
+    # `_los[j][i]` (and the bootstrap RNG stream stays in j, i order).
+    cells = [vals[i][j] for j in range(len(groups)) for i in range(len(cats))]
+    flat_lo, flat_hi = ci_bounds(cells, est_fn, estimator,
+                                 ci, level, n_boot, rng)
+    n = len(cats)
+    los = [flat_lo[j * n:(j + 1) * n] for j in range(len(groups))]
+    his = [flat_hi[j * n:(j + 1) * n] for j in range(len(groups))]
     return {"type": "pointplot", "cats": cats, "groups": groups,
             "_ests": ests, "_los": los, "_his": his, "opts": kw}
 
