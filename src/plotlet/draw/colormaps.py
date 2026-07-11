@@ -68,7 +68,13 @@ def list_colormaps() -> list[str]:
 
 def _parse_rgb(c) -> tuple[int, int, int]:
     from .colors import resolve_color
+    from ._css_colors import CSS_COLORS
     s = resolve_color(c)
+    # resolve_color passes CSS names through verbatim (SVG renders them
+    # natively); interpolation needs numeric RGB, so reduce them here.
+    # Plotlet names win over CSS ("red" is the tab10 red, as when drawing).
+    if isinstance(s, str) and not s.startswith("#"):
+        s = CSS_COLORS.get(s.lower(), s)
     if isinstance(s, str) and s.startswith("#"):
         h = s[1:]
         if len(h) == 3:
@@ -77,8 +83,8 @@ def _parse_rgb(c) -> tuple[int, int, int]:
             return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
     raise ValueError(
         f"register_colormap: can't interpolate color {c!r} — use '#rrggbb' "
-        f"hex, an (r, g, b) tuple of floats in [0, 1], or a named plotlet "
-        f"color ('blue', 'C0', ...)."
+        f"hex, an (r, g, b) tuple of floats in [0, 1], a named plotlet "
+        f"color ('blue', 'C0', ...), or a CSS color name ('white', ...)."
     )
 
 

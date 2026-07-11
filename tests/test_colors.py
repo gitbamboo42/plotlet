@@ -174,6 +174,19 @@ def test_register_colormap_accepts_tuples_and_names():
     assert cm(1.0) == (0x1f, 0x77, 0xb4)    # C0 == tab10 blue
 
 
+def test_register_colormap_accepts_css_names():
+    # the docstring example, verbatim
+    pt.register_colormap("bwr_css", ["#2166ac", "white", "#b2182b"])
+    assert all(ch >= 254 for ch in pt.colormap("bwr_css")(0.5))
+    pt.register_colormap("navy_ramp", ["navy", "ivory"])
+    cm = pt.colormap("navy_ramp")
+    assert cm(0.0) == (0x00, 0x00, 0x80)
+    assert cm(1.0) == (0xff, 0xff, 0xf0)
+    # plotlet names still win over CSS: "red" is the tab10 red, not #ff0000
+    pt.register_colormap("red_ramp", ["red", "white"])
+    assert pt.colormap("red_ramp")(0.0) == (0xd6, 0x27, 0x28)
+
+
 def test_register_colormap_overwrite_allowed():
     pt.register_colormap("mut_ramp", ["#000000", "#ff0000"])
     pt.register_colormap("mut_ramp", ["#000000", "#00ff00"])
@@ -203,7 +216,7 @@ def test_register_colormap_rejects_bad_input():
     with pytest.raises(ValueError, match="increasing"):
         pt.register_colormap("bad", ["k", "w", "k"], stops=[0, 0, 1])
     with pytest.raises(ValueError, match="can't interpolate"):
-        pt.register_colormap("bad", ["rebeccapurple", "#ffffff"])
+        pt.register_colormap("bad", ["not-a-color", "#ffffff"])
     assert "bad" not in pt.list_colormaps()
 
 
