@@ -109,3 +109,19 @@ def test_json_roundtrip_dates_in_dataframe():
     text = json.dumps(pt.to_json(c))
     assert '"$date"' in text
     assert pt.from_json(json.loads(text)).to_svg() == svg_original
+
+
+def test_json_roundtrip_integer_dataframe():
+    """All-int frames make `.values` an int64 ndarray; iterating it yields
+    np.int64 cells, which are not `int` and crash json.dumps. Regression:
+    normalization must hand the journal plain Python scalars."""
+    pd = pytest.importorskip("pandas")
+    df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    c = pt.chart(df, x="a", y="b")
+    c.line()
+    svg_original = c.to_svg()
+
+    journal_df = c._data
+    assert all(type(v) is int for row in journal_df.values for v in row)
+    text = json.dumps(pt.to_json(c))
+    assert pt.from_json(json.loads(text)).to_svg() == svg_original

@@ -262,6 +262,7 @@ class _Renderable:
         Returns a fresh copy; the original is unchanged."""
         from copy import deepcopy
         from ._ir import to_ir
+        from ._spec import _OUTER_MARGIN
         from .render import data_total_size, natural_size
         cls_name = type(self).__name__
         W = _to_px(canvas_width)
@@ -272,6 +273,13 @@ class _Renderable:
             )
         if (W is not None and W <= 0) or (H is not None and H <= 0):
             raise ValueError(f"{cls_name}.fit() canvas dimensions must be positive.")
+        # `natural_size` measures the figure content; the render adds the
+        # fixed outer trim around it. The contract is about the rendered
+        # SVG, so solve against the canvas minus the trim.
+        if W is not None:
+            W -= _OUTER_MARGIN["left"] + _OUTER_MARGIN["right"]
+        if H is not None:
+            H -= _OUTER_MARGIN["top"] + _OUTER_MARGIN["bottom"]
         node = deepcopy(self)
         node._parent = None  # copy may inherit a stale parent ref
         # Direct solve. Natural figure = data_total + overhead (margins,

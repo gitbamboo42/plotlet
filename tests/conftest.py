@@ -51,23 +51,35 @@ def baseline_compare(request):
     failure message."""
     update = request.config.getoption("--update")
 
+    # Encoding and newline are pinned so Windows behaves like everywhere
+    # else: the locale default there is cp1252 (breaks non-ASCII labels)
+    # and text-mode writes would translate \n to \r\n. Reads keep
+    # universal-newline translation so an autocrlf checkout still
+    # compares clean.
+    def _read(path: Path) -> str:
+        return path.read_text(encoding="utf-8")
+
+    def _write(path: Path, svg: str) -> None:
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(svg)
+
     def _compare(set_name: str, plot_name: str, svg: str) -> None:
         baseline_dir = BASELINE_ROOT / set_name
         baseline_dir.mkdir(parents=True, exist_ok=True)
         target = baseline_dir / f"{plot_name}.svg"
         if update:
-            if target.exists() and _normalize(target.read_text()) == _normalize(svg):
+            if target.exists() and _normalize(_read(target)) == _normalize(svg):
                 return
-            target.write_text(svg)
+            _write(target, svg)
             return
         assert target.exists(), (
             f"baseline missing: {target} — run `pytest --update` to create it"
         )
-        expected = target.read_text()
+        expected = _read(target)
         if _normalize(expected) == _normalize(svg):
             return
         actual_path = target.with_suffix(".actual.svg")
-        actual_path.write_text(svg)
+        _write(actual_path, svg)
         diff = list(difflib.unified_diff(
             _normalize(expected).splitlines(),
             _normalize(svg).splitlines(),

@@ -534,7 +534,7 @@ def test_layout_title_band():
     the figure grows by exactly the panel-title block (pad.title +
     title_size), the band text lands in regions as a `title` above
     every panel, and `fit()` treats the band as overhead."""
-    from plotlet._spec import _FONTSPEC, _PADSPEC
+    from plotlet._spec import _FONTSPEC, _OUTER_MARGIN, _PADSPEC
     from plotlet.render import natural_size
 
     def cell(t):
@@ -560,4 +560,5 @@ def test_layout_title_band():
 
     fitted = titled.fit(canvas_width=250)
     Wf, _ = natural_size(pt.to_ir(fitted))
-    assert abs(Wf - 250) <= 1
+    trim = _OUTER_MARGIN["left"] + _OUTER_MARGIN["right"]
+    assert abs(Wf + trim - 250) <= 1, "rendered SVG (natural + outer trim) fits the canvas"

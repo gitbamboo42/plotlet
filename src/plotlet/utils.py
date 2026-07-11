@@ -141,7 +141,9 @@ def _normalize_data(data):
 
     Idempotent: already-normalized values pass through unchanged.
 
-      - pandas / polars / duck-typed DataFrame  → DataFrameLite
+      - pandas / duck-typed DataFrame            → DataFrameLite
+        (needs `.values` / `.columns` / `.index` — polars has no
+        `.index`, so polars frames are not recognized here)
       - numpy scalar                             → Python scalar
       - numpy array (any dim) / pandas Series    → nested list via .tolist()
       - dict                                     → recurse over values
@@ -159,8 +161,15 @@ def _normalize_data(data):
     if (hasattr(data, "values") and hasattr(data, "columns")
             and hasattr(data, "index")
             and not isinstance(data, dict)):
+        # Iterating a 2-D ndarray row-by-row yields numpy scalars
+        # (np.int64 is not an int, so it survives json_safe and breaks
+        # json.dumps). `.tolist()` converts numeric dtypes wholesale;
+        # the recursion catches numpy scalars that survive inside
+        # object-dtype cells and rows from non-numpy duck types.
+        raw = data.values
+        rows = raw.tolist() if hasattr(raw, "tolist") else [list(r) for r in raw]
         return DataFrameLite(
-            values=[list(row) for row in data.values],
+            values=_normalize_data(rows),
             columns=[str(c) for c in data.columns],
             index=[str(i) for i in data.index],
         )

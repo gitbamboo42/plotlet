@@ -416,10 +416,13 @@ def materialize(root):
 # attr or end up with their own trailing space).
 _CLEAN_ATTR_RE = re.compile(r' data-plotlet-[\w-]+="[^"]*"')
 # Strip `<metadata data-plotlet-payload="...">...</metadata>` blocks. CDATA
-# content can include `<` `>` `&` but `json.dumps` won't emit `]]>` (see
-# `_metadata_block` in core.py), so the non-greedy match is safe.
+# content can include `<` `>` `&` and even a literal `</metadata>`, so the
+# match anchors on `]]></metadata>` — `_category_metadata` in core.py splits
+# every content `]]>` across CDATA sections, so that terminator sequence
+# appears exactly once per block.
 _CLEAN_METADATA_RE = re.compile(
-    r'<metadata data-plotlet-payload="[^"]*">.*?</metadata>', re.DOTALL
+    r'<metadata data-plotlet-payload="[^"]*"><!\[CDATA\[.*?\]\]></metadata>',
+    re.DOTALL,
 )
 
 

@@ -750,6 +750,10 @@ def _resolve_domain(lo, hi, user_lim, scale_kind, force_zero=False, tight=False,
     if force_zero and lo > 0:
         lo = 0
     if lo == hi:
+        if scale_kind == "log" and lo > 0:
+            # linear ±0.5 padding can push the domain nonpositive for
+            # values < 0.5; a decade each way stays positive.
+            return (lo / 10, hi * 10)
         return (lo - 0.5, hi + 0.5)
     expand_lo, expand_hi = expand
     has_expand = expand_lo != 0.0 or expand_hi != 0.0
@@ -1653,8 +1657,12 @@ def _attrs_str(d: dict) -> str:
 def _category_metadata(name: str, cats) -> str:
     """Emit a `<metadata data-plotlet-payload="name">` block carrying a JSON
     array of category labels. Wrapped in CDATA so labels can contain `<`
-    `>` `&` without XML escaping; `json.dumps` won't produce `]]>`."""
+    `>` `&` without XML escaping. `json.dumps` emits `]]>` verbatim when a
+    label contains it, so any occurrence is split across two CDATA sections
+    — after the split, every `]]>` in the block is immediately followed by
+    `<![CDATA[`, so the terminator sequence appears exactly once."""
     body = json.dumps(list(cats), ensure_ascii=False, separators=(",", ":"))
+    body = body.replace("]]>", "]]]]><![CDATA[>")
     return (f'<metadata data-plotlet-payload="{name}">'
             f'<![CDATA[{body}]]></metadata>')
 

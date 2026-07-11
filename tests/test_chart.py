@@ -3127,6 +3127,57 @@ def test_show_rejects_unknown_format():
 
 
 # ---------------------------------------------------------------------------
+# category <metadata> block — CDATA escaping (no baselines)
+
+
+def test_category_metadata_survives_cdata_breakout():
+    # A category label containing `]]>` must not terminate the CDATA
+    # section early — that would leave raw markup outside it (injection)
+    # and break XML parsing.
+    import json
+    import xml.etree.ElementTree as ET
+    label = ']]><script>alert(1)</script>'
+    c = pt.chart({"cat": ["a", label], "v": [1, 2]})
+    c.bar(x="cat", y="v")
+    svg = c.to_svg()
+    root = ET.fromstring(svg)
+    assert not [el for el in root.iter() if el.tag.endswith("script")]
+    # the label round-trips inside the metadata block's JSON payload
+    meta = [el for el in root.iter()
+            if el.tag.endswith("metadata")
+            and el.get("data-plotlet-payload") == "xcategories"]
+    assert len(meta) == 1
+    assert json.loads(meta[0].text) == ["a", label]
+    # clean=True strips the whole block despite the split CDATA sections
+    cleaned = c.to_svg(clean=True)
+    assert "<metadata" not in cleaned and "CDATA" not in cleaned
+    assert "script" not in cleaned
+
+
+def test_log_scale_single_point_domain():
+    # lo == hi padding must stay positive on log scales — the linear
+    # ±0.5 pad used to push a value < 0.5 to a negative bound and crash
+    # with "log scale needs strictly positive domain".
+    import re
+    c = pt.chart({"x": [0.3], "y": [1.0]})
+    c.scatter(x="x", y="y")
+    c.xscale("log")
+    m = re.search(r'data-plotlet-xlim="([^"]*)"', c.to_svg())
+    lo, hi = (float(v) for v in m.group(1).split(","))
+    assert 0 < lo < 0.3 < hi
+
+
+def test_clean_strips_metadata_containing_close_tag():
+    # A label containing a literal `</metadata>` sits legally inside CDATA;
+    # clean=True must strip to the block's real terminator, not the label.
+    label = "</metadata>x"
+    c = pt.chart({"cat": [label, "b"], "v": [1, 2]})
+    c.bar(x="cat", y="v")
+    cleaned = c.to_svg(clean=True)
+    assert "metadata" not in cleaned and "CDATA" not in cleaned
+
+
+# ---------------------------------------------------------------------------
 # bar stat= aggregation (no baselines)
 
 
