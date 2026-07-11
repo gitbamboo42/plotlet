@@ -103,7 +103,7 @@ def _hist2d_record(args, kw):
     br_x, br_y = _range_per_axis(kw.pop("binrange", None))
     finite_x = [v for v in xs if isinstance(v, (int, float)) and v == v]
     finite_y = [v for v in ys if isinstance(v, (int, float)) and v == v]
-    if not finite_x:
+    if not finite_x or not finite_y:
         return {"type": "hist2d", "_xedges": [], "_yedges": [],
                 "_counts": [], "_n": 0, "_vmax": 0, "opts": kw}
     xe = hist_bin_edges(finite_x, bins=bins_x, binwidth=bw_x, binrange=br_x)

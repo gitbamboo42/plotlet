@@ -3293,6 +3293,16 @@ def test_hist2d_two_item_bins():
     assert 'data-plotlet-bins-y="5"' in svg
 
 
+def test_hist2d_all_nan_column_is_empty():
+    # valid x + all-NaN y must take the same empty-record path all-NaN x
+    # does, not crash in min([])
+    nan = float("nan")
+    for xs, ys in (([1.0, 2.0], [nan, nan]), ([nan, nan], [1.0, 2.0])):
+        c = pt.chart({"x": xs, "y": ys})
+        c.hist2d(x="x", y="y")
+        assert 'data-plotlet-n="0"' in c.to_svg()
+
+
 def test_hist2d_binwidth_pair():
     df = {"x": [0.25, 1.25], "y": [0.5, 2.5]}
     c = pt.chart(df)
