@@ -15,15 +15,6 @@ LINESTYLE_CYCLE = (None, "--", ":", "-.")
 DEFAULT_ALPHA_RANGE = (0.3, 1.0)
 
 
-def group_color(groups, palette, j, fallback):
-    """Per-group color for artists with column-driven grouping: ungrouped
-    (`groups == [None]`) → fallback (the artist's cycle/literal color);
-    grouped → palette lookup with TAB10 wraparound."""
-    if groups == [None]:
-        return fallback
-    return palette_color(palette, groups[j], j) or TAB10[j % 10]
-
-
 def _alpha_for_level(idx, n_levels, alphas):
     """Map a discrete level index to an alpha within `alphas` (a `(lo, hi)`
     tuple). One level → high end; otherwise linearly spaced."""

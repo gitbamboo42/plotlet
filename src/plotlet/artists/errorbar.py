@@ -22,9 +22,9 @@ centers as `c.bar(..., position="dodge")` with matching values.
 import math
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import (to_list, all_numeric, resolve_aes, palette_color,
+from ..utils import (to_list, all_numeric, resolve_aes, group_color,
                      dodge_positions)
-from ..draw import TAB10, marker, segment, errorbar_v, errorbar_h
+from ..draw import marker, segment, errorbar_v, errorbar_h
 from .._spec import _D, _LEGSPEC
 from ._shared import _xy_minmax
 
@@ -163,11 +163,6 @@ def _errorbar_rows(xs, ys, xlo, xhi, ylo, yhi, opts, xs_, ys_, col, warp,
     return "".join(out)
 
 
-def _group_color(a, j):
-    g = a["groups"][j]
-    return palette_color(a["opts"].get("palette"), g, j) or TAB10[j % 10]
-
-
 def _artist_errorbar(a, ctx):
     xs_, ys_, warp = ctx.x_scale, ctx.y_scale, ctx.warp
     opts = a["opts"]
@@ -192,7 +187,8 @@ def _artist_errorbar(a, ctx):
         out.append(_errorbar_rows(
             a["xs"][j], a["ys"][j], a["xlo"][j], a["xhi"][j],
             a["ylo"][j], a["yhi"][j], opts, xs_, ys_,
-            _group_color(a, j), warp, px_of, py_of))
+            group_color(groups, opts.get("palette"), j, ctx.color),
+            warp, px_of, py_of))
     return "".join(out)
 
 
@@ -245,9 +241,13 @@ def _errorbar_legend_entries(a):
             return []
         return [{"label": label, "color": a.get("_color"),
                  "paint": _legend_paint(a.get("_color"))}]
-    return [{"label": str(g), "color": _group_color(a, j),
-             "paint": _legend_paint(_group_color(a, j))}
-            for j, g in enumerate(groups)]
+    palette = a["opts"].get("palette")
+    entries = []
+    for j, g in enumerate(groups):
+        col = group_color(groups, palette, j, a.get("_color"))
+        entries.append({"label": str(g), "color": col,
+                        "paint": _legend_paint(col)})
+    return entries
 
 
 add_artist(ArtistSpec(

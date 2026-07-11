@@ -27,7 +27,6 @@ from scipy.stats import norm
 from ..registry import ArtistSpec, add_artist
 from ..draw import circle, segment
 from ..utils import to_list, resolve_aes, long_form_1d
-from ._shared import group_color
 
 
 def _qq_build(values, kw):
@@ -69,10 +68,12 @@ def _qq_record(args, kw):
         records = []
         for j, (g, v) in enumerate(zip(groups, vals)):
             opts = dict(kw)
-            opts["color"] = group_color(groups, palette, j, None)
+            opts["palette"] = palette
             opts["label"] = str(g)
-            opts["_grouped"] = True
-            records.append(_qq_build(v, opts))
+            rec = _qq_build(v, opts)
+            rec["groups"] = groups
+            rec["_j"] = j
+            records.append(rec)
         return records
     if color_value is not None:
         kw["color"] = color_value
@@ -103,7 +104,7 @@ def _qq_draw(a, ctx):
             pad = (x_hi - x_lo) * 0.05
             x0, x1e = x_lo - pad, x_hi + pad
             y0, y1e = intercept + slope * x0, intercept + slope * x1e
-            ref_col = col if a["opts"].get("_grouped") else "#888"
+            ref_col = col if a.get("groups") else "#888"
             out.append(segment(ctx.x_scale(x0), ctx.y_scale(y0),
                                ctx.x_scale(x1e), ctx.y_scale(y1e),
                                color=ref_col, width=1, dash="4,3",

@@ -31,7 +31,7 @@ from ..registry import ArtistSpec, add_artist
 from ..draw import coord, path, rect, text_path
 from .._spec import _LEGSPEC
 from ..utils import silverman_bw, kde_1d, categorical_groups, resolve_aes
-from ._shared import group_color
+from ..utils import group_color
 
 
 def _ridge_record(args, kw):

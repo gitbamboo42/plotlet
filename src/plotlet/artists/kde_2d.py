@@ -36,7 +36,6 @@ from ..utils import to_list, silverman_bw, resolve_aes, long_form_xy
 from ._marching import MS_CASES as _MS_CASES
 from ._marching import edge_pt as _edge_pt
 from ._marching import filled_levels_svg
-from ._shared import group_color
 
 
 def _kde2d_grid(xs, ys, n_grid, bw_x, bw_y, x_lo, x_hi, y_lo, y_hi):
@@ -118,9 +117,12 @@ def _kde_2d_record(args, kw):
         records = []
         for j, (g, (xs, ys)) in enumerate(zip(groups, xy)):
             opts = dict(kw)
-            opts["color"] = group_color(groups, palette, j, None)
+            opts["palette"] = palette
             opts["label"] = str(g)
-            records.append(_kde_2d_build(xs, ys, opts))
+            rec = _kde_2d_build(xs, ys, opts)
+            rec["groups"] = groups
+            rec["_j"] = j
+            records.append(rec)
         return records
     if color_value is not None:
         kw["color"] = color_value

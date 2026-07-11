@@ -39,7 +39,7 @@ from ..utils import to_list, resolve_aes
 from ..draw import resolve_color
 from .._spec import _D, _LEGSPEC
 from ..draw import coord, path as draw_path, polygon as draw_polygon, rect as draw_rect
-from ._shared import group_color as _group_fill
+from ..utils import group_color as _group_fill
 
 
 _POSITIONS = ("overlay", "stack", "fill", "dodge")

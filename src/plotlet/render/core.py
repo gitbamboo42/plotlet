@@ -40,7 +40,7 @@ from ..draw import coord, rect, segment, text_path
 from .. import _regions
 from . import _chrome
 from ..utils import (hist_bin_edges, hist_bin_counts, hist_transform,
-                     collect_categories)
+                     collect_categories, group_color)
 from ..registry import RenderContext, get_artist, _COORD_SUPPORT
 
 # AI-readable SVG attrs — see docs/AI_ATTRS.md. Every plotlet SVG carries
@@ -1884,6 +1884,14 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
                                     or a["opts"].get("_fill_literal"))
         if user_color is not None:
             a["_color"] = user_color
+        elif "_j" in a:
+            # Fan-out group member — one record per level of a `color=`
+            # column, carrying the grouping symbolically (`groups`, `_j`,
+            # `opts["palette"]`). The per-level color resolves here, at
+            # draw context, not at record time; siblings are one logical
+            # artist, so the cycle is never consumed.
+            a["_color"] = group_color(a["groups"], a["opts"].get("palette"),
+                                      a["_j"], None)
         elif spec is not None and spec.uses_color_cycle:
             a["_color"] = TAB10[color_idx % 10]
             color_idx += 1

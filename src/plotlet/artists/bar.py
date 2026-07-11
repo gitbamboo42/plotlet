@@ -54,7 +54,7 @@ from .._spec import _D, _LEGSPEC
 from ..draw import rect as draw_rect
 from ..draw import errorbar_v, errorbar_h
 from .errorbar import _resolve_err
-from ._shared import group_color as _group_fill
+from ..utils import group_color as _group_fill
 
 
 _POSITIONS = ("stack", "dodge", "fill")

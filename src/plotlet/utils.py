@@ -350,6 +350,17 @@ def palette_color(palette, value, index):
     return resolve_color(palette[index % len(palette)])
 
 
+def group_color(groups, palette, j, fallback):
+    """Per-group color for artists with column-driven grouping: ungrouped
+    (`groups == [None]`) → fallback (the artist's cycle/literal color);
+    grouped → palette lookup with TAB10 wraparound. Also the rule the
+    render core applies when stamping `_color` on fan-out group records
+    (`groups` + `_j` in the record) — see `_render_inner`."""
+    if groups == [None]:
+        return fallback
+    return palette_color(palette, groups[j], j) or TAB10[j % 10]
+
+
 def dodge_positions(cat_scale, cat, n_groups, j, *, band_frac=0.6, gap=0.1):
     """Compute the centered-dodge position and box size for sub-box `j`
     of `n_groups` within category `cat`.
@@ -533,7 +544,7 @@ def bootstrap_ci(vals, estimator_fn, level, n_boot, rng):
 
 __all__ = ["to_list", "to_list_2d", "broadcast", "quantile",
            "hist_bin_edges", "hist_bin_counts", "hist_transform",
-           "resolve_aes", "palette_color", "dodge_positions",
+           "resolve_aes", "palette_color", "group_color", "dodge_positions",
            "categorical_groups", "collect_categories",
            "long_form_xy", "long_form_1d",
            "silverman_bw", "kde_1d", "t_ci_mean", "bootstrap_ci"]

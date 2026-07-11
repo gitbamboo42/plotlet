@@ -24,7 +24,7 @@ from ..utils import to_list, long_form_1d, resolve_aes, silverman_bw, kde_1d
 from ..draw import resolve_color
 from .._spec import _LEGSPEC
 from ..draw import polygon, polyline, segment
-from ._shared import group_color
+from ..utils import group_color
 
 
 def _density_1d_record(args, kw):

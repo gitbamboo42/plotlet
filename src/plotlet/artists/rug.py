@@ -23,7 +23,7 @@ from ..registry import ArtistSpec, add_artist
 from ..draw import segment
 from ..utils import to_list, long_form_1d, resolve_aes
 from ..draw import resolve_color
-from ._shared import group_color
+from ..utils import group_color
 
 
 def _rug_record(args, kw):

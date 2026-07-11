@@ -8,6 +8,12 @@ A spec bundles the four things `_render_inner` needs to know about a plot type:
         dict that gets stored in `Chart._calls`. Pure data — no scales yet.
         `args` and `kwargs` are fresh copies on every render, so it's safe
         for `record` to `kwargs.pop(...)` or otherwise mutate them.
+        An artist that fans one `color=`-column call out into per-level
+        records keeps the grouping symbolic: each record carries `groups`
+        (the level list), `_j` (its index), and `opts["palette"]` — never
+        a resolved color. The render core stamps each record's `_color`
+        via `utils.group_color` at draw context (and skips the color
+        cycle: sibling records are one logical artist).
 
   - `xdomain(artist) -> Iterable[float] | None` / `ydomain(...)`
         Yield numeric values that should participate in autoscaling on each

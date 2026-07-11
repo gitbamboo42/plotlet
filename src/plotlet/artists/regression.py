@@ -47,7 +47,7 @@ from ..utils import long_form_xy, resolve_aes, quantile
 from ..draw import resolve_color
 from .._spec import _LEGSPEC
 from ..draw import polygon, polyline, rect, segment
-from ._shared import group_color as _group_color
+from ..utils import group_color as _group_color
 
 
 def _drop_nan_xy(xs, ys):

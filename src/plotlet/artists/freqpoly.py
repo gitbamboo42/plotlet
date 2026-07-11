@@ -22,7 +22,7 @@ from ..registry import ArtistSpec, add_artist
 from ..utils import to_list, long_form_1d, resolve_aes
 from ..utils import _drop_nan
 from ..draw import resolve_color
-from ._shared import group_color
+from ..utils import group_color
 from .._spec import _LEGSPEC
 from ..draw import polyline, segment
 

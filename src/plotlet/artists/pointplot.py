@@ -31,7 +31,7 @@ from ..registry import ArtistSpec, add_artist
 from ..utils import (categorical_groups, resolve_aes, quantile,
                      t_ci_mean, bootstrap_ci)
 from ..draw import segment, circle, polyline, errorbar_v
-from ._shared import group_color
+from ..utils import group_color
 
 
 def _pointplot_record(args, kw):
