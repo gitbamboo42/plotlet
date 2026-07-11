@@ -49,10 +49,12 @@ def json_safe(value: Any) -> Any:
     if isinstance(value, _dt.date):
         return {"$date": value.isoformat()}
     if isinstance(value, DataFrameLite):
+        # index and cell values recurse — a date/datetime column must
+        # wire as `$date` / `$datetime` cells, same as anywhere else.
         return {"$dataframe": {
             "columns": value.columns,
-            "index":   value.index,
-            "values":  value.values,
+            "index":   [json_safe(v) for v in value.index],
+            "values":  [[json_safe(v) for v in row] for row in value.values],
         }}
     if isinstance(value, tuple):
         return {"$tuple": [json_safe(v) for v in value]}
@@ -78,9 +80,10 @@ def json_hydrate(value: Any) -> Any:
         if "$dataframe" in value:
             d = value["$dataframe"]
             return DataFrameLite(
-                values=d["values"],
+                values=[[json_hydrate(v) for v in row]
+                        for row in d["values"]],
                 columns=d["columns"],
-                index=d["index"],
+                index=[json_hydrate(v) for v in d["index"]],
             )
         if "$tuple" in value:
             return tuple(json_hydrate(v) for v in value["$tuple"])

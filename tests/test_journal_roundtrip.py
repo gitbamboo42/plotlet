@@ -89,3 +89,23 @@ def test_json_roundtrip(label, fn):
         f"(original={len(svg_original)} bytes, "
         f"replayed={len(svg_from_json)} bytes)"
     )
+
+
+def test_json_roundtrip_dates_in_dataframe():
+    """Date cells inside normalized tabular data must wire as `$date`
+    envelopes — `json_safe` recurses into the `$dataframe` payload.
+    Regression: values used to pass through raw and crash json.dumps."""
+    import datetime
+    pd = pytest.importorskip("pandas")
+    df = pd.DataFrame({
+        "day": [datetime.date(2026, 1, 1), datetime.date(2026, 1, 2),
+                datetime.date(2026, 1, 3)],
+        "v": [1.5, 2.5, 2.0],
+    })
+    c = pt.chart(df, x="day", y="v")
+    c.line()
+    svg_original = c.to_svg()
+
+    text = json.dumps(pt.to_json(c))
+    assert '"$date"' in text
+    assert pt.from_json(json.loads(text)).to_svg() == svg_original
