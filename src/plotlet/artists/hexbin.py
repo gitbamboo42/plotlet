@@ -92,7 +92,7 @@ def _hexbin_draw(a, ctx):
     counts = list(bins.values())
     vmin = a["opts"].get("vmin", 0)
     vmax = a["opts"].get("vmax", max(counts))
-    norm = ContinuousNorm(vmin or 1e-9, vmax or 1.0, "linear")
+    norm = ContinuousNorm(vmin, vmax, "linear")
 
     out = []
     for (cc, rr), n in bins.items():

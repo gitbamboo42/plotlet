@@ -132,7 +132,7 @@ def _hist2d_draw(a, ctx):
     cm = colormap(a["opts"].get("cmap", _D["default_cmap"]))
     vmin = a["opts"].get("vmin", 0)
     vmax = a["opts"].get("vmax", a["_vmax"])
-    norm = ContinuousNorm(vmin or 1e-9, vmax or 1.0, "linear")
+    norm = ContinuousNorm(vmin, vmax, "linear")
     out = []
     for yi in range(len(ye) - 1):
         py0 = ctx.y_scale(ye[yi])

@@ -3293,6 +3293,17 @@ def test_hist2d_two_item_bins():
     assert 'data-plotlet-bins-y="5"' in svg
 
 
+def test_hist2d_cell_color_matches_legend_norm():
+    # vmin=0 must reach the norm untouched — the old `vmin or 1e-9`
+    # rewrite nudged count=1 with vmax=2 across the t=0.5 LUT boundary,
+    # so cells and the legend gradient disagreed by one LUT level
+    df = {"x": [0.5], "y": [0.5]}
+    c = pt.chart(df)
+    c.hist2d(x="x", y="y", bins=([0, 1], [0, 1]), vmin=0, vmax=2)
+    r, g, b = pt.colormap("viridis")(0.5)
+    assert f'fill="rgb({r},{g},{b})"' in c.to_svg()
+
+
 def test_hist2d_all_nan_column_is_empty():
     # valid x + all-NaN y must take the same empty-record path all-NaN x
     # does, not crash in min([])
