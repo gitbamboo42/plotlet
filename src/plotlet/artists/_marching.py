@@ -42,6 +42,14 @@ def edge_pt(edge, r, c, vtl, vtr, vbr, vbl, lvl):
     return (c, r + t)
 
 
+def cell_has_nan(vtl, vtr, vbr, vbl):
+    """True if any corner is NaN. Masked cells skip whole (matplotlib's
+    corner_mask=False): a crossing interpolated against a NaN corner has
+    no defined position, and one NaN coordinate makes browsers drop the
+    entire <path>."""
+    return vtl != vtl or vtr != vtr or vbr != vbr or vbl != vbl
+
+
 def _partial_cell_polys(r, c, vtl, vtr, vbr, vbl, lvl):
     """Polygon(s) covering the `value >= lvl` part of one boundary cell.
 
@@ -71,13 +79,20 @@ def filled_level_polys(grid, lvl, nrows, ncols):
     """Polygons covering the `value >= lvl` region of the grid, in
     grid-index space. Interior runs of fully-inside cells merge into one
     rectangle per row so the output stays compact; boundary cells emit
-    their partial polygons. NaN grid values compare outside."""
+    their partial polygons. Cells with a NaN corner are masked — skipped
+    whole, leaving a hole in the region (see `cell_has_nan`)."""
     polys = []
     for r in range(nrows - 1):
         run_start = None
         for c in range(ncols - 1):
             vtl = grid[r][c]; vtr = grid[r][c + 1]
             vbr = grid[r + 1][c + 1]; vbl = grid[r + 1][c]
+            if cell_has_nan(vtl, vtr, vbr, vbl):
+                if run_start is not None:
+                    polys.append([(run_start, r), (c, r),
+                                  (c, r + 1), (run_start, r + 1)])
+                    run_start = None
+                continue
             if vtl >= lvl and vtr >= lvl and vbr >= lvl and vbl >= lvl:
                 if run_start is None:
                     run_start = c

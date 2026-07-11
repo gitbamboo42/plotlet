@@ -3275,6 +3275,22 @@ def test_contour_fill_replaces_lines():
     assert "<path" in body and "<line" not in body
 
 
+def test_contour_nan_cells_masked():
+    from plotlet.artists._marching import filled_level_polys
+    nan = float("nan")
+    # NaN corner masks its cells; the finite half of the grid still fills
+    polys = filled_level_polys([[1, 1, nan], [1, 1, nan]], 0.5, 2, 3)
+    assert polys == [[(0, 0), (1, 0), (1, 1), (0, 1)]]
+    # end-to-end: no NaN coordinate ever reaches the path data
+    grid = [[0, 0, 0], [0, 1, nan], [0, 0, 0]]
+    for fill in (True, False):
+        c = pt.chart()
+        c.contour(grid, levels=[0.5], fill=fill, cmap="viridis")
+        svg = c.to_svg()
+        assert "nan" not in svg
+        assert 'data-plotlet-type="contour"' in svg
+
+
 # ---------------------------------------------------------------------------
 # color= grouping: pointplot / ridge / kde_2d / qq (no baselines)
 

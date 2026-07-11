@@ -25,6 +25,7 @@ from ..draw import segment
 from ..draw import colormap, ContinuousNorm
 from ..utils import to_list_2d
 from ._marching import MS_CASES as _MS_CASES
+from ._marching import cell_has_nan as _cell_has_nan
 from ._marching import edge_pt as _edge_pt
 from ._marching import filled_levels_svg
 
@@ -107,6 +108,8 @@ def _contour_draw(a, ctx):
             for c in range(nc - 1):
                 vtl = grid[r][c]; vtr = grid[r][c + 1]
                 vbr = grid[r + 1][c + 1]; vbl = grid[r + 1][c]
+                if _cell_has_nan(vtl, vtr, vbr, vbl):
+                    continue
                 code = ((1 if vtl >= lvl else 0)
                         | ((1 if vtr >= lvl else 0) << 1)
                         | ((1 if vbr >= lvl else 0) << 2)
