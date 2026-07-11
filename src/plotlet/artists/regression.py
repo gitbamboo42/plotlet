@@ -8,6 +8,7 @@ The scatter is not drawn here — overlay your own `c.scatter(xs, ys)`.
   c.regression(data=df, x=..., y=..., color="group")    # one fit per group
   c.regression(data=df, x=..., y=..., order=2)          # polynomial
   c.regression(data=df, x=..., y=..., robust=True)      # Huber IRLS
+  c.regression(data=df, x=..., y=..., lowess=True)      # LOWESS smoother
 
 Styling kwargs:
   color=         line color (literal) or column name → one fit per level
@@ -19,6 +20,14 @@ Styling kwargs:
                  outliers (seaborn regplot robust=). No analytic band
                  exists, so the ribbon comes from a percentile bootstrap
                  (n_boot=200, seed=0 — deterministic)
+  lowess=False   True → LOWESS local-linear smoother (seaborn regplot
+                 lowess=, ggplot geom_smooth method="loess"). Draws the
+                 smoothed line only — like seaborn, no confidence band.
+                 Incompatible with order=/robust=.
+  frac=2/3       LOWESS window: fraction of points in each local fit
+                 (statsmodels frac=; ggplot calls it span=)
+  it=3           LOWESS robustifying iterations (bisquare-downweight
+                 outliers, statsmodels it=); 0 = plain single pass
   level=0.95     confidence level for the band
   n_grid=80      grid resolution for evaluating the band
   n_boot=200     bootstrap resamples for the robust band
@@ -36,7 +45,12 @@ Math (order=1, robust=False — the closed-form fast path):
 
 Polynomial/robust fits solve the normal equations on centered x
 (conditioning); Huber uses c=1.345 with MAD scale, IRLS to convergence.
+LOWESS is Cleveland's classic: per evaluation point, a degree-1 fit over
+the `frac`-nearest neighbours with tricube distance weights, then `it`
+rounds of bisquare residual downweighting. O(n·frac) work per point —
+for very large n, lower `frac` or subsample first.
 """
+import bisect
 import math
 import random
 
@@ -196,6 +210,82 @@ def _fit_generic(xs, ys, opts):
     return {"grid": grid, "mid": mid, "lo": lo, "hi": hi}
 
 
+# --- LOWESS path: Cleveland local-linear smoother -------------------------
+
+def _lowess_window(xs_sorted, g, k):
+    """Index range [lo, lo+k) of the k x-values nearest to `g` in a sorted
+    list. Two-pointer walk: start at the insertion point and grow toward
+    whichever side is closer."""
+    n = len(xs_sorted)
+    lo = bisect.bisect_left(xs_sorted, g)
+    lo = max(0, min(lo, n - 1))
+    hi = lo + 1
+    while hi - lo < k:
+        if lo == 0:
+            hi += 1
+        elif hi == n:
+            lo -= 1
+        elif g - xs_sorted[lo - 1] <= xs_sorted[hi] - g:
+            lo -= 1
+        else:
+            hi += 1
+    return lo, hi
+
+
+def _lowess_at(xs_sorted, ys_sorted, rob, g, k):
+    """Tricube-weighted degree-1 fit over the k nearest points, evaluated
+    at `g`. `rob` carries the bisquare robustness weights (all 1.0 on the
+    first pass)."""
+    lo, hi = _lowess_window(xs_sorted, g, k)
+    xw = xs_sorted[lo:hi]
+    yw = ys_sorted[lo:hi]
+    h = max(g - xw[0], xw[-1] - g)
+    if h <= 0:
+        # All window x's coincide with g — weighted mean.
+        wsum = sum(rob[lo:hi]) or 1e-12
+        return sum(r * y for r, y in zip(rob[lo:hi], yw)) / wsum
+    w = []
+    for x, r in zip(xw, rob[lo:hi]):
+        u = abs(x - g) / h
+        w.append(r * (1 - u ** 3) ** 3 if u < 1 else 0.0)
+    if sum(w) <= 1e-12:
+        return sum(yw) / len(yw)
+    ts = [x - g for x in xw]
+    beta, _ = _wls(ts, yw, 1, w)
+    return beta[0]
+
+
+def _fit_lowess(xs, ys, opts):
+    """LOWESS evaluated on the band grid at record time. Returns
+    `{"grid", "mid"}` (no band — none exists analytically), or None when
+    the group is too small."""
+    frac = opts.get("frac", 2 / 3)
+    if not 0 < frac <= 1:
+        raise ValueError(f"regression: frac={frac!r} — must be in (0, 1].")
+    it = opts.get("it", 3)
+    n_grid = opts.get("n_grid", 80)
+    n = len(xs)
+    if n < 3:
+        return None
+    pairs = sorted(zip(xs, ys))
+    xs_s = [p[0] for p in pairs]
+    ys_s = [p[1] for p in pairs]
+    k = max(2, min(n, int(math.ceil(frac * n))))
+    rob = [1.0] * n
+    for _ in range(max(0, it)):
+        resid = [y - _lowess_at(xs_s, ys_s, rob, x, k)
+                 for x, y in zip(xs_s, ys_s)]
+        s = quantile([abs(r) for r in resid], 0.5)
+        if s <= 1e-12:
+            break
+        rob = [(1 - (r / (6 * s)) ** 2) ** 2 if abs(r) < 6 * s else 0.0
+               for r in resid]
+    lo_x, hi_x = xs_s[0], xs_s[-1]
+    grid = [lo_x + (hi_x - lo_x) * i / (n_grid - 1) for i in range(n_grid)]
+    mid = [_lowess_at(xs_s, ys_s, rob, g, k) for g in grid]
+    return {"grid": grid, "mid": mid}
+
+
 def _regression_record(args, kw):
     kw = dict(kw)
     if args:
@@ -220,6 +310,15 @@ def _regression_record(args, kw):
     if not isinstance(order, int) or order < 1:
         raise ValueError(f"regression: order={order!r} — must be an int ≥ 1.")
     cleaned = [_drop_nan_xy(xs, ys) for xs, ys in xy]
+    if kw.get("lowess", False):
+        if order > 1 or kw.get("robust", False):
+            raise TypeError(
+                "regression: lowess=True is a nonparametric smoother — "
+                "order= and robust= don't apply."
+            )
+        fits = [_fit_lowess(xs, ys, kw) for xs, ys in cleaned]
+        return {"type": "regression", "groups": groups, "xy": cleaned,
+                "fits": fits, "_generic": True, "opts": kw}
     if order > 1 or kw.get("robust", False):
         fits = [_fit_generic(xs, ys, kw) for xs, ys in cleaned]
         return {"type": "regression", "groups": groups, "xy": cleaned,
@@ -239,8 +338,12 @@ def _regression_ydomain(a):
         for fit in a["fits"]:
             if fit is None:
                 continue
-            out.append(min(fit["lo"]))
-            out.append(max(fit["hi"]))
+            if "lo" in fit:
+                out.append(min(fit["lo"]))
+                out.append(max(fit["hi"]))
+            else:
+                out.append(min(fit["mid"]))
+                out.append(max(fit["mid"]))
         return out
     level = a["opts"].get("level", 0.95)
     out = []
@@ -270,12 +373,13 @@ def _regression_draw(a, ctx):
             if fit is None:
                 continue
             col = _group_color(a["groups"], palette, j, fallback)
-            pts_top = [(ctx.x_scale(x), ctx.y_scale(y))
-                       for x, y in zip(fit["grid"], fit["hi"])]
-            pts_bot = [(ctx.x_scale(x), ctx.y_scale(y))
-                       for x, y in zip(fit["grid"], fit["lo"])]
-            out.append(polygon(pts_top + pts_bot[::-1], fill=col,
-                               alpha=fill_alpha, project=ctx.warp))
+            if "lo" in fit:
+                pts_top = [(ctx.x_scale(x), ctx.y_scale(y))
+                           for x, y in zip(fit["grid"], fit["hi"])]
+                pts_bot = [(ctx.x_scale(x), ctx.y_scale(y))
+                           for x, y in zip(fit["grid"], fit["lo"])]
+                out.append(polygon(pts_top + pts_bot[::-1], fill=col,
+                                   alpha=fill_alpha, project=ctx.warp))
             line_pts = [(ctx.x_scale(x), ctx.y_scale(y))
                         for x, y in zip(fit["grid"], fit["mid"])]
             out.append(polyline(line_pts, color=col, width=lw,
@@ -311,22 +415,25 @@ def _regression_legend_entries(a):
     fill_alpha = opts.get("alpha", 0.2)
     lw = opts.get("linewidth", 1.8)
     sw = _LEGSPEC["swatch_width"]
+    has_band = not opts.get("lowess", False)
     if groups == [None]:
         label = opts.get("label")
         if not label:
             return []
         def paint(_a, _ctx, x0, y_mid):
             col = _a.get("_color", _ctx.color)
-            return (rect(x0, y_mid - 5, sw, 10, fill=col, alpha=fill_alpha)
-                    + segment(x0, y_mid, x0 + sw, y_mid, color=col, width=lw))
+            band = (rect(x0, y_mid - 5, sw, 10, fill=col, alpha=fill_alpha)
+                    if has_band else "")
+            return band + segment(x0, y_mid, x0 + sw, y_mid, color=col, width=lw)
         return [{"label": label, "color": None, "paint": paint}]
     palette = opts.get("palette")
     entries = []
     for j, g in enumerate(groups):
         col = _group_color(groups, palette, j, a.get("_color"))
         def paint(_a, _ctx, x0, y_mid, _col=col):
-            return (rect(x0, y_mid - 5, sw, 10, fill=_col, alpha=fill_alpha)
-                    + segment(x0, y_mid, x0 + sw, y_mid, color=_col, width=lw))
+            band = (rect(x0, y_mid - 5, sw, 10, fill=_col, alpha=fill_alpha)
+                    if has_band else "")
+            return band + segment(x0, y_mid, x0 + sw, y_mid, color=_col, width=lw)
         entries.append({"label": str(g), "color": col, "paint": paint})
     return entries
 

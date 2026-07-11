@@ -343,6 +343,21 @@ def chart_reflines():
     return c
 
 
+def chart_axline():
+    """Infinite reference lines in arbitrary directions: the y=x identity
+    line via slope=, a two-point line, both clipped to the frame."""
+    rng = random.Random(31)
+    obs = [i * 0.5 + rng.gauss(0, 0.6) for i in range(20)]
+    pred = [v + rng.gauss(0, 0.5) for v in obs]
+    c = pt.chart(data_width=260, data_height=220,
+                 title="observed vs predicted",
+                 xlabel="observed", ylabel="predicted", legend=True)
+    c.scatter(data={"o": obs, "p": pred}, x="o", y="p", size=2.5, alpha=0.7)
+    c.axline((0, 0), slope=1, linestyle="--", label="y = x")
+    c.axline((0, 8), (8, 4), color="C3", label="two-point")
+    return c
+
+
 def chart_long_title():
     # Title text wider than the data region: measure-driven margin grows
     # left and right so the centered title doesn't spill off-canvas.
@@ -2331,6 +2346,27 @@ def chart_regression_order2():
     return c
 
 
+def chart_regression_lowess():
+    """LOWESS tracks the nonlinear signal and (via the robustifying
+    iterations) shrugs off the two spike outliers. Line only — no band."""
+    rng = random.Random(30)
+    xs = [i * 0.05 for i in range(200)]
+    ys = [math.sin(x) + 0.4 * math.sin(3 * x) + rng.gauss(0, 0.3)
+          for x in xs]
+    ys[20] += 4
+    ys[150] -= 5
+    df = {"x": xs, "y": ys}
+    c = pt.chart(data_width=300, data_height=220,
+                 title="LOWESS smoother",
+                 xlabel="x", ylabel="y", legend=True)
+    c.scatter(data=df, x="x", y="y", size=1.5, alpha=0.5, color="#555555")
+    c.regression(data=df, x="x", y="y", lowess=True, frac=0.3,
+                 label="lowess (frac=0.3)")
+    c.regression(data=df, x="x", y="y", lowess=True, frac=0.7, color="C1",
+                 label="lowess (frac=0.7)")
+    return c
+
+
 def chart_regression_robust():
     """Huber IRLS shrugs off the outlier cluster that drags plain OLS."""
     rng = random.Random(29)
@@ -2422,6 +2458,7 @@ PLOTS = {
     "polygon":             chart_polygon,
     "area":                chart_area,
     "reflines":            chart_reflines,
+    "axline":              chart_axline,
     "category_x_scatter":  chart_category_x_scatter,
     "category_x_order":    chart_category_x_order,
     "category_y_scatter":  chart_category_y_scatter,
@@ -2551,6 +2588,7 @@ PLOTS = {
     "bar_mean_ci":           chart_bar_mean_ci,
     "line_estimator":        chart_line_estimator,
     "regression_order2":     chart_regression_order2,
+    "regression_lowess":     chart_regression_lowess,
     "regression_robust":     chart_regression_robust,
     "pointplot_color":       chart_pointplot_color,
     "ridge_color":           chart_ridge_color,

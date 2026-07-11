@@ -1,13 +1,20 @@
 """Reference-line / span artists — decorate the frame.
 
 `axhline` / `axvline` / `axhspan` / `axvspan` ignore autoscaling and span
-the full frame regardless of the data scale. `hlines` / `vlines` are the
-bounded, data-coordinate counterparts that participate in autoscaling and
-use the color cycle so a labeled call acts like a series.
+the full frame regardless of the data scale. `axline` is the arbitrary-
+direction sibling (matplotlib `axline` / ggplot `geom_abline`):
+
+  c.axline((0, 0), (1, 1))          # infinite line through two points
+  c.axline((0, 0), slope=1)         # point + slope (linear scales only)
+
+`hlines` / `vlines` are the bounded, data-coordinate counterparts that
+participate in autoscaling and use the color cycle so a labeled call acts
+like a series.
 """
 import math
 
 from ..registry import ArtistSpec, add_artist
+from ..scales import _LinearScale
 from ..utils import broadcast
 from .._spec import _D
 from ..draw import segment, rect as draw_rect
@@ -42,6 +49,57 @@ def _artist_axvline(a, xs_, ys_, iw, ih, col, warp=None):
                    dash=opts.get("linestyle"),
                    alpha=opts.get("alpha", 1),
                    project=warp)
+
+
+def _clip_infinite_line(px1, py1, px2, py2, w, h):
+    """Clip the infinite line through two pixel points to the frame rect
+    [0, w] x [0, h]. Returns `(x0, y0, x1, y1)` or None when the line
+    misses the frame (or the two points coincide)."""
+    dx = px2 - px1
+    dy = py2 - py1
+    if dx == 0 and dy == 0:
+        return None
+    t0, t1 = -math.inf, math.inf
+    for d, q_lo, q_hi in ((dx, -px1, w - px1), (dy, -py1, h - py1)):
+        if d == 0:
+            if q_lo > 0 or q_hi < 0:
+                return None
+        else:
+            ta, tb = q_lo / d, q_hi / d
+            if ta > tb:
+                ta, tb = tb, ta
+            t0 = max(t0, ta)
+            t1 = min(t1, tb)
+    if t0 >= t1:
+        return None
+    return (px1 + t0 * dx, py1 + t0 * dy, px1 + t1 * dx, py1 + t1 * dy)
+
+
+def _artist_axline(a, ctx):
+    opts = a["opts"]
+    xs_, ys_ = ctx.x_scale, ctx.y_scale
+    if a["slope"] is not None:
+        if not (isinstance(xs_, _LinearScale) and isinstance(ys_, _LinearScale)):
+            raise ValueError(
+                "axline: slope= is only meaningful on linear x and y scales. "
+                "Pass a second point instead: c.axline((x1, y1), (x2, y2))."
+            )
+        x2, y2 = a["x1"] + 1.0, a["y1"] + a["slope"]
+    else:
+        x2, y2 = a["x2"], a["y2"]
+    px1, py1 = xs_(a["x1"]), ys_(a["y1"])
+    px2, py2 = xs_(x2), ys_(y2)
+    if not all(math.isfinite(v) for v in (px1, py1, px2, py2)):
+        return ""
+    seg = _clip_infinite_line(px1, py1, px2, py2, ctx.iw, ctx.ih)
+    if seg is None:
+        return ""
+    return segment(*seg,
+                   color=ctx.color,
+                   width=opts.get("linewidth", _D["refline_width"]),
+                   dash=opts.get("linestyle"),
+                   alpha=opts.get("alpha", 1),
+                   project=ctx.warp)
 
 
 def _artist_hlines(a, xs_, ys_, col, warp=None):
@@ -137,6 +195,51 @@ add_artist(ArtistSpec(
     default_color=_D["refline_color"],
     legend_entries=_refline_legend_entries,
     data_attrs=_axvline_data_attrs,
+))
+
+
+# --- axline ---
+
+def _axline_record(args, kw):
+    if not args or len(args) > 2:
+        raise TypeError(
+            "axline takes a point and either a second point or slope=: "
+            "c.axline((x1, y1), (x2, y2)) or c.axline((x1, y1), slope=2)."
+        )
+    xy1 = args[0]
+    xy2 = args[1] if len(args) == 2 else None
+    slope = kw.pop("slope", None)
+    if (xy2 is None) == (slope is None):
+        raise TypeError(
+            "axline needs exactly one of a second point or slope=."
+        )
+    rec = {"type": "axline",
+           "x1": xy1[0], "y1": xy1[1],
+           "slope": None if slope is None else float(slope),
+           "x2": None, "y2": None, "opts": kw}
+    if xy2 is not None:
+        rec["x2"] = xy2[0]
+        rec["y2"] = xy2[1]
+    return rec
+
+
+def _axline_data_attrs(a):
+    if a["slope"] is not None:
+        return {"x1": a["x1"], "y1": a["y1"], "slope": a["slope"]}
+    return {"x1": a["x1"], "y1": a["y1"], "x2": a["x2"], "y2": a["y2"]}
+
+
+add_artist(ArtistSpec(
+    name="axline",
+    accepts_data_positional=False,
+    record=_axline_record,
+    xdomain=lambda a: None, ydomain=lambda a: None,
+    draw=_artist_axline,
+    layer="foreground",
+    uses_color_cycle=False,
+    default_color=_D["refline_color"],
+    legend_entries=_refline_legend_entries,
+    data_attrs=_axline_data_attrs,
 ))
 
 

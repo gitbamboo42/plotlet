@@ -8,7 +8,7 @@ polars / dict-of-lists / dict-of-arrays) and refer to columns by name
 artists). `data=` set on `pt.chart(...)` propagates to every mark, so
 per-call `data=` is optional once it's set at chart level. `heatmap` is
 also table-shaped (`data=df, x=, values=`, see below). The remaining
-shape marks (`imshow`, `contour`, `dendrogram`, `axhline`/`axvline`,
+shape marks (`imshow`, `contour`, `dendrogram`, `axhline`/`axvline`/`axline`,
 `rect`, `polygon`) take their natural positional input — there's no
 "column name" version for a 2-D matrix or a single y-value. All methods
 return `self`, so they chain.
@@ -91,6 +91,10 @@ protocol notes at the top of
 | `"power"` | accepts `exponent=` |
 | `"sqrt"` | shorthand for `"power"` with `exponent=0.5` |
 | `"time"` | auto-selected for `datetime.date` / `datetime.datetime` values. Ticks snap to calendar boundaries (year / month / day / hour / minute / second) at a resolution matching the axis span; labels format accordingly. Force with `c.xscale("time")` when data is already epoch-seconds floats; `xlim` accepts datetime or epoch-seconds endpoints. |
+
+Every non-category kind accepts `reverse=True` to invert the axis
+(`c.yscale("linear", reverse=True)` — depth profiles, ranks). For a
+category axis, reverse the `order=` list instead.
 
 ### Tick overrides
 
@@ -265,7 +269,7 @@ universal and not repeated.
 | `.line(x=, y=, color=, group=, linestyle=, alpha=, **opts)` | `palette`, `alphas=(min, max)`, `label`, `linewidth`, `marker`, `size` (marker radius px), `curve` (`"linear"`, `"step-before"`, `"step-after"`, `"step-mid"`) — `linestyle=` dispatches: literal (`"-"`, `"--"`, `":"`, `"-."`, …) → fixed dash; column name → cycle dashes per level. `estimator="mean"\|"median"` collapses replicate rows per x with a CI band (`ci="t"\|"boot"\|None`, `level`, `n_boot`, `seed`, `band_alpha`) — seaborn lineplot |
 | `.step(x=, y=, where=, **opts)` | sugar over `line(curve=…)`; `where=` is `"pre"` / `"post"` (default) / `"mid"` |
 | `.scatter(x=, y=, color=, group=, alpha=, size=, style=, **opts)` | `palette`, `alphas=(min, max)`, `label`, `marker`, `sizes=(min, max)`, `size_legend={"breaks": [...], "labels": [...]}`, `cmap`, `vmin`, `vmax`, `norm` — `color=<col>` dispatches on dtype: numeric col → cmap, categorical → palette. `size=` dispatches: number → fixed radius (px), list → per-point, column → graded via `sizes=(lo, hi)` |
-| `.regression(x=, y=, color=, **opts)` | `palette`, `level=0.95`, `alpha=0.2`, `linewidth=1.8` — OLS fit + Student-t band. `order=` fits a polynomial; `robust=True` a Huber IRLS fit with a bootstrap band (`n_boot=200`, `seed=0`) |
+| `.regression(x=, y=, color=, **opts)` | `palette`, `level=0.95`, `alpha=0.2`, `linewidth=1.8` — OLS fit + Student-t band. `order=` fits a polynomial; `robust=True` a Huber IRLS fit with a bootstrap band (`n_boot=200`, `seed=0`); `lowess=True` a LOWESS smoother (`frac=2/3`, `it=3`), line only — no band |
 | `.hist(x=, fill=, **opts)` | `color` (stroke), `palette`, `bins`, `density`, `histtype` (`"bar"` / `"step"` / `"stepfilled"`), `orientation` |
 | `.density_1d(x=, color=, **opts)` | `palette`, `bw`, `n_grid=200`, `fill=True/False`, `alpha` — Gaussian KDE |
 | `.ecdf(x=, color=, **opts)` | `palette`, `complement=False` (survival), `linewidth` |
@@ -310,6 +314,7 @@ universal and not repeated.
 | `.heatmap(data=df, x=, values=, sector=, **opts)` | Tidy input: each table row → a heatmap column (x-position from the `x` column — numeric → continuous axis, string → categorical), each value column → a track row (`values=` selects/orders them, default = all non-`x`/`sector` columns). A numeric `x` is auto-sorted (row order carries no meaning); duplicate or NaN positions raise. Opts: `cmap`, `vmin`, `vmax`, `norm`, `center`, `palette`, `absent_fill`, `legend`, `annot`, `fmt`, `annot_color`, `annot_fontsize`, `linewidth`, `linecolor`, `border`. `sector=` (a column) + `c.sectors(...)` draws gaps; for categorical-x clusters call `c.sectors({cluster: [members]}, axis=...)` — see [Sectors](#sectors). A bare matrix is not accepted; reshape it into a table first. |
 | `.dendrogram(data, **opts)` | `orient="top"\|"left"\|"right"\|"bottom"`, `labels`, `method="single"\|"complete"\|"average"\|"ward"\|...` (scipy), `metric`, `linkage_matrix=<Z>` (raw scipy Z, skip clustering math), `tree=<SplitTree>` (skip clustering entirely), `clusters=[...]` (parallel grouping vector for two-level cluster), `parent=True\|<frac>` (render centroid tree above per-block trees). Visual gap whitespace lives on the panel as `c.sectors(...)` — see [Sectors](#sectors). |
 | `.axhline(y, **opts)` / `.axvline(x, **opts)` | `color`, `linewidth`, `linestyle`, `alpha`, axes-fraction `xmin`/`xmax` |
+| `.axline(xy1, xy2)` / `.axline(xy1, slope=)` | infinite line through two points or point + slope (matplotlib `axline`, ggplot `geom_abline`), clipped to the frame; `color`, `linewidth`, `linestyle`, `alpha`, `label`. `slope=` requires linear x and y scales |
 | `.axhspan(ymin, ymax, **opts)` / `.axvspan(xmin, xmax, **opts)` | `color`, `alpha`, `label` |
 | `.rect(x, y, w, h, **opts)` / `.polygon(xs, ys, **opts)` / `.polyline(xs, ys, **opts)` | data-coord shapes — `polygon` is closed-and-fillable, `polyline` is open stroke-only |
 | `.text(data=df, x=, y=, label=, **opts)` / `.annotate(text, xy=, xytext=, **opts)` | `ha`, `va`, `fontsize`, `arrow=True/False` |

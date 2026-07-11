@@ -28,7 +28,7 @@ per-extension cost low.
   - **2-D distributions:** hexbin, hist2d, kde_2d, contour, ridge, qq
   - **bars & areas:** bar (stack/dodge/fill), fill_between, area (stack), errorbar
   - **images & matrices:** imshow, heatmap, dendrogram
-  - **reference lines / shapes / text:** axhline/vline/span, rect, polygon, text, annotate
+  - **reference lines / shapes / text:** axhline/vline/span, axline, rect, polygon, text, annotate
 - Text-as-paths rendering for cross-machine reproducibility
 - The locked visual contract (`spec.json`) and theming layer
 
