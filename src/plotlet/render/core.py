@@ -1262,11 +1262,16 @@ def _inline_legend_layout(st):
         if spec.legend_entries is not None:
             for entry in spec.legend_entries(a):
                 disc.append((a, entry))
+    manual = []
     for e in st.get("legend_manual") or []:
         entry = _manual_entry(e)
-        disc.append((entry["_a"], entry))
+        manual.append((entry["_a"], entry))
     if st.get("legend_reverse"):
+        # Mirror the pt.legend() leaf: reverse= flips each section
+        # internally; manual rows stay appended after the harvested ones.
         disc.reverse()
+        manual.reverse()
+    disc.extend(manual)
     if not disc and not cont:
         return None
 

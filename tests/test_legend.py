@@ -252,6 +252,33 @@ def test_legend_ncols_invalid_raises():
         pt.chart().legend(ncols=0)
 
 
+def test_inline_reverse_keeps_manual_entries_last():
+    # Same contract as the pt.legend() leaf: reverse= flips each
+    # section internally; entries= rows stay appended after the
+    # harvested ones — not flipped to the front.
+    import re
+    xs = [0.0, 1.0, 2.0]
+
+    def swatch_ys(reverse):
+        c = pt.chart(data_width=200, data_height=120)
+        c.line(data={"x": xs, "y": [1, 2, 1]}, x="x", y="y", label="sin")
+        c.line(data={"x": xs, "y": [2, 1, 2]}, x="x", y="y", label="cos")
+        c.legend(True, position="right", reverse=reverse,
+                 entries=[{"label": "manual", "color": "#123456"}])
+        svg = c.to_svg()
+        # harvested line swatches: stroked segments; manual row: rect
+        line_ys = [float(y) for y in
+                   re.findall(r'<line[^>]*y1="([\d.]+)"[^>]*stroke="#(?:1f77b4|ff7f0e)"', svg)]
+        manual_y = float(re.search(
+            r'<rect[^>]*y="([\d.]+)"[^>]*fill="#123456"', svg).group(1))
+        return line_ys, manual_y
+
+    for reverse in (False, True):
+        line_ys, manual_y = swatch_ys(reverse)
+        assert len(line_ys) == 2
+        assert manual_y > max(line_ys)
+
+
 def test_legend_glyph_unknown_raises():
     c = pt.chart(data_width=120, data_height=100)
     c.scatter(data={"x": [1, 2], "y": [1, 2]}, x="x", y="y",
