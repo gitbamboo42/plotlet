@@ -363,7 +363,10 @@ class CircularCoordinate:
         span and capped, so this settles in one or two rounds."""
         from ._layout_engine import _build_panel_opts
         D = self._resolved_diameter()
-        _, probe_states = _build_panel_opts(root)
+        # State-only probe: the chrome pad reads the replayed states,
+        # never margins or canvases — those are the circular resolve's
+        # to dictate, so the rect margin measurement is skipped.
+        _, probe_states = _build_panel_opts(root, measure_margins=False)
         st = probe_states[id(leaves[0])]
         pad = _circular_chrome_pad(st, D)
         for _ in range(4):
@@ -540,14 +543,17 @@ class CircularCoordinate:
             leaf._canvas_height = H
             # Circular chrome places labels at angular positions inside
             # the outward chrome pad already baked into W — no Cartesian
-            # margin band. The replay below reuses the one rect pre-pass,
-            # which also runs its margin measurement; zero that output
-            # afterward so the leaf records what actually renders: a
-            # zero-margin panel on the W×H overlay canvas (emit draws
-            # with `_ZERO_MARGIN`).
-            _panel_opts, _states = _build_panel_opts(leaf)
+            # margin band. The rect pre-pass runs in state+descriptor
+            # mode (no margin measurement, `M_eff` left `None`); the
+            # zero margin is assigned as the truth, and the leaf records
+            # what actually renders: a zero-margin panel on the W×H
+            # overlay canvas (emit draws with `_ZERO_MARGIN`).
+            _panel_opts, _states = _build_panel_opts(leaf,
+                                                     measure_margins=False)
             po = _panel_opts[id(leaf)]
             po.M_eff = {"left": 0, "right": 0, "top": 0, "bottom": 0}
+            # Share-scaling's aspect rederivation is the one canvas
+            # writer left inside the pre-pass — re-force after it.
             leaf._canvas_width  = W
             leaf._canvas_height = H
             leaf._last_M_eff = dict(po.M_eff)

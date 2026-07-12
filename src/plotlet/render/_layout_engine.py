@@ -83,7 +83,15 @@ def _node_style(node):
     `font` call overrides the theme's `font.family`. Reads the explicit
     `_theme` / `_font` fields (stamped by `materialize`, or set
     directly by the rehydrator) — never the journal; `None` is a
-    passthrough for `active_theme` / `active_font`."""
+    passthrough for `active_theme` / `active_font`. A node missing the
+    fields was never materialized — same caller contract as
+    `_build_panel_opts` / `_measure` / `_allocate`; fail with the
+    contract spelled out, not an incidental AttributeError."""
+    if not hasattr(node, "_theme") or not hasattr(node, "_font"):
+        raise AssertionError(
+            f"_node_style: {type(node).__name__} carries no _theme/_font "
+            f"fields. Run materialize(root) over the tree before "
+            f"measurement or emit.")
     with active_theme(node._theme):
         with active_font(node._font):
             yield
@@ -906,7 +914,8 @@ def _propagate_grid_joins(node, out: dict[int, _PanelOpts]) -> None:
             _propagate_grid_joins(cell, out)
 
 
-def _build_panel_opts(root) -> tuple[dict[int, _PanelOpts], dict[int, dict]]:
+def _build_panel_opts(root, *, measure_margins=True
+                      ) -> tuple[dict[int, _PanelOpts], dict[int, dict]]:
     """One pass over the tree that produces (panel_opts, replayed states).
 
     For body-first leaves, also computes a measure-driven effective
@@ -915,6 +924,14 @@ def _build_panel_opts(root) -> tuple[dict[int, _PanelOpts], dict[int, dict]]:
     `_canvas_width`/`_canvas_height` to match — `_measure` reads those
     when summing the parent's natural canvas, so layout sees the final
     grown-to-fit dimensions on the first walk.
+
+    ``measure_margins=False`` stops after states, descriptors, and the
+    join/collapse annotations: no margin measurement, no canvas
+    mutation, every `M_eff` left `None` for the caller to assign. For
+    callers that dictate panel geometry themselves — the circular
+    resolve forces each ring onto the shared overlay canvas with zero
+    margin, so a measured Cartesian margin would be wrong work thrown
+    away.
 
     Legend leaves are skipped — they have no x/y axes, no artists, and
     render through their own pipeline (see `legend.py`).
@@ -964,9 +981,10 @@ def _build_panel_opts(root) -> tuple[dict[int, _PanelOpts], dict[int, dict]]:
     _attachments.annotate_joined_pairs(leaves, states, panel_opts)
     _propagate_grid_joins(root, panel_opts)
     _attachments.promote_titles(leaves, states)
-    _compute_measured_margins(leaves, states, panel_opts)
-    _coordinate_margins(root, panel_opts)
-    _update_canvases_for_margins(leaves, panel_opts)
+    if measure_margins:
+        _compute_measured_margins(leaves, states, panel_opts)
+        _coordinate_margins(root, panel_opts)
+        _update_canvases_for_margins(leaves, panel_opts)
     return panel_opts, states
 
 
