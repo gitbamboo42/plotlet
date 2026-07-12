@@ -55,7 +55,7 @@ margins) — the stage the render path itself passes through
 rendering the figure are two views of one resolution.
 
 The full contract — node kinds, init keys, op normalization, envelope
-forms, ordering — is written down in `docs/IR.md`; `render.validate`
+forms, ordering — is written down in `docs/ARCHITECTURE.md`; `render.validate`
 enforces it at every render entry.
 """
 from __future__ import annotations
@@ -122,7 +122,7 @@ class FigureIR:
         return resolve(self)
 
     def validate(self) -> "FigureIR":
-        """Check this IR against the render contract (`docs/IR.md`)
+        """Check this IR against the render contract (`docs/ARCHITECTURE.md`)
         without rendering — useful when hand-authoring or transforming
         IRs. Raises `ValueError` on the first violation; returns `self`
         so calls chain. Rendering validates implicitly."""

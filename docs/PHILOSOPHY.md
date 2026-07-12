@@ -8,7 +8,9 @@ per-extension cost low.
 
 ## What's in the core
 
-- The deferred-render pipeline (Chart, replay, render)
+- The deferred-render pipeline — journal → figure IR → resolved IR →
+  SVG, every stage inspectable (`to_ir`, `resolve_ir`, `.to_dict()`,
+  `c.regions()`)
 - Scales: linear, log, category, time, symlog, power, sqrt
 - Axis partitioning: `c.sectors(...)` — named regions along an axis,
   either continuous (length-weighted) or categorical (grouped members).
@@ -90,6 +92,17 @@ Three claims:
    extension API is `ArtistSpec` — two required callbacks (`record`,
    `draw`) plus opt-in hooks — and the replay model means custom
    artists compose like built-in ones.
+
+4. **Verification over trust.** The pipeline is a ladder of observable
+   checkpoints — journal → figure IR → resolved IR → debug-attributed
+   SVG → baseline images — each answering one question (what was said /
+   what figure is that / what was decided / where did it land / what
+   are the bytes). A wrong change fails loudly at the stage that owns
+   it, so correctness is checked by diffing artifacts, not by trusting
+   whoever (or whatever) wrote the code — the property that makes
+   heavy AI-assisted development safe. The seams are enforced by
+   tests, not convention ([ARCHITECTURE.md](ARCHITECTURE.md)); each
+   fact lives at exactly one stage and flows forward.
 
 The cost: if your plot type isn't shipped, you write it.
 

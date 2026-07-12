@@ -20,7 +20,7 @@ journal, and rendering lowers it journal → `FigureIR` → SVG. The
 recording half (`chart.py`, `_journal.py`, `_ir.py`, …) never imports
 the render half at module level; the [`render/`](src/plotlet/render/)
 package never imports the recording half at all — the `FigureIR` is the
-one contract between them ([docs/IR.md](docs/IR.md), enforced by
+one contract between them ([docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), enforced by
 `tests/test_import_boundary.py`). Product positioning and why-not-X
 live in [README.md](README.md) and [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md).
 
@@ -41,7 +41,7 @@ live in [README.md](README.md) and [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md).
 
 ## Deep dives
 
-- The journal → IR → render contract → [docs/IR.md](docs/IR.md)
+- The render pipeline and the FigureIR contract → [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Custom plot types → [docs/EXTENDING.md](docs/EXTENDING.md)
 - Coordinate systems (Circular, custom projections) → [docs/COORDINATES.md](docs/COORDINATES.md)
 - Multi-panel layouts, `share_x` / `share_y` → [docs/SUBPLOTS.md](docs/SUBPLOTS.md)

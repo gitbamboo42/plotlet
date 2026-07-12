@@ -374,4 +374,4 @@ def from_json(blob: dict) -> JournalNode:
 
 # Rendering lives behind the render half's seam: the journal lowers to
 # the figure IR (`journal_to_ir` in `_ir.py`), and `render.render_svg`
-# hydrates its private node tree from the IR. Contract: `docs/IR.md`.
+# hydrates its private node tree from the IR. Contract: `docs/ARCHITECTURE.md`.

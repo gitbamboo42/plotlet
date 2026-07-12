@@ -1,31 +1,53 @@
-# The FigureIR contract
+# Architecture — the render pipeline
+
+plotlet works like a small compiler: what you type is *recorded*, then
+progressively *lowered* into the final image. Every figure renders
+through the same four representations (the middle two are IRs —
+"intermediate representations", the compiler term), ordered by
+distance from the user:
+
+    journal     flat append-only event log — "what the user did"
+    FigureIR    compiled per-node table    — "what the figure is"
+    ResolvedIR  resolved render plan       — "what was decided"
+    SVG         the rendered plot
+
+`Chart.to_svg()` itself goes journal → IR → resolved IR → SVG; there
+is no other render path, so each stage provably carries everything the
+next one consumes.
+
+- **journal** — the recorder's event log; `Chart` methods append, never
+  execute. Owned by the recording half (`_journal.py`, `chart.py`);
+  the replay model is described in
+  [PHILOSOPHY.md](PHILOSOPHY.md#the-replay-model).
+- **FigureIR** — the journal compiled to a per-node table, loss-free
+  and round-trippable, still in user terms (ops, data columns, palette
+  names). **The one contract between the two halves — the rest of this
+  file specifies it.**
+- **ResolvedIR** — the render plan after resolution: replayed states,
+  trained scales, measured margins, baked colors. One-way, unversioned,
+  in-process by design; it lives entirely inside the render half and is
+  documented where it's defined (`render/resolved.py`).
+- **SVG** — written by the emit pass, which only transcribes decisions
+  already in the ResolvedIR (pinned: emit never re-resolves).
+
+## The FigureIR contract
 
 The specified boundary between plotlet's two halves. The **recording
 half** (`chart.py`, `facet.py`, `legend.py`, `_journal.py`, `_ir.py`)
 turns user actions into a `FigureIR`; the **render half** (the
 `render/` package) turns a `FigureIR` into an SVG and never imports the
-recording half. Everything in this file is contract: the render half
-may assume it, and anything producing IRs — the recorder, a JSON
-loader, a programmatic transform — must guarantee it. `render.validate`
-enforces it at every render entry; `tests/test_import_boundary.py`
-enforces the import boundary itself.
-
-Three representations, ordered by distance from the user:
-
-    journal   flat append-only event log — "what the user did"
-    FigureIR  compiled per-node table    — "what the figure is"
-    SVG       the rendered plot
-
-`Chart.to_svg()` itself goes journal → IR → SVG; there is no other
-render path, so the IR provably carries everything the renderer
-consumes. Lowering is loss-free both ways (`ir_to_journal ∘
+recording half. Everything below is contract: the render half may
+assume it, and anything producing IRs — the recorder, a JSON loader, a
+programmatic transform — must guarantee it. `render.validate` enforces
+it at every render entry; `tests/test_import_boundary.py` enforces the
+import boundary itself. Lowering is loss-free both ways (`ir_to_journal ∘
 journal_to_ir` replays to a byte-identical SVG). A `FacetGrid` is
 recording-side sugar: it journals as one `new_facet_grid` event for
 provenance, and `journal_to_ir` expands it to the grid of charts it
 denotes — the IR and everything downstream see only the four node
 kinds below.
 
-## Shape
+### Shape
 
 ```python
 FigureIR(nodes=[IRNode, ...], root_nid=<int>)
@@ -47,7 +69,7 @@ envelopes anywhere in init/op values — appears **earlier** in the list.
 Hydration is a single forward pass. The order is the depth-first walk
 from the root, so two IRs of the same figure list nodes identically.
 
-## Node kinds and init keys
+### Node kinds and init keys
 
 **`chart`** — data leaf. All keys optional; missing keys take spec
 defaults. `data_width`, `data_height` (px or unit strings; unread under
@@ -73,7 +95,7 @@ envelopes), `legend_group_by_chart`, `legend_valign`, `legend_ncols`,
 for grid holes). Grids additionally require integer `grid_rows` /
 `grid_cols` with `rows * cols == len(children)`.
 
-## Ops are normalized calls
+### Ops are normalized calls
 
 An op is one recorded method call, **post**-normalization: chart-level
 aes and data injection already applied, `data=` normalized to the
@@ -113,7 +135,7 @@ decision reads the `container` flag on the `$coord` envelope (stamped by
 blob alone — `validate` cross-checks the flag against the registered
 class and rejects a mismatch.
 
-## Value envelopes
+### Value envelopes
 
 Three envelopes, shared verbatim with the journal, may appear anywhere
 in init or op values; `_decode` (`_json_layer.py`) resolves them at
@@ -134,7 +156,7 @@ are additionally wrapped by `_json_layer` envelopes (`$tuple`, `$set`,
 `$date`, `$datetime`, `$dataframe`, `$dict_pairs`); those decode at
 `from_dict` time, before the IR contract applies.
 
-## Version discipline
+### Version discipline
 
 The in-memory `FigureIR` carries no version; the JSON form does
 (`"version": 1`), checked in `FigureIR.from_dict`. Pre-release the

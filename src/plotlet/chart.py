@@ -25,7 +25,7 @@ Composition operators:
     shape the user typed so the journal stays append-only.
 
 Rendering goes journal → IR → plot: `to_svg()` lowers the tree to the
-figure IR (`_ir.py`, contract in `docs/IR.md`) and hands it to the
+figure IR (`_ir.py`, contract in `docs/ARCHITECTURE.md`) and hands it to the
 render half through the `render` package's seam — the IR path is the
 only render path, and this half never sees the pipeline internals.
 

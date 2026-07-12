@@ -1,6 +1,6 @@
 """The recording/rendering split, enforced as tests.
 
-The contract (plan of record: `docs/IR.md`): the recording half
+The contract (plan of record: `docs/ARCHITECTURE.md`): the recording half
 (`chart`, `facet`, `legend`, `_journal`, `_ir`, ...) never imports the
 render half at module level — `plotlet.render` loads lazily on first
 render — and the render half never imports the recording half at all;

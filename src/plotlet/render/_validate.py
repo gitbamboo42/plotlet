@@ -5,7 +5,7 @@ JSON, so nothing the recorder normally guarantees can be assumed here.
 `validate` walks the node table once and raises `ValueError` with an
 actionable message on the first violation; `hydrate` calls it at entry,
 so every render path is covered. The checks mirror the contract spelled
-out in `docs/IR.md`:
+out in `docs/ARCHITECTURE.md`:
 
   * the node table is non-empty, nids are unique, the root nid exists
   * every kind is in the render vocabulary (chart / legend / diagram /
@@ -253,7 +253,7 @@ def _check_insets(node, kinds: dict) -> None:
 
 
 def validate(ir):
-    """Check `ir` against the FigureIR contract (`docs/IR.md`). Raises
+    """Check `ir` against the FigureIR contract (`docs/ARCHITECTURE.md`). Raises
     `ValueError` on the first violation; returns `ir` unchanged so calls
     chain. `hydrate` runs this at entry — every render is validated."""
     if not getattr(ir, "nodes", None):

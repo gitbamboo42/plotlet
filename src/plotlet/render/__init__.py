@@ -7,7 +7,7 @@ SVG emission, operating on the private node tree hydrated from a
 (`chart`, `facet`, `_journal`) — the IR is the only input, and the
 shared vocabulary (`registry`, `draw`, `_spec`, `sectors`, `utils`,
 `_tree`, `_json_layer`, `scales`, `_regions`) is the only other
-dependency. The contract lives in `docs/IR.md`; `validate` enforces it
+dependency. The contract lives in `docs/ARCHITECTURE.md`; `validate` enforces it
 at every entry (`hydrate` runs it first).
 
 The front half calls in through this seam — every function takes a

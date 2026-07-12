@@ -141,7 +141,7 @@ deeper integration:
 | `draw_x_frame(project, iw, ih, x_ticks_t, x_labels, frame_opts) -> str` | Replaces the Cartesian x-axis rendering. When present, the standard bottom-spine + x-tick block is skipped. |
 | `draw_x_sector_chrome(...)` | Replaces the Cartesian x-axis sector chrome (dividers + labels) when `c.sectors(axis="x")` is set. Required if `draw_x_frame` is implemented and sectors are used. |
 | `clip_path_d(iw, ih) -> str` | SVG path-data string for the data-area clip region. Defaults to the four-corner polygon (correct for affine coords); `CircularCoordinate` returns an annulus. |
-| `render_layout(root) -> (W, H, body)` | Makes the coord a **container coord**: it takes over layout rendering for the whole (sub)tree — `CircularCoordinate` overlays every leaf onto one canvas as concentric r-bands. Its presence drives the IR container flag and the title hoist (see [IR.md](IR.md)); coords without it render each panel in its own layout cell. |
+| `render_layout(root) -> (W, H, body)` | Makes the coord a **container coord**: it takes over layout rendering for the whole (sub)tree — `CircularCoordinate` overlays every leaf onto one canvas as concentric r-bands. Its presence drives the IR container flag and the title hoist (see [ARCHITECTURE.md](ARCHITECTURE.md)); coords without it render each panel in its own layout cell. |
 
 For **non-affine** coords (no `svg_transform`), supporting artists draw
 through `ctx.warp` — a Cartesian-pixel → coord-pixel closure passed to
