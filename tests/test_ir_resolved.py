@@ -30,8 +30,6 @@ from plotlet.render.resolved import (
     IRScale,
     ResolvedIR,
 )
-from plotlet._json_layer import json_safe
-
 from test_journal_roundtrip import PLOTS
 
 
@@ -110,23 +108,13 @@ def test_resolve_ir_deterministic(label, fn):
 
 @pytest.mark.parametrize("label,fn", PLOTS, ids=[p[0] for p in PLOTS])
 def test_resolve_ir_json_safe(label, fn):
-    ir = resolve_ir(fn())
-    # Enveloping walks the whole tree — a non-JSON-safe leaf value
-    # raises somewhere. Then json.dumps must not fail either.
-    enveloped = json_safe(_to_plain(ir.root))
-    json.dumps(enveloped)
-
-
-def _to_plain(v):
-    """Dataclass IR → plain dict/list so `json_safe` doesn't need to
-    grow a dataclass branch. Recurse only through IR containers."""
-    if isinstance(v, (IRPanel, IRLayout, IRScale, IRCoord, IRArtist)):
-        return {k: _to_plain(getattr(v, k)) for k in v.__dataclass_fields__}
-    if isinstance(v, dict):
-        return {k: _to_plain(x) for k, x in v.items()}
-    if isinstance(v, (list, tuple)):
-        return [_to_plain(x) for x in v]
-    return v
+    """`to_dict()` — the read-only JSON debug view — dumps cleanly for
+    every baseline figure. Enveloping walks the whole tree, so a
+    non-JSON-safe leaf value raises somewhere; then json.dumps must not
+    fail either."""
+    d = resolve_ir(fn()).to_dict()
+    json.dumps(d)
+    assert set(d) == {"root"}
 
 
 def test_figure_ir_resolve_method():

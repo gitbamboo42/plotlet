@@ -41,9 +41,9 @@ emits without re-resolving (pinned: emit never touches
 
 The resolved IR is one-way, not a round-trip peer: it deliberately
 drops what's needed to rebuild the journal. Same journal → same
-resolved IR. No wire form yet (frozen Python objects; state dicts are
-JSON-safe by construction, coordinate objects ride as `IRCoord`) —
-serializing the stage is future work.
+resolved IR. The projection is frozen Python objects; `to_dict()`
+gives a read-only JSON view for inspecting the pipeline (no loader, no
+version — a real wire form waits for a consumer).
 
 Draw-derived artist keys (`_color`, hist `_bin_groups`) are stamped at
 resolve time (`_build_panel_opts`), so the projection carries final
@@ -161,6 +161,34 @@ class ResolvedIR:
         else:
             svg = _emit_plan(plan, outer=out)
         return _strip_plotlet_attrs(svg) if clean else svg
+
+    def to_dict(self) -> dict:
+        """Read-only dict view of the projection, `json.dumps`-able
+        as-is — for eyeballing what resolution produced (the middle of
+        the journal → IR → resolved IR → SVG pipeline). Plain dicts and
+        lists; non-JSON leaf values ride in the same `_json_layer`
+        envelopes the journal uses (`$sectors`, …), coordinates as
+        their `IRCoord` {kind, params} dump.
+
+        One-way on purpose: there is no `from_dict`, no version tag,
+        no validator — this is a debug view, not a wire format. To
+        reconstruct a figure, go back to the journal / figure IR."""
+        from .._json_layer import json_safe
+        return json_safe(_to_plain(self))
+
+
+def _to_plain(v):
+    """Dataclass IR → plain dict/list for `to_dict()`. Recurses only
+    through the IR containers; leaf values pass through untouched for
+    `json_safe` to envelope."""
+    if isinstance(v, (ResolvedIR, IRPanel, IRLayout, IRScale, IRCoord,
+                      IRArtist)):
+        return {k: _to_plain(getattr(v, k)) for k in v.__dataclass_fields__}
+    if isinstance(v, dict):
+        return {k: _to_plain(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_to_plain(x) for x in v]
+    return v
 
 
 # ---------------------------------------------------------------------------
