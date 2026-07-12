@@ -61,27 +61,6 @@ from .. import _regions
 from ..draw import coord, descender, svg_family, text_path, text_block_height
 
 
-def _extract_theme(calls) -> str | None:
-    """Last-call-wins scan for the active theme. Returns `None` when the
-    chart never set a theme — `active_theme(None)` is a passthrough that
-    leaves the spec dicts on their current values."""
-    name = None
-    for call_name, args, _kw in calls:
-        if call_name == "theme":
-            name = args[0] if args else None
-    return name
-
-
-def _extract_font(calls) -> str | None:
-    """Last-call-wins scan for the chart's `font` selector (`None` when
-    the chart never chose one — `active_font(None)` is a passthrough)."""
-    family = None
-    for call_name, args, kw in calls:
-        if call_name == "font":
-            family = args[0] if args else kw.get("family")
-    return family
-
-
 def _funnel_leaf(root):
     """The single leaf a root funnels to — the 1×1 wrapper
     `journal_to_ir` mints around a lone chart — or `None` for roots
@@ -101,9 +80,12 @@ def _node_style(node):
     site that measures or emits text enters this ONE helper, so
     measurement can never disagree with render about the active face
     (which would corrupt margin math). Font nests inside theme so a
-    `font` call overrides the theme's `font.family`."""
-    with active_theme(_extract_theme(node._calls)):
-        with active_font(_extract_font(node._calls)):
+    `font` call overrides the theme's `font.family`. Reads the explicit
+    `_theme` / `_font` fields (stamped by `materialize`, or set
+    directly by the rehydrator) — never the journal; `None` is a
+    passthrough for `active_theme` / `active_font`."""
+    with active_theme(node._theme):
+        with active_font(node._font):
             yield
 
 
@@ -131,15 +113,12 @@ def _figure_style(root):
 # ---------------------------------------------------------------------------
 
 def _layout_title(node) -> str:
-    """Last-recorded `title` op on a layout node ('' when untitled or
-    not a layout)."""
+    """A layout's figure-title text ('' when untitled or not a layout)
+    — the explicit `_title_text` field stamped by `materialize` (or set
+    directly by the rehydrator)."""
     if not getattr(node, "_is_parent", False):
         return ""
-    text = ""
-    for call_name, args, _kw in node._calls:
-        if call_name == "title":
-            text = args[0] if args and args[0] is not None else ""
-    return text
+    return node._title_text
 
 
 def _title_band_h(node) -> int:
@@ -204,12 +183,12 @@ def _resolve_gap(a, b, *, axis: str) -> float:
       3. Per-axis spec default      (`layout.gap_x` / `gap_y`)
       4. Unified spec default       (`layout.gap`)
 
-    Walks up through "absorbed" ancestors — same-kind Layouts with empty
-    `_calls` that `_effective_children()` flattens through. `(a|b) | c`
-    records nested, so `a._parent` is the inner Layout; but the gap
-    setting lives on whichever outer Layout actually scopes a, b, c as
-    siblings. Stop the walk at the first ancestor that recorded its own
-    state — its scope is real, not pass-through.
+    Walks up through "absorbed" ancestors — same-kind Layouts with no
+    recorded state that `_effective_children()` flattens through.
+    `(a|b) | c` records nested, so `a._parent` is the inner Layout; but
+    the gap setting lives on whichever outer Layout actually scopes a,
+    b, c as siblings. Stop the walk at the first ancestor that recorded
+    its own state (`_had_state`) — its scope is real, not pass-through.
 
     Both-None happens when an entire grid boundary is empty cells; the
     spec default is the right answer there."""
@@ -223,7 +202,7 @@ def _resolve_gap(a, b, *, axis: str) -> float:
             return per_axis
         if parent._gap is not None:
             return parent._gap
-        if parent._calls:
+        if parent._had_state:
             break
         parent = parent._parent
     if spec_per_axis is not None:
@@ -1272,9 +1251,10 @@ def _render_layout(root, outer=None) -> str:
     which runs the same two passes with the `ResolvedIR` artifact as
     the explicit seam between them."""
     # Rehydrated nodes (from a ResolvedIR projection) carry their plan —
-    # emit it directly. Checked before materialize: their synthesized
-    # `_calls` carry no attach/share ops, so a materialize pass would
-    # wipe the rehydrated wiring instead of rebuilding it.
+    # emit it directly. Checked before materialize: rehydrated nodes
+    # have no journals at all (state rides in explicit fields), so a
+    # materialize pass would wipe the rehydrated wiring instead of
+    # rebuilding it.
     plan = getattr(root, "_resolved_plan", None)
     if plan is not None:
         return _emit_plan(plan, outer=outer)

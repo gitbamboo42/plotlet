@@ -241,7 +241,6 @@ def _node_to_ir(node, panel_opts, states, pids):
 
 
 def _layout_to_ir(layout, panel_opts, states, pids):
-    from ._layout_engine import _layout_title
     # A container-coord layout resolved its own overlay plan — its ring
     # states (spliced band coords, forced W×H, zero margins) are what
     # actually renders. Project children from that truth, not from the
@@ -269,8 +268,8 @@ def _layout_to_ir(layout, panel_opts, states, pids):
         share_y=share_y,
         gap=gap,
         coord=coord,
-        title=_layout_title(layout) or None,
-        had_state=bool(layout._calls),
+        title=layout._title_text or None,
+        had_state=layout._had_state,
         coord_canvas=({"W": coord_plan.W, "H": coord_plan.H,
                        "band": coord_plan.band}
                       if coord_plan is not None else None),
@@ -298,8 +297,6 @@ _LIFTED_STATE_KEYS = ("insets", "coordinate")
 
 
 def _chart_to_ir(chart, panel_opts, states, pids):
-    from ._layout_engine import _extract_font, _extract_theme
-
     if chart._leaf_kind != "data":
         return _nondata_leaf_to_ir(chart, pids)
 
@@ -374,8 +371,8 @@ def _chart_to_ir(chart, panel_opts, states, pids):
         hide=hide,
         suppress=suppress,
         share=share,
-        theme=_extract_theme(chart._calls),
-        font=_extract_font(chart._calls),
+        theme=chart._theme,
+        font=chart._font,
         attachment_gap=getattr(chart, "_attachment_gap", None),
         leaf_kind=chart._leaf_kind,
     )
@@ -393,7 +390,6 @@ def _resolve_inset(inset_chart, pids):
 
 def _nondata_leaf_to_ir(chart, pids):
     """Legend / diagram leaves: sizing plus their own config."""
-    from ._layout_engine import _extract_font, _extract_theme
     legend = None
     if chart._leaf_kind == "legend":
         legend = {
@@ -427,8 +423,8 @@ def _nondata_leaf_to_ir(chart, pids):
         hide={s: False for s in ("left", "right", "top", "bottom")},
         suppress={s: False for s in ("left", "right", "top", "bottom")},
         share={"x": None, "y": None},
-        theme=_extract_theme(chart._calls),
-        font=_extract_font(chart._calls),
+        theme=chart._theme,
+        font=chart._font,
         attachment_gap=getattr(chart, "_attachment_gap", None),
         leaf_kind=chart._leaf_kind,
         legend=legend,
@@ -501,10 +497,9 @@ def _artist_to_ir(artist):
 
 def _rehydrate(root: "IRLayout | IRPanel"):
     """Build a `RenderPlan` (tree + states + panel_opts) from the
-    projection alone. Synthesized `_calls` carry exactly what emit still
-    reads off journals: theme/font ops on leaves, the title op on
-    layouts (an empty-title sentinel preserves `had_state` semantics —
-    `_effective_children` absorption and the gap stop-walk)."""
+    projection alone. Journals stay empty — emit reads only explicit
+    fields (`_theme` / `_font` / `_title_text` / `_had_state`), so the
+    rehydrated tree carries no synthesized ops of any kind."""
     from ._layout_engine import RenderPlan
 
     ctx = _RehydrateCtx()
@@ -544,20 +539,13 @@ def _rehydrate_node(ir, ctx, *, parent):
         node._gap_y = ir.gap.get("gap_y")
         if ir.coord is not None:
             node._coordinate = _rehydrate_coord(ir.coord, ctx)
-        # `title` op: read by `_layout_title` at emit. The empty-string
-        # sentinel keeps `_calls` non-empty for op-carrying layouts —
-        # `_effective_children` must not absorb them, and the gap walk
-        # must stop at them — while `_layout_title`'s falsy check keeps
-        # the band suppressed, matching the original.
-        if ir.title is not None:
-            node._calls = [("title", [ir.title], {})]
-        elif ir.had_state:
-            node._calls = [("title", [""], {})]
+        node._title_text = ir.title or ""
+        node._had_state = ir.had_state
         if (ir.coord_canvas is not None and node._coordinate is not None
                 and hasattr(node._coordinate, "resolve_layout")):
             # Staged container coord — rebuild its overlay plan so
             # `render_layout` at emit consumes it instead of
-            # re-resolving from the synthesized (artist-less) journals.
+            # re-resolving from the empty journals.
             _rebuild_coord_plan(node, ctx, ir.coord_canvas)
         return node
     return _rehydrate_panel(ir, ctx, parent=parent)
@@ -579,12 +567,8 @@ def _rehydrate_panel(panel: "IRPanel", ctx, *, parent):
     node._canvas_height = panel.canvas_height
     node._margin = dict(panel.margin_floor)
     node._diagram_inner = panel.diagram_inner
-    calls = []
-    if panel.theme is not None:
-        calls.append(("theme", [panel.theme], {}))
-    if panel.font is not None:
-        calls.append(("font", [panel.font], {}))
-    node._calls = calls
+    node._theme = panel.theme
+    node._font = panel.font
     if panel.attachment_gap is not None:
         node._attachment_gap = panel.attachment_gap
 
@@ -625,8 +609,8 @@ def _rehydrate_panel(panel: "IRPanel", ctx, *, parent):
         inode = _rehydrate_panel(sub, ctx, parent=None)
         inode._inset_owner = node
         # The inset renders through `_render_layout`, which uses this
-        # cached plan instead of re-resolving (the synthesized `_calls`
-        # carry no artists to replay).
+        # cached plan instead of re-resolving (rehydrated journals are
+        # empty — there'd be no artists to replay).
         inode._resolved_plan = RenderPlan(
             inode,
             {id(inode): ctx.panel_opts[id(inode)]},

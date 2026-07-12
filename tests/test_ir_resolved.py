@@ -214,6 +214,34 @@ def test_figures_emit_from_projection_alone():
         assert rebuilt.to_svg() == pt.to_ir(build()).to_svg()
 
 
+def test_rehydrated_tree_has_no_journal():
+    """Rehydration synthesizes no journal ops — emit reads explicit
+    fields (`_theme` / `_font` / `_title_text` / `_had_state`), so
+    every node in the rebuilt working tree carries empty `_calls`
+    (except ring leaves, whose journals the rebuilt coord plan ignores:
+    their states are already resolved)."""
+    from plotlet.render.resolved import _rehydrate
+
+    def walk(n):
+        assert n._calls == [], \
+            f"rehydrated node carries synthesized ops: {n._calls!r}"
+        if n._is_parent:
+            for c in n._children:
+                if c is not None:
+                    walk(c)
+        else:
+            for side in (n._attached_left, n._attached_right,
+                         n._attached_above, n._attached_below):
+                for a in side:
+                    walk(a)
+            for _rect, inset in n._insets:
+                walk(inset)
+
+    for build in (_rect_chart, _rect_layout, _circular):
+        plan = _rehydrate(resolve_ir(pt.to_ir(build())).root)
+        walk(plan.root)
+
+
 def test_resolved_ir_stable_under_render():
     """Rendering a ResolvedIR does not change it — draw-derived artist
     keys (`_color`, hist `_bin_groups`) are stamped at resolve time, so

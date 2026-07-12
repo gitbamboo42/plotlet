@@ -12,8 +12,10 @@ Hydration copies IR ops verbatim into `_calls` — no recorder re-entry.
 Ops are already normalized: aes / data injection happened at record
 time, and artist frame_defaults regenerate inside `_replay`.
 `materialize` then derives the wired field state (share anchors,
-attachment lists, layout gaps, coordinates) from those ops before the
-engine reads it — `_render_layout` calls it at entry.
+attachment lists, layout gaps, coordinates, per-node style and layout
+title) from those ops before the engine reads it — `_render_layout`
+calls it at entry. Past materialize, the engine reads fields only;
+journals are consumed once more at `_replay` and never at emit.
 """
 from __future__ import annotations
 
@@ -63,6 +65,8 @@ class RenderNode:
         self._attached_below: list[RenderNode] = []
         self._is_attached = False
         self._last_M_eff: dict | None = None
+        self._theme: str | None = None
+        self._font: str | None = None
 
     def _to_svg_unchecked(self, *, outer=None) -> str:
         from ._layout_engine import _render_layout
@@ -86,6 +90,8 @@ class RenderLayout:
         self._grid_cols = None
         self._virtual_grid_aligned = False
         self._coordinate = None
+        self._had_state = False
+        self._title_text = ""
         for child in self._children:
             if child is not None:
                 child._parent = self
@@ -93,12 +99,14 @@ class RenderLayout:
     def _effective_children(self) -> list:
         """The engine's view of this node's children — absorb same-kind
         child layouts with no recorded state so `(a|b) | c` reads as one
-        flat 3-cell row. Mirrors `Layout._effective_children`."""
+        flat 3-cell row. Mirrors `Layout._effective_children` (which
+        checks `_calls` directly; here the journal fact is stamped onto
+        `_had_state` by `materialize`)."""
         out: list = []
         for child in self._children:
             if (child is not None and child._is_parent
                     and child._layout_kind == self._layout_kind
-                    and not child._calls):
+                    and not child._had_state):
                 out.extend(child._effective_children())
             else:
                 out.append(child)
@@ -226,19 +234,64 @@ def hydrate(ir):
 # ---------------------------------------------------------------------------
 # Derived state — re-derive wired fields from the recorded ops. The sole
 # writer of `_share_*`, `_attached_*`, `_coordinate`, `_gap*`,
-# `_virtual_grid_aligned` on the tree it's given.
+# `_virtual_grid_aligned`, `_had_state`, `_title_text`, `_theme`,
+# `_font` on the tree it's given. (The rehydrator in `resolved.py` sets
+# the same fields directly from the projection — its trees never pass
+# through here.)
 # ---------------------------------------------------------------------------
 
 # Names materialize knows how to dispatch on a layout journal entry. New
 # Layout state methods must either be listed here (with a dispatch arm
 # in the loop below) or in `_LAYOUT_PASSTHROUGH` (consumed elsewhere —
 # `sectors` by the `_ancestor_calls` cascade at replay time, `title` by
-# the band emit in the layout engine / coord `render_layout`, `heights`
-# by the container coord's `render_layout` band split).
+# the `_title_text` stamp in the reset loop, `heights` by the container
+# coord's `resolve_layout` band split).
 _LAYOUT_MATERIALIZED = frozenset({
     "share_x", "share_y", "coordinate", "gap", "align_x", "align_y",
 })
 _LAYOUT_PASSTHROUGH = frozenset({"sectors", "title", "heights"})
+
+
+def _last_title(calls) -> str:
+    """Last-recorded layout `title` op ('' when untitled)."""
+    text = ""
+    for entry in calls:
+        if entry[0] == "title":
+            args = entry[1]
+            text = args[0] if args and args[0] is not None else ""
+    return text
+
+
+def _stamp_style(leaf) -> None:
+    """Derive the explicit `_theme` / `_font` fields from the leaf's
+    journal, last call wins. `None` means never set — a passthrough for
+    `active_theme` / `active_font`. Emit reads only the fields
+    (`_node_style` in the layout engine), never the journal."""
+    theme = None
+    font = None
+    for entry in leaf._calls:
+        name, args, kw = entry[0], entry[1], entry[2]
+        if name == "theme":
+            theme = args[0] if args else None
+        elif name == "font":
+            font = args[0] if args else kw.get("family")
+    leaf._theme = theme
+    leaf._font = font
+
+
+def _coord_param_nodes(v):
+    """Leaf nodes riding inside a coordinate's params (e.g.
+    `CircularCoordinate.inner`) — outside the child/attachment walk,
+    but replayed and emitted like any ring leaf, so they need the same
+    style stamp."""
+    if hasattr(v, "_calls") and not getattr(v, "_is_parent", False):
+        yield v
+    elif isinstance(v, dict):
+        for x in v.values():
+            yield from _coord_param_nodes(x)
+    elif isinstance(v, (list, tuple)):
+        for x in v:
+            yield from _coord_param_nodes(x)
 
 
 def _walk_tree(root):
@@ -337,12 +390,17 @@ def materialize(root):
 
     # Reset derived state. Tree structure (_children, _layout_kind,
     # _grid_rows/_cols) is not materialized — it's set at construction.
+    # `_had_state` / `_title_text` stamp here rather than in the replay
+    # loop below: `_apply_share` walks `_effective_children`, which
+    # reads `_had_state`, so the stamp must land first.
     for la in layouts:
         la._coordinate = None
         la._gap = None
         la._gap_x = None
         la._gap_y = None
         la._virtual_grid_aligned = False
+        la._had_state = bool(la._calls)
+        la._title_text = _last_title(la._calls)
     for ch in charts:
         ch._attached_left  = []
         ch._attached_right = []
@@ -401,6 +459,19 @@ def materialize(root):
                 la._virtual_grid_aligned = True
             elif name == "align_y":
                 la._virtual_grid_aligned = True
+
+    # Style fields last, on a fresh walk: on a hydrated tree the attach
+    # pass above is what makes attached charts reachable, and the
+    # coordinate arm is what exposes coord-embedded nodes
+    # (`CircularCoordinate.inner`) — the first walk missed both.
+    for n in _walk_tree(root):
+        if n._is_parent:
+            coord = n._coordinate
+            if coord is not None and hasattr(coord, "_to_dict"):
+                for emb in _coord_param_nodes(coord._to_dict()):
+                    _stamp_style(emb)
+        else:
+            _stamp_style(n)
 
     return root
 
