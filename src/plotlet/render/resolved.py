@@ -41,11 +41,9 @@ resolved IR. No wire form yet (frozen Python objects; state dicts are
 JSON-safe by construction, coordinate objects ride as `IRCoord`) —
 serializing the stage is future work.
 
-Emit-time note: the emit pass stamps derived keys (`_color`,
-`_bin_groups`) into `state["artists"]` entries. The stamps are
-idempotent and deterministic — rendering twice emits identical bytes —
-but a `ResolvedIR` that has been rendered is no longer field-equal to a
-freshly built one.
+Draw-derived artist keys (`_color`, hist `_bin_groups`) are stamped at
+resolve time (`_build_panel_opts`), so the projection carries final
+colors and a rendered `ResolvedIR` stays field-equal to a fresh one.
 """
 from __future__ import annotations
 

@@ -1715,6 +1715,38 @@ def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal, gradient_h,
     return ''.join(parts)
 
 
+def _stamp_artist_colors(st) -> None:
+    """Stamp each artist record's final `_color` — only color-cycle
+    artists consume the cycle. Deterministic and idempotent; called at
+    resolve time (`_build_panel_opts`) so the resolved IR carries final
+    colors, and again defensively at draw."""
+    color_idx = 0
+    for a in st["artists"]:
+        spec = get_artist(a["type"])
+        # Honor either `color=` (stroke-defaulted artists) or `fill=`
+        # literal (fill-defaulted artists, e.g. bar) as the artist's
+        # user-set primary color — both should skip the cycle and supply
+        # `_color` for the legend.
+        user_color = resolve_color(a["opts"].get("color")
+                                    or a["opts"].get("_color_literal")
+                                    or a["opts"].get("_fill_literal"))
+        if user_color is not None:
+            a["_color"] = user_color
+        elif "_j" in a:
+            # Fan-out group member — one record per level of a `color=`
+            # column, carrying the grouping symbolically (`groups`, `_j`,
+            # `opts["palette"]`). The per-level color resolves at draw
+            # context, not at record time; siblings are one logical
+            # artist, so the cycle is never consumed.
+            a["_color"] = group_color(a["groups"], a["opts"].get("palette"),
+                                      a["_j"], None)
+        elif spec is not None and spec.uses_color_cycle:
+            a["_color"] = TAB10[color_idx % 10]
+            color_idx += 1
+        else:
+            a["_color"] = spec.default_color if spec else None
+
+
 def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
     """Body fragment for one panel — the string appended inside the panel
     `<g>` opened by `_panel_open`. Coordinates are panel-local: data area
@@ -1734,35 +1766,15 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
     _x_sec = st["x_sectors"]
     _y_sec = st["y_sectors"]
 
-    # color assignment — only color-cycle artists consume the cycle.
-    # Runs before the legend harvest below: entries capture `_color` at
+    # Color assignment — normally already stamped at resolve time
+    # (`_build_panel_opts` calls `_stamp_artist_colors` so the resolved
+    # IR carries final colors); recomputed here because this function
+    # is also reached with freshly replayed states (the circular coord's
+    # per-leaf render). Idempotent — identical values either way. Runs
+    # before the legend harvest below: entries capture `_color` at
     # harvest time (a `legend={...}` override harvests from a *copy* of
     # the record, so later in-place stamping wouldn't reach it).
-    color_idx = 0
-    for a in st["artists"]:
-        spec = get_artist(a["type"])
-        # Honor either `color=` (stroke-defaulted artists) or `fill=`
-        # literal (fill-defaulted artists, e.g. bar) as the artist's
-        # user-set primary color — both should skip the cycle and supply
-        # `_color` for the legend.
-        user_color = resolve_color(a["opts"].get("color")
-                                    or a["opts"].get("_color_literal")
-                                    or a["opts"].get("_fill_literal"))
-        if user_color is not None:
-            a["_color"] = user_color
-        elif "_j" in a:
-            # Fan-out group member — one record per level of a `color=`
-            # column, carrying the grouping symbolically (`groups`, `_j`,
-            # `opts["palette"]`). The per-level color resolves here, at
-            # draw context, not at record time; siblings are one logical
-            # artist, so the cycle is never consumed.
-            a["_color"] = group_color(a["groups"], a["opts"].get("palette"),
-                                      a["_j"], None)
-        elif spec is not None and spec.uses_color_cycle:
-            a["_color"] = TAB10[color_idx % 10]
-            color_idx += 1
-        else:
-            a["_color"] = spec.default_color if spec else None
+    _stamp_artist_colors(st)
 
     # In-frame legend geometry is computed up front because a top-position
     # legend sits between the title and the data area — the title's y

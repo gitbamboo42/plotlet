@@ -215,6 +215,21 @@ def test_rect_figures_emit_from_projection_alone():
     assert resolve_ir(pt.to_ir(_circular()))._coord_tree is not None
 
 
+def test_resolved_ir_stable_under_render():
+    """Rendering a ResolvedIR does not change it — draw-derived artist
+    keys (`_color`, hist `_bin_groups`) are stamped at resolve time, so
+    a rendered ResolvedIR stays field-equal to a freshly built one."""
+    def build():
+        c = pt.chart({"v": [1.0, 1.5, 2.0, 2.2, 3.0], "g": ["a"] * 3 + ["b"] * 2})
+        c.hist(x="v", fill="g")
+        c.scatter(data={"x": [1.0, 2.0], "y": [1.0, 2.0]}, x="x", y="y")
+        return pt.to_ir(c)
+
+    rendered = resolve_ir(build())
+    rendered.to_svg()
+    assert _nan_eq(rendered.root, resolve_ir(build()).root)
+
+
 def test_render_resolves_exactly_once():
     """The public render path runs one resolution pass — `render_svg`
     consumes the ResolvedIR's plan instead of re-resolving. (Figures

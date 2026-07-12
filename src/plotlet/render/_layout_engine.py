@@ -52,6 +52,7 @@ from .core import (
     _axis_descriptor,
     _PanelOpts,
     _figure_root_attrs, _panel_open,
+    _prebin_hist, _stamp_artist_colors,
 )
 from ..scales import _AxisDescriptor
 from .._tree import iter_leaves as _iter_leaves
@@ -964,6 +965,12 @@ def _build_panel_opts(root) -> tuple[dict[int, _PanelOpts], dict[int, dict]]:
                          + l._calls)
             st = _replay(effective)
             st["insets"] = getattr(l, "_insets", [])
+            # Stamp draw-derived artist keys at resolve time — the
+            # resolved IR carries final colors and hist bins, and a
+            # rendered ResolvedIR stays field-equal to a fresh one
+            # (the draw-side recomputation is idempotent).
+            _prebin_hist(st)
+            _stamp_artist_colors(st)
             states[id(l)] = st
     # Descriptors before share scaling: both are pure data-space (no
     # pixel dims involved), and the scaling pass needs the resolved
