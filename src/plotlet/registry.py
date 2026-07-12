@@ -4,8 +4,10 @@ Every plot type (built-in or user-added) is an `ArtistSpec` registered here.
 A spec bundles the four things `_render_inner` needs to know about a plot type:
 
   - `record(args, kwargs) -> dict`
-        Convert positional/keyword args from the recorder into the artist
-        dict that gets stored in `Chart._calls`. Pure data — no scales yet.
+        Convert positional/keyword args into the artist dict. Despite the
+        name, it does NOT run at record time — the journal keeps the raw
+        call; `_replay` invokes `record` at render, and the dict lands in
+        the replayed state's `artists` list. Pure data — no scales yet.
         `args` and `kwargs` are fresh copies on every render, so it's safe
         for `record` to `kwargs.pop(...)` or otherwise mutate them.
         An artist that fans one `color=`-column call out into per-level
