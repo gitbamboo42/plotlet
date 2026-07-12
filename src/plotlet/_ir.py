@@ -49,8 +49,10 @@ are shared with the journal — the IR stores values exactly as
 at hydration time.
 
 A second lowering stage lives in `render/resolved.py`: `FigureIR.resolve()`
-projects the figure into a pre-layout render plan (resolved scales,
-baked palettes, effective margins) for inspection and tooling.
+returns the resolved IR (trained scales, baked palettes, effective
+margins) — the stage the render path itself passes through
+(`render_svg` is `resolve_ir(ir).to_svg()`), so inspecting it and
+rendering the figure are two views of one resolution.
 
 The full contract — node kinds, init keys, op normalization, envelope
 forms, ordering — is written down in `docs/IR.md`; `render.validate`
@@ -112,9 +114,10 @@ class FigureIR:
 
     def resolve(self):
         """Lower one step further: the resolved IR (`render/resolved.py`)
-        — a pre-layout render plan with resolved scales, baked
-        palettes, and effective margins. A projection for inspection
-        and tooling, not a round-trip peer."""
+        — trained scales, baked palettes, effective margins. This is
+        the render pipeline's own middle stage (`to_svg()` goes through
+        it), inspectable via `.root` and renderable via `.to_svg()`.
+        One-way — not a round-trip peer."""
         from .render import resolve
         return resolve(self)
 

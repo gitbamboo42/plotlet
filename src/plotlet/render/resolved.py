@@ -1,35 +1,51 @@
-"""Resolved IR — the pre-layout projection of a figure.
+"""Resolved IR — the render pipeline's middle stage.
 
-Second lowering stage of the pipeline. `_ir.py` compiles the journal
-into the figure IR (`FigureIR`) — loss-free, round-trippable, still in
-user terms (ops, data columns, palette names). `resolve_ir` lowers one
-step further into a fully-resolved render plan:
+Second lowering of the pipeline, and the stage the render path passes
+through: `render.render_svg` is `resolve_ir(ir).to_svg()`. `_ir.py`
+compiles the journal into the figure IR (`FigureIR`) — loss-free,
+round-trippable, still in user terms (ops, data columns, palette
+names). `resolve_ir` lowers one step further and returns a `ResolvedIR`
+whose `.root` is a **complete render plan**: the emit pass runs from a
+tree rehydrated out of `.root` alone (`_rehydrate`), so every field
+here is load-bearing — delete one and rendering breaks, not just
+inspection.
+
+What resolution bakes into the projection:
 
   * axes are `IRScale` — an alias of `scales._AxisDescriptor`, the same
-    pre-pixel type the layout engine builds and consumes, so the IR
-    carries the descriptor directly (zero schema drift)
-  * chrome (title / xlabel / ylabel / ...) is read straight off the
-    replayed state dict
-  * palettes are already baked into per-group artist entries by
-    `_replay` — a `color=<column>` chart-aes fans out into one
-    `IRArtist` per group with a resolved hex color, so the resolved IR
-    inherits fully-resolved colors for free
-  * per-leaf effective margins (`M_eff`) come from the layout engine's
-    measurement pre-pass, not the user's floor
+    pre-pixel type the layout engine builds and consumes (zero schema
+    drift); share classes reference one descriptor per class
+  * `state` is the full replayed per-leaf state — artists with baked
+    per-group hex colors, sector partitions, tick config, spines —
+    exactly what the emit pass draws from (`chrome` is a curated view
+    of the same dict for quick inspection)
+  * effective margins (`margin` = `M_eff`), grown canvases, and the
+    joined-edge `hide`/`suppress` annotations from the layout engine's
+    measurement pre-pass
+  * `theme` / `font` made explicit (the recorder kept them as ops)
+  * cross-panel wiring by `pid`: share anchors and legend sources
+  * insets resolved recursively — each inset panel carries its own
+    trained scales and margins (they render from their plan at emit,
+    not by re-resolving)
 
-Geometry (rectangles) stays symbolic — that's the layout engine's job,
-downstream of this projection. Hence "pre-layout".
+Geometry (pixel rects) stays symbolic — placement is the emit pass's
+job, downstream. Hence "pre-layout".
 
-Unlike the figure IR, the resolved IR is a *projection*, not a
-round-trip peer: it answers "what does this figure resolve to" for
-inspection, linting, and tooling, and deliberately drops the
-information needed to rebuild the journal. Same journal → same
-resolved IR.
+One documented exception: container-coordinate roots (Circular). Their
+coord's `render_layout` re-resolves internally from the raw tree, so
+`ResolvedIR.to_svg()` keeps the hydrated tree for that path only.
 
-Implementation reuses the render half's node tree (`render/_nodes.py`:
-hydrate + materialize), then the layout engine's panel-opts pre-pass.
-The render tree is a private staging area; the resolved IR is the
-artifact.
+The resolved IR is one-way, not a round-trip peer: it deliberately
+drops what's needed to rebuild the journal. Same journal → same
+resolved IR. No wire form yet (frozen Python objects; state dicts are
+JSON-safe by construction, coordinate objects ride as `IRCoord`) —
+serializing the stage is future work.
+
+Emit-time note: the emit pass stamps derived keys (`_color`,
+`_bin_groups`) into `state["artists"]` entries. The stamps are
+idempotent and deterministic — rendering twice emits identical bytes —
+but a `ResolvedIR` that has been rendered is no longer field-equal to a
+freshly built one.
 """
 from __future__ import annotations
 
@@ -67,24 +83,39 @@ class IRCoord:
 
 @dataclass(frozen=True)
 class IRPanel:
-    """One leaf of the composition. `leaf_kind`:
+    """One leaf of the composition — a self-contained render plan for
+    that panel. `leaf_kind`:
       * `"data"` — normal chart with axes + artists
-      * `"legend"` — standalone legend leaf
-      * `"diagram"` — pre-rendered SVG leaf (layout diagram)
+      * `"legend"` — standalone legend leaf (`legend` carries its config)
+      * `"diagram"` — pre-rendered SVG leaf (`diagram_inner`)
 
-    Non-data leaves carry only sizing; `scales` / `artists` / `chrome`
-    are empty for them.
+    Non-data leaves carry sizing plus their own config; `scales` /
+    `artists` / `state` / `chrome` are empty for them.
     """
+    pid: int             # stable panel id within this ResolvedIR
     coord: IRCoord
     scales: dict         # {"x": IRScale, "y": IRScale} for data leaves
-    artists: tuple
-    chrome: dict
-    attachments: dict    # {"left": tuple, "right": tuple, "top": tuple, "bottom": tuple}
-    insets: tuple        # ((rect, IRPanel), ...)
+    artists: tuple       # curated view of state["artists"]
+    chrome: dict         # curated view of identity/spine state
+    state: dict          # the FULL replayed state the emit pass draws from
+                         # (minus "insets"/"coordinate", lifted to fields)
+    attachments: dict    # {"left","right","top","bottom"} → tuple[IRPanel]
+    insets: tuple        # ((rect, IRPanel), ...) — each fully resolved
     data_width: float
     data_height: float
-    margin: dict         # effective margin from the layout pre-pass
+    canvas_width: float
+    canvas_height: float
+    margin: dict         # effective margin (M_eff) from the pre-pass
+    margin_floor: dict   # the user/spec floor margin
+    hide: dict           # {"left","right","top","bottom"} → bool
+    suppress: dict       # {"left","right","top","bottom"} → bool (labels)
+    share: dict          # {"x": pid | None, "y": pid | None} anchor refs
+    theme: str | None
+    font: str | None
+    attachment_gap: float | None
     leaf_kind: str
+    legend: dict | None = None       # legend-leaf config (sources by pid)
+    diagram_inner: str | None = None
 
 
 @dataclass(frozen=True)
@@ -98,48 +129,124 @@ class IRLayout:
     gap: dict = field(default_factory=dict)      # {"gap","gap_x","gap_y"}
     coord: IRCoord | None = None
     title: str | None = None                     # figure-title band text
+    # True when the recorded layout carried any ops. Load-bearing at
+    # emit: `_effective_children` absorbs op-less same-kind child
+    # layouts, and the gap walk stops at op-carrying ancestors — the
+    # rehydrated tree must collapse exactly like the original.
+    had_state: bool = False
+
+
+@dataclass(frozen=True)
+class ResolvedIR:
+    """The resolved figure. `.root` is the complete render plan —
+    `to_svg()` rehydrates a working tree from it and runs the emit
+    pass, so the projection users inspect *is* what renders.
+
+    `_coord_tree` is non-None only for container-coordinate roots
+    (Circular): their coord re-resolves internally from the raw tree,
+    the one path that can't yet emit from the projection."""
+    root: "IRLayout"
+    _coord_tree: object = field(default=None, repr=False, compare=False)
+
+    def to_svg(self, *, clean: bool = False, outer: bool = True) -> str:
+        from .._spec import _OUTER_MARGIN
+        from ._layout_engine import _emit_plan, _render_coord_root
+        from ._nodes import _strip_plotlet_attrs
+        out = dict(_OUTER_MARGIN) if outer else None
+        if self._coord_tree is not None:
+            svg = _render_coord_root(self._coord_tree, outer=out)
+        else:
+            svg = _emit_plan(_rehydrate(self.root), outer=out)
+        return _strip_plotlet_attrs(svg) if clean else svg
 
 
 # ---------------------------------------------------------------------------
-# Builder
+# Builder — RenderPlan → projection
 # ---------------------------------------------------------------------------
 
 
-def resolve_ir(ir):
-    """Lower a `FigureIR` to its resolved IR. (The public
-    `plotlet.resolve_ir` wraps this with `to_ir` coercion, so users can
-    hand it a `Chart` / `Layout` / journal directly — this render-side
-    entry takes the IR only, like everything behind the seam.)
+def resolve_ir(ir) -> ResolvedIR:
+    """Lower a `FigureIR` to its resolved IR — the second stage of the
+    render pipeline. (The public `plotlet.resolve_ir` wraps this with
+    `to_ir` coercion, so users can hand it a `Chart` / `Layout` /
+    journal directly — this render-side entry takes the IR only, like
+    everything behind the seam.)
 
-    The round-trip contract lives with the journal and the figure IR;
-    the resolved IR sits below them and is a projection, not a
-    round-trip peer. Same journal → same resolved IR."""
-    from ._layout_engine import _build_panel_opts
-    from ._nodes import hydrate, materialize
+    `render.render_svg` is `resolve_ir(ir).to_svg()` — every rendered
+    figure passes through the artifact returned here, and the emit pass
+    runs from the projection alone (container-coord roots excepted).
+    One-way; same journal → same resolved IR."""
+    from ._layout_engine import _build_plan
+    from ._nodes import hydrate
 
     root = hydrate(ir)
-    materialize(root)
-    panel_opts, states = _build_panel_opts(root)
-    return _node_to_ir(root, panel_opts, states)
+    plan = _build_plan(root)
+    pids = _assign_pids(plan.root)
+    projection = _node_to_ir(plan.root, plan.panel_opts, plan.states, pids)
+    coord_obj = getattr(plan.root, "_coordinate", None)
+    keep_tree = (plan.root if coord_obj is not None
+                 and hasattr(coord_obj, "render_layout") else None)
+    return ResolvedIR(root=projection, _coord_tree=keep_tree)
 
 
-def _node_to_ir(node, panel_opts, states):
+def _walk_all_leaves(node, out):
+    """Deterministic full walk: children (plus any nodes embedded in a
+    layout coord's params, e.g. `CircularCoordinate.inner`), then
+    attachments, then insets — the pid assignment order. Mirrors the
+    projection recursion."""
+    if node is None:
+        return
+    if getattr(node, "_is_parent", False):
+        for c in node._children:
+            _walk_all_leaves(c, out)
+        coord = getattr(node, "_coordinate", None)
+        if coord is not None and hasattr(coord, "_to_dict"):
+            _walk_coord_params(coord._to_dict(), out)
+        return
+    out.append(node)
+    for side_list in (node._attached_left, node._attached_right,
+                      node._attached_above, node._attached_below):
+        for a in side_list:
+            _walk_all_leaves(a, out)
+    for _rect, inset in node._insets:
+        _walk_all_leaves(inset, out)
+
+
+def _walk_coord_params(v, out):
+    from ._nodes import RenderNode
+    if isinstance(v, RenderNode):
+        _walk_all_leaves(v, out)
+    elif isinstance(v, dict):
+        for x in v.values():
+            _walk_coord_params(x, out)
+    elif isinstance(v, (list, tuple)):
+        for x in v:
+            _walk_coord_params(x, out)
+
+
+def _assign_pids(root) -> dict[int, int]:
+    leaves: list = []
+    _walk_all_leaves(root, leaves)
+    return {id(l): i for i, l in enumerate(leaves)}
+
+
+def _node_to_ir(node, panel_opts, states, pids):
     if node._is_parent:
-        return _layout_to_ir(node, panel_opts, states)
-    return _chart_to_ir(node, panel_opts, states)
+        return _layout_to_ir(node, panel_opts, states, pids)
+    return _chart_to_ir(node, panel_opts, states, pids)
 
 
-def _layout_to_ir(layout, panel_opts, states):
+def _layout_to_ir(layout, panel_opts, states, pids):
     from ._layout_engine import _layout_title
     share_x = _last_call(layout, "share_x")
     share_y = _last_call(layout, "share_y")
     gap = {"gap": layout._gap, "gap_x": layout._gap_x, "gap_y": layout._gap_y}
-    coord = (_coord_to_ir(layout._coordinate, panel_opts, states)
+    coord = (_coord_to_ir(layout._coordinate, panel_opts, states, pids)
              if layout._coordinate else None)
     return IRLayout(
         kind=layout._layout_kind,
         children=tuple(
-            _node_to_ir(c, panel_opts, states) if c is not None else None
+            _node_to_ir(c, panel_opts, states, pids) if c is not None else None
             for c in layout._children
         ),
         grid_rows=layout._grid_rows,
@@ -149,6 +256,7 @@ def _layout_to_ir(layout, panel_opts, states):
         gap=gap,
         coord=coord,
         title=_layout_title(layout) or None,
+        had_state=bool(layout._calls),
     )
 
 
@@ -165,20 +273,27 @@ def _last_call(layout, op_name):
     return {}
 
 
-def _chart_to_ir(chart, panel_opts, states):
+# State keys lifted out of the projected state dict: insets carry live
+# node objects (projected recursively into `IRPanel.insets`) and the
+# coordinate is a live instance (projected as `IRCoord`, reconstructed
+# through the coord registry at rehydration).
+_LIFTED_STATE_KEYS = ("insets", "coordinate")
+
+
+def _chart_to_ir(chart, panel_opts, states, pids):
+    from ._layout_engine import _extract_font, _extract_theme
+
     if chart._leaf_kind != "data":
-        return _nondata_leaf_to_ir(chart)
+        return _nondata_leaf_to_ir(chart, pids)
 
     st = states.get(id(chart))
     if st is None:
-        # Attachment leaves aren't in the main-tree traversal — replay manually.
-        from ._layout_engine import _ancestor_calls
-        from . import _attachments
-        from .core import _replay
-        effective = (_ancestor_calls(chart)
-                     + _attachments.attachment_inherited_calls(chart)
-                     + chart._calls)
-        st = _replay(effective)
+        # Not resolved by the plan this projection was taken from (an
+        # inset's own attachment, say) — resolve it in isolation, the
+        # same resolution its render would run.
+        from ._layout_engine import _build_plan
+        sub = _build_plan(chart)
+        return _chart_to_ir(chart, sub.panel_opts, sub.states, pids)
 
     po = panel_opts.get(id(chart))
     scales = {}
@@ -188,57 +303,123 @@ def _chart_to_ir(chart, panel_opts, states):
         scales["y"] = po.y_axis
 
     coord_obj = st.get("coordinate")
-    ir_coord = (_coord_to_ir(coord_obj, panel_opts, states)
+    ir_coord = (_coord_to_ir(coord_obj, panel_opts, states, pids)
                 if coord_obj else IRCoord(kind="cartesian"))
 
     artists = tuple(_artist_to_ir(a) for a in st.get("artists", ()))
     chrome = _extract_chrome(st)
+    state = {k: v for k, v in st.items() if k not in _LIFTED_STATE_KEYS}
 
     attachments = {
-        "left":   tuple(_chart_to_ir(a, panel_opts, states) for a in chart._attached_left),
-        "right":  tuple(_chart_to_ir(a, panel_opts, states) for a in chart._attached_right),
-        "top":    tuple(_chart_to_ir(a, panel_opts, states) for a in chart._attached_above),
-        "bottom": tuple(_chart_to_ir(a, panel_opts, states) for a in chart._attached_below),
+        "left":   tuple(_chart_to_ir(a, panel_opts, states, pids)
+                        for a in chart._attached_left),
+        "right":  tuple(_chart_to_ir(a, panel_opts, states, pids)
+                        for a in chart._attached_right),
+        "top":    tuple(_chart_to_ir(a, panel_opts, states, pids)
+                        for a in chart._attached_above),
+        "bottom": tuple(_chart_to_ir(a, panel_opts, states, pids)
+                        for a in chart._attached_below),
     }
 
+    # Insets are not part of the owner's resolution — each gets its own
+    # isolated plan, exactly the resolution its render runs. Resolution
+    # is idempotent, so pre-running it here is observationally free.
     insets = tuple(
-        (tuple(rect), _chart_to_ir(inset_chart, panel_opts, states))
+        (tuple(rect), _resolve_inset(inset_chart, pids))
         for rect, inset_chart in chart._insets
     )
 
     margin = dict(po.M_eff) if po and po.M_eff else dict(chart._margin)
+    hide = {s: getattr(po, f"hide_{s}", False) if po else False
+            for s in ("left", "right", "top", "bottom")}
+    suppress = {s: getattr(po, f"suppress_{s}_labels", False) if po else False
+                for s in ("left", "right", "top", "bottom")}
+    share = {
+        "x": pids.get(id(chart._share_x)) if chart._share_x is not None else None,
+        "y": pids.get(id(chart._share_y)) if chart._share_y is not None else None,
+    }
 
     return IRPanel(
+        pid=pids[id(chart)],
         coord=ir_coord,
         scales=scales,
         artists=artists,
         chrome=chrome,
+        state=state,
         attachments=attachments,
         insets=insets,
         data_width=chart._data_width,
         data_height=chart._data_height,
+        canvas_width=chart._canvas_width,
+        canvas_height=chart._canvas_height,
         margin=margin,
+        margin_floor=dict(chart._margin),
+        hide=hide,
+        suppress=suppress,
+        share=share,
+        theme=_extract_theme(chart._calls),
+        font=_extract_font(chart._calls),
+        attachment_gap=getattr(chart, "_attachment_gap", None),
         leaf_kind=chart._leaf_kind,
     )
 
 
-def _nondata_leaf_to_ir(chart):
-    """Legend / diagram leaves: minimal shell — sizing only, no axes."""
+def _resolve_inset(inset_chart, pids):
+    """Project one inset with its own isolated resolution — the same
+    `_build_plan` its render runs. The inset node is mutated the way
+    rendering would mutate it (canvas growth, `_last_M_eff`); a second
+    resolution at emit recomputes identical values."""
+    from ._layout_engine import _build_plan
+    sub = _build_plan(inset_chart)
+    return _chart_to_ir(inset_chart, sub.panel_opts, sub.states, pids)
+
+
+def _nondata_leaf_to_ir(chart, pids):
+    """Legend / diagram leaves: sizing plus their own config."""
+    from ._layout_engine import _extract_font, _extract_theme
+    legend = None
+    if chart._leaf_kind == "legend":
+        legend = {
+            "sources": tuple(pids[id(s)] for s in chart._legend_sources),
+            "names": tuple((pids[id(n)], v)
+                           for n, v in chart._legend_names.items()),
+            "group_by_chart": chart._legend_group_by_chart,
+            "valign": chart._legend_valign,
+            "ncols": chart._legend_ncols,
+            "reverse": chart._legend_reverse,
+            "manual": tuple(chart._legend_manual),
+            "user_width": chart._legend_user_width,
+            "user_height": chart._legend_user_height,
+            "gap": chart._legend_gap,
+        }
     return IRPanel(
+        pid=pids[id(chart)],
         coord=IRCoord(kind="cartesian"),
         scales={},
         artists=(),
         chrome={},
+        state={},
         attachments={"left": (), "right": (), "top": (), "bottom": ()},
         insets=(),
         data_width=chart._data_width,
         data_height=chart._data_height,
+        canvas_width=chart._canvas_width,
+        canvas_height=chart._canvas_height,
         margin=dict(chart._margin),
+        margin_floor=dict(chart._margin),
+        hide={s: False for s in ("left", "right", "top", "bottom")},
+        suppress={s: False for s in ("left", "right", "top", "bottom")},
+        share={"x": None, "y": None},
+        theme=_extract_theme(chart._calls),
+        font=_extract_font(chart._calls),
+        attachment_gap=getattr(chart, "_attachment_gap", None),
         leaf_kind=chart._leaf_kind,
+        legend=legend,
+        diagram_inner=chart._diagram_inner,
     )
 
 
-def _coord_to_ir(coord, panel_opts=None, states=None):
+def _coord_to_ir(coord, panel_opts=None, states=None, pids=None):
     """Resolved coord object → `IRCoord`. Uses the same registry the
     journal uses for round-tripping. Any Chart-typed params (e.g.
     `CircularCoordinate.inner`) recurse into `IRPanel` so the coord
@@ -247,22 +428,24 @@ def _coord_to_ir(coord, panel_opts=None, states=None):
     for name, cls in _COORD_REGISTRY.items():
         if isinstance(coord, cls):
             raw = coord._to_dict() if hasattr(coord, "_to_dict") else {}
-            params = {k: _coerce_param(v, panel_opts, states)
+            params = {k: _coerce_param(v, panel_opts, states, pids)
                       for k, v in raw.items()}
             return IRCoord(kind=name, params=params)
     return IRCoord(kind=type(coord).__name__)
 
 
-def _coerce_param(v, panel_opts, states):
+def _coerce_param(v, panel_opts, states, pids):
     """Recursively wrap node-typed coord params (e.g.
     `CircularCoordinate.inner`) as IRPanel."""
     from ._nodes import RenderNode
     if isinstance(v, RenderNode):
-        return _chart_to_ir(v, panel_opts or {}, states or {})
+        return _chart_to_ir(v, panel_opts or {}, states or {},
+                            pids or _assign_pids(v))
     if isinstance(v, dict):
-        return {k: _coerce_param(x, panel_opts, states) for k, x in v.items()}
+        return {k: _coerce_param(x, panel_opts, states, pids)
+                for k, x in v.items()}
     if isinstance(v, (list, tuple)):
-        return type(v)(_coerce_param(x, panel_opts, states) for x in v)
+        return type(v)(_coerce_param(x, panel_opts, states, pids) for x in v)
     return v
 
 
@@ -289,3 +472,183 @@ def _artist_to_ir(artist):
     kind = artist.get("type", "unknown")
     props = {k: v for k, v in artist.items() if k != "type"}
     return IRArtist(kind=kind, props=props)
+
+
+# ---------------------------------------------------------------------------
+# Rehydrator — projection → RenderPlan. The inverse of the builder for
+# everything the emit pass reads; `ResolvedIR.to_svg()` runs on its
+# output. No `materialize`, no `_replay` — the projection already
+# carries the resolution; this pass only rebuilds the working shapes.
+# ---------------------------------------------------------------------------
+
+
+def _rehydrate(root: "IRLayout | IRPanel"):
+    """Build a `RenderPlan` (tree + states + panel_opts) from the
+    projection alone. Synthesized `_calls` carry exactly what emit still
+    reads off journals: theme/font ops on leaves, the title op on
+    layouts (an empty-title sentinel preserves `had_state` semantics —
+    `_effective_children` absorption and the gap stop-walk)."""
+    from ._layout_engine import RenderPlan
+
+    ctx = _RehydrateCtx()
+    tree = _rehydrate_node(root, ctx, parent=None)
+    for panel, node in ctx.wire_share:
+        node._share_x = ctx.by_pid.get(panel.share["x"])
+        node._share_y = ctx.by_pid.get(panel.share["y"])
+    for panel, node in ctx.wire_legend:
+        cfg = panel.legend
+        node._legend_sources = [ctx.by_pid[p] for p in cfg["sources"]]
+        node._legend_names = {ctx.by_pid[p]: v for p, v in cfg["names"]}
+    return RenderPlan(tree, ctx.panel_opts, ctx.states)
+
+
+class _RehydrateCtx:
+    def __init__(self):
+        self.by_pid: dict[int, object] = {}
+        self.panel_opts: dict[int, object] = {}
+        self.states: dict[int, dict] = {}
+        self.wire_share: list = []
+        self.wire_legend: list = []
+
+
+def _rehydrate_node(ir, ctx, *, parent):
+    from ._nodes import RenderLayout
+    if isinstance(ir, IRLayout):
+        children = [
+            _rehydrate_node(c, ctx, parent=None) if c is not None else None
+            for c in ir.children
+        ]
+        node = RenderLayout(ir.kind, children)
+        node._parent = parent
+        node._grid_rows = ir.grid_rows
+        node._grid_cols = ir.grid_cols
+        node._gap = ir.gap.get("gap")
+        node._gap_x = ir.gap.get("gap_x")
+        node._gap_y = ir.gap.get("gap_y")
+        if ir.coord is not None:
+            node._coordinate = _rehydrate_coord(ir.coord, ctx)
+        # `title` op: read by `_layout_title` at emit. The empty-string
+        # sentinel keeps `_calls` non-empty for op-carrying layouts —
+        # `_effective_children` must not absorb them, and the gap walk
+        # must stop at them — while `_layout_title`'s falsy check keeps
+        # the band suppressed, matching the original.
+        if ir.title is not None:
+            node._calls = [("title", [ir.title], {})]
+        elif ir.had_state:
+            node._calls = [("title", [""], {})]
+        return node
+    return _rehydrate_panel(ir, ctx, parent=parent)
+
+
+def _rehydrate_panel(panel: "IRPanel", ctx, *, parent):
+    from ._layout_engine import RenderPlan
+    from ._nodes import RenderNode
+    from .core import _PanelOpts
+
+    node = RenderNode()
+    node._parent = parent
+    node._leaf_kind = panel.leaf_kind
+    node._data_width = panel.data_width
+    node._data_height = panel.data_height
+    node._orig_data_width = panel.data_width
+    node._orig_data_height = panel.data_height
+    node._canvas_width = panel.canvas_width
+    node._canvas_height = panel.canvas_height
+    node._margin = dict(panel.margin_floor)
+    node._diagram_inner = panel.diagram_inner
+    calls = []
+    if panel.theme is not None:
+        calls.append(("theme", [panel.theme], {}))
+    if panel.font is not None:
+        calls.append(("font", [panel.font], {}))
+    node._calls = calls
+    if panel.attachment_gap is not None:
+        node._attachment_gap = panel.attachment_gap
+
+    ctx.by_pid[panel.pid] = node
+    ctx.wire_share.append((panel, node))
+    if panel.legend is not None:
+        node._legend_group_by_chart = panel.legend["group_by_chart"]
+        node._legend_valign = panel.legend["valign"]
+        node._legend_ncols = panel.legend["ncols"]
+        node._legend_reverse = panel.legend["reverse"]
+        node._legend_manual = list(panel.legend["manual"])
+        node._legend_user_width = panel.legend["user_width"]
+        node._legend_user_height = panel.legend["user_height"]
+        node._legend_gap = panel.legend["gap"]
+        ctx.wire_legend.append((panel, node))
+
+    side_attr = {"left": "_attached_left", "right": "_attached_right",
+                 "top": "_attached_above", "bottom": "_attached_below"}
+    for side, attached in panel.attachments.items():
+        lst = getattr(node, side_attr[side])
+        for sub in attached:
+            child = _rehydrate_panel(sub, ctx, parent=node)
+            child._is_attached = True
+            lst.append(child)
+
+    if panel.leaf_kind != "data":
+        return node
+
+    # Data leaf: rebuild state + panel opts. State is shallow-copied so
+    # the lifted keys can be reinstated without touching the projection.
+    st = dict(panel.state)
+    if panel.coord.kind != "cartesian":
+        st["coordinate"] = _rehydrate_coord(panel.coord, ctx)
+    node._last_M_eff = dict(panel.margin)
+
+    insets = []
+    for rect, sub in panel.insets:
+        inode = _rehydrate_panel(sub, ctx, parent=None)
+        inode._inset_owner = node
+        # The inset renders through `_render_layout`, which uses this
+        # cached plan instead of re-resolving (the synthesized `_calls`
+        # carry no artists to replay).
+        inode._resolved_plan = RenderPlan(
+            inode,
+            {id(inode): ctx.panel_opts[id(inode)]},
+            {id(inode): ctx.states[id(inode)]},
+        )
+        insets.append((tuple(rect), inode))
+        node._insets.append((tuple(rect), inode))
+    st["insets"] = insets
+
+    po = _PanelOpts(
+        x_axis=panel.scales.get("x"),
+        y_axis=panel.scales.get("y"),
+        hide_left=panel.hide["left"], hide_right=panel.hide["right"],
+        hide_top=panel.hide["top"], hide_bottom=panel.hide["bottom"],
+        suppress_left_labels=panel.suppress["left"],
+        suppress_right_labels=panel.suppress["right"],
+        suppress_top_labels=panel.suppress["top"],
+        suppress_bottom_labels=panel.suppress["bottom"],
+        M_eff=dict(panel.margin),
+    )
+    ctx.states[id(node)] = st
+    ctx.panel_opts[id(node)] = po
+    return node
+
+
+def _rehydrate_coord(ir_coord: "IRCoord", ctx):
+    """`IRCoord` → live coordinate instance, through the same registry
+    the journal's `$coord` envelopes decode against. Node-typed params
+    (IRPanel) rehydrate first."""
+    from .._coord_registry import _COORD_REGISTRY
+    cls = _COORD_REGISTRY.get(ir_coord.kind)
+    if cls is None:
+        raise ValueError(
+            f"rehydrate: coordinate {ir_coord.kind!r} is not in the coord "
+            f"registry — register it (register_coord_codec) before rendering."
+        )
+    kwargs = {k: _rehydrate_param(v, ctx) for k, v in ir_coord.params.items()}
+    return cls(**kwargs)
+
+
+def _rehydrate_param(v, ctx):
+    if isinstance(v, IRPanel):
+        return _rehydrate_panel(v, ctx, parent=None)
+    if isinstance(v, dict):
+        return {k: _rehydrate_param(x, ctx) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return type(v)(_rehydrate_param(x, ctx) for x in v)
+    return v

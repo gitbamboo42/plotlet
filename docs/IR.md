@@ -147,7 +147,8 @@ change bumps the number and old blobs fail loudly.
 ir = pt.to_ir(fig)          # Chart / Layout / FacetGrid / journal → IR
 ir.validate()               # contract check without rendering
 ir.to_svg()                 # render (validates implicitly)
-ir.resolve()                # pre-layout render plan (resolved IR)
+ir.resolve()                # resolved IR — the render path's middle
+                            # stage; .root inspects, .to_svg() emits
 blob = ir.to_dict()         # JSON-safe; pt.from_ir(blob) inverts
 ```
 

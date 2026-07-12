@@ -1,14 +1,17 @@
 """Resolved-IR sanity: for every baseline plot, `resolve_ir` must:
 
   * run without error
-  * produce a JSON-safe result (envelopes only via `_json_layer`)
+  * produce a JSON-safe projection (envelopes only via `_json_layer`)
   * be deterministic (same figure built twice → equal resolved IR)
   * emit valid IRScale kinds and populated IRArtist kinds
 
-The resolved IR is a projection, not a round-trip peer — the
-byte-identical round-trip proof lives with the journal / figure-IR
-suites (`test_journal_roundtrip.py`, `test_ir.py`). This suite is a
-structural smoke over the same PLOTS registry.
+The resolved IR is the second stage of the render pipeline:
+`render.render_svg` is `resolve_ir(ir).to_svg()`, so the projection
+under `.root` and the rendered SVG are two views of one resolution.
+The staged-pipeline pins at the bottom hold that property in place.
+The byte-identical round-trip proof lives with the journal / figure-IR
+suites (`test_journal_roundtrip.py`, `test_ir.py`) — the resolved IR
+itself is one-way.
 """
 from __future__ import annotations
 
@@ -25,6 +28,7 @@ from plotlet.render.resolved import (
     IRLayout,
     IRPanel,
     IRScale,
+    ResolvedIR,
 )
 from plotlet._json_layer import json_safe
 
@@ -36,7 +40,7 @@ _VALID_SCALE_KINDS = {"linear", "log", "category", "symlog", "power",
 
 
 def _walk_panels(ir):
-    """Yield every IRPanel (data or non-data) in the resolved IR."""
+    """Yield every IRPanel (data or non-data) in the resolved projection."""
     if isinstance(ir, IRPanel):
         yield ir
         for side in ("left", "right", "top", "bottom"):
@@ -53,10 +57,12 @@ def _walk_panels(ir):
 @pytest.mark.parametrize("label,fn", PLOTS, ids=[p[0] for p in PLOTS])
 def test_resolve_ir_structural(label, fn):
     fig = fn()
-    ir = resolve_ir(fig)
+    rir = resolve_ir(fig)
 
+    assert isinstance(rir, ResolvedIR)
+    ir = rir.root
     assert isinstance(ir, (IRPanel, IRLayout)), \
-        f"root IR must be a panel or layout, got {type(ir).__name__}"
+        f"projection root must be a panel or layout, got {type(ir).__name__}"
 
     for panel in _walk_panels(ir):
         assert panel.leaf_kind in ("data", "legend", "diagram"), \
@@ -98,7 +104,8 @@ def _nan_eq(a, b):
 def test_resolve_ir_deterministic(label, fn):
     ir1 = resolve_ir(fn())
     ir2 = resolve_ir(fn())
-    assert _nan_eq(ir1, ir2), "resolved IR should be identical across two builds"
+    assert _nan_eq(ir1.root, ir2.root), \
+        "resolved IR should be identical across two builds"
 
 
 @pytest.mark.parametrize("label,fn", PLOTS, ids=[p[0] for p in PLOTS])
@@ -106,7 +113,7 @@ def test_resolve_ir_json_safe(label, fn):
     ir = resolve_ir(fn())
     # Enveloping walks the whole tree — a non-JSON-safe leaf value
     # raises somewhere. Then json.dumps must not fail either.
-    enveloped = json_safe(_to_plain(ir))
+    enveloped = json_safe(_to_plain(ir.root))
     json.dumps(enveloped)
 
 
@@ -129,11 +136,11 @@ def test_figure_ir_resolve_method():
     c.scatter(data=data, x="x", y="y")
     via_method = pt.to_ir(c).resolve()
     via_fn = pt.resolve_ir(c)
-    assert _nan_eq(via_method, via_fn)
+    assert _nan_eq(via_method.root, via_fn.root)
     # a lone chart resolves through its 1×1 layout wrapper; the panel
     # title lives on the leaf
-    assert isinstance(via_method, IRLayout)
-    (panel,) = via_method.children
+    assert isinstance(via_method.root, IRLayout)
+    (panel,) = via_method.root.children
     assert panel.chrome.get("title") == "t"
 
 
@@ -147,6 +154,84 @@ def test_layout_title_projected():
         b.line(x="x", y="y")
         return a | b
 
-    assert pt.resolve_ir(pair().title("first").title("Figure title")).title \
+    assert pt.resolve_ir(pair().title("first").title("Figure title")).root.title \
         == "Figure title"
-    assert pt.resolve_ir(pair()).title is None
+    assert pt.resolve_ir(pair()).root.title is None
+
+
+# ---------------------------------------------------------------------------
+# Staged-pipeline pins — the SVG is rendered FROM the resolved IR
+# ---------------------------------------------------------------------------
+
+
+def _rect_chart():
+    c = pt.chart({"x": [1.0, 2.0, 3.0], "y": [2.0, 3.1, 4.5],
+                  "g": ["a", "b", "a"]}, title="pin")
+    c.scatter(x="x", y="y", color="g")
+    return c
+
+
+def _rect_layout():
+    a = pt.chart({"x": [1.0, 2.0], "y": [3.0, 4.0]})
+    a.scatter(x="x", y="y")
+    b = pt.chart({"x": [1.0, 2.0], "y": [4.0, 3.0]})
+    b.line(x="x", y="y")
+    return (a | b).title("pinned pair")
+
+
+def _circular():
+    c = pt.chart({"x": [1, 2, 3], "y": [1.0, 4.0, 9.0]})
+    c.scatter(x="x", y="y")
+    lay = pt.grid([[c]])
+    lay.coordinate(pt.CircularCoordinate(r_inner=0.3))
+    return lay
+
+
+@pytest.mark.parametrize("build", [_rect_chart, _rect_layout, _circular],
+                         ids=["chart", "layout", "circular"])
+def test_resolved_ir_renders_byte_identical(build):
+    """`resolve_ir(fig).to_svg()` and the normal render agree byte for
+    byte — the resolved IR is the artifact the SVG comes from, not a
+    parallel account of it. (The whole baseline suite proves this too:
+    `render_svg` itself routes through the projection.)"""
+    ir = pt.to_ir(build())
+    assert resolve_ir(ir).to_svg() == ir.to_svg()
+
+
+def test_rect_figures_emit_from_projection_alone():
+    """For rectangular figures the ResolvedIR holds no hidden working
+    tree — `to_svg()` rehydrates from `.root` and nothing else, so
+    every projection field is load-bearing. Container-coordinate roots
+    are the documented exception (`_coord_tree`)."""
+    from plotlet.render.resolved import ResolvedIR
+
+    for build in (_rect_chart, _rect_layout):
+        rir = resolve_ir(pt.to_ir(build()))
+        assert rir._coord_tree is None
+        # Rebuilding the wrapper from the projection alone renders
+        # identically — nothing rides outside `.root`.
+        rebuilt = ResolvedIR(root=rir.root, _coord_tree=None)
+        assert rebuilt.to_svg() == pt.to_ir(build()).to_svg()
+    assert resolve_ir(pt.to_ir(_circular()))._coord_tree is not None
+
+
+def test_render_resolves_exactly_once():
+    """The public render path runs one resolution pass — `render_svg`
+    consumes the ResolvedIR's plan instead of re-resolving. (Figures
+    with insets legitimately re-enter for the nested render; this pin
+    uses a flat chart.)"""
+    from plotlet.render import _layout_engine
+
+    calls = {"n": 0}
+    orig = _layout_engine._build_panel_opts
+
+    def counting(root):
+        calls["n"] += 1
+        return orig(root)
+
+    _layout_engine._build_panel_opts = counting
+    try:
+        _rect_chart().to_svg()
+    finally:
+        _layout_engine._build_panel_opts = orig
+    assert calls["n"] == 1

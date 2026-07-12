@@ -56,6 +56,13 @@ def json_safe(value: Any) -> Any:
             "index":   [json_safe(v) for v in value.index],
             "values":  [[json_safe(v) for v in row] for row in value.values],
         }}
+    from .sectors import Sectors
+    if isinstance(value, Sectors):
+        # Live instance → the same envelope `to_journal` emits and
+        # `_decode` reconstructs (`Sectors._from_dict`). Reached by
+        # values that never passed through the journal emitter, e.g. a
+        # resolved-IR state dict.
+        return {"$sectors": json_safe(value._to_dict())}
     if isinstance(value, tuple):
         return {"$tuple": [json_safe(v) for v in value]}
     if isinstance(value, (set, frozenset)):

@@ -438,13 +438,13 @@ def _strip_plotlet_attrs(svg: str) -> str:
 
 
 def render_svg(ir, *, clean: bool = False, outer: bool = True) -> str:
-    """Render a `FigureIR` to the standalone SVG string — hydrate the
-    render tree and hand it to the layout engine (which derives field
-    state via `materialize` at entry). `outer=False` drops the
+    """Render a `FigureIR` to the standalone SVG string — the staged
+    pipeline: `resolve_ir(ir)` lowers to the resolved IR (hydrate,
+    materialize, replay, train scales, coordinate margins), then
+    `.to_svg()` emits from that artifact. Every rendered figure passes
+    through the resolved stage — inspection (`pt.resolve_ir`) and
+    rendering are two views of one resolution. `outer=False` drops the
     figure-level breathing-room margin — the inner render tools embed
     (`layout_diagram`) or measure against."""
-    svg = hydrate(ir)._to_svg_unchecked(
-        outer=dict(_OUTER_MARGIN) if outer else None)
-    if clean:
-        svg = _strip_plotlet_attrs(svg)
-    return svg
+    from .resolved import resolve_ir
+    return resolve_ir(ir).to_svg(clean=clean, outer=outer)

@@ -17,7 +17,10 @@ The front half calls in through this seam — every function takes a
     regions(ir, outer=...)                chrome regions from a render
     natural_size(ir)                      figure (W, H) after measurement
     data_total_size(ir)                   summed data-area (w, h)
-    resolve(ir)                           pre-layout render plan
+    resolve(ir)                           the resolved IR — the render
+                                          path's own middle stage;
+                                          render_svg is
+                                          resolve(ir).to_svg()
     validate(ir)                          contract check, ValueError on
                                           violation
     hydrate(ir) / materialize(tree)       the render tree, for tools

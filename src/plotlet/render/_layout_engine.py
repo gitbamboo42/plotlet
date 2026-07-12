@@ -1174,7 +1174,83 @@ def _update_canvases_for_margins(leaves: list,
 
 
 
+class RenderPlan:
+    """The resolution pass's complete output — the working set the emit
+    pass consumes. `root` is the materialized render tree (canvases
+    grown to their measured margins), `states` the replayed per-leaf
+    state dicts, `panel_opts` the per-leaf axis descriptors + effective
+    margins. Wrapped by the public `ResolvedIR` (`resolved.py`): the
+    projection users inspect and this plan are two views of one
+    resolution — the emit pass renders from exactly what `resolve_ir`
+    reports."""
+
+    def __init__(self, root, panel_opts: dict, states: dict):
+        self.root = root
+        self.panel_opts = panel_opts
+        self.states = states
+
+
+def _build_plan(root) -> RenderPlan:
+    """Resolution pass: materialize wired state, replay every leaf,
+    train axis descriptors, coordinate share scaling and margins, size
+    legend leaves. Everything downstream (`_emit_plan`, and the coord
+    `render_layout` delegation) consumes the plan; nothing re-resolves."""
+    from ._nodes import materialize
+    materialize(root)
+    panel_opts, states = _build_panel_opts(root)
+    # Override each legend leaf's intrinsic _fig size with its
+    # content-driven size before measure runs.
+    from ._legend import _size_legends
+    _size_legends(root, states)
+    return RenderPlan(root, panel_opts, states)
+
+
+def _render_coord_root(root, outer=None) -> str:
+    """Document-root render for a container-coord layout — the coord
+    owns the entire strategy (overlay, ring stacking, …) and returns
+    `(W, H, body)`; this wraps it in the top-level `<svg>`. The
+    placement loop in `_emit_plan` calls `coord.render_layout` directly
+    when embedding a coord-Layout inside a parent — there it wants the
+    body, not a wrapper."""
+    coord_obj = root._coordinate
+    W, H, body = coord_obj.render_layout(root)
+    ol = outer["left"]   if outer else 0
+    ot = outer["top"]    if outer else 0
+    or_ = outer["right"] if outer else 0
+    ob = outer["bottom"] if outer else 0
+    Wt, Ht = W + ol + or_, H + ot + ob
+    wrap = f'<g transform="translate({ol},{ot})">' if (ol or ot) else ""
+    close = "</g>" if (ol or ot) else ""
+    # Match `_emit_plan`: root theme scopes the outer <svg> (so a themed
+    # root gets the right figure background), and `_figure_root_attrs()`
+    # carries the standard plotlet schema attrs so downstream tools can
+    # identify the SVG. The background is a real first-child <rect> —
+    # CSS `background` on the root element is ignored by non-browser
+    # consumers (cairosvg).
+    with _figure_style(root):
+        root_fs = _FIGSPEC["root_font_size"]
+        return (f'<svg xmlns="http://www.w3.org/2000/svg" '
+                f'width="{Wt}" height="{Ht}" viewBox="0 0 {Wt} {Ht}" '
+                f'font-family="{svg_family()}" font-size="{root_fs}"'
+                f'{_figure_root_attrs()}>'
+                f'<rect width="{Wt}" height="{Ht}" '
+                f'fill="{SPEC["figure"]["background"]}"/>'
+                f'{wrap}{body}{close}</svg>')
+
+
 def _render_layout(root, outer=None) -> str:
+    """Tree-in, SVG-out — the internal entry used by embedded renders
+    (insets, attachment routing) and tools that hold a raw tree. The
+    public path (`render.render_svg`) goes `resolve_ir(ir).to_svg()`,
+    which runs the same two passes with the `ResolvedIR` artifact as
+    the explicit seam between them."""
+    # Rehydrated nodes (from a ResolvedIR projection) carry their plan —
+    # emit it directly. Checked before materialize: their synthesized
+    # `_calls` carry no attach/share ops, so a materialize pass would
+    # wipe the rehydrated wiring instead of rebuilding it.
+    plan = getattr(root, "_resolved_plan", None)
+    if plan is not None:
+        return _emit_plan(plan, outer=outer)
     # Materialize first — replay the recorded journals to populate
     # `_share_x/y`, `_coordinate`, `_gap*`, `_attached_*`, etc. before
     # anything reads them. Normally `root` is the hydrated render tree
@@ -1183,50 +1259,21 @@ def _render_layout(root, outer=None) -> str:
     from ._nodes import materialize
     materialize(root)
     # If the root has a container coord that implements `render_layout`,
-    # delegate the entire render to it — the coord owns its strategy
-    # (overlay, faceting, etc.). The coord returns `(W, H, body)`; this
-    # function wraps in a top-level `<svg>` since it's the document
-    # root. The placement loop in `_render_layout_rect` calls
-    # `coord.render_layout` directly when embedding a coord-Layout
-    # inside a parent — there it wants the body, not a wrapper.
-    coord = getattr(root, "_coordinate", None)
-    if coord is not None and hasattr(coord, "render_layout"):
-        W, H, body = coord.render_layout(root)
-        ol = outer["left"]   if outer else 0
-        ot = outer["top"]    if outer else 0
-        or_ = outer["right"] if outer else 0
-        ob = outer["bottom"] if outer else 0
-        Wt, Ht = W + ol + or_, H + ot + ob
-        wrap = f'<g transform="translate({ol},{ot})">' if (ol or ot) else ""
-        close = "</g>" if (ol or ot) else ""
-        # Match `_render_layout_rect`: root theme scopes the outer <svg>
-        # (so a themed root gets the right figure background), and
-        # `_figure_root_attrs()` carries the standard plotlet schema
-        # attrs so downstream tools can identify the SVG. The background
-        # is a real first-child <rect> — CSS `background` on the root
-        # element is ignored by non-browser consumers (cairosvg).
-        with _figure_style(root):
-            root_fs = _FIGSPEC["root_font_size"]
-            return (f'<svg xmlns="http://www.w3.org/2000/svg" '
-                    f'width="{Wt}" height="{Ht}" viewBox="0 0 {Wt} {Ht}" '
-                    f'font-family="{svg_family()}" font-size="{root_fs}"'
-                    f'{_figure_root_attrs()}>'
-                    f'<rect width="{Wt}" height="{Ht}" '
-                    f'fill="{SPEC["figure"]["background"]}"/>'
-                    f'{wrap}{body}{close}</svg>')
+    # delegate the entire render to it — the coord owns its strategy.
+    coord_obj = getattr(root, "_coordinate", None)
+    if coord_obj is not None and hasattr(coord_obj, "render_layout"):
+        return _render_coord_root(root, outer=outer)
     # Default: rectangular stack. Coord-bearing sub-Layouts are treated as
     # atomic blocks by `_measure` / `_allocate` (see `_is_atomic`) and
     # rendered through their coord's own strategy at placement time —
     # the rect path stays unaware of coord internals.
-    return _render_layout_rect(root, outer=outer)
+    return _emit_plan(_build_plan(root), outer=outer)
 
 
-def _render_layout_rect(root, outer=None) -> str:
-    panel_opts, states = _build_panel_opts(root)
-    # Override each legend leaf's intrinsic _fig size with its
-    # content-driven size before measure runs.
-    from ._legend import _size_legends
-    _size_legends(root, states)
+def _emit_plan(plan: RenderPlan, outer=None) -> str:
+    """Emit pass: measure, allocate pixel rects, write the SVG. Consumes
+    the `RenderPlan` — no re-resolution happens past this point."""
+    root, panel_opts, states = plan.root, plan.panel_opts, plan.states
     W, H = _measure(root)
     W, H = int(round(W)), int(round(H))
     placements: list = []
