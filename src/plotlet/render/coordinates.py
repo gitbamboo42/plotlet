@@ -161,6 +161,23 @@ def _circular_chrome_pad(st, dw) -> float:
     return x_chrome
 
 
+class _CircularPlan:
+    """Resolved overlay plan for a container `CircularCoordinate` —
+    the coord's counterpart of the rect engine's `RenderPlan`. `rings`
+    is `[(leaf, state, panel_opts), …]` in draw order (children
+    outermost-first, then the `inner` disc chart if any); `W`/`H` the
+    shared canvas edge from the chrome-pad fixpoint; `band` the
+    layout-title band height. Built by `resolve_layout`, cached on the
+    layout node, consumed by `emit_layout` / `layout_size`."""
+
+    def __init__(self, root, W: int, H: int, band: int, rings: list):
+        self.root = root
+        self.W = W
+        self.H = H
+        self.band = band
+        self.rings = rings
+
+
 class CircularCoordinate:
     """Ring-shaped coordinate: t around the ring, r along the radius.
 
@@ -361,7 +378,12 @@ class CircularCoordinate:
     def layout_size(self, root) -> tuple[int, int]:
         """The (W, H) this coord's `render_layout` will claim — consulted
         by `_atomic_size` so a ring embedded in a parent rect layout packs
-        at its true footprint."""
+        at its true footprint. Consumes the resolved plan when present —
+        the probe must not re-run after `resolve_layout` spliced the ring
+        journals (a spliced probe would measure different chrome)."""
+        plan = getattr(root, "_coord_plan", None)
+        if plan is not None:
+            return plan.W, plan.W + plan.band
         from ._layout_engine import _title_band_h
         leaves = list(root._iter_leaves())
         if not leaves:
@@ -387,20 +409,31 @@ class CircularCoordinate:
         whether to wrap it for a standalone render or inline it inside
         a parent `<g translate>`.
 
+        Two staged halves: `resolve_layout` (canvas fixpoint, band
+        derivation, ring journals spliced and replayed → per-ring
+        states) and `emit_layout` (draw each ring from its state). The
+        resolved plan caches on the layout node, so `resolve_ir` can
+        run the resolution ahead of time and this call only emits.
+
         Future coords (polar wedges, geographic facets, etc.) implement
         their own `render_layout` with a different strategy — the
         dispatcher in `_layout_engine.py` is coord-agnostic and just
         delegates here.
         """
-        from itertools import count
-        from ._layout_engine import (_build_panel_opts, _emit_layout_title,
-                                     _node_style, _title_band_h)
-        from .core import _expand_frame_defaults, _panel_open, _render_inner
-        from .. import _regions
-        _ZERO_MARGIN = {"left": 0, "right": 0, "top": 0, "bottom": 0}
-        # Shared across leaves so coord-clip `<clipPath id>`s don't
-        # collide once each leaf's body is concatenated into one document.
-        _clip_counter = count()
+        plan = getattr(root, "_coord_plan", None)
+        if plan is None:
+            plan = self.resolve_layout(root)
+        return self.emit_layout(plan)
+
+    def resolve_layout(self, root) -> "_CircularPlan":
+        """Resolution half: canvas metrics (chrome-pad fixpoint on the
+        unspliced probe), wrap-gap and band derivation, then per ring —
+        splice the leaf journal (band coord, chrome suppression) and
+        replay it into a state dict. Caches the plan on `root` so
+        `layout_size` and `render_layout` never re-probe a spliced
+        tree."""
+        from ._layout_engine import _build_panel_opts, _title_band_h
+        from .core import _expand_frame_defaults
 
         leaves = list(root._iter_leaves())
         if not leaves:
@@ -409,7 +442,8 @@ class CircularCoordinate:
         # labels, sector labels) grows the canvas outward around it — the
         # circular counterpart of Cartesian margins around the data rect.
         # The probe runs with full layout context so layout-level
-        # .sectors() propagates into the chrome measurement.
+        # .sectors() propagates into the chrome measurement — and runs
+        # before any splicing below, so it measures the user's journal.
         D, W, _probe_states = self._canvas_metrics(root, leaves)
         H = W
         # Layout-level title: one band above the overlay canvas —
@@ -447,11 +481,11 @@ class CircularCoordinate:
             start_deg=self.start_deg, end_deg=self.end_deg,
         ).derive_leaf_coords(leaves, heights)
 
-        def _render_leaf(leaf, coord, *, is_outermost=False, prepend=()):
+        def _resolve_leaf(leaf, coord, *, is_outermost=False, prepend=()):
             # `prepend` carries inherited entries (today: dampened sectors
             # for `self.inner`) that need to be replayed before the
             # leaf's own calls. The leaves here are renderer-private nodes,
-            # rebuilt fresh for every figure render and rendered exactly
+            # rebuilt fresh for every figure render and resolved exactly
             # once per render — so the splices and dimension overrides
             # below mutate freely, with nothing to restore.
             n_prepend = len(prepend)
@@ -504,22 +538,10 @@ class CircularCoordinate:
             # avoiding a translate(N,0) offset that would misalign this
             # leaf with others rendered onto the same canvas.
             _panel_opts, _states = _build_panel_opts(leaf)
-            _st = _states[id(leaf)]
-            _po = _panel_opts[id(leaf)]
-            with _node_style(leaf):
-                # Emit just the panel body (no <svg> wrapper) — the
-                # caller concatenates each leaf's body into the shared
-                # overlay canvas (below the title band, when present).
-                with _regions.translate(0, band):
-                    inner = _render_inner(_st, W, H, _ZERO_MARGIN, _po,
-                                          clip_counter=_clip_counter)
-                body = (_panel_open(_st, _po, "translate(0,0)",
-                                    _ZERO_MARGIN, W, H, (0, 0, W, H))
-                        + inner + '</g>')
-            return body
+            return leaf, _states[id(leaf)], _panel_opts[id(leaf)]
 
-        bodies = [_render_leaf(leaf, c, is_outermost=(i == 0))
-                  for i, (leaf, c) in enumerate(zip(leaves, leaf_coords))]
+        rings = [_resolve_leaf(leaf, c, is_outermost=(i == 0))
+                 for i, (leaf, c) in enumerate(zip(leaves, leaf_coords))]
 
         if self.inner is not None:
             # Inherit the layout's sector partition onto the inner chart
@@ -560,12 +582,43 @@ class CircularCoordinate:
                 wrap_gap_deg=resolved_wrap_gap_deg,
                 start_deg=self.start_deg, end_deg=self.end_deg,
             )
-            bodies.append(_render_leaf(self.inner, inner_coord,
+            rings.append(_resolve_leaf(self.inner, inner_coord,
                                        prepend=inner_prepend))
+
+        plan = _CircularPlan(root=root, W=W, H=H, band=band, rings=rings)
+        root._coord_plan = plan
+        return plan
+
+    def emit_layout(self, plan: "_CircularPlan") -> tuple[int, int, str]:
+        """Emit half: draw each resolved ring from its state onto the
+        shared overlay canvas. No re-resolution — the plan carries
+        everything (per-ring states, panel opts, canvas metrics)."""
+        from itertools import count
+        from ._layout_engine import _emit_layout_title, _node_style
+        from .core import _panel_open, _render_inner
+        from .. import _regions
+        _ZERO_MARGIN = {"left": 0, "right": 0, "top": 0, "bottom": 0}
+        # Shared across leaves so coord-clip `<clipPath id>`s don't
+        # collide once each leaf's body is concatenated into one document.
+        _clip_counter = count()
+        W, H, band = plan.W, plan.H, plan.band
+
+        bodies = []
+        for leaf, st, po in plan.rings:
+            with _node_style(leaf):
+                # Emit just the panel body (no <svg> wrapper) — the
+                # caller concatenates each leaf's body into the shared
+                # overlay canvas (below the title band, when present).
+                with _regions.translate(0, band):
+                    inner = _render_inner(st, W, H, _ZERO_MARGIN, po,
+                                          clip_counter=_clip_counter)
+                bodies.append(_panel_open(st, po, "translate(0,0)",
+                                          _ZERO_MARGIN, W, H, (0, 0, W, H))
+                              + inner + '</g>')
 
         body = "".join(bodies)
         if band:
-            body = (_emit_layout_title(root, 0, 0, W)
+            body = (_emit_layout_title(plan.root, 0, 0, W)
                     + f'<g transform="translate(0,{band})">{body}</g>')
         return W, H + band, body
 

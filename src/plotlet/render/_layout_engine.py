@@ -1200,7 +1200,8 @@ class RenderPlan:
 def _build_plan(root) -> RenderPlan:
     """Resolution pass: materialize wired state, replay every leaf,
     train axis descriptors, coordinate share scaling and margins, size
-    legend leaves. Everything downstream (`_emit_plan`, and the coord
+    legend leaves, and resolve every container-coord layout's overlay
+    plan. Everything downstream (`_emit_plan`, and the coord
     `render_layout` delegation) consumes the plan; nothing re-resolves."""
     from ._nodes import materialize
     materialize(root)
@@ -1209,7 +1210,26 @@ def _build_plan(root) -> RenderPlan:
     # content-driven size before measure runs.
     from ._legend import _size_legends
     _size_legends(root, states)
+    _resolve_coord_layouts(root)
     return RenderPlan(root, panel_opts, states)
+
+
+def _resolve_coord_layouts(node) -> None:
+    """Resolve the overlay plan of every container-coord layout under
+    `node` (root and embedded alike) so measure (`layout_size`),
+    placement, and emit all consume the cached plan instead of
+    re-resolving. Children first — a nested coord layout resolves
+    before its parent might consult it. Coords that implement
+    `render_layout` without the staged `resolve_layout` keep their
+    old at-emit behavior."""
+    if node is None or not getattr(node, "_is_parent", False):
+        return
+    for child in node._children:
+        _resolve_coord_layouts(child)
+    coord_obj = getattr(node, "_coordinate", None)
+    if (coord_obj is not None and hasattr(coord_obj, "resolve_layout")
+            and getattr(node, "_coord_plan", None) is None):
+        coord_obj.resolve_layout(node)
 
 
 def _render_coord_root(root, outer=None) -> str:

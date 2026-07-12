@@ -31,9 +31,12 @@ What resolution bakes into the projection:
 Geometry (pixel rects) stays symbolic — placement is the emit pass's
 job, downstream. Hence "pre-layout".
 
-One documented exception: container-coordinate roots (Circular). Their
-coord's `render_layout` re-resolves internally from the raw tree, so
-`ResolvedIR.to_svg()` keeps the hydrated tree for that path only.
+Container-coordinate figures (Circular) are staged too: the coord's
+`resolve_layout` runs at resolution (canvas fixpoint, ring splicing,
+per-ring replay), the projection carries the true ring states plus the
+canvas metrics (`IRLayout.coord_canvas`), and rehydration rebuilds the
+overlay plan — the coord's `render_layout` emits without re-resolving
+(pinned: emit never touches `_build_panel_opts`).
 
 The resolved IR is one-way, not a round-trip peer: it deliberately
 drops what's needed to rebuild the journal. Same journal → same
@@ -132,29 +135,35 @@ class IRLayout:
     # layouts, and the gap walk stops at op-carrying ancestors — the
     # rehydrated tree must collapse exactly like the original.
     had_state: bool = False
+    # Container-coord overlay canvas metrics ({"W","H","band"}), from
+    # the coord's own resolution. Not derivable from ring panel dims —
+    # the per-ring pre-pass re-mutates leaf dims after the splice, so
+    # the fixpoint result must ride explicitly.
+    coord_canvas: dict | None = None
 
 
 @dataclass(frozen=True)
 class ResolvedIR:
     """The resolved figure. `.root` is the complete render plan —
     `to_svg()` rehydrates a working tree from it and runs the emit
-    pass, so the projection users inspect *is* what renders.
-
-    `_coord_tree` is non-None only for container-coordinate roots
-    (Circular): their coord re-resolves internally from the raw tree,
-    the one path that can't yet emit from the projection."""
+    pass, so the projection users inspect *is* what renders. This holds
+    for container-coordinate figures too: ring states are projected
+    from the coord's own resolution and the rehydrated layout carries a
+    rebuilt overlay plan, so the coord's `render_layout` emits without
+    re-resolving."""
     root: "IRLayout"
-    _coord_tree: object = field(default=None, repr=False, compare=False)
 
     def to_svg(self, *, clean: bool = False, outer: bool = True) -> str:
         from .._spec import _OUTER_MARGIN
         from ._layout_engine import _emit_plan, _render_coord_root
         from ._nodes import _strip_plotlet_attrs
         out = dict(_OUTER_MARGIN) if outer else None
-        if self._coord_tree is not None:
-            svg = _render_coord_root(self._coord_tree, outer=out)
+        plan = _rehydrate(self.root)
+        coord_obj = getattr(plan.root, "_coordinate", None)
+        if coord_obj is not None and hasattr(coord_obj, "render_layout"):
+            svg = _render_coord_root(plan.root, outer=out)
         else:
-            svg = _emit_plan(_rehydrate(self.root), outer=out)
+            svg = _emit_plan(plan, outer=out)
         return _strip_plotlet_attrs(svg) if clean else svg
 
 
@@ -181,10 +190,7 @@ def resolve_ir(ir) -> ResolvedIR:
     plan = _build_plan(root)
     pids = _assign_pids(plan.root)
     projection = _node_to_ir(plan.root, plan.panel_opts, plan.states, pids)
-    coord_obj = getattr(plan.root, "_coordinate", None)
-    keep_tree = (plan.root if coord_obj is not None
-                 and hasattr(coord_obj, "render_layout") else None)
-    return ResolvedIR(root=projection, _coord_tree=keep_tree)
+    return ResolvedIR(root=projection)
 
 
 def _walk_all_leaves(node, out):
@@ -236,6 +242,16 @@ def _node_to_ir(node, panel_opts, states, pids):
 
 def _layout_to_ir(layout, panel_opts, states, pids):
     from ._layout_engine import _layout_title
+    # A container-coord layout resolved its own overlay plan — its ring
+    # states (spliced band coords, forced W×H, zero margins) are what
+    # actually renders. Project children from that truth, not from the
+    # rect pre-pass probe.
+    coord_plan = getattr(layout, "_coord_plan", None)
+    if coord_plan is not None:
+        states = {**states,
+                  **{id(l): st for l, st, _po in coord_plan.rings}}
+        panel_opts = {**panel_opts,
+                      **{id(l): po for l, _st, po in coord_plan.rings}}
     share_x = _last_call(layout, "share_x")
     share_y = _last_call(layout, "share_y")
     gap = {"gap": layout._gap, "gap_x": layout._gap_x, "gap_y": layout._gap_y}
@@ -255,6 +271,9 @@ def _layout_to_ir(layout, panel_opts, states, pids):
         coord=coord,
         title=_layout_title(layout) or None,
         had_state=bool(layout._calls),
+        coord_canvas=({"W": coord_plan.W, "H": coord_plan.H,
+                       "band": coord_plan.band}
+                      if coord_plan is not None else None),
     )
 
 
@@ -534,6 +553,12 @@ def _rehydrate_node(ir, ctx, *, parent):
             node._calls = [("title", [ir.title], {})]
         elif ir.had_state:
             node._calls = [("title", [""], {})]
+        if (ir.coord_canvas is not None and node._coordinate is not None
+                and hasattr(node._coordinate, "resolve_layout")):
+            # Staged container coord — rebuild its overlay plan so
+            # `render_layout` at emit consumes it instead of
+            # re-resolving from the synthesized (artist-less) journals.
+            _rebuild_coord_plan(node, ctx, ir.coord_canvas)
         return node
     return _rehydrate_panel(ir, ctx, parent=parent)
 
@@ -625,6 +650,28 @@ def _rehydrate_panel(panel: "IRPanel", ctx, *, parent):
     ctx.states[id(node)] = st
     ctx.panel_opts[id(node)] = po
     return node
+
+
+def _rebuild_coord_plan(node, ctx, canvas: dict) -> None:
+    """Rebuild a container coord's overlay plan on a rehydrated layout —
+    ring order matches `resolve_layout`: `_iter_leaves` (children,
+    depth-first), then the coord's `inner` disc chart. States and panel
+    opts come from the rehydration context (the projection carried the
+    spliced ring truth) and the canvas metrics from `coord_canvas`, so
+    `render_layout` emits without re-resolving."""
+    from .coordinates import _CircularPlan
+
+    ring_leaves = list(node._iter_leaves())
+    inner = getattr(node._coordinate, "inner", None)
+    if inner is not None:
+        ring_leaves.append(inner)
+    if not ring_leaves:
+        return
+    rings = [(l, ctx.states[id(l)], ctx.panel_opts[id(l)])
+             for l in ring_leaves]
+    node._coord_plan = _CircularPlan(
+        root=node, W=canvas["W"], H=canvas["H"], band=canvas["band"],
+        rings=rings)
 
 
 def _rehydrate_coord(ir_coord: "IRCoord", ctx):

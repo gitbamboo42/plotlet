@@ -198,21 +198,20 @@ def test_resolved_ir_renders_byte_identical(build):
     assert resolve_ir(ir).to_svg() == ir.to_svg()
 
 
-def test_rect_figures_emit_from_projection_alone():
-    """For rectangular figures the ResolvedIR holds no hidden working
-    tree — `to_svg()` rehydrates from `.root` and nothing else, so
-    every projection field is load-bearing. Container-coordinate roots
-    are the documented exception (`_coord_tree`)."""
+def test_figures_emit_from_projection_alone():
+    """The ResolvedIR holds no hidden working tree — `to_svg()`
+    rehydrates from `.root` and nothing else, so every projection field
+    is load-bearing. Holds for container-coordinate figures too: the
+    rehydrated layout rebuilds the coord's overlay plan from projected
+    ring states."""
     from plotlet.render.resolved import ResolvedIR
 
-    for build in (_rect_chart, _rect_layout):
+    for build in (_rect_chart, _rect_layout, _circular):
         rir = resolve_ir(pt.to_ir(build()))
-        assert rir._coord_tree is None
         # Rebuilding the wrapper from the projection alone renders
         # identically — nothing rides outside `.root`.
-        rebuilt = ResolvedIR(root=rir.root, _coord_tree=None)
+        rebuilt = ResolvedIR(root=rir.root)
         assert rebuilt.to_svg() == pt.to_ir(build()).to_svg()
-    assert resolve_ir(pt.to_ir(_circular()))._coord_tree is not None
 
 
 def test_resolved_ir_stable_under_render():
@@ -228,6 +227,28 @@ def test_resolved_ir_stable_under_render():
     rendered = resolve_ir(build())
     rendered.to_svg()
     assert _nan_eq(rendered.root, resolve_ir(build()).root)
+
+
+@pytest.mark.parametrize("build", [_rect_chart, _rect_layout, _circular],
+                         ids=["chart", "layout", "circular"])
+def test_emit_never_resolves(build):
+    """Once resolved, emitting runs zero resolution — `to_svg()` on a
+    ResolvedIR must not touch `_build_panel_opts`, circular included
+    (its overlay plan is rebuilt from projected ring states)."""
+    from plotlet.render import _layout_engine
+
+    rir = resolve_ir(pt.to_ir(build()))
+    orig = _layout_engine._build_panel_opts
+
+    def forbidden(root):
+        raise AssertionError("emit re-entered resolution")
+
+    _layout_engine._build_panel_opts = forbidden
+    try:
+        svg = rir.to_svg()
+    finally:
+        _layout_engine._build_panel_opts = orig
+    assert svg.lstrip().startswith("<svg")
 
 
 def test_render_resolves_exactly_once():
