@@ -528,17 +528,30 @@ class CircularCoordinate:
                 leaf._calls.append(("xticks", [[]], {"labels": False}))
             leaf._data_width  = W
             leaf._data_height = H
+            # `_orig_data_*` too: the share-scaling reset inside
+            # `_build_panel_opts` restores dims from these, and once the
+            # leaf is spliced onto the shared overlay canvas the ring
+            # dims ARE its declared dims — the pre-splice user value has
+            # no consumer left.
+            leaf._orig_data_width  = W
+            leaf._orig_data_height = H
             leaf._margin = {"left": 0, "right": 0, "top": 0, "bottom": 0}
             leaf._canvas_width  = W
             leaf._canvas_height = H
             # Circular chrome places labels at angular positions inside
-            # the outward chrome pad — no Cartesian margin band needed.
-            # Zero margin
-            # + a fresh `_build_panel_opts` bypasses margin recomputation,
-            # avoiding a translate(N,0) offset that would misalign this
-            # leaf with others rendered onto the same canvas.
+            # the outward chrome pad already baked into W — no Cartesian
+            # margin band. The replay below reuses the one rect pre-pass,
+            # which also runs its margin measurement; zero that output
+            # afterward so the leaf records what actually renders: a
+            # zero-margin panel on the W×H overlay canvas (emit draws
+            # with `_ZERO_MARGIN`).
             _panel_opts, _states = _build_panel_opts(leaf)
-            return leaf, _states[id(leaf)], _panel_opts[id(leaf)]
+            po = _panel_opts[id(leaf)]
+            po.M_eff = {"left": 0, "right": 0, "top": 0, "bottom": 0}
+            leaf._canvas_width  = W
+            leaf._canvas_height = H
+            leaf._last_M_eff = dict(po.M_eff)
+            return leaf, _states[id(leaf)], po
 
         rings = [_resolve_leaf(leaf, c, is_outermost=(i == 0))
                  for i, (leaf, c) in enumerate(zip(leaves, leaf_coords))]

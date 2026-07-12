@@ -33,10 +33,11 @@ job, downstream. Hence "pre-layout".
 
 Container-coordinate figures (Circular) are staged too: the coord's
 `resolve_layout` runs at resolution (canvas fixpoint, ring splicing,
-per-ring replay), the projection carries the true ring states plus the
-canvas metrics (`IRLayout.coord_canvas`), and rehydration rebuilds the
-overlay plan — the coord's `render_layout` emits without re-resolving
-(pinned: emit never touches `_build_panel_opts`).
+per-ring replay), the projection carries the true ring states — each
+ring panel's dims ARE the shared overlay canvas — and rehydration
+rebuilds the overlay plan from them, so the coord's `render_layout`
+emits without re-resolving (pinned: emit never touches
+`_build_panel_opts`).
 
 The resolved IR is one-way, not a round-trip peer: it deliberately
 drops what's needed to rebuild the journal. Same journal → same
@@ -135,11 +136,6 @@ class IRLayout:
     # layouts, and the gap walk stops at op-carrying ancestors — the
     # rehydrated tree must collapse exactly like the original.
     had_state: bool = False
-    # Container-coord overlay canvas metrics ({"W","H","band"}), from
-    # the coord's own resolution. Not derivable from ring panel dims —
-    # the per-ring pre-pass re-mutates leaf dims after the splice, so
-    # the fixpoint result must ride explicitly.
-    coord_canvas: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -270,9 +266,6 @@ def _layout_to_ir(layout, panel_opts, states, pids):
         coord=coord,
         title=layout._title_text or None,
         had_state=layout._had_state,
-        coord_canvas=({"W": coord_plan.W, "H": coord_plan.H,
-                       "band": coord_plan.band}
-                      if coord_plan is not None else None),
     )
 
 
@@ -541,12 +534,12 @@ def _rehydrate_node(ir, ctx, *, parent):
             node._coordinate = _rehydrate_coord(ir.coord, ctx)
         node._title_text = ir.title or ""
         node._had_state = ir.had_state
-        if (ir.coord_canvas is not None and node._coordinate is not None
+        if (node._coordinate is not None
                 and hasattr(node._coordinate, "resolve_layout")):
             # Staged container coord — rebuild its overlay plan so
             # `render_layout` at emit consumes it instead of
             # re-resolving from the empty journals.
-            _rebuild_coord_plan(node, ctx, ir.coord_canvas)
+            _rebuild_coord_plan(node, ctx)
         return node
     return _rehydrate_panel(ir, ctx, parent=parent)
 
@@ -636,13 +629,17 @@ def _rehydrate_panel(panel: "IRPanel", ctx, *, parent):
     return node
 
 
-def _rebuild_coord_plan(node, ctx, canvas: dict) -> None:
+def _rebuild_coord_plan(node, ctx) -> None:
     """Rebuild a container coord's overlay plan on a rehydrated layout —
     ring order matches `resolve_layout`: `_iter_leaves` (children,
     depth-first), then the coord's `inner` disc chart. States and panel
     opts come from the rehydration context (the projection carried the
-    spliced ring truth) and the canvas metrics from `coord_canvas`, so
-    `render_layout` emits without re-resolving."""
+    spliced ring truth), the overlay canvas is the rings' own W×H
+    (every ring was forced to it at resolution), and the title band
+    recomputes from `_title_text` — same call, same ambient spec as the
+    original resolution. `render_layout` then emits without
+    re-resolving."""
+    from ._layout_engine import _title_band_h
     from .coordinates import _CircularPlan
 
     ring_leaves = list(node._iter_leaves())
@@ -654,7 +651,8 @@ def _rebuild_coord_plan(node, ctx, canvas: dict) -> None:
     rings = [(l, ctx.states[id(l)], ctx.panel_opts[id(l)])
              for l in ring_leaves]
     node._coord_plan = _CircularPlan(
-        root=node, W=canvas["W"], H=canvas["H"], band=canvas["band"],
+        root=node, W=ring_leaves[0]._data_width,
+        H=ring_leaves[0]._data_height, band=_title_band_h(node),
         rings=rings)
 
 
