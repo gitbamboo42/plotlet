@@ -317,7 +317,7 @@ def _expand_frame_defaults(calls):
 # suite immediately.
 _FRAME_OPS = frozenset({
     "title", "subtitle", "caption", "xlabel", "ylabel", "xlim", "ylim",
-    "xscale", "yscale", "grid", "legend",
+    "xscale", "yscale", "gridlines", "legend",
     "xticks", "yticks", "spines", "theme", "font",
     "x_expand", "y_expand", "clip", "facecolor",
     "coordinate", "sectors", "aspect",
@@ -513,9 +513,9 @@ def _replay(calls):
                         if attr in v: st[f"spine_{target}_{attr}"] = v[attr]
                 else:
                     st[f"spine_{target}"] = bool(v)
-        elif name == "grid":
-            # c.grid() / c.grid(False) toggle; c.grid("both") or
-            # c.grid(which="minor") select which tick set draws lines.
+        elif name == "gridlines":
+            # c.gridlines() / c.gridlines(False) toggle; c.gridlines("both")
+            # or c.gridlines(which="minor") select which tick set draws lines.
             v = args[0] if args else True
             if isinstance(v, str):
                 st["grid"] = True
@@ -526,8 +526,8 @@ def _replay(calls):
                 st["grid_which"] = kw["which"]
             if st["grid_which"] not in ("major", "minor", "both"):
                 raise ValueError(
-                    f"c.grid(which={st['grid_which']!r}) — pass \"major\", "
-                    f"\"minor\", or \"both\"."
+                    f"c.gridlines(which={st['grid_which']!r}) — pass "
+                    f"\"major\", \"minor\", or \"both\"."
                 )
         elif name == "legend":
             st["legend"] = (args[0] if args else True)

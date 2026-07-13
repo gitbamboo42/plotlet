@@ -17,31 +17,46 @@ from ..draw import resolve_color
 from ._shared import _xy_minmax, _bar_legend_entries
 
 
+def _shape_opts(kw):
+    """Pop `fill=` out of the user kwargs at record time, bar-family
+    style: a literal color goes to `_fill_literal` (consumed by the
+    color-cycle stamp and the draw below); `fill="none"` switches the
+    fill off entirely."""
+    kw = dict(kw)
+    fill = kw.pop("fill", None)
+    if fill == "none":
+        kw["_unfilled"] = True
+    elif fill is not None:
+        kw["_fill_literal"] = fill
+    return kw
+
+
 def _fill_stroke_params(a, ctx_color):
-    """Shared edge/fill resolution for rect and polygon. Returns a kwargs
-    dict ready to splat into `draw.rect` / `draw.polygon`.
-    `fill=False` switches the fill off entirely; `edgecolor=` overrides the
-    artist color for the outline; `linewidth=` controls outline width
-    (default spec linewidth)."""
+    """Shared fill/edge resolution for rect and polygon, following the
+    bar-family convention. Returns a kwargs dict ready to splat into
+    `draw.rect` / `draw.polygon`.
+    `fill=` is the fill color (default: the artist color); `fill="none"`
+    switches the fill off; `color=` strokes the outline (default None =
+    no stroke); `linewidth=` controls outline width (default spec
+    linewidth)."""
     opts = a["opts"]
-    do_fill = opts.get("fill", True)
-    edge = opts.get("edgecolor")
+    unfilled = opts.get("_unfilled", False)
+    stroke = resolve_color(opts.get("color"))
     lw = opts.get("linewidth", _D["linewidth"])
     alpha = opts.get("alpha", _D["bar_alpha"])
-    if edge is not None:
-        stroke = resolve_color(edge)
-    elif not do_fill:
-        # No fill and no explicit edge: draw the outline in the artist color
-        # so an outline-only shape is still visible.
+    if unfilled and stroke is None:
+        # No fill and no explicit stroke: draw the outline in the artist
+        # color so an outline-only shape is still visible.
         stroke = ctx_color
-    else:
-        stroke = None
-    return {"fill": ctx_color if do_fill else None,
+    fill_literal = resolve_color(opts.get("_fill_literal"))
+    fill = None if unfilled else (
+        fill_literal if fill_literal is not None else ctx_color)
+    return {"fill": fill,
             "stroke": stroke,
             "stroke_width": lw,
-            # `fill=False` means a transparent shape with an opaque outline —
+            # `fill="none"` means a transparent shape with an opaque outline —
             # never apply the fill-alpha to the stroke.
-            "alpha": alpha if do_fill else 1}
+            "alpha": 1 if unfilled else alpha}
 
 
 def _artist_rect(a, xs_, ys_, col, warp=None):
@@ -86,7 +101,8 @@ def _rect_data_attrs(a):
 
 def _rect_record(args, kw):
     xs, ys, ws, hs = broadcast(args[0], args[1], args[2], args[3])
-    return {"type": "rect", "xs": xs, "ys": ys, "ws": ws, "hs": hs, "opts": kw}
+    return {"type": "rect", "xs": xs, "ys": ys, "ws": ws, "hs": hs,
+            "opts": _shape_opts(kw)}
 
 
 def _rect_xdomain(a):
@@ -121,7 +137,7 @@ add_artist(ArtistSpec(
     record=lambda args, kw: {"type": "polygon",
                               "xs": to_list(args[0]),
                               "ys": to_list(args[1]),
-                              "opts": kw},
+                              "opts": _shape_opts(kw)},
     xdomain=lambda a: a["xs"],
     ydomain=lambda a: a["ys"],
     draw=lambda a, ctx: _artist_polygon(a, ctx.x_scale, ctx.y_scale, ctx.color, ctx.warp),

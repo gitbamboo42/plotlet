@@ -20,8 +20,8 @@ Pass at construction or as chained setters:
 `title`, `subtitle` (smaller line under the title), `caption` (small
 right-aligned text below the chart — ggplot's `labs(caption=)`),
 `xlabel`, `ylabel`, `xlim=(a, b)`, `ylim=(a, b)`, `xscale`,
-`yscale`, `grid=True/False` (or `"major"`/`"minor"`/`"both"`; also
-`c.grid(which="minor")` — minor lines use the axes' `minor=` tick
+`yscale`, `gridlines=True/False` (or `"major"`/`"minor"`/`"both"`; also
+`c.gridlines(which="minor")` — minor lines use the axes' `minor=` tick
 positions, or auto subdivisions when none are set), `legend=True/False`,
 `clip=True/False`,
 `data_width`, `data_height`, `theme` (see [THEMES.md](THEMES.md)),
@@ -295,7 +295,7 @@ universal and not repeated.
 | `.hist(x=, fill=, **opts)` | `color` (stroke), `palette`, `bins` (count or explicit edges), `binwidth`, `binrange=(lo, hi)`, `weights` (column or sequence — sum per bin instead of count), `density`, `cumulative`, `position="overlay"\|"stack"\|"fill"\|"dodge"` (multi-group layout; `histtype="bar"` only), `histtype` (`"bar"` / `"step"` / `"stepfilled"`), `orientation` |
 | `.density_1d(x=, color=, **opts)` | `palette`, `bw`, `n_grid=200`, `fill=True/False`, `alpha` — Gaussian KDE |
 | `.ecdf(x=, color=, **opts)` | `palette`, `complement=False` (survival), `linewidth` |
-| `.rug(x=, color=, axis="x", **opts)` | `palette`, `length=0.04`, `alpha` — tick marks at observations |
+| `.rug(x=, color=, orientation="x", **opts)` | `palette`, `length=0.04`, `alpha` — tick marks at observations |
 | `.freqpoly(x=, color=, **opts)` | `palette`, `bins`, `density` — line version of hist |
 | `.qq(sample=, color=, **opts)` | `dist=` accepts `"normal"`, any `scipy.stats` RV, or another sample; `color=<col>` → one series + reference line per level (`palette=`) |
 
@@ -334,12 +334,12 @@ universal and not repeated.
 | --- | --- |
 | `.imshow(data, **opts)` | `cmap` (~180 vendored, default `"viridis"`), `vmin`, `vmax`, `extent`, `annot`, `fmt`, `annot_color`, `annot_fontsize` |
 | `.heatmap(data=df, x=, values=, sector=, **opts)` | Tidy input: each table row → a heatmap column (x-position from the `x` column — numeric → continuous axis, string → categorical), each value column → a track row (`values=` selects/orders them, default = all non-`x`/`sector` columns). A numeric `x` is auto-sorted (row order carries no meaning); duplicate or NaN positions raise. Opts: `cmap`, `vmin`, `vmax`, `norm`, `center`, `palette`, `absent_fill`, `legend`, `annot`, `fmt`, `annot_color`, `annot_fontsize`, `linewidth`, `linecolor`, `border`. `sector=` (a column) + `c.sectors(...)` draws gaps; for categorical-x clusters call `c.sectors({cluster: [members]}, axis=...)` — see [Sectors](#sectors). A bare matrix is not accepted; reshape it into a table first. |
-| `.dendrogram(data, **opts)` | `orient="top"\|"left"\|"right"\|"bottom"`, `labels`, `method="single"\|"complete"\|"average"\|"ward"\|...` (scipy), `metric`, `linkage_matrix=<Z>` (raw scipy Z, skip clustering math), `tree=<SplitTree>` (skip clustering entirely), `clusters=[...]` (parallel grouping vector for two-level cluster), `parent=True\|<frac>` (render centroid tree above per-block trees). Visual gap whitespace lives on the panel as `c.sectors(...)` — see [Sectors](#sectors). |
+| `.dendrogram(data, **opts)` | `orientation="top"\|"left"\|"right"\|"bottom"`, `labels`, `method="single"\|"complete"\|"average"\|"ward"\|...` (scipy), `metric`, `linkage_matrix=<Z>` (raw scipy Z, skip clustering math), `tree=<SplitTree>` (skip clustering entirely), `clusters=[...]` (parallel grouping vector for two-level cluster), `parent=True\|<frac>` (render centroid tree above per-block trees). Visual gap whitespace lives on the panel as `c.sectors(...)` — see [Sectors](#sectors). |
 | `.axhline(y, **opts)` / `.axvline(x, **opts)` | `color`, `linewidth`, `linestyle`, `alpha`, axes-fraction span limits (`xmin`/`xmax` on axhline, `ymin`/`ymax` on axvline) |
 | `.axline(xy1, xy2)` / `.axline(xy1, slope=)` | infinite line through two points or point + slope (matplotlib `axline`, ggplot `geom_abline`), clipped to the frame; `color`, `linewidth`, `linestyle`, `alpha`, `label`. `slope=` requires linear x and y scales |
 | `.axhspan(ymin, ymax, **opts)` / `.axvspan(xmin, xmax, **opts)` | `color`, `alpha`, `label` |
 | `.hlines(ys, xmins, xmaxs, **opts)` / `.vlines(xs, ymins, ymaxs, **opts)` | data-coordinate segments (scalars broadcast against sequences); unlike `axhline`/`axvline` they participate in autoscaling; `color`, `linewidth`, `linestyle`, `alpha`, `label` |
-| `.rect(x, y, w, h, **opts)` / `.polygon(xs, ys, **opts)` / `.polyline(xs, ys, **opts)` | data-coord shapes — `polygon` is closed-and-fillable, `polyline` is open stroke-only |
+| `.rect(x, y, w, h, **opts)` / `.polygon(xs, ys, **opts)` / `.polyline(xs, ys, **opts)` | data-coord shapes — `polygon` is closed-and-fillable, `polyline` is open stroke-only. `rect`/`polygon` follow the bar convention: `fill=` fill color (`"none"` for unfilled), `color=` outline stroke |
 | `.text(data=df, x=, y=, label=, **opts)` / `.annotate(text, xy=, xytext=, **opts)` | `ha`, `va`, `fontsize`, `arrow=True/False` |
 
 ### Notes

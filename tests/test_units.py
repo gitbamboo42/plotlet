@@ -185,7 +185,7 @@ def main() -> int:
     # Same check on a chart with content (so spines render alongside data
     # artists / ticks / grid). Extra `<line>` elements should not pollute
     # the spine match.
-    c = pt.chart(data_width=300, data_height=200, grid=True)
+    c = pt.chart(data_width=300, data_height=200, gridlines=True)
     c.line(data={"x": [1, 2, 3, 4], "y": [1, 4, 9, 16]}, x="x", y="y", label="sq")
     rects = _spine_rects(c.to_svg())
     _check("spine rect count, chart with content", len(rects), 1, failures)

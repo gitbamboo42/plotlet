@@ -55,7 +55,7 @@ from .registry import get_artist, all_artist_names
 # the dispatcher in `_replay` matches on name directly.
 _FRAME_METHODS = {
     "title", "subtitle", "caption", "xlabel", "ylabel", "xlim", "ylim",
-    "xscale", "yscale", "grid", "legend",
+    "xscale", "yscale", "gridlines", "legend",
     "xticks", "yticks", "spines", "theme", "font",
     "x_expand", "y_expand", "clip", "facecolor",
     "coordinate", "sectors", "aspect",
@@ -323,7 +323,7 @@ class Chart(_Renderable):
                  **kwargs):
         # Constructor accepts only field-state kwargs (structural dims,
         # margin, data, aes). Everything else (title, xlim, xscale,
-        # legend, grid, theme, …) is a method call — chain them after
+        # legend, gridlines, theme, …) is a method call — chain them after
         # construction. Kept minimal so the journal event `new_chart`
         # can carry exactly the kwargs Chart() accepts, no whitelist
         # needed at replay.
@@ -1058,7 +1058,7 @@ def chart(data=None, *,
           title=None, subtitle=None, caption=None, xlabel=None, ylabel=None,
           xlim=None, ylim=None, xscale=None, yscale=None,
           x_expand=None, y_expand=None,
-          legend=None, grid=None, clip=None,
+          legend=None, gridlines=None, clip=None,
           facecolor=None, theme=None, font=None) -> Chart:
     """Construct a table-bound Chart. Structural kwargs (`data_width`,
     `data_height`, `margin`) and aes kwargs (`x`, `y`, `fill`, `color`,
@@ -1083,7 +1083,7 @@ def chart(data=None, *,
     if y_expand is not None:
         c.y_expand(*(y_expand if isinstance(y_expand, (tuple, list)) else (y_expand,)))
     if legend    is not None: c.legend(legend)
-    if grid      is not None: c.grid(grid)
+    if gridlines is not None: c.gridlines(gridlines)
     if clip      is not None: c.clip(clip)
     if facecolor is not None: c.facecolor(facecolor)
     if theme     is not None: c.theme(theme)

@@ -12,7 +12,7 @@ no private symbols, no plotlet-core changes.
 
 API mirrors `dendrogram`:
 
-    c.curved_tree(data, labels=..., orient="top",
+    c.curved_tree(data, labels=..., orientation="top",
                   clusters=groups, method="ward")
 
 `clusters=` is the parallel grouping vector that drives the two-level
@@ -40,10 +40,10 @@ _DEFAULTS = pt.SPEC["defaults"]   # public path to spec defaults
 
 def _curved_record(args, kw):
     kw = dict(kw)
-    orient = kw.pop("orient", "top")
+    orient = kw.pop("orientation", "top")
     if orient not in _ORIENTS:
         raise ValueError(
-            f"curved_tree(): orient={orient!r}; expected one of {_ORIENTS}"
+            f"curved_tree(): orientation={orient!r}; expected one of {_ORIENTS}"
         )
     leaf_on_x = orient in ("top", "bottom")
     split = kw.pop("clusters", None)
@@ -75,20 +75,20 @@ def _curved_record(args, kw):
         "_n_leaves": sum(len(lv) for _, _, lv in blocks),
         "_max_h": max_h,
         "_leaf_labels": final_labels if had_labels else None,
-        "orient": orient,
+        "orientation": orient,
         "opts": kw,
     }
 
 
 def _curved_xdomain(a):
-    if a["orient"] in ("top", "bottom"):
+    if a["orientation"] in ("top", "bottom"):
         return (a["_leaf_labels"] if a["_leaf_labels"] is not None
                 else [0.0, a["_n_leaves"]])
     return [0.0, a["_max_h"]]
 
 
 def _curved_ydomain(a):
-    if a["orient"] in ("top", "bottom"):
+    if a["orientation"] in ("top", "bottom"):
         return [0.0, a["_max_h"]]
     return (a["_leaf_labels"] if a["_leaf_labels"] is not None
             else [0.0, a["_n_leaves"]])
@@ -122,7 +122,7 @@ def _bezier_path(x_l, x_r, y_l, y_r, y_t, color, width, leaf_on_x):
 def _curved_draw(a, ctx):
     color = a["opts"].get("color", "#3a1a8a")
     width = a["opts"].get("linewidth", 1.4)
-    orient = a["orient"]
+    orient = a["orientation"]
     max_h = a["_max_h"]
     labels = a["_leaf_labels"]
     leaf_on_x = orient in ("top", "bottom")
@@ -176,7 +176,7 @@ def _curved_draw(a, ctx):
 def _curved_axis_order(a):
     if a["_leaf_labels"] is None:
         return None
-    axis = "x" if a["orient"] in ("top", "bottom") else "y"
+    axis = "x" if a["orientation"] in ("top", "bottom") else "y"
     return {axis: a["_leaf_labels"]}
 
 

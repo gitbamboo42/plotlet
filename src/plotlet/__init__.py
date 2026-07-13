@@ -1,7 +1,7 @@
 """plotlet — pure-Python deferred-rendering SVG plot library.
 
     import plotlet as pt
-    c = pt.chart(df, title="...", xlabel="x", ylabel="y", legend=True, grid=True)
+    c = pt.chart(df, title="...", xlabel="x", ylabel="y", legend=True, gridlines=True)
     c.line(x="time", y="value", color="series")
     c                         # auto-renders in Jupyter
 
@@ -10,7 +10,7 @@ Chart methods chain for incremental composition:
     df = {"x": [1, 2, 3], "y": [1, 4, 9]}
     c = pt.chart()
     c.line(df, x="x", y="y", label="squares")
-    c.title("Hello").legend().grid(True)
+    c.title("Hello").legend().gridlines(True)
     c
 """
 from ._spec import SPEC

@@ -36,7 +36,7 @@ class SplitTree:
       observation labels in that block (in within-block input order).
       `Z` is `None` for a single-observation block (no merges).
     - `between_order`: indices into `blocks`; the order blocks render
-      left-to-right (or top-to-bottom for orient=left/right).
+      left-to-right (or top-to-bottom for orientation=left/right).
     - `between_Z`: the linkage matrix computed on per-block centroids,
       whose leaves are `between_order`. Renderers can draw it as a
       "parent tree" above the per-block trees. `None` for single-block
@@ -432,7 +432,7 @@ def tree_frame_defaults(kw, *,
     category-scale artist (dendrogram, heatmap, annotation_strip)
     inherits the gaps via the shared scale.
     """
-    orient = kw.get("orient", "top")
+    orient = kw.get("orientation", "top")
     leaf_on_x = orient in ("top", "bottom")
     has_labels = kw.get("labels") is not None
     out = [("spines", [], {"top": False, "right": False,

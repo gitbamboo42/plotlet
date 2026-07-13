@@ -4,7 +4,7 @@ No-bin alternative (or companion) to a histogram. Pairs especially well
 with `density_1d` to show both the smoothed estimate and the raw
 observations.
 
-  c.rug(data=df, x="col")                       # long-form (axis="y" too)
+  c.rug(data=df, x="col")                       # long-form (orientation="y" too)
   c.rug(data=df, x="col", color="group")        # ticks colored per group
 
 Aesthetics:
@@ -12,7 +12,7 @@ Aesthetics:
   palette=       maps group levels → colors when `color=` is a column
 
 Other styling kwargs:
-  axis='x'       'y' draws ticks along the left axis instead
+  orientation='x'  'y' draws ticks along the left axis instead
   length=0.04    tick length as a fraction of axis pixel extent
   alpha=0.6      tick opacity
   linewidth=0.8  tick stroke width
@@ -48,7 +48,7 @@ def _rug_record(args, kw):
     return {"type": "rug", "groups": groups, "vals": vals, "opts": kw}
 
 
-def _rug_axis(a): return a["opts"].get("axis", "x")
+def _rug_axis(a): return a["opts"].get("orientation", "x")
 
 
 def _rug_xdomain(a):

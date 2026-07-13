@@ -95,7 +95,7 @@ Type-specific attrs:
 | `imshow`        | `rows`, `cols`, `vmin`, `vmax`, `cmap`, `extent`, `data-encoding` (`"rects"` below ~10000 cells, `"png-embedded"` above); when non-default: `origin`, `norm`, `center`, `annot` (`"values"`/`"custom"`) |
 | `heatmap`       | `rows`, `cols`, `data-encoding` plus either `vmin`, `vmax`, `cmap` (value mode) or `mode="categorical"`, `categories` (palette mode); numeric-`x` charts add `x-axis="continuous"`, `x-extent`; when non-default: `norm`, `center`, `annot` |
 | `hist2d`        | `n` (raw obs), `bins-x`, `bins-y`, `count-max`                               |
-| `dendrogram`    | `orient`, `n-leaves`, `max-height`, `leaves` (concatenated scipy leaf order) |
+| `dendrogram`    | `orientation`, `n-leaves`, `max-height`, `leaves` (concatenated scipy leaf order) |
 
 ### Categorical lists
 

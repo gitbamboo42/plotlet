@@ -53,10 +53,10 @@ _ORIENTS = ("top", "bottom", "left", "right")
 
 def _dendrogram_record(args, kw):
     kw = dict(kw)
-    orient = kw.pop("orient", "top")
+    orient = kw.pop("orientation", "top")
     if orient not in _ORIENTS:
         raise ValueError(
-            f"dendrogram(): orient={orient!r}; expected one of {_ORIENTS}"
+            f"dendrogram(): orientation={orient!r}; expected one of {_ORIENTS}"
         )
     # ``clusters=`` is the parallel list (label-per-row) that drives
     # two-level clustering. The visual gap whitespace between blocks
@@ -99,13 +99,13 @@ def _dendrogram_record(args, kw):
         "_n_leaves": sum(len(lv) for _, _, lv in blocks),
         "_max_h": max_h,
         "_leaf_labels": leaf_labels,
-        "orient": orient,
+        "orientation": orient,
         "opts": kw,
     }
 
 
 def _dendrogram_xdomain(a):
-    if a["orient"] in ("top", "bottom"):
+    if a["orientation"] in ("top", "bottom"):
         if a["_leaf_labels"] is not None:
             return a["_leaf_labels"]
         return [0.0, a["_n_leaves"]]
@@ -113,7 +113,7 @@ def _dendrogram_xdomain(a):
 
 
 def _dendrogram_ydomain(a):
-    if a["orient"] in ("top", "bottom"):
+    if a["orientation"] in ("top", "bottom"):
         return [0.0, a["_max_h"]]
     if a["_leaf_labels"] is not None:
         return a["_leaf_labels"]
@@ -133,7 +133,7 @@ def _orient_xy(orient, ic, dc, max_h):
 def _dendrogram_draw(a, ctx):
     col = resolve_color(a["opts"].get("color")) or ctx.color or _D["dendrogram_color"]
     lw = a["opts"].get("linewidth", _D["dendrogram_linewidth"])
-    orient = a["orient"]
+    orient = a["orientation"]
     max_h = a["_max_h"]
     labels = a["_leaf_labels"]
     leaf_on_x = orient in ("top", "bottom")
@@ -201,13 +201,13 @@ def _dendrogram_frame_defaults(args, kw):
 def _dendrogram_axis_order(a):
     if a["_leaf_labels"] is None:
         return None
-    axis = "x" if a["orient"] in ("top", "bottom") else "y"
+    axis = "x" if a["orientation"] in ("top", "bottom") else "y"
     return {axis: a["_leaf_labels"]}
 
 
 def _dendrogram_data_attrs(a):
     out = {
-        "orient": a["orient"],
+        "orientation": a["orientation"],
         "n-leaves": a["_n_leaves"],
         "max-height": round(a["_max_h"], 6),
         # Concatenated scipy leaves across blocks (one block in the unsplit case).

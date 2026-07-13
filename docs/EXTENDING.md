@@ -71,7 +71,7 @@ pt.add_artist(pt.ArtistSpec(
 c = pt.chart()
 c.lollipop({"x": [1, 2, 3, 4, 5], "y": [3, 7, 2, 9, 4]},
            x="x", y="y", label="A")
-c.title("Lollipop chart").grid(True).legend(True).save_svg("out.svg")
+c.title("Lollipop chart").gridlines(True).legend(True).save_svg("out.svg")
 ```
 
 Worked example: [`lollipop.py`](https://github.com/gitbamboo42/plotlet-extensions/blob/main/src/plotlet/extensions/lollipop.py)
@@ -207,7 +207,7 @@ and `pt.linkage_split`.
 A new tree variant is then ~3 callbacks (record / draw / axis_order),
 each a thin wrapper around these helpers — the clustering and layout
 are not your concern. The visible API stays uniform: `c.<artist>(data,
-labels=, orient=, clusters=, parent=, ...)`.
+labels=, orientation=, clusters=, parent=, ...)`.
 
 ---
 

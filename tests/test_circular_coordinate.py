@@ -312,10 +312,10 @@ def ring_shapes():
     c = pt.chart(title="shapes — ring", xlim=(0, 1), ylim=(0, 1))
     c.coordinate(pt.CircularCoordinate())
     c.xticks([0.0, 0.25, 0.5, 0.75])
-    c.rect(0.10, 0.20, 0.25, 0.40, color="#A0C4E2", alpha=0.5)
+    c.rect(0.10, 0.20, 0.25, 0.40, fill="#A0C4E2", alpha=0.5)
     poly_x = [0.55, 0.75, 0.85, 0.70, 0.55]
     poly_y = [0.30, 0.30, 0.55, 0.70, 0.55]
-    c.polygon(poly_x, poly_y, color="#F2C57C", alpha=0.6)
+    c.polygon(poly_x, poly_y, fill="#F2C57C", alpha=0.6)
     line_x = [0.05, 0.20, 0.40, 0.60, 0.80, 0.95]
     line_y = [0.90, 0.70, 0.85, 0.65, 0.80, 0.60]
     c.polyline(line_x, line_y, color="#534AB7", linewidth=1.5)

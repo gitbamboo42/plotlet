@@ -6,7 +6,7 @@ horizontal (positions along the x axis), designed to align with a host
 panel above or below via `share_x` — sample-group bars on top of a
 heatmap, regime tags above a time series, cluster labels alongside a
 dendrogram, score tracks aligned with a coverage plot, group titles
-above a split heatmap, etc. Pass `orient="y"` for a vertical column.
+above a split heatmap, etc. Pass `orientation="y"` for a vertical column.
 
 Each cell can carry any combination of fill, text, and border:
 
@@ -127,10 +127,10 @@ def annotation_strip_record(args, kw):
             f"annotation_strip: positions ({len(positions)}) and "
             f"values ({len(values)}) must be the same length."
         )
-    orient = kw.get("orient", "x")
+    orient = kw.get("orientation", "x")
     if orient not in ("x", "y"):
         raise ValueError(
-            f"annotation_strip: orient= must be 'x' or 'y'; got {orient!r}."
+            f"annotation_strip: orientation= must be 'x' or 'y'; got {orient!r}."
         )
     if kw.get("palette") is not None and kw.get("cmap") is not None:
         raise ValueError(
@@ -184,7 +184,7 @@ def annotation_strip_record(args, kw):
         side = kw.get("side") or _DEFAULT_SIDE[orient]
         if side not in _VALID_SIDES[orient]:
             raise ValueError(
-                f"annotation_strip: side={side!r} invalid for orient={orient!r}; "
+                f"annotation_strip: side={side!r} invalid for orientation={orient!r}; "
                 f"expected one of {sorted(_VALID_SIDES[orient])}."
             )
     # Precompute vmin/vmax for cmap mode so the legend gradient and the
@@ -579,7 +579,7 @@ def annotation_strip_frame_defaults(args, kw):
     column annotation). In interval mode (x1=/x2= variable widths —
     cytobands, sectors, gene tracks) the strip is the framing element,
     so spines stay on by default."""
-    orient = kw.get("orient", "x")
+    orient = kw.get("orientation", "x")
     name = kw.get("name")
     interval_mode = ("x1" in kw) or ("x2" in kw)
     out = []

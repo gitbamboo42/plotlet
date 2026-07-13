@@ -38,7 +38,7 @@ def chart_table():
         "cos": [math.cos(x) for x in xs],
     }
     c = pt.chart(df, title="chart from table",
-                 xlabel="t", ylabel="value", legend=True, grid=True)
+                 xlabel="t", ylabel="value", legend=True, gridlines=True)
     c.line(x="t", y="sin", label="sin(t)")
     c.line(x="t", y="cos", label="cos(t)", linestyle="--")
     return c
@@ -53,7 +53,7 @@ def chart_color():
         "series": ["sin"] * n + ["cos"] * n,
     }
     c = pt.chart(df, title="color split",
-                 xlabel="t", ylabel="v", legend=True, grid=True)
+                 xlabel="t", ylabel="v", legend=True, gridlines=True)
     c.line(x="t", y="v", color="series")
     return c
 
@@ -67,7 +67,7 @@ def chart_scatter_color():
         "group": ["A"] * n + ["B"] * n,
     }
     c = pt.chart(df, title="scatter color",
-                 xlabel="x", ylabel="y", legend=True, grid=True)
+                 xlabel="x", ylabel="y", legend=True, gridlines=True)
     c.scatter(x="x", y="y", color="group", size=3, alpha=0.6)
     return c
 
@@ -333,7 +333,7 @@ def chart_reflines():
     xs = _xs()
     df = {"t": xs, "v": [math.sin(x) for x in xs]}
     c = pt.chart(df, title="reference lines",
-                 xlabel="t", ylabel="v", legend=True, grid=True)
+                 xlabel="t", ylabel="v", legend=True, gridlines=True)
     c.axhspan(-0.5, 0.5, color="C2")
     c.axvspan(2.0, 3.5)
     c.line(x="t", y="v", label="sin(t)")
@@ -711,7 +711,7 @@ def chart_dendrogram_split():
     data_t = [[matrix[r][c] for r in range(nrows_hm)] for c in range(ncols_hm)]
 
     tree = pt.chart(data_height=60)
-    tree.dendrogram(data_t, labels=col_labels, orient="top",
+    tree.dendrogram(data_t, labels=col_labels, orientation="top",
                     clusters=col_groups, method="ward")
 
     hm = pt.chart(title="dendrogram-driven split heatmap",
@@ -727,17 +727,21 @@ def chart_dendrogram_split():
 
 
 def chart_dendrogram_split_parent():
-    """Both axes split + parent-tree on top and left, dendrogram + the
-    curved_tree extension on each side. Same grouping vector flows to
-    every tree via `clusters=`, and the panel declares
+    """Both axes split + parent-tree on both sides: the curved_tree
+    extension on top, the built-in dendrogram on the left. Same grouping
+    vector flows to each tree via `clusters=`, and the panel declares
     `c.sectors(...)` once on each axis for the visual gap whitespace —
-    all four trees and the heatmap pick up the dendrogram's
-    between-cluster order through the artist `axis_order` precedence rule.
+    both trees and the heatmap pick up the dendrogram's between-cluster
+    order through the artist `axis_order` precedence rule.
 
-    Stresses `cluster.fit_parent` on both orient=top and orient=left,
-    via both the built-in (`dendrogram`) and an extension
-    (`curved_tree`) — regression on either renderer or on the public
-    cluster API trips this baseline."""
+    Stresses `cluster.fit_parent` on both orientation=top and
+    orientation=left, and on both renderers (built-in `dendrogram`,
+    extension `curved_tree`) — one per side — so a regression on either
+    renderer or on the public cluster API trips this baseline.
+
+    Row names sit right of the heatmap (`yticks(side="right")` on the
+    host, `yticks(labels=False)` on the tree so they don't draw twice) —
+    the only baseline covering `side=` interacting with attachments."""
     import random
     import plotlet.extensions.curved_tree  # registers c.curved_tree
     rng = random.Random(7)
@@ -757,22 +761,18 @@ def chart_dendrogram_split_parent():
     data_top = [[matrix[r][c] for r in range(nrows_hm)] for c in range(ncols_hm)]
     data_left = matrix
 
-    top_d = pt.chart(data_height=90)
-    top_d.dendrogram(data_top, labels=col_labels, orient="top",
-                     clusters=col_groups, method="ward", parent=True)
     top_c = pt.chart(data_height=90)
-    top_c.curved_tree(data_top, labels=col_labels, orient="top",
+    top_c.curved_tree(data_top, labels=col_labels, orientation="top",
                       clusters=col_groups, method="ward", parent=True)
 
     left_d = pt.chart(data_width=100)
-    left_d.dendrogram(data_left, labels=row_labels, orient="left",
+    left_d.dendrogram(data_left, labels=row_labels, orientation="left",
                       clusters=row_groups, method="ward", parent=True)
-    left_c = pt.chart(data_width=100)
-    left_c.curved_tree(data_left, labels=row_labels, orient="left",
-                       clusters=row_groups, method="ward", parent=True)
+    left_d.yticks(labels=False)
 
     hm = pt.chart(title="split heatmap with parent trees on both sides",
                   data_width=360, data_height=240)
+    hm.yticks(side="right")
     hm.sectors(_by_label(col_labels, col_groups), axis="x",
                divider=False, label=False)
     hm.sectors(_by_label(row_labels, row_groups), axis="y",
@@ -780,9 +780,8 @@ def chart_dendrogram_split_parent():
     hm.heatmap(data=_tidy_heatmap(matrix, col_labels, row_labels, xname="col"),
                x="col", values=row_labels,
                cmap="viridis", legend={"label": "value"})
-    # First arg sits closest to host; outermost arg sits furthest.
-    hm.attach_above(top_c, top_d)
-    hm.attach_left(left_c, left_d)
+    hm.attach_above(top_c)
+    hm.attach_left(left_d)
 
     return pt.grid([[hm, pt.legend()]]).gap(0)
 
@@ -1041,7 +1040,7 @@ def chart_curve_steps():
     xs = [0, 1, 2, 3, 4, 5]
     ys = [1, 3, 2, 5, 4, 6]
     c = pt.chart(title="curve= modes", xlabel="x", ylabel="y",
-                 legend=True, grid=True)
+                 legend=True, gridlines=True)
     c.line(data={"x": xs, "y": ys}, x="x", y="y", curve="linear", marker="o", label="linear")
     c.line(data={"x": xs, "y": [v + 2 for v in ys]}, x="x", y="y", curve="step-after", marker="o", label="step-after")
     c.line(data={"x": xs, "y": [v + 4 for v in ys]}, x="x", y="y", curve="step-before", marker="o", label="step-before")
@@ -1069,25 +1068,26 @@ def chart_curve_fills():
 def chart_rect():
     # Mixed scalar / list inputs — broadcast covers the multi-track,
     # gantt-style, and interval-model use cases that motivated adding rect.
-    # Also exercises edgecolor + linewidth so the outline path is covered.
-    c = pt.chart(title="rect (broadcast + edgecolor)",
+    # Also exercises color= (outline) + linewidth so the stroke path is
+    # covered.
+    c = pt.chart(title="rect (broadcast + outline)",
                  xlabel="x", ylabel="y", legend=True)
-    c.rect([0, 2, 4, 6], 0, [1.5, 1.5, 1.5, 1.5], 2, color="C0",
+    c.rect([0, 2, 4, 6], 0, [1.5, 1.5, 1.5, 1.5], 2, fill="C0",
            alpha=0.6, label="intervals")
-    c.rect(0.5, 2.5, 7, 1, color="C1", alpha=0.3,
-           edgecolor="C3", linewidth=1.5, label="overlay")
-    c.rect(3, 0.2, 1, 1.6, fill=False, edgecolor="black",
+    c.rect(0.5, 2.5, 7, 1, fill="C1", alpha=0.3,
+           color="C3", linewidth=1.5, label="overlay")
+    c.rect(3, 0.2, 1, 1.6, fill="none", color="black",
            linewidth=2, label="outline")
     return c
 
 
 def chart_polygon():
     # Two polygons composed in one chart: a filled triangle (color cycle)
-    # and an outlined diamond (fill=False). Polygon auto-closes — the
+    # and an outlined diamond (fill="none"). Polygon auto-closes — the
     # last vertex doesn't need to repeat the first.
     c = pt.chart(title="polygon", xlabel="x", ylabel="y", legend=True)
     c.polygon([0, 2, 1], [0, 0, 2], alpha=0.5, label="triangle")
-    c.polygon([3, 4, 3, 2], [1, 2, 3, 2], fill=False, linewidth=2,
+    c.polygon([3, 4, 3, 2], [1, 2, 3, 2], fill="none", linewidth=2,
               label="diamond")
     return c
 
@@ -1113,14 +1113,14 @@ def _dendro_sample():
 
 
 def chart_dendrogram_top():
-    c = pt.chart(title="dendrogram (orient=top)", data_height=180)
+    c = pt.chart(title="dendrogram (orientation=top)", data_height=180)
     c.dendrogram(_dendro_sample(), method="ward")
     return c
 
 
 def chart_dendrogram_left():
-    c = pt.chart(title="dendrogram (orient=left)", data_width=240)
-    c.dendrogram(_dendro_sample(), method="ward", orient="left")
+    c = pt.chart(title="dendrogram (orientation=left)", data_width=240)
+    c.dendrogram(_dendro_sample(), method="ward", orientation="left")
     return c
 
 
@@ -1301,7 +1301,7 @@ def chart_annotate():
 
 def chart_ticks_step():
     c = pt.chart(data_width=400, data_height=170,
-                 title="step=0.25", xlabel="x", ylabel="y", grid=True)
+                 title="step=0.25", xlabel="x", ylabel="y", gridlines=True)
     c.line(data={"x": [0, 0.5, 1.0, 1.5, 2.0], "y": [0, 1, 4, 9, 16]}, x="x", y="y", marker="o")
     c.xticks(step=0.25)
     return c
@@ -1309,7 +1309,7 @@ def chart_ticks_step():
 
 def chart_ticks_count():
     c = pt.chart(data_width=400, data_height=170,
-                 title="count=4", xlabel="x", ylabel="y", grid=True)
+                 title="count=4", xlabel="x", ylabel="y", gridlines=True)
     c.line(data={"x": list(range(11)), "y": [i * i for i in range(11)]}, x="x", y="y", marker="o")
     c.xticks(count=4)
     return c
@@ -1317,7 +1317,7 @@ def chart_ticks_count():
 
 def chart_minor_ticks_linear():
     c = pt.chart(data_width=400, data_height=180,
-                 title="minor ticks", xlabel="x", ylabel="y", grid=True)
+                 title="minor ticks", xlabel="x", ylabel="y", gridlines=True)
     c.line(data={"x": [0, 1, 2, 3, 4, 5], "y": [0, 1, 4, 9, 16, 25]}, x="x", y="y", marker="o")
     c.xticks(minor=True)
     c.yticks(minor=True)
@@ -1357,20 +1357,20 @@ def chart_minor_grid():
     # which="both": thin minor lines between the major ones, auto
     # positions on the linear axes without minor ticks enabled.
     c = pt.chart(data_width=400, data_height=180,
-                 title="minor grid", xlabel="x", ylabel="y", grid="both")
+                 title="minor grid", xlabel="x", ylabel="y", gridlines="both")
     c.line(data={"x": [0, 1, 2, 3, 4, 5], "y": [0, 1, 4, 9, 16, 25]}, x="x", y="y", marker="o")
     return c
 
 
 def chart_minor_grid_log():
     # log x: minor gridlines at the 2..9 decade multipliers, drawn from
-    # c.grid(which=) with explicit minor ticks shown too.
+    # c.gridlines(which=) with explicit minor ticks shown too.
     c = pt.chart(data_width=400, data_height=180,
                  title="minor grid log", xlabel="freq", ylabel="amp")
     c.line(data={"x": [1, 10, 100, 1000, 10000], "y": [1, 5, 12, 25, 60]}, x="x", y="y", marker="o")
     c.xscale("log")
     c.xticks(minor=True)
-    c.grid(which="both")
+    c.gridlines(which="both")
     return c
 
 
@@ -1580,7 +1580,7 @@ def chart_time_axis_dates():
     dates = [datetime.date(2024, 1, 1) + datetime.timedelta(days=30 * i) for i in range(12)]
     vals  = [10, 12, 9, 15, 18, 22, 25, 21, 17, 14, 12, 11]
     c = pt.chart(data_width=400, data_height=180,
-                 title="2024 monthly units", ylabel="units", grid=True)
+                 title="2024 monthly units", ylabel="units", gridlines=True)
     c.line(data={"x": dates, "y": vals}, x="x", y="y", marker="o")
     return c
 
@@ -2143,7 +2143,7 @@ def _legend_position_chart(position):
     on the named side to accommodate the legend block."""
     xs = _xs()
     c = pt.chart(title=f"legend {position}",
-                 xlabel="t", ylabel="value", grid=True,
+                 xlabel="t", ylabel="value", gridlines=True,
                  data_width=300, data_height=180)
     c.line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y", label="sin(t)")
     c.line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y", label="cos(t)", linestyle="--")
@@ -2164,7 +2164,7 @@ def chart_legend_ncols_bottom():
     # x-axis band like the single-row bottom legend.
     xs = _xs()
     c = pt.chart(title="legend bottom ncols=3",
-                 xlabel="t", ylabel="value", grid=True,
+                 xlabel="t", ylabel="value", gridlines=True,
                  data_width=300, data_height=180)
     for k in range(9):
         c.line(data={"x": xs, "y": [math.sin(x + k * 0.35) + k * 0.15 for x in xs]},
@@ -2216,7 +2216,7 @@ def chart_multiline_labels():
     df = {"t": xs, "sin": [math.sin(x) for x in xs]}
     c = pt.chart(df, title="two-line title:\nsecond line",
                  xlabel="time\n(seconds)", ylabel="amplitude\n(unitless)",
-                 grid=True)
+                 gridlines=True)
     c.line(x="t", y="sin")
     return c
 
