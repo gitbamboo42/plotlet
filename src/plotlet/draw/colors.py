@@ -29,8 +29,6 @@ TAB10 = Palette([
     "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
 ])
 
-colors = TAB10
-
 # Names and single-letter codes are tab10-flavored, not CSS: "red" is the
 # muted tab10 red, not #ff0000. Letters map to the tab10 hue of the same
 # family (m → pink, y → olive — tab10 has no true magenta/yellow).

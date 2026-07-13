@@ -107,7 +107,7 @@ Or as a JSON file you ship in your project:
 pt.register_theme("paper", "themes/paper.json")
 ```
 
-`pt.available_themes()` lists everything registered, including the
+`pt.list_themes()` lists everything registered, including the
 built-ins.
 
 > ⚠️ A theme that overrides `size.data_width` / `size.data_height`

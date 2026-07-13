@@ -20,7 +20,7 @@ def legend(*sources: Chart, names: dict | None = None,
            entries: list | None = None,
            canvas_width: int | float | str | None = None,
            canvas_height: int | float | str | None = None,
-           legend_gap: int | float | None = None,
+           gap: int | float | None = None,
            **kwargs) -> Chart:
     """Create a layout-level legend.
 
@@ -57,7 +57,7 @@ def legend(*sources: Chart, names: dict | None = None,
 
     Legend leaves have no data axes, so the dimensional surface is
     canvas-only: pass `canvas_width=` / `canvas_height=` to override the
-    content-driven auto-size. `legend_gap=N` overrides the default 6 px
+    content-driven auto-size. `gap=N` overrides the default 6 px
     separation between this legend and its source neighbor (falls back
     to `spec.json:layout.legend_gap` when unset).
     """
@@ -99,7 +99,7 @@ def legend(*sources: Chart, names: dict | None = None,
     leaf._legend_manual = [dict(e) for e in entries] if entries else []
     leaf._legend_user_width = canvas_width
     leaf._legend_user_height = canvas_height
-    leaf._legend_gap = float(legend_gap) if legend_gap is not None else None
+    leaf._legend_gap = float(gap) if gap is not None else None
     return leaf
 
 

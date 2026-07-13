@@ -240,6 +240,6 @@ class FacetGrid:
         self._materialize().save_pdf(path)
         return self
 
-    def write_html(self, path):
-        self._materialize().write_html(path)
+    def save_html(self, path):
+        self._materialize().save_html(path)
         return self

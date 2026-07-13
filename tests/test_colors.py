@@ -120,7 +120,7 @@ def test_palette_is_plain_list_with_swatch_repr():
     html = p._repr_html_()
     assert html.startswith("<svg") and html.count("<rect") == len(p)
     assert all(c in html for c in p)
-    assert "<svg" in TAB10._repr_html_()            # pt.colors previews too
+    assert "<svg" in TAB10._repr_html_()            # pt.TAB10 previews too
 
 
 # ---------------------------------------------------------------- register_colormap

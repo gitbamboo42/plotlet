@@ -1,4 +1,4 @@
-"""Bundled example datasets — `pt.load("penguins")` and friends.
+"""Bundled example datasets — `pt.load_dataset("penguins")` and friends.
 
 Datasets ship as CSV files under `_datasets/` and are loaded into a
 dict-of-lists (`{col: [values, ...]}`) — the same shape `pt.chart()`
@@ -23,7 +23,7 @@ Available datasets:
 Example:
 
     import plotlet as pt
-    penguins = pt.load("penguins")
+    penguins = pt.load_dataset("penguins")
     c = pt.chart(penguins, x="bill_length_mm", y="bill_depth_mm", color="species")
     c.scatter()
 """
@@ -73,12 +73,12 @@ def _coerce(value, kind):
     return value
 
 
-def load(name):
+def load_dataset(name):
     """Load a bundled example dataset as a `dict[col, list]`.
 
     Pass directly to `pt.chart(...)`:
 
-        df = pt.load("penguins")
+        df = pt.load_dataset("penguins")
         pt.chart(df, x="bill_length_mm", y="bill_depth_mm", color="species")
 
     See `pt.list_datasets()` for what's available.

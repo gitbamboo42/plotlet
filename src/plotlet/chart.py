@@ -230,7 +230,7 @@ class _Renderable:
                          write_to=str(path))
         return self
 
-    def write_html(self, path):
+    def save_html(self, path):
         Path(path).write_text(self.to_html(full_page=True))
         return self
 

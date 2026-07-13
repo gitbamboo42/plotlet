@@ -384,7 +384,7 @@ Deeper layout helpers — `layout_tree(tree)`, `layout_parent(tree)`, `fit_paren
 
 ## Datasets
 
-`pt.load(name)` → `dict[col, list]`, the shape `pt.chart()` accepts directly; `pt.list_datasets()` for names. Bundled: `"penguins"` (scatter/grouping), `"flights"` (month × year heatmap), `"anscombe"` (regression/facets), `"tips"` (categorical: bar, box, violin). Numeric columns arrive as `float`/`int` with missing values as `nan`; sources and citations in `NOTICE.md`.
+`pt.load_dataset(name)` → `dict[col, list]`, the shape `pt.chart()` accepts directly; `pt.list_datasets()` for names. Bundled: `"penguins"` (scatter/grouping), `"flights"` (month × year heatmap), `"anscombe"` (regression/facets), `"tips"` (categorical: bar, box, violin). Numeric columns arrive as `float`/`int` with missing values as `nan`; sources and citations in `NOTICE.md`.
 
 ## User-defined colormaps
 

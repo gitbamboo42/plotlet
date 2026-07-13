@@ -13,7 +13,7 @@ of one render.
 Public API:
 
   - `load_theme(name)` — return the fully resolved spec for `name`.
-  - `available_themes()` — sorted list of theme names installed.
+  - `list_themes()` — sorted list of theme names installed.
   - `register_theme(name, spec)` — register an in-memory theme (dict or
     path to a JSON file). User-defined themes never live in the package.
 """
@@ -51,12 +51,12 @@ def _read_theme_file(name: str) -> dict:
     path = _THEME_DIR / f"{name}.json"
     if not path.exists():
         raise ValueError(
-            f"unknown theme {name!r}; available: {available_themes()}"
+            f"unknown theme {name!r}; available: {list_themes()}"
         )
     return json.loads(path.read_text())
 
 
-def available_themes() -> list[str]:
+def list_themes() -> list[str]:
     """Sorted list of theme names — built-ins + user-registered. `"classic"`
     is included as the name for the default (= no override on `spec.json`)."""
     builtins = ["classic"] + sorted(p.stem for p in _THEME_DIR.glob("*.json"))

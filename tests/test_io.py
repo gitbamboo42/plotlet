@@ -1,4 +1,4 @@
-"""Output-method tests: save_svg / to_html / write_html / save_pdf.
+"""Output-method tests: save_svg / to_html / save_html / save_pdf.
 PNG output has its own coverage in test_chart.py."""
 import pytest
 
@@ -46,10 +46,10 @@ def test_to_html_variants():
     assert bare in page
 
 
-def test_write_html(tmp_path):
+def test_save_html(tmp_path):
     c = _chart()
     out = tmp_path / "fig.html"
-    ret = c.write_html(out)
+    ret = c.save_html(out)
     assert ret is c
     assert out.read_text() == c.to_html(full_page=True)
 

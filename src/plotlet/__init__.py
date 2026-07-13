@@ -14,7 +14,7 @@ Chart methods chain for incremental composition:
     c
 """
 from ._spec import SPEC
-from .draw import TAB10, colors, palette, list_palettes
+from .draw import TAB10, palette, list_palettes
 from .draw import colormap, list_colormaps, register_colormap
 from . import artists  # noqa: F401  — registers built-in artists on import
 from .chart import Chart, Layout, chart, grid
@@ -22,9 +22,9 @@ from .legend import legend
 from .registry import ArtistSpec, add_artist, artist_table, declare_coord_support
 from .sectors import Sectors
 from .layout_diagram import layout_diagram
-from .themes import load_theme, available_themes, register_theme
+from .themes import load_theme, list_themes, register_theme
 from .facet import facet, FacetGrid
-from .datasets import load, list_datasets
+from .datasets import load_dataset, list_datasets
 from .cluster import linkage, linkage_split, SplitTree
 from .formatters import (register_formatter, list_formatters,
                          superscript, subscript)
@@ -45,16 +45,16 @@ def __getattr__(name):
         return CircularCoordinate
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-__all__ = ["chart", "Chart", "Layout", "SPEC", "TAB10", "colors",
+__all__ = ["chart", "Chart", "Layout", "SPEC", "TAB10",
            "palette", "list_palettes",
            "colormap", "list_colormaps", "register_colormap",
            "grid", "legend",
            "ArtistSpec", "add_artist", "artist_table", "declare_coord_support",
            "CircularCoordinate", "Sectors",
            "layout_diagram",
-           "load_theme", "available_themes", "register_theme",
+           "load_theme", "list_themes", "register_theme",
            "facet", "FacetGrid",
-           "load", "list_datasets",
+           "load_dataset", "list_datasets",
            "linkage", "linkage_split", "SplitTree",
            "register_formatter", "list_formatters",
            "superscript", "subscript",

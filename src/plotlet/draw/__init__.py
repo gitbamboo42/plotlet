@@ -15,7 +15,7 @@ from .primitives import (
     segment, rect, circle, path, polyline, polygon,
     arc, errorbar_v, errorbar_h, split_rect, split_pie,
 )
-from .colors import TAB10, colors, resolve_color, palette, list_palettes, Palette
+from .colors import TAB10, resolve_color, palette, list_palettes, Palette
 from .colormaps import (colormap, colormap_lut, list_colormaps,
                         register_colormap, ContinuousNorm)
 from .font import (measure_text, cap_height, descender, tick_band_height,
@@ -29,7 +29,7 @@ __all__ = [
     "text_path", "marker", "op", "segment", "rect", "circle",
     "path", "polyline", "polygon", "arc", "split_rect", "split_pie",
     "errorbar_v", "errorbar_h", "dash_attr",
-    "TAB10", "colors", "resolve_color", "palette", "list_palettes", "Palette",
+    "TAB10", "resolve_color", "palette", "list_palettes", "Palette",
     "colormap", "colormap_lut", "list_colormaps", "register_colormap",
     "ContinuousNorm",
     "measure_text", "cap_height", "descender", "tick_band_height",

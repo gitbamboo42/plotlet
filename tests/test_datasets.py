@@ -12,11 +12,11 @@ def test_list_datasets():
 
 def test_unknown_dataset():
     with pytest.raises(ValueError, match="Unknown dataset"):
-        pt.load("nope")
+        pt.load_dataset("nope")
 
 
 def test_penguins():
-    df = pt.load("penguins")
+    df = pt.load_dataset("penguins")
     assert list(df) == ["species", "island", "bill_length_mm", "bill_depth_mm",
                         "flipper_length_mm", "body_mass_g", "sex", "year"]
     assert len(df["species"]) == 344
@@ -27,7 +27,7 @@ def test_penguins():
 
 
 def test_flights():
-    df = pt.load("flights")
+    df = pt.load_dataset("flights")
     assert list(df) == ["year", "month", "passengers"]
     assert len(df["year"]) == 144                      # 12 years x 12 months
     assert df["year"][0] == 1949 and df["year"][-1] == 1960
@@ -36,7 +36,7 @@ def test_flights():
 
 
 def test_anscombe():
-    df = pt.load("anscombe")
+    df = pt.load_dataset("anscombe")
     assert list(df) == ["dataset", "x", "y"]
     assert len(df["x"]) == 44
     assert sorted(set(df["dataset"])) == ["I", "II", "III", "IV"]
@@ -44,7 +44,7 @@ def test_anscombe():
 
 
 def test_tips():
-    df = pt.load("tips")
+    df = pt.load_dataset("tips")
     assert list(df) == ["total_bill", "tip", "sex", "smoker",
                         "day", "time", "size"]
     assert len(df["tip"]) == 244
