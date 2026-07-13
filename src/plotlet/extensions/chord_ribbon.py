@@ -49,7 +49,7 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.draw import path as draw_path, polygon, TAB10
-from plotlet.utils import to_list, resolve_aes, palette_color
+from plotlet.utils import to_list, resolve_aes, palette_color, pack_opts
 from ..draw import coord
 
 
@@ -61,33 +61,26 @@ _DEFAULT_TENSION = 1.0   # cubic-control fraction along endpoint→center radius
                          # at the cost of a less pronounced waist on regular chords.
 
 
-def _chord_ribbon_record(args, kw):
-    kw = dict(kw)
-    if args:
-        raise TypeError(
-            "chord_ribbon requires long-form input: "
-            "c.chord_ribbon(data=df, x1_start=..., x1_end=..., "
-            "x2_start=..., x2_end=...)."
-        )
-    data = kw.pop("data", None)
-    x1a = kw.pop("x1_start", None)
-    x1b = kw.pop("x1_end",   None)
-    x2a = kw.pop("x2_start", None)
-    x2b = kw.pop("x2_end",   None)
-    if data is None or None in (x1a, x1b, x2a, x2b):
+def _chord_ribbon_record(data=None, x1_start=None, x1_end=None,
+                         x2_start=None, x2_end=None, color=None, palette=None,
+                         # style — packed into opts for the draw/legend side
+                         alpha=None, edge_color=None, edge_width=None,
+                         tension=None, allow_twist=None, height=None,
+                         label=None, legend=None):
+    if data is None or None in (x1_start, x1_end, x2_start, x2_end):
         raise TypeError(
             "chord_ribbon requires data=, x1_start=, x1_end=, "
             "x2_start=, x2_end=."
         )
-    color   = kw.pop("color",   None)
-    palette = kw.pop("palette", None)
-
-    xs1a = to_list(data[x1a]); xs1b = to_list(data[x1b])
-    xs2a = to_list(data[x2a]); xs2b = to_list(data[x2b])
+    xs1a = to_list(data[x1_start]); xs1b = to_list(data[x1_end])
+    xs2a = to_list(data[x2_start]); xs2b = to_list(data[x2_end])
+    base = pack_opts(alpha=alpha, edge_color=edge_color, edge_width=edge_width,
+                     tension=tension, allow_twist=allow_twist, height=height,
+                     label=label, legend=legend)
 
     color_kind, color_value = resolve_aes(data, color)
     if color_kind != "column":
-        opts = dict(kw)
+        opts = dict(base)
         if color_value is not None:
             opts["color"] = color_value
         return {
@@ -105,7 +98,7 @@ def _chord_ribbon_record(args, kw):
     labeled: set = set()
     for ck in levels:
         idxs = [i for i, v in enumerate(color_vec) if v == ck]
-        opts = dict(kw)
+        opts = dict(base)
         idx = levels.index(ck)
         opts["color"] = palette_color(palette, ck, idx) or TAB10[idx % 10]
         if ck not in labeled:

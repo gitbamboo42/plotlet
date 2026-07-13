@@ -554,9 +554,15 @@ class Chart(_Renderable):
                             f"draw {name}() on a pt.chart() and compose the two."
                         )
                     # Chart-level aesthetic inheritance — fill in missing aes
-                    # from `pt.chart(df, x=, y=, color=, palette=)`.
+                    # from `pt.chart(df, x=, y=, color=, palette=)`. The
+                    # record signature declares the artist's kwarg names
+                    # (`__kwarg_names__`, stamped by `add_artist`); only
+                    # inject aes the artist can accept, since its
+                    # signature would otherwise reject an unknown name.
+                    known = getattr(spec.record, "__kwarg_names__", None)
                     for k, v in self._aes.items():
-                        if v is not None and k not in kwargs:
+                        if (v is not None and k not in kwargs
+                                and (known is None or k in known)):
                             kwargs[k] = v
                     # Data injection — inject the chart-level table when any
                     # kwarg value names a column on it. Generic by design:
@@ -565,6 +571,7 @@ class Chart(_Renderable):
                     # so adding a new artist with new endpoint kwargs needs
                     # no edit here.
                     if (self._data is not None and "data" not in kwargs
+                            and (known is None or "data" in known)
                             and any(_data_has_column(self._data, v)
                                     for v in kwargs.values()
                                     if isinstance(v, str))):
@@ -587,7 +594,11 @@ class Chart(_Renderable):
             # `c.line?` / `help(c.line)` / `c.line.__doc__` reach it —
             # __getattr__ dispatch otherwise blocks Python's standard
             # help path. Frame methods (no spec) keep the empty default.
+            # Pointing `__wrapped__` at the record function makes
+            # `inspect.signature(c.bar)` and `c.bar?` show the artist's
+            # real parameter list.
             if spec is not None:
+                recorder.__wrapped__ = spec.record
                 mod = inspect.getmodule(spec.record)
                 recorder.__doc__ = (mod.__doc__ if mod is not None else None) or ""
                 recorder.__name__ = name

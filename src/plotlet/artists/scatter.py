@@ -27,7 +27,7 @@ are dropped on that path.
 import math
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, resolve_aes, palette_color
+from ..utils import pack_opts, to_list, resolve_aes, palette_color
 from ..draw import marker
 from ..draw import TAB10
 from ..draw import colormap_lut, ContinuousNorm
@@ -219,41 +219,27 @@ def _is_continuous(values):
     return saw_num
 
 
-def _scatter_record(args, kw):
-    kw = dict(kw)
-    if args:
-        raise TypeError(
-            "scatter requires long-form input: "
-            "c.scatter(data=df, x='col', y='col')."
-        )
-    data  = kw.pop("data", None)
-    x_col = kw.pop("x", None)
-    y_col = kw.pop("y", None)
-    if data is None or x_col is None or y_col is None:
+def _scatter_record(data=None,
+                    # input & series splitting — consumed here at record
+                    x=None, y=None,
+                    color=None, group=None, alpha=None, palette=None,
+                    size=None, style=None, sizes=(2, 7),
+                    alphas=DEFAULT_ALPHA_RANGE,
+                    # style — packed into opts for the draw/legend/attrs side
+                    marker=None, edgecolor=None, linewidth=None,
+                    cmap=None, vmin=None, vmax=None, norm=None, center=None,
+                    size_legend=None, label=None, legend=None,
+                    # scatter has no line to dash; inherited chart-level
+                    # linestyle/fill aes are accepted and ignored
+                    linestyle=None, fill=None):
+    if data is None or x is None or y is None:
         raise TypeError(
             "scatter requires data=, x=, y= (color/group/alpha/size/style optional)."
         )
-    if "c" in kw:
-        raise TypeError(
-            "scatter takes `color=<numeric column>` for cmap-based coloring "
-            "(numeric column → cmap, categorical → palette, literal → fixed)."
-        )
-    if "s" in kw:
-        raise TypeError(
-            "scatter takes `size=` for marker radius (px) "
-            "(number → fixed, list → per-point, column → graded via sizes=(lo, hi))."
-        )
-    color   = kw.pop("color", None)
-    group   = kw.pop("group", None)
-    alpha   = kw.pop("alpha", None)
-    palette = kw.pop("palette", None)
-    size    = kw.pop("size", None)
-    style   = kw.pop("style", None)
-    sizes   = kw.pop("sizes", (2, 7))
-    alphas  = kw.pop("alphas", DEFAULT_ALPHA_RANGE)
-    # scatter has no line to dash; ignore inherited linestyle/fill.
-    kw.pop("linestyle", None)
-    kw.pop("fill", None)
+    opts = pack_opts(marker=marker, edgecolor=edgecolor, linewidth=linewidth,
+                     cmap=cmap, vmin=vmin, vmax=vmax, norm=norm,
+                     center=center, size_legend=size_legend,
+                     label=label, legend=legend)
 
     # Resolve `size=`: number/list → literal pixel radius into opts["size"];
     # column name → keep as `size` for the column-mapping path below.
@@ -267,29 +253,33 @@ def _scatter_record(args, kw):
                 f"pass a number or list for a literal size."
             )
         else:
-            kw["size"] = (to_list(size_value)
-                          if isinstance(size_value, (list, tuple))
-                             or hasattr(size_value, "tolist")
-                          else size_value)
+            opts["size"] = (to_list(size_value)
+                            if isinstance(size_value, (list, tuple))
+                               or hasattr(size_value, "tolist")
+                            else size_value)
             size = None
 
     color_kind, color_value = resolve_aes(data, color)
 
     if color_kind == "column" and _is_continuous(color_value):
         # Continuous color: numeric column → cmap. Single record (no
-        # group/alpha splitting); size/style compose per-point.
+        # group/alpha splitting); size/style compose per-point. A scalar
+        # `alpha=` still applies uniformly (there's no split to fold it
+        # into, so carry it straight into opts).
         c_vals = list(color_value)
-        kw["c"] = c_vals
-        vmin, vmax = _resolve_c_range(c_vals, kw)
+        if isinstance(alpha, (int, float)):
+            opts["alpha"] = alpha
+        opts["c"] = c_vals
+        vmin, vmax = _resolve_c_range(c_vals, opts)
         if size is not None:
-            kw["size"] = _compute_size_array(data[size], sizes)
+            opts["size"] = _compute_size_array(data[size], sizes)
         if style is not None:
-            kw["marker"] = _compute_style_array(data[style])
+            opts["marker"] = _compute_style_array(data[style])
         rec = {"type": "scatter",
-               "xs": to_list(data[x_col]),
-               "ys": to_list(data[y_col]),
+               "xs": to_list(data[x]),
+               "ys": to_list(data[y]),
                "_vmin": vmin, "_vmax": vmax,
-               "opts": kw}
+               "opts": opts}
         if size is not None:
             src_vals = [v for v in to_list(data[size])
                         if isinstance(v, (int, float)) and v == v]
@@ -303,14 +293,15 @@ def _scatter_record(args, kw):
         return rec
 
     if size is not None or style is not None:
-        return _expand_with_aesthetics(data, x_col, y_col, color, group, alpha,
-                                        palette, size, style, sizes, alphas, kw)
+        return _expand_with_aesthetics(data, x, y, color, group, alpha,
+                                        palette, size, style, sizes, alphas,
+                                        opts)
 
     # Default long-form: split by (color, group, alpha). scatter has no
     # linestyle splits (no line to dash).
-    return expand_xy_long_form("scatter", data, x_col, y_col,
+    return expand_xy_long_form("scatter", data, x, y,
                                 color, group, None, alpha,
-                                palette, alphas, kw)
+                                palette, alphas, opts)
 
 
 def _scatter_xdomain(a): return a["xs"]

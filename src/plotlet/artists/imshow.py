@@ -2,7 +2,7 @@
 domain can be computed. We do that in record() rather than draw().
 """
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list_2d
+from ..utils import to_list_2d, pack_opts
 from .._spec import _D
 from ..draw import rect, text_path
 from ..draw import image_png
@@ -160,27 +160,37 @@ def _imshow_data_attrs(a):
     return out
 
 
-def _imshow_record(args, kw):
-    d = to_list_2d(args[0])
+def _imshow_record(matrix,
+                   # vmin/vmax/norm drive autoscale here and also ride in
+                   # opts (norm read at draw; vmin/vmax by the legend)
+                   cmap=None, vmin=None, vmax=None, norm=None, center=None,
+                   origin=None, extent=None,
+                   annot=None, fmt=None, annot_color=None, annot_fontsize=None,
+                   legend=None):
+    d = to_list_2d(matrix)
     nrows = len(d)
     ncols = len(d[0]) if d else 0
-    vmin = kw.get("vmin"); vmax = kw.get("vmax")
-    norm = kw.get("norm", "linear")
+    norm_val = norm if norm is not None else "linear"
     # For log norm, autoscale ignores non-positive values (they can't be
     # log-mapped). User-supplied vmin/vmax are still trusted as-is; the
     # ContinuousNorm constructor will raise if they're non-positive.
-    if vmin is None or vmax is None:
-        if norm == "log":
+    lo, hi = vmin, vmax
+    if lo is None or hi is None:
+        if norm_val == "log":
             flat = [v for row in d for v in row if v == v and v > 0]
         else:
             flat = [v for row in d for v in row if v == v]
         if flat:
-            if vmin is None: vmin = min(flat)
-            if vmax is None: vmax = max(flat)
+            if lo is None: lo = min(flat)
+            if hi is None: hi = max(flat)
         else:
-            vmin, vmax = (1.0, 10.0) if norm == "log" else (0.0, 1.0)
+            lo, hi = (1.0, 10.0) if norm_val == "log" else (0.0, 1.0)
+    opts = pack_opts(cmap=cmap, vmin=vmin, vmax=vmax, norm=norm, center=center,
+                     origin=origin, extent=extent, annot=annot, fmt=fmt,
+                     annot_color=annot_color, annot_fontsize=annot_fontsize,
+                     legend=legend)
     return {"type": "imshow", "_data": d, "_nrows": nrows, "_ncols": ncols,
-            "_vmin": vmin, "_vmax": vmax, "opts": kw}
+            "_vmin": lo, "_vmax": hi, "opts": opts}
 
 
 def _imshow_xdomain(a):

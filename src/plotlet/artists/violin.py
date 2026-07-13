@@ -30,7 +30,7 @@ Other styling kwargs:
   bw_adjust=1.0         Silverman bandwidth multiplier (>1 smoother)
 """
 from ..registry import ArtistSpec, add_artist
-from ..utils import (quantile, resolve_aes,
+from ..utils import (UNSET, pack_opts, quantile, resolve_aes,
                      dodge_positions, categorical_groups,
                      silverman_bw, kde_1d)
 from ..utils import _drop_nan, group_color as _group_fill
@@ -39,8 +39,7 @@ from ..draw import polygon, rect, segment
 from .._spec import _FRAME, _FIGSPEC
 
 
-def _resolve_fill_kwarg(data, kw):
-    fill = kw.pop("fill", True)
+def _resolve_fill_kwarg(data, fill):
     if fill is False or fill is None:
         return False, None, None
     if fill is True:
@@ -51,28 +50,37 @@ def _resolve_fill_kwarg(data, kw):
     return True, value, None
 
 
-def _violin_record(args, kw):
-    if args:
-        raise TypeError(
-            "violin requires long-form input: "
-            "c.violin(data=df, x='col', y='col', fill='col')."
-        )
-    data = kw.pop("data", None)
-    x = kw.pop("x", None)
-    y = kw.pop("y", None)
+def _violin_record(data=None,
+                   # input & grouping — consumed here at record
+                   x=None, y=None, fill=True,
+                   # style — packed into opts for the draw/legend side
+                   orientation=None, width=None, gap=None,
+                   color=None, palette=None,
+                   inner=UNSET, trim=None, fill_alpha=None, linewidth=None,
+                   whis=None, inner_box_fill=None, n_grid=None,
+                   bw_adjust=None, label=None, legend=None):
     if data is None or x is None or y is None:
         raise TypeError(
             "violin requires data=, x=, y= (fill= optional)."
         )
-    do_fill, fill_literal, group_col = _resolve_fill_kwarg(data, kw)
+    do_fill, fill_literal, group_col = _resolve_fill_kwarg(data, fill)
     cats, groups, vals = categorical_groups(data, x, y, group_col)
-    kw["_do_fill"] = do_fill
+    opts = pack_opts(orientation=orientation, width=width, gap=gap,
+                     color=color, palette=palette, trim=trim,
+                     fill_alpha=fill_alpha, linewidth=linewidth, whis=whis,
+                     inner_box_fill=inner_box_fill, n_grid=n_grid,
+                     bw_adjust=bw_adjust, label=label, legend=legend)
+    # `inner=None` is meaningful (KDE outline only, no inner marks), so
+    # unset gets a sentinel default and an explicit None packs through.
+    if inner is not UNSET:
+        opts["inner"] = inner
+    opts["_do_fill"] = do_fill
     if fill_literal is not None:
-        kw["_fill_literal"] = fill_literal
+        opts["_fill_literal"] = fill_literal
     if group_col is not None and group_col == x:
-        kw["_redundant_grouping"] = True
+        opts["_redundant_grouping"] = True
     return {"type": "violin", "cats": cats, "groups": groups,
-            "vals": vals, "opts": kw}
+            "vals": vals, "opts": opts}
 
 
 def _violin_horizontal(a): return a["opts"].get("orientation") == "h"

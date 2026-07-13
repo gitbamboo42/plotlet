@@ -15,33 +15,28 @@ package, or (for the few core depends on) in
 
 ```python
 import plotlet as pt
-from plotlet.utils import to_list
+from plotlet.utils import to_list, pack_opts
 from plotlet.draw import segment, circle
 
 
-# 1. record(args, kwargs) -> dict
-#    Turn c.<name>(...) kwargs into the artist dict stored in Chart._calls.
-#    Pure data — no scales yet. Long-form is plotlet's standard: pull
-#    `data=` and column names out of kw and refuse positional arrays.
-#    The dispatch layer hoists a single positional arg into `data=` (the
-#    `c.lollipop(df, x="x", y="y")` sugar), so `if args` here just guards
-#    against accidental wide-form calls.
-def my_record(args, kw):
-    kw = dict(kw)
-    if args:
-        raise TypeError(
-            "lollipop requires long-form input: "
-            "c.lollipop(data=df, x='col', y='col')."
-        )
-    data = kw.pop("data", None)
-    x_col = kw.pop("x", None)
-    y_col = kw.pop("y", None)
-    if data is None or x_col is None or y_col is None:
+# 1. record(...) -> dict
+#    Turn c.<name>(...) into the artist dict stored in Chart._calls.
+#    Pure data — no scales yet. Write an EXPLICIT signature: the
+#    parameter list IS your artist's kwarg vocabulary, so Python itself
+#    rejects a typo like `c.lollipop(..., widht=2)` at render, and
+#    `c.lollipop?` shows the real parameters. `data=` first lets a caller
+#    pass the table positionally (`c.lollipop(df, x=, y=)`). Style kwargs
+#    the record doesn't consume go into `opts` via `pack_opts` (which
+#    drops the None defaults, so the draw side's `.get(k, default)` still
+#    falls through to your defaults).
+def my_record(data=None, x=None, y=None, color=None, linewidth=None,
+              label=None):
+    if data is None or x is None or y is None:
         raise TypeError("lollipop requires data=, x=, y=.")
     return {"type": "lollipop",
-            "xs": to_list(data[x_col]),
-            "ys": to_list(data[y_col]),
-            "opts": kw}
+            "xs": to_list(data[x]),
+            "ys": to_list(data[y]),
+            "opts": pack_opts(color=color, linewidth=linewidth, label=label)}
 
 
 # 2. xdomain(a) / ydomain(a) -> Iterable[float] | None
@@ -53,13 +48,17 @@ def my_ydomain(a): return list(a["ys"]) + [0]   # always include 0 for stems
 
 # 3. draw(a, ctx) -> str
 #    Emit the SVG fragment. ctx carries scales, dimensions, color, defaults.
+#    Read style back from opts with a default — an unset kwarg simply
+#    isn't in opts, so `.get(k, default)` supplies it.
 def my_draw(a, ctx):
+    color = a["opts"].get("color") or ctx.color
+    width = a["opts"].get("linewidth", 1.5)
     out = []
     y0 = ctx.y_scale(0)
     for x, y in zip(a["xs"], a["ys"]):
         px, py = ctx.x_scale(x), ctx.y_scale(y)
-        out.append(segment(px, y0, px, py, color=ctx.color, width=1.5))
-        out.append(circle(px, py, 5, fill=ctx.color))
+        out.append(segment(px, y0, px, py, color=color, width=width))
+        out.append(circle(px, py, 5, fill=color))
     return "".join(out)
 
 
@@ -80,6 +79,24 @@ in the `plotlet-extensions` package — basic artist plus an optional
 extension in [`plotlet-extensions`](https://github.com/gitbamboo42/plotlet-extensions)
 (and the few kept in [`src/plotlet/extensions/`](../src/plotlet/extensions/))
 is a working reference; skim a couple before writing your own.
+
+## When your functions run
+
+None of them run when the user calls `c.lollipop(...)` — that only
+appends the raw call to the journal. Everything executes inside
+`to_svg()`, split across the two render passes
+([ARCHITECTURE.md](ARCHITECTURE.md)):
+
+| Hook | Pass | What exists at that point |
+|---|---|---|
+| `record` | resolve | Nothing but the raw kwargs. No scales, no pixels — its *output* is what domains and scales get built from. Re-runs on every render (re-renders replay the journal), so it must return the same result every time and touch nothing outside itself. |
+| `xdomain` / `ydomain`, `axis_order`, `frame_defaults` | resolve | The record dict from `record`. Still data-space only. |
+| `draw`, `legend_entries`, `data_attrs` | emit | Everything is already decided: `ctx` carries the final pixel scales, panel size, and resolved color. Turn the record into SVG text here; do not make any new decisions. |
+
+Two things follow from this: an error raised in `record` appears when the
+chart is rendered, not on the line where the user typed the call; and
+rendering a `ResolvedIR` twice only re-runs the emit column — `record`
+already ran once, at resolve.
 
 ---
 
@@ -159,7 +176,7 @@ render state so call sites stay short.
 
 ## Artist-dict conventions
 
-Whatever you return from `record(args, kwargs)` ends up in `Chart._calls`
+Whatever you return from `record(...)` ends up in `Chart._calls`
 and is passed to `xdomain` / `ydomain` / `draw` as `a`. Two conventions:
 
 - **Always set `"type"` to your artist name** — used for the registry
@@ -195,7 +212,7 @@ and `pt.linkage_split`.
 |---|---|
 | `pt.linkage(data, labels=, method=, metric=)` | One scipy.linkage → `SplitTree` (one block). |
 | `pt.linkage_split(data, split=, labels=, …)` | Two-level cluster (within-block + centroid between-block) → multi-block `SplitTree`. |
-| `build_tree(args, kw, split)` | Standard input dispatch: pops `tree=` / `linkage_matrix=` / `data=` from `kw` and returns `(SplitTree, had_labels)`. Drop into your artist's `record`. |
+| `build_tree(data, split, tree=, linkage_matrix=, method=, metric=, labels=)` | Standard input dispatch over `tree=` / `linkage_matrix=` / `data`; returns `(SplitTree, had_labels)`. Forward your tree artist's matching parameters straight into it. |
 | `layout_tree(tree)` | `SplitTree` → `(blocks, offsets, final_labels)` ready for drawing. Per-block scipy.dendrogram + pooled height normalize. |
 | `layout_parent(tree)` | The optional centroid tree's `(icoord, dcoord, leaves)`, or `None` for single-block trees. |
 | `fit_parent(blocks, parent_layout, parent_frac, gap_frac=)` | Shrinks per-block dcoords + drops parent leaves to each block's apex so both fit in one panel. |

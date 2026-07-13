@@ -15,7 +15,7 @@ import math
 
 from ..registry import ArtistSpec, add_artist
 from ..scales import _LinearScale
-from ..utils import broadcast
+from ..utils import broadcast, pack_opts
 from .._spec import _D
 from ..draw import segment, rect as draw_rect
 from ._shared import _refline_legend_entries, _refspan_legend_entries
@@ -162,13 +162,21 @@ def _artist_axvspan(a, xs_, ys_, iw, ih, col, warp=None):
 
 # --- axhline ---
 
+def _axhline_record(y, xmin=None, xmax=None, color=None, linewidth=None,
+                    linestyle=None, alpha=None, label=None, legend=None):
+    return {"type": "axhline", "y": y,
+            "opts": pack_opts(xmin=xmin, xmax=xmax, color=color,
+                              linewidth=linewidth, linestyle=linestyle,
+                              alpha=alpha, label=label, legend=legend)}
+
+
 def _axhline_data_attrs(a):  return {"y": a["y"]}
 
 
 add_artist(ArtistSpec(
     name="axhline",
     accepts_data_positional=False,
-    record=lambda args, kw: {"type": "axhline", "y": args[0], "opts": kw},
+    record=_axhline_record,
     xdomain=lambda a: None, ydomain=lambda a: None,
     draw=lambda a, ctx: _artist_axhline(a, ctx.x_scale, ctx.y_scale, ctx.iw, ctx.ih, ctx.color, ctx.warp),
     layer="foreground",
@@ -181,13 +189,21 @@ add_artist(ArtistSpec(
 
 # --- axvline ---
 
+def _axvline_record(x, ymin=None, ymax=None, color=None, linewidth=None,
+                    linestyle=None, alpha=None, label=None, legend=None):
+    return {"type": "axvline", "x": x,
+            "opts": pack_opts(ymin=ymin, ymax=ymax, color=color,
+                              linewidth=linewidth, linestyle=linestyle,
+                              alpha=alpha, label=label, legend=legend)}
+
+
 def _axvline_data_attrs(a):  return {"x": a["x"]}
 
 
 add_artist(ArtistSpec(
     name="axvline",
     accepts_data_positional=False,
-    record=lambda args, kw: {"type": "axvline", "x": args[0], "opts": kw},
+    record=_axvline_record,
     xdomain=lambda a: None, ydomain=lambda a: None,
     draw=lambda a, ctx: _artist_axvline(a, ctx.x_scale, ctx.y_scale, ctx.iw, ctx.ih, ctx.color, ctx.warp),
     layer="foreground",
@@ -200,15 +216,8 @@ add_artist(ArtistSpec(
 
 # --- axline ---
 
-def _axline_record(args, kw):
-    if not args or len(args) > 2:
-        raise TypeError(
-            "axline takes a point and either a second point or slope=: "
-            "c.axline((x1, y1), (x2, y2)) or c.axline((x1, y1), slope=2)."
-        )
-    xy1 = args[0]
-    xy2 = args[1] if len(args) == 2 else None
-    slope = kw.pop("slope", None)
+def _axline_record(xy1, xy2=None, slope=None, color=None, linewidth=None,
+                   linestyle=None, alpha=None, label=None, legend=None):
     if (xy2 is None) == (slope is None):
         raise TypeError(
             "axline needs exactly one of a second point or slope=."
@@ -216,7 +225,10 @@ def _axline_record(args, kw):
     rec = {"type": "axline",
            "x1": xy1[0], "y1": xy1[1],
            "slope": None if slope is None else float(slope),
-           "x2": None, "y2": None, "opts": kw}
+           "x2": None, "y2": None,
+           "opts": pack_opts(color=color, linewidth=linewidth,
+                             linestyle=linestyle, alpha=alpha,
+                             label=label, legend=legend)}
     if xy2 is not None:
         rec["x2"] = xy2[0]
         rec["y2"] = xy2[1]
@@ -248,9 +260,16 @@ add_artist(ArtistSpec(
 def _axhspan_data_attrs(a):  return {"ymin": a["ymin"], "ymax": a["ymax"]}
 
 
+def _axhspan_record(ymin, ymax, color=None, alpha=None,
+                    xmin=None, xmax=None, label=None, legend=None):
+    return {"type": "axhspan", "ymin": ymin, "ymax": ymax,
+            "opts": pack_opts(color=color, alpha=alpha, xmin=xmin, xmax=xmax,
+                              label=label, legend=legend)}
+
+
 add_artist(ArtistSpec(
     name="axhspan",
-    record=lambda args, kw: {"type": "axhspan", "ymin": args[0], "ymax": args[1], "opts": kw},
+    record=_axhspan_record,
     xdomain=lambda a: None, ydomain=lambda a: None,
     draw=lambda a, ctx: _artist_axhspan(a, ctx.x_scale, ctx.y_scale, ctx.iw, ctx.ih, ctx.color, ctx.warp),
     layer="background",
@@ -266,9 +285,16 @@ add_artist(ArtistSpec(
 def _axvspan_data_attrs(a):  return {"xmin": a["xmin"], "xmax": a["xmax"]}
 
 
+def _axvspan_record(xmin, xmax, color=None, alpha=None,
+                    ymin=None, ymax=None, label=None, legend=None):
+    return {"type": "axvspan", "xmin": xmin, "xmax": xmax,
+            "opts": pack_opts(color=color, alpha=alpha, ymin=ymin, ymax=ymax,
+                              label=label, legend=legend)}
+
+
 add_artist(ArtistSpec(
     name="axvspan",
-    record=lambda args, kw: {"type": "axvspan", "xmin": args[0], "xmax": args[1], "opts": kw},
+    record=_axvspan_record,
     xdomain=lambda a: None, ydomain=lambda a: None,
     draw=lambda a, ctx: _artist_axvspan(a, ctx.x_scale, ctx.y_scale, ctx.iw, ctx.ih, ctx.color, ctx.warp),
     layer="background",
@@ -290,13 +316,13 @@ def _hlines_data_attrs(a):
     return out
 
 
-def _hlines_record(args, kw):
-    if len(args) != 3:
-        raise TypeError(
-            "hlines takes exactly (y, xmin, xmax) — scalars or lists."
-        )
-    ys, xmins, xmaxs = broadcast(args[0], args[1], args[2])
-    return {"type": "hlines", "ys": ys, "xmins": xmins, "xmaxs": xmaxs, "opts": kw}
+def _hlines_record(y, xmin, xmax, color=None, linewidth=None,
+                   linestyle=None, alpha=None, label=None, legend=None):
+    ys, xmins, xmaxs = broadcast(y, xmin, xmax)
+    return {"type": "hlines", "ys": ys, "xmins": xmins, "xmaxs": xmaxs,
+            "opts": pack_opts(color=color, linewidth=linewidth,
+                              linestyle=linestyle, alpha=alpha,
+                              label=label, legend=legend)}
 
 
 add_artist(ArtistSpec(
@@ -321,13 +347,13 @@ def _vlines_data_attrs(a):
     return out
 
 
-def _vlines_record(args, kw):
-    if len(args) != 3:
-        raise TypeError(
-            "vlines takes exactly (x, ymin, ymax) — scalars or lists."
-        )
-    xs, ymins, ymaxs = broadcast(args[0], args[1], args[2])
-    return {"type": "vlines", "xs": xs, "ymins": ymins, "ymaxs": ymaxs, "opts": kw}
+def _vlines_record(x, ymin, ymax, color=None, linewidth=None,
+                   linestyle=None, alpha=None, label=None, legend=None):
+    xs, ymins, ymaxs = broadcast(x, ymin, ymax)
+    return {"type": "vlines", "xs": xs, "ymins": ymins, "ymaxs": ymaxs,
+            "opts": pack_opts(color=color, linewidth=linewidth,
+                              linestyle=linestyle, alpha=alpha,
+                              label=label, legend=legend)}
 
 
 add_artist(ArtistSpec(

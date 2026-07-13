@@ -15,27 +15,25 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.draw import rect
-from plotlet.utils import to_list
+from plotlet.registry import ArtistSpec, add_artist
+from plotlet.utils import pack_opts, to_list
 from plotlet._spec import _D
 
 
-def numeric_bar_record(args, kw):
-    kw = dict(kw)
-    if args:
-        raise TypeError(
-            "numeric_bar requires long-form input: "
-            "c.numeric_bar(data=df, x='col', y='col')."
-        )
-    data = kw.pop("data", None)
-    x_col = kw.pop("x", None)
-    y_col = kw.pop("y", None)
-    if data is None or x_col is None or y_col is None:
+def numeric_bar_record(data=None,
+                       # input columns — consumed here at record
+                       x=None, y=None,
+                       # style — packed into opts for the draw/legend side
+                       width=None, color=None, alpha=None,
+                       label=None, legend=None):
+    if data is None or x is None or y is None:
         raise TypeError("numeric_bar requires data=, x=, y= (heights).")
     return {
         "type": "numeric_bar",
-        "xs":      to_list(data[x_col]),
-        "heights": to_list(data[y_col]),
-        "opts": kw,
+        "xs":      to_list(data[x]),
+        "heights": to_list(data[y]),
+        "opts": pack_opts(width=width, color=color, alpha=alpha,
+                          label=label, legend=legend),
     }
 
 
@@ -81,7 +79,7 @@ def numeric_bar_legend_entries(a):
     return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
-pt.add_artist(pt.ArtistSpec(
+add_artist(ArtistSpec(
     name="numeric_bar",
     record=numeric_bar_record,
     xdomain=numeric_bar_xdomain,

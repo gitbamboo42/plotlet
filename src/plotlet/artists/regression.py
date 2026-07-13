@@ -57,7 +57,7 @@ import random
 from scipy.stats import t as _t_dist
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import long_form_xy, resolve_aes, quantile
+from ..utils import long_form_xy, resolve_aes, quantile, pack_opts
 from ..draw import resolve_color
 from .._spec import _LEGSPEC
 from ..draw import polygon, polyline, rect, segment
@@ -160,14 +160,11 @@ def _huber_fit(ts, ys, order, *, c=1.345, max_iter=30):
     return beta
 
 
-def _fit_generic(xs, ys, opts):
+def _fit_generic(xs, ys, order=1, robust=False, level=0.95, n_grid=80,
+                 n_boot=200, seed=0):
     """Polynomial / robust fit evaluated on the band grid at record time.
     Returns `{"grid", "mid", "lo", "hi"}` in data space, or None when the
     group is too small (needs n ≥ order + 2 for one residual df)."""
-    order = opts.get("order", 1)
-    robust = opts.get("robust", False)
-    level = opts.get("level", 0.95)
-    n_grid = opts.get("n_grid", 80)
     n = len(xs)
     p = order + 1
     if n < p + 1:
@@ -179,8 +176,7 @@ def _fit_generic(xs, ys, opts):
     if robust:
         beta = _huber_fit(ts, ys, order)
         mid = [_peval(beta, g - xm) for g in grid]
-        rng = random.Random(opts.get("seed", 0))
-        n_boot = opts.get("n_boot", 200)
+        rng = random.Random(seed)
         curves = []
         for _ in range(n_boot):
             idx = [rng.randrange(n) for _ in range(n)]
@@ -255,15 +251,12 @@ def _lowess_at(xs_sorted, ys_sorted, rob, g, k):
     return beta[0]
 
 
-def _fit_lowess(xs, ys, opts):
+def _fit_lowess(xs, ys, frac=2 / 3, it=3, n_grid=80):
     """LOWESS evaluated on the band grid at record time. Returns
     `{"grid", "mid"}` (no band — none exists analytically), or None when
     the group is too small."""
-    frac = opts.get("frac", 2 / 3)
     if not 0 < frac <= 1:
         raise ValueError(f"regression: frac={frac!r} — must be in (0, 1].")
-    it = opts.get("it", 3)
-    n_grid = opts.get("n_grid", 80)
     n = len(xs)
     if n < 3:
         return None
@@ -286,46 +279,51 @@ def _fit_lowess(xs, ys, opts):
     return {"grid": grid, "mid": mid}
 
 
-def _regression_record(args, kw):
-    kw = dict(kw)
-    if args:
-        raise TypeError(
-            "regression requires long-form input: "
-            "c.regression(data=df, x='col', y='col')."
-        )
-    data = kw.pop("data", None)
-    x_col = kw.pop("x", None)
-    y_col = kw.pop("y", None)
-    if data is None or x_col is None or y_col is None:
+def _regression_record(data=None,
+                       # input & fitting — consumed here at record
+                       x=None, y=None, color=None,
+                       order=1, robust=False, frac=2 / 3, it=3,
+                       n_boot=200, seed=0,
+                       # `lowess` gates the record-time fit AND tells the
+                       # legend to drop the band swatch; `level`/`n_grid`
+                       # feed the record-time generic fits AND the OLS
+                       # band evaluated at draw — all three are packed.
+                       lowess=None, level=0.95, n_grid=80,
+                       # style — packed into opts for the draw/legend side
+                       alpha=None, linewidth=None, palette=None,
+                       label=None, legend=None):
+    if data is None or x is None or y is None:
         raise TypeError(
             "regression requires data=, x=, y= (color= optional)."
         )
-    color = kw.pop("color", None)
     color_kind, color_value = resolve_aes(data, color)
     group_col = color if color_kind == "column" else None
-    groups, xy = long_form_xy(data, x_col, y_col, group_col)
+    groups, xy = long_form_xy(data, x, y, group_col)
+    opts = pack_opts(lowess=lowess, level=level, n_grid=n_grid,
+                     alpha=alpha, linewidth=linewidth, palette=palette,
+                     label=label, legend=legend)
     if color_kind == "literal" and color_value is not None:
-        kw["_color_literal"] = color_value
-    order = kw.get("order", 1)
+        opts["_color_literal"] = color_value
     if not isinstance(order, int) or order < 1:
         raise ValueError(f"regression: order={order!r} — must be an int ≥ 1.")
     cleaned = [_drop_nan_xy(xs, ys) for xs, ys in xy]
-    if kw.get("lowess", False):
-        if order > 1 or kw.get("robust", False):
+    if lowess:
+        if order > 1 or robust:
             raise TypeError(
                 "regression: lowess=True is a nonparametric smoother — "
                 "order= and robust= don't apply."
             )
-        fits = [_fit_lowess(xs, ys, kw) for xs, ys in cleaned]
+        fits = [_fit_lowess(xs, ys, frac, it, n_grid) for xs, ys in cleaned]
         return {"type": "regression", "groups": groups, "xy": cleaned,
-                "fits": fits, "_generic": True, "opts": kw}
-    if order > 1 or kw.get("robust", False):
-        fits = [_fit_generic(xs, ys, kw) for xs, ys in cleaned]
+                "fits": fits, "_generic": True, "opts": opts}
+    if order > 1 or robust:
+        fits = [_fit_generic(xs, ys, order, robust, level, n_grid,
+                             n_boot, seed) for xs, ys in cleaned]
         return {"type": "regression", "groups": groups, "xy": cleaned,
-                "fits": fits, "_generic": True, "opts": kw}
+                "fits": fits, "_generic": True, "opts": opts}
     fits = [_fit_ols(xs, ys) for xs, ys in cleaned]
     return {"type": "regression", "groups": groups, "xy": cleaned,
-            "fits": fits, "opts": kw}
+            "fits": fits, "opts": opts}
 
 
 def _regression_xdomain(a):

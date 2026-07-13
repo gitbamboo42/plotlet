@@ -26,7 +26,7 @@ import math
 from ..registry import ArtistSpec, add_artist
 from ..draw import rect
 from ..draw import colormap, ContinuousNorm
-from ..utils import to_list, hist_bin_edges
+from ..utils import UNSET, pack_opts, to_list, hist_bin_edges
 from .._spec import _D
 
 
@@ -82,37 +82,40 @@ def _count2d(xs, ys, xe, ye):
     return counts
 
 
-def _hist2d_record(args, kw):
-    kw = dict(kw)
-    if args:
-        raise TypeError(
-            "hist2d requires long-form input: "
-            "c.hist2d(data=df, x='col', y='col')."
-        )
-    data = kw.pop("data", None)
-    x_col = kw.pop("x", None)
-    y_col = kw.pop("y", None)
-    if data is None or x_col is None or y_col is None:
+def _hist2d_record(data=None,
+                   # input & binning — consumed here at record
+                   x=None, y=None,
+                   bins=UNSET, binwidth=None, binrange=None,
+                   # color — packed into opts for the draw/legend side
+                   cmap=None, vmin=None, vmax=None,
+                   label=None, legend=None):
+    if data is None or x is None or y is None:
         raise TypeError("hist2d requires data=, x=, y=.")
-    if "bins" in kw and "binwidth" in kw:
+    # `bins=` has a non-None default (30), so a sentinel keeps the
+    # bins-vs-binwidth exclusivity check from firing on the default.
+    if bins is not UNSET and binwidth is not None:
         raise TypeError("hist2d: pass bins= or binwidth=, not both.")
-    xs = to_list(data[x_col])
-    ys = to_list(data[y_col])
-    bins_x, bins_y = _bins_per_axis(kw.pop("bins", 30))
-    bw_x, bw_y = _width_per_axis(kw.pop("binwidth", None))
-    br_x, br_y = _range_per_axis(kw.pop("binrange", None))
+    if bins is UNSET:
+        bins = 30
+    xs = to_list(data[x])
+    ys = to_list(data[y])
+    bins_x, bins_y = _bins_per_axis(bins)
+    bw_x, bw_y = _width_per_axis(binwidth)
+    br_x, br_y = _range_per_axis(binrange)
+    opts = pack_opts(cmap=cmap, vmin=vmin, vmax=vmax,
+                     label=label, legend=legend)
     finite_x = [v for v in xs if isinstance(v, (int, float)) and v == v]
     finite_y = [v for v in ys if isinstance(v, (int, float)) and v == v]
     if not finite_x or not finite_y:
         return {"type": "hist2d", "_xedges": [], "_yedges": [],
-                "_counts": [], "_n": 0, "_vmax": 0, "opts": kw}
+                "_counts": [], "_n": 0, "_vmax": 0, "opts": opts}
     xe = hist_bin_edges(finite_x, bins=bins_x, binwidth=bw_x, binrange=br_x)
     ye = hist_bin_edges(finite_y, bins=bins_y, binwidth=bw_y, binrange=br_y)
     counts = _count2d(xs, ys, xe, ye)
     return {"type": "hist2d", "_xedges": xe, "_yedges": ye,
             "_counts": counts, "_n": len(xs),
             "_vmax": max((v for row in counts for v in row), default=0),
-            "opts": kw}
+            "opts": opts}
 
 
 def _hist2d_xdomain(a):

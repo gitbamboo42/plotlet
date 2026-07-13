@@ -33,7 +33,7 @@ from ..draw import segment, rect
 from ..draw import colormap, ContinuousNorm
 from ..draw import TAB10
 from .._spec import _LEGSPEC
-from ..utils import to_list, silverman_bw, resolve_aes, long_form_xy
+from ..utils import to_list, pack_opts, silverman_bw, resolve_aes, long_form_xy
 from ._marching import MS_CASES as _MS_CASES
 from ._marching import edge_pt as _edge_pt
 from ._marching import filled_levels_svg
@@ -56,11 +56,10 @@ def _kde2d_grid(xs, ys, n_grid, bw_x, bw_y, x_lo, x_hi, y_lo, y_hi):
     return [[v * inv for v in row] for row in grid]
 
 
-def _resolve_levels(grid, opts):
+def _resolve_levels(grid, levels):
     """Resolve `levels` once at record time so draw and legend_gradient
     share a single source of truth. Mirrors the historical lazy fallback
     (5 fixed quantile-style fractions of grid max)."""
-    levels = opts.get("levels")
     if levels is not None:
         return list(levels)
     flat = [v for row in grid for v in row]
@@ -70,66 +69,61 @@ def _resolve_levels(grid, opts):
     return [vmax * f for f in (0.1, 0.25, 0.5, 0.75, 0.9)]
 
 
-def _kde_2d_build(xs, ys, kw):
+def _kde_2d_build(xs, ys, n_grid, bw, levels, opts):
     """One estimated-density record from a materialized (xs, ys) sample."""
-    n_grid = kw.get("n_grid", 60)
     if not xs:
         return {"type": "kde_2d", "_xs": xs, "_ys": ys, "_grid": [],
-                "_levels": [], "opts": kw}
-    bw = kw.get("bw")
+                "_levels": [], "opts": opts}
     bw_x = bw if bw else silverman_bw(xs)
     bw_y = bw if bw else silverman_bw(ys)
     x_lo = min(xs) - 3 * bw_x; x_hi = max(xs) + 3 * bw_x
     y_lo = min(ys) - 3 * bw_y; y_hi = max(ys) + 3 * bw_y
     grid = _kde2d_grid(xs, ys, n_grid, bw_x, bw_y, x_lo, x_hi, y_lo, y_hi)
-    levels = _resolve_levels(grid, kw)
+    levels = _resolve_levels(grid, levels)
     record = {"type": "kde_2d", "_xs": xs, "_ys": ys, "_grid": grid,
               "_extent": (x_lo, x_hi, y_lo, y_hi),
-              "_levels": levels, "opts": kw}
+              "_levels": levels, "opts": opts}
     if levels:
         record["_vmin"] = min(levels)
         record["_vmax"] = max(levels)
     return record
 
 
-def _kde_2d_record(args, kw):
-    kw = dict(kw)
-    if args:
-        raise TypeError(
-            "kde_2d requires long-form input: "
-            "c.kde_2d(data=df, x='col', y='col')."
-        )
-    data = kw.pop("data", None)
-    x_col = kw.pop("x", None)
-    y_col = kw.pop("y", None)
-    if data is None or x_col is None or y_col is None:
+def _kde_2d_record(data=None, x=None, y=None,
+                   color=None, palette=None,
+                   # KDE estimation — consumed here at record
+                   n_grid=60, bw=None, levels=None,
+                   # style — packed into opts for the draw/legend side
+                   fill=None, cmap=None, alpha=None, linewidth=None,
+                   label=None, legend=None):
+    if data is None or x is None or y is None:
         raise TypeError("kde_2d requires data=, x=, y=.")
-    color = kw.pop("color", None)
     color_kind, color_value = resolve_aes(data, color)
-    palette = kw.pop("palette", None)
+    base_opts = pack_opts(fill=fill, cmap=cmap, alpha=alpha,
+                          linewidth=linewidth, label=label, legend=legend)
     if color_kind == "column":
-        if kw.get("cmap"):
+        if cmap:
             raise TypeError(
                 "kde_2d: cmap= colors contours by density level; with "
                 "color= column grouping each group is single-colored — "
                 "pass palette= instead."
             )
-        groups, xy = long_form_xy(data, x_col, y_col, color)
+        groups, xy = long_form_xy(data, x, y, color)
         records = []
         for j, (g, (xs, ys)) in enumerate(zip(groups, xy)):
-            opts = dict(kw)
+            opts = dict(base_opts)
             opts["palette"] = palette
             opts["label"] = str(g)
-            rec = _kde_2d_build(xs, ys, opts)
+            rec = _kde_2d_build(xs, ys, n_grid, bw, levels, opts)
             rec["groups"] = groups
             rec["_j"] = j
             records.append(rec)
         return records
     if color_value is not None:
-        kw["color"] = color_value
-    xs = to_list(data[x_col])
-    ys = to_list(data[y_col])
-    return _kde_2d_build(xs, ys, kw)
+        base_opts["color"] = color_value
+    xs = to_list(data[x])
+    ys = to_list(data[y])
+    return _kde_2d_build(xs, ys, n_grid, bw, levels, base_opts)
 
 
 def _kde_2d_xdomain(a): return a["_xs"]

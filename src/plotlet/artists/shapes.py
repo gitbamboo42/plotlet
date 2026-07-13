@@ -10,25 +10,24 @@ the data-shaped `c.line(data=...)`).
 import math
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import broadcast, to_list
+from ..utils import broadcast, pack_opts, to_list
 from .._spec import _D
 from ..draw import rect as draw_rect, polygon as draw_polygon, polyline as draw_polyline
 from ..draw import resolve_color
 from ._shared import _xy_minmax, _bar_legend_entries
 
 
-def _shape_opts(kw):
-    """Pop `fill=` out of the user kwargs at record time, bar-family
-    style: a literal color goes to `_fill_literal` (consumed by the
-    color-cycle stamp and the draw below); `fill="none"` switches the
-    fill off entirely."""
-    kw = dict(kw)
-    fill = kw.pop("fill", None)
+def _shape_opts(fill, color, linewidth, alpha, label, legend):
+    """Build rect/polygon opts, bar-family style: a literal `fill=`
+    color goes to `_fill_literal` (consumed by the color-cycle stamp and
+    the draw below); `fill="none"` switches the fill off entirely."""
+    opts = pack_opts(color=color, linewidth=linewidth, alpha=alpha,
+                     label=label, legend=legend)
     if fill == "none":
-        kw["_unfilled"] = True
+        opts["_unfilled"] = True
     elif fill is not None:
-        kw["_fill_literal"] = fill
-    return kw
+        opts["_fill_literal"] = fill
+    return opts
 
 
 def _fill_stroke_params(a, ctx_color):
@@ -99,10 +98,11 @@ def _rect_data_attrs(a):
     return out
 
 
-def _rect_record(args, kw):
-    xs, ys, ws, hs = broadcast(args[0], args[1], args[2], args[3])
+def _rect_record(x, y, w, h, fill=None, color=None, linewidth=None,
+                 alpha=None, label=None, legend=None):
+    xs, ys, ws, hs = broadcast(x, y, w, h)
     return {"type": "rect", "xs": xs, "ys": ys, "ws": ws, "hs": hs,
-            "opts": _shape_opts(kw)}
+            "opts": _shape_opts(fill, color, linewidth, alpha, label, legend)}
 
 
 def _rect_xdomain(a):
@@ -132,12 +132,17 @@ def _polygon_data_attrs(a):
     return out
 
 
+def _polygon_record(xs, ys, fill=None, color=None, linewidth=None,
+                    alpha=None, label=None, legend=None):
+    return {"type": "polygon",
+            "xs": to_list(xs),
+            "ys": to_list(ys),
+            "opts": _shape_opts(fill, color, linewidth, alpha, label, legend)}
+
+
 add_artist(ArtistSpec(
     name="polygon",
-    record=lambda args, kw: {"type": "polygon",
-                              "xs": to_list(args[0]),
-                              "ys": to_list(args[1]),
-                              "opts": _shape_opts(kw)},
+    record=_polygon_record,
     xdomain=lambda a: a["xs"],
     ydomain=lambda a: a["ys"],
     draw=lambda a, ctx: _artist_polygon(a, ctx.x_scale, ctx.y_scale, ctx.color, ctx.warp),
@@ -160,12 +165,19 @@ def _artist_polyline(a, xs_, ys_, col, warp=None):
                           dash=dash, alpha=alpha, project=warp)
 
 
+def _polyline_record(xs, ys, color=None, linewidth=None, linestyle=None,
+                     alpha=None, label=None, legend=None):
+    return {"type": "polyline",
+            "xs": to_list(xs),
+            "ys": to_list(ys),
+            "opts": pack_opts(color=color, linewidth=linewidth,
+                              linestyle=linestyle, alpha=alpha,
+                              label=label, legend=legend)}
+
+
 add_artist(ArtistSpec(
     name="polyline",
-    record=lambda args, kw: {"type": "polyline",
-                              "xs": to_list(args[0]),
-                              "ys": to_list(args[1]),
-                              "opts": kw},
+    record=_polyline_record,
     xdomain=lambda a: a["xs"],
     ydomain=lambda a: a["ys"],
     draw=lambda a, ctx: _artist_polyline(a, ctx.x_scale, ctx.y_scale, ctx.color, ctx.warp),

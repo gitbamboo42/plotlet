@@ -66,7 +66,8 @@ import plotlet as pt
 from plotlet.draw import rect, resolve_color
 from plotlet.draw import colormap, ContinuousNorm
 from plotlet.draw import text_path, cap_height, descender
-from plotlet.utils import to_list
+from plotlet.registry import ArtistSpec, add_artist
+from plotlet.utils import pack_opts, to_list
 from plotlet._splits import block_bbox_1d, blocks as _blocks
 
 
@@ -74,18 +75,23 @@ _VALID_SIDES = {"x": {"bottom", "top"}, "y": {"left", "right"}}
 _DEFAULT_SIDE = {"x": "bottom", "y": "right"}
 
 
-def annotation_strip_record(args, kw):
-    kw = dict(kw)
-    if args:
-        raise TypeError(
-            "annotation_strip requires long-form input: "
-            "c.annotation_strip(data=df, position='col', value='col')."
-        )
-    data = kw.pop("data", None)
-    position_col = kw.pop("position", None)
-    x1_col       = kw.pop("x1",       None)
-    x2_col       = kw.pop("x2",       None)
-    value_col    = kw.pop("value",    None)
+def annotation_strip_record(data=None,
+                            # input columns — consumed here at record
+                            position=None, x1=None, x2=None, value=None,
+                            # layout/mode switches — consumed at record
+                            orientation="x", mode="band", text=None,
+                            side=None, vmin=None, vmax=None,
+                            # style — packed into opts for draw/legend
+                            palette=None, cmap=None, norm=None, center=None,
+                            width=None, x_padding=None, y_padding=None,
+                            absent_fill=None, cell_border=None,
+                            fontsize=None, text_color=None, rotation=None,
+                            text_pad=None, name=None, label=None,
+                            legend=None):
+    position_col = position
+    x1_col       = x1
+    x2_col       = x2
+    value_col    = value
     if data is None or value_col is None:
         raise TypeError("annotation_strip requires data= and value=.")
     interval_mode = x1_col is not None or x2_col is not None
@@ -127,28 +133,26 @@ def annotation_strip_record(args, kw):
             f"annotation_strip: positions ({len(positions)}) and "
             f"values ({len(values)}) must be the same length."
         )
-    orient = kw.get("orientation", "x")
+    orient = orientation
     if orient not in ("x", "y"):
         raise ValueError(
             f"annotation_strip: orientation= must be 'x' or 'y'; got {orient!r}."
         )
-    if kw.get("palette") is not None and kw.get("cmap") is not None:
+    if palette is not None and cmap is not None:
         raise ValueError(
             "annotation_strip: pass either palette= (categorical mode) "
             "or cmap= (continuous mode), not both."
         )
-    if kw.get("palette"):
-        kw = dict(kw)
-        kw["palette"] = {k: resolve_color(v) for k, v in kw["palette"].items()}
+    if palette:
+        palette = {k: resolve_color(v) for k, v in palette.items()}
     # mode=: "band" (default) one cell per position; "block" one cell per
     # contiguous run of equal values (per-run, not per-unique-value — see
     # `_splits.group_order` for the permuting variant).
-    mode = kw.get("mode", "band")
     if mode not in ("band", "block"):
         raise ValueError(
             f"annotation_strip: mode= must be 'band' or 'block'; got {mode!r}."
         )
-    if mode == "block" and kw.get("cmap") is not None:
+    if mode == "block" and cmap is not None:
         raise ValueError(
             "annotation_strip: mode='block' does not support cmap= "
             "(per-block aggregate would mask within-block variation). "
@@ -156,9 +160,9 @@ def annotation_strip_record(args, kw):
         )
     # text=: None/False → no per-cell text; True → use `value` column as
     # text; str → name of a separate column to read text from.
-    text_spec = kw.get("text")
+    text_spec = text
     text_values = None
-    side = None
+    text_side = None
     if text_spec not in (None, False):
         if text_spec is True:
             text_values = [None if v is None or (isinstance(v, float) and v != v)
@@ -181,33 +185,32 @@ def annotation_strip_record(args, kw):
                 f"annotation_strip: text= must be True, False, None, or a "
                 f"column name; got {type(text_spec).__name__}."
             )
-        side = kw.get("side") or _DEFAULT_SIDE[orient]
-        if side not in _VALID_SIDES[orient]:
+        # side= default depends on orientation — resolve here.
+        text_side = side or _DEFAULT_SIDE[orient]
+        if text_side not in _VALID_SIDES[orient]:
             raise ValueError(
-                f"annotation_strip: side={side!r} invalid for orientation={orient!r}; "
+                f"annotation_strip: side={text_side!r} invalid for orientation={orient!r}; "
                 f"expected one of {sorted(_VALID_SIDES[orient])}."
             )
     # Precompute vmin/vmax for cmap mode so the legend gradient and the
     # draw step agree on the range without recomputing.
-    vmin = vmax = None
-    if kw.get("cmap") is not None:
-        norm = kw.get("norm", "linear")
+    res_vmin = res_vmax = None
+    if cmap is not None:
         if norm == "log":
             flat = [v for v in values if isinstance(v, (int, float)) and v == v and v > 0]
         else:
             flat = [v for v in values if isinstance(v, (int, float)) and v == v]
-        user_vmin = kw.get("vmin"); user_vmax = kw.get("vmax")
         if flat:
-            vmin = user_vmin if user_vmin is not None else min(flat)
-            vmax = user_vmax if user_vmax is not None else max(flat)
+            res_vmin = vmin if vmin is not None else min(flat)
+            res_vmax = vmax if vmax is not None else max(flat)
         else:
-            vmin = user_vmin if user_vmin is not None else (1.0 if norm == "log" else 0.0)
-            vmax = user_vmax if user_vmax is not None else (10.0 if norm == "log" else 1.0)
+            res_vmin = vmin if vmin is not None else (1.0 if norm == "log" else 0.0)
+            res_vmax = vmax if vmax is not None else (10.0 if norm == "log" else 1.0)
     # In block mode, find boundaries where consecutive values differ.
     # `block_bbox_1d` consumes this list to yield per-block pixel extents.
     run_bounds = None
     if mode == "block":
-        if not kw.get("palette") and text_values is None:
+        if not palette and text_values is None:
             raise ValueError(
                 "annotation_strip: mode='block' needs at least one of "
                 "palette= or text= (otherwise the strip has no content)."
@@ -219,16 +222,22 @@ def annotation_strip_record(args, kw):
         "positions": positions,
         "values": values,
         "_orient": orient,
-        "_vmin": vmin,
-        "_vmax": vmax,
+        "_vmin": res_vmin,
+        "_vmax": res_vmax,
         "_text_values": text_values,
-        "_side": side,
+        "_side": text_side,
         "_mode": mode,
         "_run_bounds": run_bounds,
         "_widths": widths,
         "_xs1": xs1 if interval_mode else None,
         "_xs2": xs2 if interval_mode else None,
-        "opts": kw,
+        "opts": pack_opts(palette=palette, cmap=cmap, norm=norm,
+                          center=center, width=width,
+                          x_padding=x_padding, y_padding=y_padding,
+                          absent_fill=absent_fill, cell_border=cell_border,
+                          fontsize=fontsize, text_color=text_color,
+                          rotation=rotation, text_pad=text_pad,
+                          name=name, label=label, legend=legend),
     }
 
 
@@ -607,7 +616,7 @@ def annotation_strip_frame_defaults(args, kw):
     return out
 
 
-pt.add_artist(pt.ArtistSpec(
+add_artist(ArtistSpec(
     name="annotation_strip",
     record=annotation_strip_record,
     xdomain=annotation_strip_xdomain,

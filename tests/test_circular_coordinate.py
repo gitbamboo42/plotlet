@@ -72,7 +72,7 @@ def ring_line():
     c = pt.chart(title="line — ring")
     c.coordinate(pt.CircularCoordinate())
     c.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
-           color="#1D9E75", width=1.5)
+           color="#1D9E75", linewidth=1.5)
     return c
 
 
@@ -84,7 +84,7 @@ def ring_line_chords():
     c = pt.chart(title="line — chords (arc=False)")
     c.coordinate(pt.CircularCoordinate())
     c.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
-           color="#1D9E75", width=1.5, arc=False)
+           color="#1D9E75", linewidth=1.5, arc=False)
     return c
 
 
@@ -94,7 +94,7 @@ def ring_line_band():
     c.fill_between(data={"x": _LINE_TS, "lo": _BAND_LO, "hi": _BAND_HI},
                    x="x", y1="lo", y2="hi", fill="#1D9E75", alpha=0.25)
     c.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
-           color="#1D9E75", width=1.5)
+           color="#1D9E75", linewidth=1.5)
     return c
 
 
@@ -254,7 +254,7 @@ def ring_x_sectors():
         ys = [y for y, s in zip(pts_y, pts_sec) if s == sname]
         ss = [sname] * len(xs)
         c.line(data={"x": xs, "y": ys, "sec": ss},
-               x="x", y="y", color="#1D9E75", width=1.2)
+               x="x", y="y", color="#1D9E75", linewidth=1.2)
     # Scatter has no connections — single call is fine.
     c.scatter(data={"x": pts_x, "y": pts_y, "sec": pts_sec},
               x="x", y="y", color="#534AB7", size=2.5, alpha=0.7)
@@ -283,7 +283,7 @@ def ring_inner_outer():
     c.coordinate(pt.CircularCoordinate(r_inner=0.55))
     c.xticks([0.0, 0.5])
     c.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
-           color="#534AB7", width=1.5)
+           color="#534AB7", linewidth=1.5)
     return c
 
 
@@ -402,7 +402,7 @@ def ring_partial_arc():
     c.xticks([0.0, 0.25, 0.5, 0.75, 1.0])
     c.yticks([0.0, 0.5, 1.0])
     c.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
-           color="#1D9E75", width=1.5)
+           color="#1D9E75", linewidth=1.5)
     return c
 
 
@@ -414,7 +414,7 @@ def ring_partial_arc_right_side():
     c.xticks([0.0, 0.5, 1.0])
     c.yticks([0.0, 0.5, 1.0], side="right")
     c.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
-           color="#534AB7", width=1.5)
+           color="#534AB7", linewidth=1.5)
     return c
 
 
@@ -442,7 +442,7 @@ def ring_partial_arc_sectors():
         ys = [y for y, s in zip(pts_y, pts_sec) if s == sname]
         ss = [sname] * len(xs)
         c.line(data={"x": xs, "y": ys, "sec": ss},
-               x="x", y="y", color="#D9534F", width=1.2)
+               x="x", y="y", color="#D9534F", linewidth=1.2)
     return c
 
 
@@ -452,7 +452,7 @@ def ring_pile_titled():
     # on the layout"); per-leaf titles stay suppressed in piles.
     outer = pt.chart(xlim=(0, 1), ylim=(0, 1))
     outer.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
-               color="#1D9E75", width=1.5)
+               color="#1D9E75", linewidth=1.5)
     inner = pt.chart(xlim=(0, 1), ylim=(0, 1))
     inner.scatter(data={"x": _SCATTER_T, "y": _SCATTER_V}, x="x", y="y",
                   color="#534AB7", size=2.5, alpha=0.6)

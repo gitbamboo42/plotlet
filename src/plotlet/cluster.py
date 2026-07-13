@@ -357,14 +357,16 @@ def fit_parent(blocks, parent_layout, parent_frac, gap_frac=0.10):
 # frame-defaults wiring without copy-pasting from dendrogram.py.
 # ---------------------------------------------------------------------------
 
-def build_tree(args, kw, split):
+def build_tree(data, split, tree=None, linkage_matrix=None,
+               method="single", metric="euclidean", labels=None):
     """Resolve a tree artist's input → `(SplitTree, had_labels)`.
 
     Dispatches in priority order:
-    - `tree=`     → use directly (must be a `SplitTree`).
+    - `tree=`     → use directly (must be a `SplitTree`); the other
+      input parameters are ignored.
     - `linkage_matrix=` → wrap a raw scipy Z as a one-block `SplitTree`.
-    - `data=` + `split` → `linkage_split(...)`.
-    - `data=`             → `linkage(...)`.
+    - `data` + `split` → `linkage_split(...)`.
+    - `data`             → `linkage(...)`.
 
     `had_labels` tracks whether `labels=` was explicitly supplied. Tree
     renderers use it to decide between a categorical leaf axis (labels
@@ -372,29 +374,17 @@ def build_tree(args, kw, split):
     `linkage_split()` fabricate `str(i)` defaults when labels are
     omitted, so the returned `SplitTree.blocks` always carries labels,
     but the artist still wants to render the unlabeled case differently.
-
-    Pops every kwarg it consumes. Caller passes `kw` (a mutable dict)
-    so the leftover entries belong to the artist's `opts`.
     """
-    tree = kw.pop("tree", None)
-    had_labels = kw.get("labels") is not None
+    had_labels = labels is not None
     if tree is not None:
         if not isinstance(tree, SplitTree):
             raise TypeError(
                 f"tree= must be a SplitTree; got {type(tree).__name__}."
             )
-        # When a pre-built tree is given the other input kwargs are
-        # ignored — drop them so they don't leak into `opts`.
-        for key in ("data", "linkage_matrix", "method", "metric", "labels"):
-            kw.pop(key, None)
         return tree, True
-    data = args[0] if args else kw.pop("data", None)
     if data is not None and hasattr(data, "tolist"):
         data = data.tolist()
-    Z = kw.pop("linkage_matrix", None)
-    method = kw.pop("method", "single")
-    metric = kw.pop("metric", "euclidean")
-    labels = kw.pop("labels", None)
+    Z = linkage_matrix
     if Z is not None:
         if split is not None:
             raise ValueError(

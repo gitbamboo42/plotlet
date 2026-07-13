@@ -8,7 +8,8 @@ shared `x`). `area` stacks rows over `x`, optionally grouped by `fill=`.
   c.area(data=df, x="x", y="y", fill="series")                 # stacked
 """
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, resolve_aes, group_color as _group_fill
+from ..utils import (pack_opts, to_list, resolve_aes,
+                     group_color as _group_fill)
 from ..draw import resolve_color
 from .._spec import _D, _LEGSPEC
 from ..draw import polygon as draw_polygon, rect as draw_rect
@@ -53,30 +54,21 @@ def _fill_between_data_attrs(a):
     return out
 
 
-def _fill_between_record(args, kw):
-    kw = dict(kw)
-    if args:
-        raise TypeError(
-            "fill_between requires long-form input: "
-            "c.fill_between(data=df, x='col', y1='col', y2='col')."
-        )
-    if "color" in kw:
-        raise TypeError(
-            "fill_between: use `fill=` for the interior color, not `color=`."
-        )
-    if "fill" in kw:
-        kw["_fill_literal"] = kw.pop("fill")
-    data = kw.pop("data", None)
-    x = kw.pop("x", None)
-    y1 = kw.pop("y1", None)
-    y2 = kw.pop("y2", None)
+def _fill_between_record(data=None,
+                         # input — consumed here at record
+                         x=None, y1=None, y2=None, fill=None,
+                         # style — packed into opts for the draw/attrs side
+                         curve=None, alpha=None, label=None, legend=None):
     if data is None or x is None or y1 is None or y2 is None:
         raise TypeError(
             "fill_between requires data=, x=, y1=, y2=."
         )
+    opts = pack_opts(curve=curve, alpha=alpha, label=label, legend=legend)
+    if fill is not None:
+        opts["_fill_literal"] = fill
     return {"type": "fill_between",
             "xs": to_list(data[x]), "y1": to_list(data[y1]),
-            "y2": to_list(data[y2]), "opts": kw}
+            "y2": to_list(data[y2]), "opts": opts}
 
 
 add_artist(ArtistSpec(
@@ -113,29 +105,25 @@ def _aggregate_long_xy(data, x_col, y_col, group_col):
     return xs, groups, series
 
 
-def _area_record(args, kw):
-    kw = dict(kw)
-    base = kw.pop("base", 0)
-    if args:
-        raise TypeError(
-            "area requires long-form input: "
-            "c.area(data=df, x='col', y='col', fill='col')."
-        )
-    data = kw.pop("data", None)
-    x_col = kw.pop("x", None)
-    y_col = kw.pop("y", None)
-    if data is None or x_col is None or y_col is None:
+def _area_record(data=None,
+                 # input & stacking — consumed here at record
+                 x=None, y=None, fill=None, base=0,
+                 # style — packed into opts for the draw/legend/attrs side
+                 color=None, curve=None, alpha=None, palette=None,
+                 label=None, legend=None):
+    if data is None or x is None or y is None:
         raise TypeError(
             "area requires data=, x=, y= (fill= optional)."
         )
-    fill = kw.pop("fill", None)
     fill_kind, fill_value = resolve_aes(data, fill)
     group_col = fill if fill_kind == "column" else None
-    xs, groups, series = _aggregate_long_xy(data, x_col, y_col, group_col)
+    xs, groups, series = _aggregate_long_xy(data, x, y, group_col)
+    opts = pack_opts(color=color, curve=curve, alpha=alpha, palette=palette,
+                     label=label, legend=legend)
     if fill_kind == "literal" and fill_value is not None:
-        kw["_fill_literal"] = fill_value
+        opts["_fill_literal"] = fill_value
     return {"type": "area", "xs": xs, "groups": groups, "series": series,
-            "base": base, "opts": kw}
+            "base": base, "opts": opts}
 
 
 def _area_ydomain(a):

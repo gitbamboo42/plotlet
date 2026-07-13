@@ -42,7 +42,8 @@ gap between groups; ``_resolve_display`` (below) reorders the matrix at
 draw time to match the sector cat order.
 """
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list_2d, to_list, all_numeric, _data_has_column
+from ..utils import (pack_opts, to_list_2d, to_list, all_numeric,
+                     _data_has_column)
 from ..sectors import SectoredValue
 from .._spec import _D
 from .. import _splits
@@ -128,21 +129,6 @@ _HEATMAP_USAGE = (
     "c.heatmap(data=df, x='col'[, sector='group', values=[...]]). "
     "A bare matrix must be reshaped into a table first."
 )
-
-# Column-selection kwargs consumed before opts, plus every opt the draw /
-# legend / attrs paths read. Anything outside these (and the ignored aes
-# below) is a typo or a stale call shape — reject it loudly.
-_HEATMAP_KWARGS = {
-    "data", "x", "sector", "values", "border",
-    "cmap", "vmin", "vmax", "norm", "center", "palette", "absent_fill",
-    "legend", "annot", "fmt", "annot_color", "annot_fontsize",
-    "linewidth", "linecolor", "label",
-}
-# Chart-level aes injected into every artist call (`pt.chart(df, y=...,
-# color=...)`); heatmap doesn't use these, so drop them instead of
-# rejecting — a chart-level binding meant for peer marks must not break
-# the heatmap layer.
-_HEATMAP_IGNORED_AES = {"y", "color", "fill", "group", "linestyle"}
 
 
 def _resolve_columns(kw):
@@ -260,15 +246,23 @@ def _sort_by_x(xs, matrix, opts):
     return xs, matrix, opts
 
 
-def _heatmap_record(args, kw):
-    if args:
-        raise TypeError(_HEATMAP_USAGE)
-    unknown = set(kw) - _HEATMAP_KWARGS - _HEATMAP_IGNORED_AES
-    if unknown:
-        raise TypeError(
-            f"heatmap: unknown kwarg(s) {', '.join(sorted(unknown))}."
-        )
-    matrix, xs, rows = _parse_heatmap_input(kw)
+def _heatmap_record(data=None, x=None, sector=None, values=None, border=False,
+                    cmap=None, vmin=None, vmax=None, norm=None, center=None,
+                    palette=None, absent_fill=None,
+                    annot=None, fmt=None, annot_color=None,
+                    annot_fontsize=None, linewidth=None, linecolor=None,
+                    label=None, legend=None,
+                    # Chart-level aes injected into every artist call
+                    # (`pt.chart(df, y=..., color=...)`); heatmap has no use
+                    # for these, so it accepts and drops them — a chart-level
+                    # binding meant for peer marks must not break the heatmap
+                    # layer. (`y=` additionally keeps that column out of the
+                    # default tracks, see `_resolve_columns`.)
+                    y=None, color=None, fill=None, group=None, linestyle=None):
+    # `border=` is consumed by `_heatmap_frame_defaults` (replay hands the
+    # hook the raw kw dict); record just accepts it.
+    matrix, xs, rows = _parse_heatmap_input(
+        {"data": data, "x": x, "sector": sector, "values": values, "y": y})
     nrows  = len(matrix)                        # tracks
     ncols  = len(matrix[0]) if matrix else 0    # positions
     for row in matrix:
@@ -282,9 +276,11 @@ def _heatmap_record(args, kw):
             f"heatmap: x column has {len(xs)} rows but the value columns "
             f"have {ncols}."
         )
-    opts = {k: v for k, v in kw.items()
-            if k not in ("data", "x", "sector", "values", "border")
-            and k not in _HEATMAP_IGNORED_AES}
+    opts = pack_opts(cmap=cmap, norm=norm, center=center,
+                     absent_fill=absent_fill, annot=annot, fmt=fmt,
+                     annot_color=annot_color, annot_fontsize=annot_fontsize,
+                     linewidth=linewidth, linecolor=linecolor,
+                     label=label, legend=legend)
     # Numeric x column → continuous positioning (edges from cell centers);
     # string x → categorical band labels. y (tracks) is always categorical.
     x_continuous = all_numeric(xs)
@@ -308,7 +304,6 @@ def _heatmap_record(args, kw):
     x_edges = _cell_edges(xs) if x_continuous else None
 
     base: dict = {"_x_continuous": x_continuous, "_x_edges": x_edges}
-    palette = opts.get("palette")
     if palette is not None:
         if not isinstance(palette, dict):
             raise TypeError(
@@ -320,10 +315,9 @@ def _heatmap_record(args, kw):
                 "_nrows": nrows, "_ncols": ncols, "_is_categorical": True,
                 "_palette": palette, "opts": opts, **base}
 
-    vmin = opts.get("vmin"); vmax = opts.get("vmax")
-    norm = opts.get("norm", "linear")
+    norm_kind = norm if norm is not None else "linear"
     if vmin is None or vmax is None:
-        if norm == "log":
+        if norm_kind == "log":
             flat = [v for row in matrix for v in row if v is not None and v == v and v > 0]
         else:
             flat = [v for row in matrix for v in row if v is not None and v == v]
@@ -331,7 +325,7 @@ def _heatmap_record(args, kw):
             if vmin is None: vmin = min(flat)
             if vmax is None: vmax = max(flat)
         else:
-            vmin, vmax = (1.0, 10.0) if norm == "log" else (0.0, 1.0)
+            vmin, vmax = (1.0, 10.0) if norm_kind == "log" else (0.0, 1.0)
     return {"type": "heatmap", "_matrix": matrix, "_cols": cols, "_rows": rows,
             "_nrows": nrows, "_ncols": ncols, "_vmin": vmin, "_vmax": vmax,
             "opts": opts, **base}

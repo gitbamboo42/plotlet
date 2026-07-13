@@ -40,31 +40,28 @@ from pathlib import Path
 
 import plotlet as pt
 from plotlet.draw import path as draw_path, segment, TAB10
-from plotlet.utils import to_list, resolve_aes, palette_color
+from plotlet.registry import ArtistSpec, add_artist
+from plotlet.utils import pack_opts, to_list, resolve_aes, palette_color
 from ..draw import coord
 
 
 
-def _chord_links_record(args, kw):
-    kw = dict(kw)
-    if args:
-        raise TypeError(
-            "chord_links requires long-form input: "
-            "c.chord_links(data=df, x1='col', x2='col')."
-        )
-    data  = kw.pop("data", None)
-    x1_col = kw.pop("x1", None)
-    x2_col = kw.pop("x2", None)
-    if data is None or x1_col is None or x2_col is None:
+def _chord_links_record(data=None,
+                        # input columns & color grouping — consumed at record
+                        x1=None, x2=None, color=None, palette=None,
+                        # style — packed into opts for the draw/legend side
+                        width=None, alpha=None, height=None,
+                        label=None, legend=None):
+    if data is None or x1 is None or x2 is None:
         raise TypeError("chord_links requires data=, x1=, x2=.")
-    color   = kw.pop("color", None)
-    palette = kw.pop("palette", None)
-    xs1 = to_list(data[x1_col])
-    xs2 = to_list(data[x2_col])
+    xs1 = to_list(data[x1])
+    xs2 = to_list(data[x2])
+    base_opts = pack_opts(width=width, alpha=alpha, height=height,
+                          label=label, legend=legend)
 
     color_kind, color_value = resolve_aes(data, color)
     if color_kind != "column":
-        opts = dict(kw)
+        opts = dict(base_opts)
         if color_value is not None:
             opts["color"] = color_value
         return {"type": "chord_links", "xs1": xs1, "xs2": xs2, "opts": opts}
@@ -78,7 +75,7 @@ def _chord_links_record(args, kw):
     labeled: set = set()
     for ck in levels:
         idxs = [i for i, v in enumerate(color_vec) if v == ck]
-        opts = dict(kw)
+        opts = dict(base_opts)
         idx = levels.index(ck)
         opts["color"] = palette_color(palette, ck, idx) or TAB10[idx % 10]
         if ck not in labeled:

@@ -35,7 +35,8 @@ Other styling kwargs:
   linewidth=<themed>  stroke width (used only when color is set)
 """
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, resolve_aes, dodge_slot, DODGE_WIDTH, DODGE_GAP
+from ..utils import (pack_opts, to_list, resolve_aes, dodge_slot,
+                     DODGE_WIDTH, DODGE_GAP)
 from ._shared import band_rect
 from ..draw import resolve_color
 from .._spec import _D, _LEGSPEC
@@ -132,35 +133,36 @@ def _long_form_1d_weighted(data, x_col, group_col, weights):
     return groups, vals, wgts
 
 
-def _hist_record(args, kw):
-    kw = dict(kw)
-    if args:
-        raise TypeError(
-            "hist requires long-form input: "
-            "c.hist(data=df, x='col')."
-        )
-    data_df = kw.pop("data", None)
-    x_col = kw.pop("x", None)
-    if data_df is None or x_col is None:
+def _hist_record(data=None,
+                 # input & grouping — consumed here at record
+                 x=None, fill=None, weights=None,
+                 position="overlay",
+                 # binning & stats — validated here, applied at render
+                 # (`_prebin_hist` in render/core.py reads them from opts)
+                 bins=None, binwidth=None, binrange=None,
+                 density=None, cumulative=None,
+                 # style — packed into opts for the draw/legend side
+                 histtype=None, orientation=None, color=None, alpha=None,
+                 linewidth=None, linestyle=None, palette=None,
+                 label=None, legend=None):
+    if data is None or x is None:
         raise TypeError(
             "hist requires data=, x= (fill= optional)."
         )
-    histtype = kw.get("histtype", "bar")
-    if histtype not in ("bar", "step", "stepfilled"):
+    ht = histtype if histtype is not None else "bar"
+    if ht not in ("bar", "step", "stepfilled"):
         raise ValueError(
-            f"hist histtype={histtype!r} — must be 'bar', 'step', or 'stepfilled'."
+            f"hist histtype={ht!r} — must be 'bar', 'step', or 'stepfilled'."
         )
-    position = kw.pop("position", "overlay")
     if position not in _POSITIONS:
         raise ValueError(
             f"unknown position={position!r}; expected one of {_POSITIONS}."
         )
-    if position != "overlay" and histtype != "bar":
+    if position != "overlay" and ht != "bar":
         raise ValueError(
             f"hist position={position!r} needs histtype='bar' — step "
             f"outlines can't stack or dodge."
         )
-    bins = kw.get("bins")
     if bins is not None and not isinstance(bins, int):
         edges = [float(e) for e in to_list(bins)]
         if len(edges) < 2 or any(b <= a for a, b in zip(edges, edges[1:])):
@@ -168,33 +170,34 @@ def _hist_record(args, kw):
                 "hist bins= as a sequence must be 2+ strictly increasing "
                 "bin edges."
             )
-        kw["bins"] = edges
-        if "binrange" in kw:
+        bins = edges
+        if binrange is not None:
             raise TypeError(
                 "hist: explicit bin edges already pin the range — drop "
                 "binrange=."
             )
-    if "bins" in kw and "binwidth" in kw:
+    if bins is not None and binwidth is not None:
         raise TypeError("hist: pass bins= or binwidth=, not both.")
-    binwidth = kw.get("binwidth")
     if binwidth is not None and binwidth <= 0:
         raise ValueError(f"hist binwidth={binwidth!r} — must be positive.")
-    binrange = kw.get("binrange")
     if binrange is not None:
         if len(binrange) != 2 or not binrange[0] < binrange[1]:
             raise ValueError(
                 f"hist binrange={binrange!r} — must be (lo, hi) with lo < hi."
             )
-    fill = kw.pop("fill", None)
-    fill_kind, fill_value = resolve_aes(data_df, fill)
+    fill_kind, fill_value = resolve_aes(data, fill)
     group_col = fill if fill_kind == "column" else None
-    weights = kw.pop("weights", None)
-    groups, vals, wgts = _long_form_1d_weighted(data_df, x_col, group_col,
+    groups, vals, wgts = _long_form_1d_weighted(data, x, group_col,
                                                 weights)
+    opts = pack_opts(bins=bins, binwidth=binwidth, binrange=binrange,
+                     density=density, cumulative=cumulative,
+                     histtype=histtype, orientation=orientation, color=color,
+                     alpha=alpha, linewidth=linewidth, linestyle=linestyle,
+                     palette=palette, label=label, legend=legend)
     if fill_kind == "literal" and fill_value is not None:
-        kw["_fill_literal"] = fill_value
+        opts["_fill_literal"] = fill_value
     return {"type": "hist", "groups": groups, "vals": vals,
-            "weights": wgts, "_position": position, "opts": kw}
+            "weights": wgts, "_position": position, "opts": opts}
 
 
 def _bin_xs(bin_groups):

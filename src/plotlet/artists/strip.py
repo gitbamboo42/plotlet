@@ -27,8 +27,8 @@ Other styling kwargs:
   linewidth=0       outline stroke width (0 = no outline)
 """
 from ..registry import ArtistSpec, add_artist
-from ..utils import (resolve_aes, dodge_positions, categorical_groups,
-                     group_color as _group_fill)
+from ..utils import (pack_opts, resolve_aes, dodge_positions,
+                     categorical_groups, group_color as _group_fill)
 from ..draw import resolve_color
 from ..draw import circle
 from .._spec import _FRAME
@@ -48,10 +48,9 @@ def _jitter_hash(*ints):
     return ((z & 0xFFFFFFFF) / 0xFFFFFFFF) - 0.5
 
 
-def _resolve_fill_kwarg(data, kw):
+def _resolve_fill_kwarg(data, fill):
     """For strip/swarm: `fill=` accepts None, literal color, or column name.
     Returns `(fill_literal, group_col)`."""
-    fill = kw.pop("fill", None)
     if fill is None:
         return None, None
     kind, value = resolve_aes(data, fill)
@@ -60,27 +59,30 @@ def _resolve_fill_kwarg(data, kw):
     return value, None
 
 
-def _strip_record(args, kw):
-    if args:
-        raise TypeError(
-            "strip requires long-form input: "
-            "c.strip(data=df, x='col', y='col', fill='col')."
-        )
-    data = kw.pop("data", None)
-    x = kw.pop("x", None)
-    y = kw.pop("y", None)
+def _strip_record(data=None,
+                  # input & grouping — consumed here at record
+                  x=None, y=None, fill=None,
+                  # style — packed into opts for the draw/legend side
+                  orientation=None, width=None, gap=None,
+                  color=None, palette=None,
+                  jitter=None, size=None, alpha=None, linewidth=None,
+                  label=None, legend=None):
     if data is None or x is None or y is None:
         raise TypeError(
             "strip requires data=, x=, y= (fill= optional)."
         )
-    fill_literal, group_col = _resolve_fill_kwarg(data, kw)
+    fill_literal, group_col = _resolve_fill_kwarg(data, fill)
     cats, groups, vals = categorical_groups(data, x, y, group_col)
+    opts = pack_opts(orientation=orientation, width=width, gap=gap,
+                     color=color, palette=palette, jitter=jitter,
+                     size=size, alpha=alpha, linewidth=linewidth,
+                     label=label, legend=legend)
     if fill_literal is not None:
-        kw["_fill_literal"] = fill_literal
+        opts["_fill_literal"] = fill_literal
     if group_col is not None and group_col == x:
-        kw["_redundant_grouping"] = True
+        opts["_redundant_grouping"] = True
     return {"type": "strip", "cats": cats, "groups": groups,
-            "vals": vals, "opts": kw}
+            "vals": vals, "opts": opts}
 
 
 def _strip_horizontal(a): return a["opts"].get("orientation") == "h"

@@ -22,8 +22,8 @@ centers as `c.bar(..., position="dodge")` with matching values.
 import math
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import (to_list, all_numeric, resolve_aes, group_color,
-                     dodge_positions, DODGE_WIDTH, DODGE_GAP)
+from ..utils import (UNSET, pack_opts, to_list, all_numeric, resolve_aes,
+                     group_color, dodge_positions, DODGE_WIDTH, DODGE_GAP)
 from ..draw import marker, segment, errorbar_v, errorbar_h
 from .._spec import _D, _LEGSPEC
 from ._shared import _xy_minmax
@@ -62,33 +62,25 @@ def _resolve_bounds(data, vals, min_spec, max_spec, err_lo, err_hi, axis):
             [hi - v for v, hi in zip(vals, hi_vals)])
 
 
-def _errorbar_record(args, kw):
-    kw = dict(kw)
-    if args:
-        raise TypeError(
-            "errorbar requires long-form input: "
-            "c.errorbar(data=df, x='col', y='col', yerr='col')."
-        )
-    data = kw.pop("data", None)
-    x_col = kw.pop("x", None)
-    y_col = kw.pop("y", None)
-    if data is None or x_col is None or y_col is None:
+def _errorbar_record(data=None,
+                     # input — consumed here at record
+                     x=None, y=None,
+                     xerr=None, yerr=None,
+                     xmin=None, xmax=None, ymin=None, ymax=None,
+                     color=None,
+                     # style — packed into opts for the draw/legend/attrs side
+                     marker=UNSET, size=None, alpha=None,
+                     capsize=None, linewidth=None, width=None, gap=None,
+                     palette=None, label=None, legend=None):
+    if data is None or x is None or y is None:
         raise TypeError(
             "errorbar requires data=, x=, y= "
             "(yerr/xerr/ymin/ymax/xmin/xmax optional)."
         )
-    if "markersize" in kw:
-        raise TypeError(
-            "errorbar takes `size=` for marker radius (px)."
-        )
-    xs = to_list(data[x_col])
-    ys = to_list(data[y_col])
+    xs = to_list(data[x])
+    ys = to_list(data[y])
     n = len(xs)
 
-    xerr = kw.pop("xerr", None)
-    yerr = kw.pop("yerr", None)
-    xmin = kw.pop("xmin", None); xmax = kw.pop("xmax", None)
-    ymin = kw.pop("ymin", None); ymax = kw.pop("ymax", None)
     if xerr is not None and (xmin is not None or xmax is not None):
         raise TypeError("errorbar: xerr= and xmin=/xmax= are mutually exclusive.")
     if yerr is not None and (ymin is not None or ymax is not None):
@@ -99,15 +91,25 @@ def _errorbar_record(args, kw):
     xlo, xhi = _resolve_bounds(data, xs, xmin, xmax, xlo, xhi, "x")
     ylo, yhi = _resolve_bounds(data, ys, ymin, ymax, ylo, yhi, "y")
 
+    opts = pack_opts(size=size, alpha=alpha, capsize=capsize,
+                     linewidth=linewidth, width=width, gap=gap,
+                     palette=palette, label=label, legend=legend)
+    # `marker=None` is meaningful (whiskers without a point glyph), so
+    # unset gets a sentinel default rather than None.
+    if marker is not UNSET:
+        opts["marker"] = marker
+
     # `color=` may be a literal color or a column name; column → grouped
     # multi-series (one nested row list per level).
-    color_kind, _ = resolve_aes(data, kw.get("color"))
+    color_kind, _ = resolve_aes(data, color)
     if color_kind != "column":
+        if color is not None:
+            opts["color"] = color
         return {"type": "errorbar",
                 "xs": xs, "ys": ys,
                 "xlo": xlo, "xhi": xhi, "ylo": ylo, "yhi": yhi,
-                "opts": kw}
-    gs = to_list(data[kw.pop("color")])
+                "opts": opts}
+    gs = to_list(data[color])
     groups = []
     for g in gs:
         if g not in groups:
@@ -120,7 +122,7 @@ def _errorbar_record(args, kw):
         split["xs"][j].append(x);  split["ys"][j].append(y)
         split["xlo"][j].append(xl); split["xhi"][j].append(xh)
         split["ylo"][j].append(yl); split["yhi"][j].append(yh)
-    return {"type": "errorbar", "groups": groups, **split, "opts": kw}
+    return {"type": "errorbar", "groups": groups, **split, "opts": opts}
 
 
 def _errorbar_rows(xs, ys, xlo, xhi, ylo, yhi, opts, xs_, ys_, col, warp,

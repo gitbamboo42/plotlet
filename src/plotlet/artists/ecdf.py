@@ -19,33 +19,31 @@ Other styling kwargs:
 """
 from ..registry import ArtistSpec, add_artist
 from ..draw import polyline, segment
-from ..utils import to_list, long_form_1d, resolve_aes
+from ..utils import pack_opts, long_form_1d, resolve_aes
 from ..draw import resolve_color
 from ..utils import group_color
 from .._spec import _LEGSPEC
 
 
-def _ecdf_record(args, kw):
-    kw = dict(kw)
-    if args:
-        raise TypeError(
-            "ecdf requires long-form input: "
-            "c.ecdf(data=df, x='col')."
-        )
-    data_df = kw.pop("data", None)
-    x_col = kw.pop("x", None)
-    if data_df is None or x_col is None:
+def _ecdf_record(data=None,
+                 # input — consumed here at record
+                 x=None, color=None,
+                 # style — packed into opts for the draw/legend side
+                 complement=None, linewidth=None, palette=None,
+                 label=None, legend=None):
+    if data is None or x is None:
         raise TypeError(
             "ecdf requires data=, x= (color= optional)."
         )
-    color = kw.pop("color", None)
-    color_kind, color_value = resolve_aes(data_df, color)
+    color_kind, color_value = resolve_aes(data, color)
     group_col = color if color_kind == "column" else None
-    groups, vals = long_form_1d(data_df, x_col, group_col)
+    groups, vals = long_form_1d(data, x, group_col)
+    opts = pack_opts(complement=complement, linewidth=linewidth,
+                     palette=palette, label=label, legend=legend)
     if color_kind == "literal" and color_value is not None:
-        kw["_color_literal"] = color_value
+        opts["_color_literal"] = color_value
     vals = [sorted(g) for g in vals]
-    return {"type": "ecdf", "groups": groups, "vals": vals, "opts": kw}
+    return {"type": "ecdf", "groups": groups, "vals": vals, "opts": opts}
 
 
 def _ecdf_xdomain(a):

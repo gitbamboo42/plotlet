@@ -30,6 +30,7 @@ from plotlet.cluster import (layout_tree, layout_parent, leaf_position,
                              block_apex_centers, parent_leaf_px, fit_parent,
                              build_tree, tree_frame_defaults)
 from plotlet.registry import ArtistSpec, add_artist
+from plotlet.utils import pack_opts
 from ..draw import coord, stroke_w
 
 
@@ -38,29 +39,34 @@ _ORIENTS = ("top", "bottom", "left", "right")
 _DEFAULTS = pt.SPEC["defaults"]   # public path to spec defaults
 
 
-def _curved_record(args, kw):
-    kw = dict(kw)
-    orient = kw.pop("orientation", "top")
-    if orient not in _ORIENTS:
+def _curved_record(data=None,
+                   # tree input — consumed by `build_tree`
+                   tree=None, linkage_matrix=None,
+                   method="single", metric="euclidean", labels=None,
+                   # layout
+                   clusters=None, parent=False, orientation="top",
+                   # style — packed into opts for the draw side
+                   color=None, linewidth=None, label=None, legend=None):
+    if orientation not in _ORIENTS:
         raise ValueError(
-            f"curved_tree(): orientation={orient!r}; expected one of {_ORIENTS}"
+            f"curved_tree(): orientation={orientation!r}; "
+            f"expected one of {_ORIENTS}"
         )
-    leaf_on_x = orient in ("top", "bottom")
-    split = kw.pop("clusters", None)
-    parent_kw = kw.pop("parent", False)
-
-    tree, had_labels = build_tree(args, kw, split)
-    blocks, offsets, final_labels = layout_tree(tree)
+    tree_obj, had_labels = build_tree(data, clusters, tree=tree,
+                                      linkage_matrix=linkage_matrix,
+                                      method=method, metric=metric,
+                                      labels=labels)
+    blocks, offsets, final_labels = layout_tree(tree_obj)
     parent_block = None
-    if parent_kw and tree.between_Z is not None:
-        parent_frac = (_DEFAULTS["tree_parent_height"] if parent_kw is True
-                       else float(parent_kw))
+    if parent and tree_obj.between_Z is not None:
+        parent_frac = (_DEFAULTS["tree_parent_height"] if parent is True
+                       else float(parent))
         if not (0.0 < parent_frac < 0.8):
             raise ValueError(
                 f"curved_tree(): parent= must be in (0, 0.8); got {parent_frac}"
             )
         blocks, parent_block = fit_parent(
-            blocks, layout_parent(tree), parent_frac,
+            blocks, layout_parent(tree_obj), parent_frac,
             gap_frac=_DEFAULTS["tree_parent_gap"],
         )
     all_dc = [v for _, dc, _ in blocks for row in dc for v in row]
@@ -75,8 +81,9 @@ def _curved_record(args, kw):
         "_n_leaves": sum(len(lv) for _, _, lv in blocks),
         "_max_h": max_h,
         "_leaf_labels": final_labels if had_labels else None,
-        "orientation": orient,
-        "opts": kw,
+        "orientation": orientation,
+        "opts": pack_opts(color=color, linewidth=linewidth,
+                          label=label, legend=legend),
     }
 
 

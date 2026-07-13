@@ -33,7 +33,7 @@ Other styling kwargs:
 import math
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import (quantile, resolve_aes,
+from ..utils import (pack_opts, quantile, resolve_aes,
                      dodge_positions, categorical_groups)
 from ..utils import _drop_nan, group_color as _group_fill
 from ..draw import resolve_color
@@ -41,15 +41,14 @@ from ..draw import segment, rect, circle, errorbar_v, errorbar_h, polygon, marke
 from .._spec import _FRAME
 
 
-def _resolve_fill_kwarg(data, kw):
-    """Pop `fill=` and classify it. Returns `(do_fill, fill_literal,
-    group_col)` where `fill_literal` is a hex / CSS color string (None
-    when the user did not pass a literal) and `group_col` is a column
-    name (None when fill is not column-driven).
+def _resolve_fill_kwarg(data, fill):
+    """Classify `fill=`. Returns `(do_fill, fill_literal, group_col)`
+    where `fill_literal` is a hex / CSS color string (None when the user
+    did not pass a literal) and `group_col` is a column name (None when
+    fill is not column-driven).
 
     `fill=True` → defaults; `fill=False` → outline-only; literal string →
     same color for every box; column name → drives grouping."""
-    fill = kw.pop("fill", True)
     if fill is False or fill is None:
         return False, None, None
     if fill is True:
@@ -60,31 +59,39 @@ def _resolve_fill_kwarg(data, kw):
     return True, value, None
 
 
-def _boxplot_record(args, kw):
-    if args:
-        raise TypeError(
-            "boxplot requires long-form input: "
-            "c.boxplot(data=df, x='col', y='col', fill='col')."
-        )
-    data = kw.pop("data", None)
-    x = kw.pop("x", None)
-    y = kw.pop("y", None)
+def _boxplot_record(data=None,
+                    # input & grouping — consumed here at record
+                    x=None, y=None, fill=True,
+                    # style — packed into opts for the draw/legend side
+                    orientation=None, width=None, gap=None,
+                    color=None, palette=None,
+                    fill_alpha=None, linewidth=None, median_linewidth=None,
+                    notch=None, showmeans=None, mean_marker=None,
+                    whis=None, showfliers=None, flier_size=None,
+                    flier_color=None, label=None, legend=None):
     if data is None or x is None or y is None:
         raise TypeError(
             "boxplot requires data=, x=, y= (fill= optional)."
         )
-    do_fill, fill_literal, group_col = _resolve_fill_kwarg(data, kw)
+    do_fill, fill_literal, group_col = _resolve_fill_kwarg(data, fill)
     cats, groups, vals = categorical_groups(data, x, y, group_col)
-    kw["_do_fill"] = do_fill
+    opts = pack_opts(orientation=orientation, width=width, gap=gap,
+                     color=color, palette=palette, fill_alpha=fill_alpha,
+                     linewidth=linewidth, median_linewidth=median_linewidth,
+                     notch=notch, showmeans=showmeans,
+                     mean_marker=mean_marker, whis=whis,
+                     showfliers=showfliers, flier_size=flier_size,
+                     flier_color=flier_color, label=label, legend=legend)
+    opts["_do_fill"] = do_fill
     if fill_literal is not None:
-        kw["_fill_literal"] = fill_literal
+        opts["_fill_literal"] = fill_literal
     # `fill=<x_col>` is redundant grouping — each cat has exactly one
     # nonempty group, so dodging would just shrink the box uselessly.
     # Suppress dodge but keep the per-cat palette coloring.
     if group_col is not None and group_col == x:
-        kw["_redundant_grouping"] = True
+        opts["_redundant_grouping"] = True
     return {"type": "boxplot", "cats": cats, "groups": groups,
-            "vals": vals, "opts": kw}
+            "vals": vals, "opts": opts}
 
 
 def _boxplot_horizontal(a): return a["opts"].get("orientation") == "h"

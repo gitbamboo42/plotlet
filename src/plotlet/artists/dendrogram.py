@@ -40,6 +40,7 @@ from __future__ import annotations
 import math
 
 from ..registry import ArtistSpec, add_artist
+from ..utils import pack_opts
 from .._spec import _D
 from ..cluster import (layout_tree, layout_parent,
                        leaf_position, block_apex_centers, parent_leaf_px,
@@ -51,35 +52,42 @@ from ..draw import resolve_color
 _ORIENTS = ("top", "bottom", "left", "right")
 
 
-def _dendrogram_record(args, kw):
-    kw = dict(kw)
-    orient = kw.pop("orientation", "top")
-    if orient not in _ORIENTS:
+def _dendrogram_record(data=None,
+                       # tree input — consumed by `build_tree`
+                       tree=None, linkage_matrix=None,
+                       method="single", metric="euclidean", labels=None,
+                       # layout
+                       clusters=None, parent=False, orientation="top",
+                       # style — packed into opts for the draw side
+                       color=None, linewidth=None, label=None, legend=None):
+    if orientation not in _ORIENTS:
         raise ValueError(
-            f"dendrogram(): orientation={orient!r}; expected one of {_ORIENTS}"
+            f"dendrogram(): orientation={orientation!r}; "
+            f"expected one of {_ORIENTS}"
         )
     # ``clusters=`` is the parallel list (label-per-row) that drives
     # two-level clustering. The visual gap whitespace between blocks
     # lives on the panel as ``c.sectors(...)`` — not duplicated here.
-    split = kw.pop("clusters", None)
+    #
     # `parent=` opt-in: False (default) = today's behavior; True = enable
     # with default 0.30 height fraction; float = custom fraction.
     # Silently a no-op when the tree has no `between_Z` (single block).
-    parent_kw = kw.pop("parent", False)
-
-    tree, had_labels = build_tree(args, kw, split)
-    blocks, offsets, final_labels = layout_tree(tree)
+    tree_obj, had_labels = build_tree(data, clusters, tree=tree,
+                                      linkage_matrix=linkage_matrix,
+                                      method=method, metric=metric,
+                                      labels=labels)
+    blocks, offsets, final_labels = layout_tree(tree_obj)
 
     parent_block = None
-    if parent_kw and tree.between_Z is not None:
-        parent_frac = (_D["tree_parent_height"] if parent_kw is True
-                       else float(parent_kw))
+    if parent and tree_obj.between_Z is not None:
+        parent_frac = (_D["tree_parent_height"] if parent is True
+                       else float(parent))
         if not (0.0 < parent_frac < 0.8):
             raise ValueError(
                 f"dendrogram(): parent= must be in (0, 0.8); got {parent_frac}"
             )
         blocks, parent_block = fit_parent(
-            blocks, layout_parent(tree), parent_frac,
+            blocks, layout_parent(tree_obj), parent_frac,
             gap_frac=_D["tree_parent_gap"],
         )
     # No user-supplied labels = numeric leaf axis. `linkage` /
@@ -99,8 +107,9 @@ def _dendrogram_record(args, kw):
         "_n_leaves": sum(len(lv) for _, _, lv in blocks),
         "_max_h": max_h,
         "_leaf_labels": leaf_labels,
-        "orientation": orient,
-        "opts": kw,
+        "orientation": orientation,
+        "opts": pack_opts(color=color, linewidth=linewidth,
+                          label=label, legend=legend),
     }
 
 

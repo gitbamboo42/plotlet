@@ -895,7 +895,7 @@ def chart_split_rect():
     _COLS = [str(k) for k in range(8)]
     _ROWS = ["sym", "n", "rotate", "weights"]
 
-    def _sr_record(args, kw):
+    def _sr_record(**kw):
         return {"type": "split_rect_demo", "opts": kw}
 
     def _sr_xdomain(a): return _COLS
@@ -964,7 +964,7 @@ def chart_split_pie():
     _COLS = [str(k) for k in range(8)]
     _ROWS = ["n", "rotate", "weights", "gap"]
 
-    def _sp_record(args, kw):
+    def _sp_record(**kw):
         return {"type": "split_pie_demo", "opts": kw}
 
     def _sp_xdomain(a): return _COLS
@@ -2191,7 +2191,7 @@ def chart_circular_overlay():
 
     outer = pt.chart(xlim=(0, 1), ylim=(0, 1))
     outer.line(data={"x": ts, "y": sine}, x="x", y="y",
-               color="C0", width=1.5)
+               color="C0", linewidth=1.5)
 
     middle = pt.chart(xlim=(0, 1), ylim=(0, 1))
     middle.fill_between(data={"x": ts, "lo": [v - 0.1 for v in sine],
@@ -2970,7 +2970,9 @@ def test_heatmap_rejects_bad_continuous_x():
 def test_heatmap_rejects_unknown_kwargs():
     c = pt.chart()
     c.heatmap(data={"x": ["a"], "v": [1]}, x="x", xticklabels=["a"])
-    with pytest.raises(TypeError, match="unknown kwarg"):
+    # The record signature is the kwarg allow-list — Python rejects
+    # unknown names at replay.
+    with pytest.raises(TypeError, match="xticklabels"):
         c.to_svg()
 
 
@@ -3345,7 +3347,7 @@ def test_regression_order2_recovers_parabola():
     from plotlet.artists.regression import _fit_generic
     xs = [i * 0.5 for i in range(20)]
     ys = [2.0 * x * x - 3.0 * x + 1.0 for x in xs]   # exact, no noise
-    fit = _fit_generic(xs, ys, {"order": 2})
+    fit = _fit_generic(xs, ys, order=2)
     for g, m in zip(fit["grid"], fit["mid"]):
         assert abs(m - (2.0 * g * g - 3.0 * g + 1.0)) < 1e-6
     # zero residual → the band collapses onto the line
@@ -3358,8 +3360,8 @@ def test_regression_robust_ignores_outliers():
     ys = [1.0 + 2.0 * x for x in xs]
     for i in (3, 11, 17):
         ys[i] += 50.0
-    robust = _fit_generic(xs, ys, {"robust": True, "n_boot": 20})
-    ols = _fit_generic(xs, ys, {"order": 2})  # generic OLS path, distorted
+    robust = _fit_generic(xs, ys, robust=True, n_boot=20)
+    ols = _fit_generic(xs, ys, order=2)  # generic OLS path, distorted
 
     def max_err(fit):
         return max(abs(m - (1.0 + 2.0 * g))

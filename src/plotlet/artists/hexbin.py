@@ -22,30 +22,30 @@ import math
 from ..registry import ArtistSpec, add_artist
 from ..draw import polygon
 from ..draw import colormap, ContinuousNorm
-from ..utils import to_list
+from ..utils import to_list, pack_opts, UNSET
 from .._spec import _D
 
 
-def _hexbin_record(args, kw):
-    kw = dict(kw)
-    if args:
-        raise TypeError(
-            "hexbin requires long-form input: "
-            "c.hexbin(data=df, x='col', y='col')."
-        )
-    data = kw.pop("data", None)
-    x_col = kw.pop("x", None)
-    y_col = kw.pop("y", None)
-    if data is None or x_col is None or y_col is None:
+def _hexbin_record(data=None, x=None, y=None,
+                   # `gridsize` is read at record AND draw, so it rides in
+                   # opts; UNSET keeps opts contents identical to a call
+                   # that never passed it (draw defaults to 30 either way).
+                   gridsize=UNSET, cmap=None, vmin=None, vmax=None,
+                   label=None, legend=None):
+    if data is None or x is None or y is None:
         raise TypeError("hexbin requires data=, x=, y=.")
-    xs = to_list(data[x_col])
-    ys = to_list(data[y_col])
+    xs = to_list(data[x])
+    ys = to_list(data[y])
     # Rough max-count estimate for the legend gradient (4× avg per cell).
-    gridsize = kw.get("gridsize", 30)
+    gs = 30 if gridsize is UNSET else gridsize
     n = len(xs)
-    rough_max = max(1, n // max(1, gridsize * gridsize // 4))
+    rough_max = max(1, n // max(1, gs * gs // 4))
+    opts = pack_opts(cmap=cmap, vmin=vmin, vmax=vmax,
+                     label=label, legend=legend)
+    if gridsize is not UNSET:
+        opts["gridsize"] = gridsize
     return {"type": "hexbin", "xs": xs, "ys": ys,
-            "_rough_max": rough_max, "opts": kw}
+            "_rough_max": rough_max, "opts": opts}
 
 
 def _hexbin_xdomain(a): return a["xs"]

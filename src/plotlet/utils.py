@@ -76,6 +76,26 @@ def _to_px(value):
     return int(round(num * _UNIT_PX[unit]))
 
 
+class _UnsetType:
+    """Signature default for the rare kwarg where `None` is itself a
+    meaningful user value (e.g. bar's `ci=None` = "no CI", distinct from
+    unset = stat-dependent default). The repr keeps `help()` output
+    readable."""
+    def __repr__(self):
+        return "UNSET"
+
+
+UNSET = _UnsetType()
+
+
+def pack_opts(**pairs):
+    """Build an artist `opts` dict from explicit record-function
+    parameters: only user-set entries (non-None) are kept, so downstream
+    `opts.get(key, default)` reads still fall through to spec/theme
+    defaults exactly as with the legacy leftover-kwargs bag."""
+    return {k: v for k, v in pairs.items() if v is not None}
+
+
 def to_list(obj):
     """Convert numpy / pandas / arbitrary iterables to plain Python lists."""
     if hasattr(obj, "tolist"):

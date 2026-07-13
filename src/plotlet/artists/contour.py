@@ -24,18 +24,17 @@ from ..registry import ArtistSpec, add_artist
 from ..draw import segment
 from ..draw import colormap, ContinuousNorm
 from ..draw import TAB10
-from ..utils import to_list_2d
+from ..utils import pack_opts, to_list_2d
 from ._marching import MS_CASES as _MS_CASES
 from ._marching import cell_has_nan as _cell_has_nan
 from ._marching import edge_pt as _edge_pt
 from ._marching import filled_levels_svg
 
 
-def _resolve_levels(grid, opts):
+def _resolve_levels(grid, levels):
     """Resolve `levels` once at record time so draw and legend_gradient
     share a single source of truth. Mirrors the historical lazy fallback
     (5 evenly-spaced between grid min/max)."""
-    levels = opts.get("levels")
     if levels is not None:
         return list(levels)
     flat = [v for row in grid for v in row if v == v]
@@ -45,13 +44,21 @@ def _resolve_levels(grid, opts):
     return [lo + (hi - lo) * i / 6 for i in range(1, 6)]
 
 
-def _contour_record(args, kw):
-    grid = to_list_2d(args[0])
+def _contour_record(grid,
+                    # levels — consumed here at record into `_levels`
+                    levels=None,
+                    # style — packed into opts for the draw/legend side
+                    extent=None, fill=None, cmap=None, color=None,
+                    alpha=None, linewidth=None, label=None, legend=None):
+    grid = to_list_2d(grid)
     nrows = len(grid); ncols = len(grid[0]) if grid else 0
-    levels = _resolve_levels(grid, kw)
+    opts = pack_opts(extent=extent, fill=fill, cmap=cmap, color=color,
+                     alpha=alpha, linewidth=linewidth, label=label,
+                     legend=legend)
+    levels = _resolve_levels(grid, levels)
     record = {"type": "contour", "grid": grid,
               "_nrows": nrows, "_ncols": ncols,
-              "_levels": levels, "opts": kw}
+              "_levels": levels, "opts": opts}
     if levels:
         record["_vmin"] = min(levels)
         record["_vmax"] = max(levels)

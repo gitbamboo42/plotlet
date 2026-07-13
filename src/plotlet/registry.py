@@ -3,13 +3,16 @@
 Every plot type (built-in or user-added) is an `ArtistSpec` registered here.
 A spec bundles the four things `_render_inner` needs to know about a plot type:
 
-  - `record(args, kwargs) -> dict`
-        Convert positional/keyword args into the artist dict. Despite the
-        name, it does NOT run at record time — the journal keeps the raw
-        call; `_replay` invokes `record` at render, and the dict lands in
-        the replayed state's `artists` list. Pure data — no scales yet.
-        `args` and `kwargs` are fresh copies on every render, so it's safe
-        for `record` to `kwargs.pop(...)` or otherwise mutate them.
+  - `record(*args, **kwargs) -> dict`
+        Convert positional/keyword args into the artist dict. Write it
+        with an explicit signature — `def _bar_record(data=None, x=None,
+        ...)` — so the parameter list IS the artist's kwarg vocabulary
+        and Python rejects unknown names at replay. Despite the name it
+        does NOT run at record time — the journal keeps the raw call;
+        `_replay` invokes `record(*args, **kwargs)` at render, and the
+        dict lands in the replayed state's `artists` list. Pure data — no
+        scales yet. Style kwargs the record doesn't consume are packed
+        into `opts` (via `utils.pack_opts`) for the draw side to read.
         An artist that fans one `color=`-column call out into per-level
         records keeps the grouping symbolic: each record carries `groups`
         (the level list), `_j` (its index), and `opts["palette"]` — never
@@ -163,13 +166,35 @@ def declare_coord_support(coord_name: str, artist_names) -> None:
     _COORD_SUPPORT.setdefault(coord_name, set()).update(artist_names)
 
 
+def _record_kwarg_names(fn):
+    """The keyword names the chart-level aes injection may fill on a
+    record function. A `**kw` catch-all (e.g. `step` forwarding to
+    `line`) accepts anything, so `None` disables the filter — the
+    forwarded-to function validates. Otherwise it's every parameter with
+    a default; the required positionals (rect's x/y/w/h, imshow's
+    matrix) are geometry an injected keyword must not collide with."""
+    params = inspect.signature(fn).parameters.values()
+    if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params):
+        return None
+    return frozenset(p.name for p in params
+                     if p.default is not inspect.Parameter.empty)
+
+
 def add_artist(spec: ArtistSpec) -> None:
     """Register a plot type. Overwrites if the name already exists.
+
+    The record function's signature IS the artist's kwarg vocabulary:
+    `_replay` calls it as `record(*args, **kwargs)`, so Python itself
+    rejects unknown names at replay (`TypeError: unexpected keyword
+    argument 'widht'`), and `c.<artist>?` shows the real parameter list.
+    Registration stamps `__kwarg_names__` (read by the chart-level aes
+    injection in `Chart.__getattr__`) from that signature.
 
     If the artist also renders correctly under a non-affine coord, call
     ``declare_coord_support(coord_name, [spec.name])`` after this — core
     artists' opt-in lives next to the coord class definition; extension
     artists' opt-in lives right after their own ``add_artist`` call."""
+    spec.record.__kwarg_names__ = _record_kwarg_names(spec.record)
     _REGISTRY[spec.name] = spec
     frame = inspect.currentframe()
     caller = frame.f_back if frame is not None else None

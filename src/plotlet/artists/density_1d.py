@@ -20,39 +20,35 @@ Other styling kwargs:
   label=None     legend label (single-series only)
 """
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, long_form_1d, resolve_aes, silverman_bw, kde_1d
+from ..utils import pack_opts, long_form_1d, resolve_aes, silverman_bw, kde_1d
 from ..draw import resolve_color
 from .._spec import _LEGSPEC
 from ..draw import polygon, polyline, segment
 from ..utils import group_color
 
 
-def _density_1d_record(args, kw):
-    kw = dict(kw)
-    if args:
-        raise TypeError(
-            "density_1d requires long-form input: "
-            "c.density_1d(data=df, x='col')."
-        )
-    data_df = kw.pop("data", None)
-    x_col = kw.pop("x", None)
-    if data_df is None or x_col is None:
+def _density_1d_record(data=None, x=None, color=None,
+                       # KDE estimation — consumed here at record
+                       bw=None, n_grid=200,
+                       # style — packed into opts for the draw/legend side
+                       fill=None, alpha=None, linewidth=None,
+                       palette=None, label=None, legend=None):
+    if data is None or x is None:
         raise TypeError(
             "density_1d requires data=, x= (color= optional)."
         )
-    color = kw.pop("color", None)
-    color_kind, color_value = resolve_aes(data_df, color)
+    color_kind, color_value = resolve_aes(data, color)
     group_col = color if color_kind == "column" else None
-    groups, vals = long_form_1d(data_df, x_col, group_col)
+    groups, vals = long_form_1d(data, x, group_col)
+    opts = pack_opts(fill=fill, alpha=alpha, linewidth=linewidth,
+                     palette=palette, label=label, legend=legend)
     if color_kind == "literal" and color_value is not None:
-        kw["_color_literal"] = color_value
-    n_grid = kw.get("n_grid", 200)
-    bw_kw = kw.get("bw")
+        opts["_color_literal"] = color_value
     all_vals = [v for g in vals for v in g]
     if not all_vals:
         return {"type": "density_1d", "groups": groups,
                 "_grids": [[] for _ in vals], "_ds": [[] for _ in vals],
-                "opts": kw}
+                "opts": opts}
     lo, hi = min(all_vals), max(all_vals)
     pad = (hi - lo) * 0.1 or 1.0
     lo -= pad; hi += pad
@@ -63,11 +59,10 @@ def _density_1d_record(args, kw):
         if not g:
             grids.append([]); ds.append([])
             continue
-        bw = bw_kw or silverman_bw(g)
         grids.append(grid)
-        ds.append(kde_1d(g, grid, bw))
+        ds.append(kde_1d(g, grid, bw or silverman_bw(g)))
     return {"type": "density_1d", "groups": groups,
-            "_grids": grids, "_ds": ds, "opts": kw}
+            "_grids": grids, "_ds": ds, "opts": opts}
 
 
 def _density_1d_xdomain(a):

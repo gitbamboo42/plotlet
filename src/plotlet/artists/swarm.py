@@ -23,14 +23,14 @@ Other styling kwargs:
 """
 from ..registry import ArtistSpec, add_artist
 from ..draw import circle
-from ..utils import (resolve_aes, dodge_positions, categorical_groups,
-                     _drop_nan, group_color as _group_fill)
+from ..utils import (pack_opts, resolve_aes, dodge_positions,
+                     categorical_groups, _drop_nan,
+                     group_color as _group_fill)
 from ..draw import resolve_color
 from .._spec import _FRAME
 
 
-def _resolve_fill_kwarg(data, kw):
-    fill = kw.pop("fill", None)
+def _resolve_fill_kwarg(data, fill):
     if fill is None:
         return None, None
     kind, value = resolve_aes(data, fill)
@@ -39,27 +39,30 @@ def _resolve_fill_kwarg(data, kw):
     return value, None
 
 
-def _swarm_record(args, kw):
-    if args:
-        raise TypeError(
-            "swarm requires long-form input: "
-            "c.swarm(data=df, x='col', y='col', fill='col')."
-        )
-    data = kw.pop("data", None)
-    x = kw.pop("x", None)
-    y = kw.pop("y", None)
+def _swarm_record(data=None,
+                  # input & grouping — consumed here at record
+                  x=None, y=None, fill=None,
+                  # style — packed into opts for the draw/legend side
+                  orientation=None, width=None, gap=None,
+                  color=None, palette=None,
+                  size=None, alpha=None, linewidth=None,
+                  label=None, legend=None):
     if data is None or x is None or y is None:
         raise TypeError(
             "swarm requires data=, x=, y= (fill= optional)."
         )
-    fill_literal, group_col = _resolve_fill_kwarg(data, kw)
+    fill_literal, group_col = _resolve_fill_kwarg(data, fill)
     cats, groups, vals = categorical_groups(data, x, y, group_col)
+    opts = pack_opts(orientation=orientation, width=width, gap=gap,
+                     color=color, palette=palette,
+                     size=size, alpha=alpha, linewidth=linewidth,
+                     label=label, legend=legend)
     if fill_literal is not None:
-        kw["_fill_literal"] = fill_literal
+        opts["_fill_literal"] = fill_literal
     if group_col is not None and group_col == x:
-        kw["_redundant_grouping"] = True
+        opts["_redundant_grouping"] = True
     return {"type": "swarm", "cats": cats, "groups": groups,
-            "vals": vals, "opts": kw}
+            "vals": vals, "opts": opts}
 
 
 def _swarm_horizontal(a): return a["opts"].get("orientation") == "h"

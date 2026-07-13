@@ -26,7 +26,7 @@ from scipy.stats import norm
 
 from ..registry import ArtistSpec, add_artist
 from ..draw import circle, segment
-from ..utils import to_list, resolve_aes, long_form_1d
+from ..utils import to_list, resolve_aes, long_form_1d, pack_opts
 from .._spec import _D
 
 
@@ -50,25 +50,20 @@ def _qq_build(values, kw):
     return {"type": "qq", "theo": theo, "sample": sample, "opts": kw}
 
 
-def _qq_record(args, kw):
-    kw = dict(kw)
-    if args:
-        raise TypeError(
-            "qq requires long-form input: "
-            "c.qq(data=df, sample='col')."
-        )
-    data = kw.pop("data", None)
-    sample_col = kw.pop("sample", None)
-    if data is None or sample_col is None:
+def _qq_record(data=None, sample=None, color=None, palette=None,
+               # `dist` is consumed by `_qq_build` at record; the rest are
+               # style read at draw. All ride in opts.
+               dist=None, size=None, alpha=None, label=None, legend=None):
+    if data is None or sample is None:
         raise TypeError("qq requires data=, sample= (dist= optional).")
-    color = kw.pop("color", None)
     color_kind, color_value = resolve_aes(data, color)
-    palette = kw.pop("palette", None)
+    base = pack_opts(dist=dist, size=size, alpha=alpha,
+                     label=label, legend=legend)
     if color_kind == "column":
-        groups, vals = long_form_1d(data, sample_col, color)
+        groups, vals = long_form_1d(data, sample, color)
         records = []
         for j, (g, v) in enumerate(zip(groups, vals)):
-            opts = dict(kw)
+            opts = dict(base)
             opts["palette"] = palette
             opts["label"] = str(g)
             rec = _qq_build(v, opts)
@@ -77,8 +72,8 @@ def _qq_record(args, kw):
             records.append(rec)
         return records
     if color_value is not None:
-        kw["color"] = color_value
-    return _qq_build(to_list(data[sample_col]), kw)
+        base["color"] = color_value
+    return _qq_build(to_list(data[sample]), base)
 
 
 def _qq_xdomain(a): return a["theo"]

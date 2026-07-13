@@ -30,29 +30,26 @@ Styling kwargs:
 from ..registry import ArtistSpec, add_artist
 from ..draw import coord, path, rect, text_path
 from .._spec import _LEGSPEC
-from ..utils import silverman_bw, kde_1d, categorical_groups, resolve_aes
+from ..utils import pack_opts, silverman_bw, kde_1d, categorical_groups, resolve_aes
 from ..utils import group_color
 
 
-def _ridge_record(args, kw):
-    if args:
-        raise TypeError(
-            "ridge requires long-form input: "
-            "c.ridge(data=df, x='label', y='value')."
-        )
-    data = kw.pop("data", None)
-    x = kw.pop("x", None)
-    y = kw.pop("y", None)
+def _ridge_record(data=None, x=None, y=None, color=None,
+                  # style — packed into opts for the draw/legend side
+                  # (bw/n_grid too: ridge runs its KDEs at draw time)
+                  palette=None, overlap=None, bw=None, n_grid=None,
+                  alpha=None, label=None, legend=None):
     if data is None or x is None or y is None:
         raise TypeError("ridge requires data=, x=, y=.")
-    color = kw.pop("color", None)
     color_kind, color_value = resolve_aes(data, color)
     group_col = color if color_kind == "column" else None
+    opts = pack_opts(palette=palette, overlap=overlap, bw=bw, n_grid=n_grid,
+                     alpha=alpha, label=label, legend=legend)
     if color_kind == "literal" and color_value is not None:
-        kw["color"] = color_value
+        opts["color"] = color_value
     labels, groups, vals = categorical_groups(data, x, y, group_col)
     return {"type": "ridge", "labels": labels, "groups": groups,
-            "vals": vals, "opts": kw}
+            "vals": vals, "opts": opts}
 
 
 def _ridge_xdomain(a):

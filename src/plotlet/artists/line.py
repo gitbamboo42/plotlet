@@ -37,7 +37,7 @@ import math
 import random
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import quantile, validate_ci, ci_bounds
+from ..utils import UNSET, pack_opts, quantile, validate_ci, ci_bounds
 from .._spec import _D
 from ..draw import coord, marker, path as draw_path, polygon, polyline
 from ._shared import (_xy_minmax, _line_legend_entries, _CURVE_VALUES,
@@ -111,68 +111,53 @@ def _artist_line(a, xs_, ys_, col, xs, ys, warp=None):
     return "".join(out)
 
 
-def _line_record(args, kw):
-    kw = dict(kw)
-    if args:
-        raise TypeError(
-            "line requires long-form input: "
-            "c.line(data=df, x='col', y='col')."
-        )
-    data = kw.pop("data", None)
-    x_col = kw.pop("x", None)
-    y_col = kw.pop("y", None)
-    if data is None or x_col is None or y_col is None:
+def _line_record(data=None,
+                 # input & series splitting — consumed here at record
+                 x=None, y=None,
+                 color=None, group=None, linestyle=None, alpha=None,
+                 palette=None, alphas=DEFAULT_ALPHA_RANGE,
+                 # aggregation (estimator=) — consumed here at record
+                 estimator=None, ci=UNSET, level=0.95, n_boot=1000, seed=0,
+                 # style — packed into opts for the draw/attrs side
+                 curve=None, arc=None, marker=None, size=None,
+                 linewidth=None, band_alpha=None, label=None, legend=None):
+    if data is None or x is None or y is None:
         raise TypeError(
             "line requires data=, x=, y= (color/group/linestyle/alpha optional)."
         )
-    if "linetype" in kw:
-        raise TypeError(
-            "line takes `linestyle=` for dash style "
-            "(literal `\"--\"`, `\":\"`, `\"-.\"`, … → fixed; column name → "
-            "cycle dashes per level)."
-        )
-    if "markersize" in kw:
-        raise TypeError(
-            "line takes `size=` for marker radius (px)."
-        )
-    color   = kw.pop("color", None)
-    group   = kw.pop("group", None)
-    ls      = kw.pop("linestyle", None)
-    alpha   = kw.pop("alpha", None)
-    palette = kw.pop("palette", None)
-    alphas  = kw.pop("alphas", DEFAULT_ALPHA_RANGE)
-    estimator = kw.get("estimator")
     if estimator not in (None, "mean", "median"):
         raise ValueError(
             f"line: estimator={estimator!r} — expected 'mean', 'median', "
             f"or None."
         )
-    if estimator is None and ("ci" in kw or "band_alpha" in kw):
+    # `ci=None` is meaningful (aggregate line without a band), so unset
+    # gets a sentinel default rather than None.
+    if estimator is None and (ci is not UNSET or band_alpha is not None):
         raise TypeError("line: ci=/band_alpha= apply with estimator=.")
-    if estimator is not None and kw.get("curve", "linear") != "linear":
+    if estimator is not None and curve is not None and curve != "linear":
         raise ValueError(
             "line: estimator= aggregation draws a linear band — "
             "it doesn't combine with curve=/step()."
         )
-    records = expand_xy_long_form("line", data, x_col, y_col,
-                                   color, group, ls, alpha,
-                                   palette, alphas, kw)
+    opts = pack_opts(curve=curve, arc=arc, marker=marker, size=size,
+                     linewidth=linewidth, band_alpha=band_alpha,
+                     estimator=estimator, label=label, legend=legend)
+    records = expand_xy_long_form("line", data, x, y,
+                                   color, group, linestyle, alpha,
+                                   palette, alphas, opts)
     if estimator is not None:
         for rec in records:
-            _aggregate_series(rec, estimator)
+            _aggregate_series(rec, estimator, "t" if ci is UNSET else ci,
+                              level, n_boot, seed)
     return records
 
 
-def _aggregate_series(rec, estimator):
+def _aggregate_series(rec, estimator, ci, level, n_boot, seed):
     """Collapse replicate rows sharing an x to their estimator, in place.
     x order: ascending when numeric, first-seen otherwise. NaN/None pairs
     drop. `ci` attaches `_band_lo`/`_band_hi` alongside the aggregate."""
-    opts = rec["opts"]
-    ci = opts.get("ci", "t")
     validate_ci("line", ci)
-    level = opts.get("level", 0.95)
-    n_boot = opts.get("n_boot", 1000)
-    rng = random.Random(opts.get("seed", 0))
+    rng = random.Random(seed)
     cells = {}
     for x, y in zip(rec["xs"], rec["ys"]):
         if x is None or (isinstance(x, float) and x != x):
@@ -267,15 +252,15 @@ add_artist(ArtistSpec(
 _STEP_WHERE = {"pre": "step-before", "post": "step-after", "mid": "step-mid"}
 
 
-def _step_record(args, kw):
-    where = kw.pop("where", "post")
+def _step_record(data=None, where="post", **kw):
     curve = _STEP_WHERE.get(where)
     if curve is None:
         raise ValueError(
             f"step() where= expects 'pre', 'post', or 'mid'; got {where!r}"
         )
-    kw["curve"] = curve
-    return _line_record(args, kw)
+    # Forwards to line — `**kw` here means step accepts everything line
+    # does; line's signature does the name checking.
+    return _line_record(data, curve=curve, **kw)
 
 
 add_artist(ArtistSpec(

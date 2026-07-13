@@ -21,31 +21,28 @@ import math
 
 from ..registry import ArtistSpec, add_artist
 from ..draw import segment
-from ..utils import to_list, long_form_1d, resolve_aes
+from ..utils import to_list, long_form_1d, resolve_aes, pack_opts
 from ..draw import resolve_color
 from ..utils import group_color
 
 
-def _rug_record(args, kw):
-    kw = dict(kw)
-    if args:
-        raise TypeError(
-            "rug requires long-form input: "
-            "c.rug(data=df, x='col')."
-        )
-    data_df = kw.pop("data", None)
-    x_col = kw.pop("x", None)
-    if data_df is None or x_col is None:
+def _rug_record(data=None, x=None, color=None,
+                # style — packed into opts for the draw side
+                orientation=None, palette=None, length=None,
+                alpha=None, linewidth=None, label=None, legend=None):
+    if data is None or x is None:
         raise TypeError(
             "rug requires data=, x= (color= optional)."
         )
-    color = kw.pop("color", None)
-    color_kind, color_value = resolve_aes(data_df, color)
+    color_kind, color_value = resolve_aes(data, color)
     group_col = color if color_kind == "column" else None
-    groups, vals = long_form_1d(data_df, x_col, group_col)
+    groups, vals = long_form_1d(data, x, group_col)
+    opts = pack_opts(orientation=orientation, palette=palette, length=length,
+                     alpha=alpha, linewidth=linewidth, label=label,
+                     legend=legend)
     if color_kind == "literal" and color_value is not None:
-        kw["_color_literal"] = color_value
-    return {"type": "rug", "groups": groups, "vals": vals, "opts": kw}
+        opts["_color_literal"] = color_value
+    return {"type": "rug", "groups": groups, "vals": vals, "opts": opts}
 
 
 def _rug_axis(a): return a["opts"].get("orientation", "x")

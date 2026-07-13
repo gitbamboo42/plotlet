@@ -28,35 +28,31 @@ Styling kwargs:
 import random
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import (categorical_groups, resolve_aes, quantile,
+from ..utils import (pack_opts, categorical_groups, resolve_aes, quantile,
                      validate_ci, ci_bounds)
 from ..draw import segment, circle, polyline, errorbar_v
 from ..utils import group_color
 
 
-def _pointplot_record(args, kw):
-    if args:
-        raise TypeError(
-            "pointplot requires long-form input: "
-            "c.pointplot(data=df, x='col', y='col')."
-        )
-    data = kw.pop("data", None)
-    x = kw.pop("x", None)
-    y = kw.pop("y", None)
+def _pointplot_record(data=None,
+                      # input & aggregation — consumed here at record
+                      x=None, y=None, color=None,
+                      estimator="mean", ci="t", level=0.95, n_boot=1000,
+                      seed=0,
+                      # style — packed into opts for the draw/legend side
+                      size=None, capsize=None, linewidth=None,
+                      palette=None, label=None, legend=None):
     if data is None or x is None or y is None:
         raise TypeError("pointplot requires data=, x=, y=.")
-    color = kw.pop("color", None)
     color_kind, color_value = resolve_aes(data, color)
     group_col = color if color_kind == "column" else None
+    opts = pack_opts(size=size, capsize=capsize, linewidth=linewidth,
+                     palette=palette, label=label, legend=legend)
     if color_kind == "literal" and color_value is not None:
-        kw["color"] = color_value
+        opts["color"] = color_value
     cats, groups, vals = categorical_groups(data, x, y, group_col)
-    estimator = kw.pop("estimator", "mean")
-    ci = kw.pop("ci", "t")
     validate_ci("pointplot", ci)
-    level = kw.pop("level", 0.95)
-    n_boot = kw.pop("n_boot", 1000)
-    rng = random.Random(kw.pop("seed", 0))
+    rng = random.Random(seed)
     est_fn = ((lambda xs: sum(xs) / len(xs) if xs else float("nan"))
               if estimator == "mean" else (lambda xs: quantile(xs, 0.5)))
     ests = [[est_fn(vals[i][j]) for i in range(len(cats))]
@@ -70,7 +66,7 @@ def _pointplot_record(args, kw):
     los = [flat_lo[j * n:(j + 1) * n] for j in range(len(groups))]
     his = [flat_hi[j * n:(j + 1) * n] for j in range(len(groups))]
     return {"type": "pointplot", "cats": cats, "groups": groups,
-            "_ests": ests, "_los": los, "_his": his, "opts": kw}
+            "_ests": ests, "_los": los, "_his": his, "opts": opts}
 
 
 def _pointplot_xdomain(a): return a["cats"]

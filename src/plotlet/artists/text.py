@@ -10,7 +10,7 @@ font-independent.
 import math
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list
+from ..utils import to_list, pack_opts
 from .._spec import _D
 from ..draw import text_path, segment, rect as draw_rect, polygon as draw_polygon
 from ..draw import coord, measure_text
@@ -77,6 +77,9 @@ def _artist_annotate(a, xs_, ys_, col, warp=None):
     dx = opts.get("dx", 0)
     dy = opts.get("dy", 0)
     rotation = opts.get("rotation", 0)
+    fontstyle = opts.get("fontstyle", "normal")
+    fontweight = opts.get("fontweight", "normal")
+    decoration = opts.get("decoration", "none")
     anchor = _HA_TO_ANCHOR.get(ha, "start")
     if va == "top":      va_offset = fontsize * 0.78
     elif va == "center": va_offset = fontsize * 0.34
@@ -127,7 +130,9 @@ def _artist_annotate(a, xs_, ys_, col, warp=None):
     if bb is not None:
         parts.append(_text_bbox_rect(a["text"], px_tx, text_y, fontsize, anchor, bb))
     parts.append(text_path(a["text"], px_tx, text_y,
-                           fontsize, anchor=anchor, color=color))
+                           fontsize, anchor=anchor, color=color,
+                           fontstyle=fontstyle, fontweight=fontweight,
+                           decoration=decoration))
     if rotation:
         # Same convention as `_artist_text`: positive = CCW, anchored at
         # the ha/va alignment point. The arrow stays unrotated.
@@ -153,6 +158,9 @@ def _artist_text(a, xs_, ys_, col, warp=None):
     dx = opts.get("dx", 0)
     dy = opts.get("dy", 0)
     rotation = opts.get("rotation", 0)
+    fontstyle = opts.get("fontstyle", "normal")
+    fontweight = opts.get("fontweight", "normal")
+    decoration = opts.get("decoration", "none")
     anchor = _HA_TO_ANCHOR.get(ha, "start")
     # va offset on top of the SVG baseline. Cap-height of DejaVu ≈ 0.7 * size;
     # x-height ≈ 0.5. These constants give visually-centered placement for
@@ -180,7 +188,9 @@ def _artist_text(a, xs_, ys_, col, warp=None):
         parts = []
         if bb is not None:
             parts.append(_text_bbox_rect(str(s), px, py, fontsize, anchor, bb))
-        parts.append(text_path(str(s), px, py, fontsize, anchor=anchor, color=color))
+        parts.append(text_path(str(s), px, py, fontsize, anchor=anchor,
+                               color=color, fontstyle=fontstyle,
+                               fontweight=fontweight, decoration=decoration))
         if rotation:
             # `rotation=` uses the convention positive = CCW; SVG's
             # native rotation is CW in screen space (y-down), so we
@@ -197,26 +207,23 @@ def _artist_text(a, xs_, ys_, col, warp=None):
 # Data-anchored labels, long-form only: one label per table row from the
 # `label=` column. One-off labels go through `annotate` instead.
 
-def _text_record(args, kw):
-    kw = dict(kw)
-    if args:
-        raise TypeError(
-            "text requires long-form input: "
-            "c.text(data=df, x='col', y='col', label='col'). "
-            "For a one-off label use c.annotate('text', xy=(x, y))."
-        )
-    data = kw.pop("data", None)
-    x_col = kw.pop("x", None)
-    y_col = kw.pop("y", None)
-    label_col = kw.pop("label", None)
-    if data is None or x_col is None or y_col is None or label_col is None:
+def _text_record(data=None, x=None, y=None, label=None,
+                 # style — packed into opts for the draw side
+                 fontsize=None, ha=None, va=None, color=None,
+                 dx=None, dy=None, rotation=None, bbox=None,
+                 fontstyle=None, fontweight=None, decoration=None):
+    if data is None or x is None or y is None or label is None:
         raise TypeError(
             "text requires data=, x=, y=, label=."
         )
-    xs = to_list(data[x_col])
-    ys = to_list(data[y_col])
-    labels = [str(v) for v in to_list(data[label_col])]
-    return {"type": "text", "xs": xs, "ys": ys, "labels": labels, "opts": kw}
+    xs = to_list(data[x])
+    ys = to_list(data[y])
+    labels = [str(v) for v in to_list(data[label])]
+    opts = pack_opts(fontsize=fontsize, ha=ha, va=va, color=color,
+                     dx=dx, dy=dy, rotation=rotation, bbox=bbox,
+                     fontstyle=fontstyle, fontweight=fontweight,
+                     decoration=decoration)
+    return {"type": "text", "xs": xs, "ys": ys, "labels": labels, "opts": opts}
 
 
 def _text_data_attrs(a):
@@ -244,13 +251,21 @@ add_artist(ArtistSpec(
 # data coordinates so the arrow follows the axis through resizes /
 # share_x scaling.
 
-def _annotate_record(args, kw):
-    text = args[0]
-    if "xy" not in kw:
+def _annotate_record(text, xy=None, xytext=None,
+                     # style — packed into opts for the draw side
+                     arrow=None, arrow_head=None, arrow_width=None, bbox=None,
+                     fontsize=None, ha=None, va=None, color=None,
+                     dx=None, dy=None, rotation=None,
+                     fontstyle=None, fontweight=None, decoration=None):
+    if xy is None:
         raise TypeError("annotate() requires xy=(x, y)")
-    xy = tuple(kw["xy"])
-    xytext = tuple(kw.get("xytext", xy))
-    opts = {k: v for k, v in kw.items() if k not in ("xy", "xytext")}
+    xy = tuple(xy)
+    xytext = xy if xytext is None else tuple(xytext)
+    opts = pack_opts(arrow=arrow, arrow_head=arrow_head,
+                     arrow_width=arrow_width, bbox=bbox, fontsize=fontsize,
+                     ha=ha, va=va, color=color, dx=dx, dy=dy, rotation=rotation,
+                     fontstyle=fontstyle, fontweight=fontweight,
+                     decoration=decoration)
     return {"type": "annotate", "text": str(text),
             "xy": xy, "xytext": xytext, "opts": opts}
 

@@ -47,7 +47,7 @@ Other styling kwargs:
 import random
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import (to_list, resolve_aes, dodge_positions,
+from ..utils import (UNSET, pack_opts, to_list, resolve_aes, dodge_positions,
                      validate_ci, ci_bounds, DODGE_WIDTH, DODGE_GAP)
 from ..draw import resolve_color
 from .._spec import _D, _LEGSPEC
@@ -152,76 +152,78 @@ def _aggregate_stat(data, x_col, y_col, group_col, stat, ci,
     return cats, groups, series, err_lo, err_hi
 
 
-def _bar_record(args, kw):
-    kw = dict(kw)
-    if args:
-        raise TypeError(
-            "bar requires long-form input: "
-            "c.bar(data=df, x='col', y='col', fill='col')."
-        )
-    data = kw.pop("data", None)
-    x_col = kw.pop("x", None)
-    y_col = kw.pop("y", None)
-    stat = kw.pop("stat", "identity")
+def _bar_record(data=None,
+                # input & aggregation — consumed here at record
+                x=None, y=None, fill=None,
+                stat="identity", ci=UNSET, level=0.95, n_boot=1000, seed=0,
+                position=None, yerr=None, xerr=None,
+                # style — packed into opts for the draw/legend/attrs side
+                orientation=None, bottom=None, width=None, gap=None,
+                color=None, alpha=None, linewidth=None, linestyle=None,
+                ecolor=None, capsize=None, palette=None,
+                label=None, legend=None):
     if stat not in _STATS:
         raise ValueError(
             f"unknown stat={stat!r}; expected one of {_STATS}."
         )
-    if data is None or x_col is None or (y_col is None and stat != "count"):
+    if data is None or x is None or (y is None and stat != "count"):
         raise TypeError(
             "bar requires data=, x=, y= (fill= optional)."
         )
-    if stat == "count" and y_col is not None:
+    if stat == "count" and y is not None:
         raise TypeError(
             "bar: stat='count' counts rows per category — drop y=."
         )
-    ci = kw.pop("ci", "t" if stat == "mean" else None)
+    # `ci=None` is meaningful (mean bars without a CI), so unset gets a
+    # sentinel default rather than None.
+    if ci is UNSET:
+        ci = "t" if stat == "mean" else None
     if ci is not None and stat != "mean":
         raise TypeError("bar: ci= applies to stat='mean'.")
     validate_ci("bar", ci)
     # `fill=` may be a literal color or a column name. Column → drives
     # grouping; literal → applied to every bar.
-    fill = kw.pop("fill", None)
     fill_kind, fill_value = resolve_aes(data, fill)
     group_col = fill if fill_kind == "column" else None
     stat_err_lo = stat_err_hi = None
     if stat == "identity":
-        cats, groups, series = _aggregate_long(data, x_col, y_col, group_col)
+        cats, groups, series = _aggregate_long(data, x, y, group_col)
     else:
         cats, groups, series, stat_err_lo, stat_err_hi = _aggregate_stat(
-            data, x_col, y_col, group_col, stat, ci,
-            kw.pop("level", 0.95), kw.pop("n_boot", 1000), kw.pop("seed", 0))
+            data, x, y, group_col, stat, ci, level, n_boot, seed)
+    opts = pack_opts(orientation=orientation, bottom=bottom, width=width,
+                     gap=gap, color=color, alpha=alpha, linewidth=linewidth,
+                     linestyle=linestyle, ecolor=ecolor, capsize=capsize,
+                     palette=palette, label=label, legend=legend)
     if fill_kind == "literal":
-        kw["_fill_literal"] = fill_value
-    if group_col is not None and group_col == x_col:
-        kw["_redundant_grouping"] = True
-    bottom = kw.get("bottom", 0)
-    if hasattr(bottom, "__iter__") and not isinstance(bottom, str):
+        opts["_fill_literal"] = fill_value
+    if group_col is not None and group_col == x:
+        opts["_redundant_grouping"] = True
+    if bottom is not None and hasattr(bottom, "__iter__") \
+            and not isinstance(bottom, str):
         raise TypeError(
             "bar: bottom= must be a scalar baseline; for grouped bars "
             "pass fill='series_col' with position='stack'."
         )
-    yerr = kw.pop("yerr", None)
-    xerr = kw.pop("xerr", None)
     if stat != "identity" and (yerr is not None or xerr is not None):
         raise TypeError(
             "bar: stat= aggregates for you — stat='mean' supplies error "
             "bars from the CI; drop yerr=/xerr=."
         )
-    horizontal = kw.get("orientation") == "h"
+    horizontal = orientation == "h"
     if yerr is not None and horizontal:
         raise TypeError("bar: horizontal bars take xerr= (the value axis is x).")
     if xerr is not None and not horizontal:
         raise TypeError("bar: vertical bars take yerr= (the value axis is y).")
     err = xerr if horizontal else yerr
 
-    if len(series) == 1:
-        default_pos = None
-    elif err is not None or stat == "mean":
-        default_pos = "dodge"
-    else:
-        default_pos = "stack"
-    position = kw.pop("position", default_pos)
+    if position is None:
+        if len(series) == 1:
+            position = None
+        elif err is not None or stat == "mean":
+            position = "dodge"
+        else:
+            position = "stack"
     if position is not None and position not in _POSITIONS:
         raise ValueError(
             f"unknown position={position!r}; expected one of {_POSITIONS}."
@@ -232,7 +234,7 @@ def _bar_record(args, kw):
             f"position='dodge', not {position!r}."
         )
     rec = {"type": "bar", "cats": cats, "groups": groups, "series": series,
-           "_position": position, "opts": kw}
+           "_position": position, "opts": opts}
     if err is not None:
         if position in ("stack", "fill"):
             raise ValueError(
@@ -240,7 +242,7 @@ def _bar_record(args, kw):
                 f"use position='dodge'."
             )
         rec["err_lo"], rec["err_hi"] = _aggregate_err(
-            data, x_col, group_col, err, cats, groups)
+            data, x, group_col, err, cats, groups)
     elif stat_err_lo is not None:
         rec["err_lo"], rec["err_hi"] = stat_err_lo, stat_err_hi
     return rec

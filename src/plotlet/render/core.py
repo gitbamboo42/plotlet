@@ -478,7 +478,7 @@ def _replay(calls):
             # artists).
             if st["x_sectors"] is not None or st["y_sectors"] is not None:
                 call_kw = _sector_remap_data(call_kw, st)
-            result = spec.record(call_args, call_kw)
+            result = spec.record(*call_args, **call_kw)
             if isinstance(result, list):
                 st["artists"].extend(result)
             else:

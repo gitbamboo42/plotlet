@@ -19,7 +19,7 @@ Other styling kwargs:
   label=None      legend label (single-series only)
 """
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, long_form_1d, resolve_aes
+from ..utils import pack_opts, long_form_1d, resolve_aes
 from ..utils import _drop_nan
 from ..draw import resolve_color
 from ..utils import group_color
@@ -42,33 +42,28 @@ def _bin_one(vals, lo, hi, width, bins, density):
     return counts
 
 
-def _freqpoly_record(args, kw):
-    kw = dict(kw)
-    if args:
-        raise TypeError(
-            "freqpoly requires long-form input: "
-            "c.freqpoly(data=df, x='col')."
-        )
-    data_df = kw.pop("data", None)
-    x_col = kw.pop("x", None)
-    if data_df is None or x_col is None:
+def _freqpoly_record(data=None,
+                     # input & binning — consumed here at record
+                     x=None, color=None, bins=20, density=False,
+                     # style — packed into opts for the draw/legend side
+                     linewidth=None, palette=None, label=None, legend=None):
+    if data is None or x is None:
         raise TypeError(
             "freqpoly requires data=, x= (color= optional)."
         )
-    color = kw.pop("color", None)
-    color_kind, color_value = resolve_aes(data_df, color)
+    color_kind, color_value = resolve_aes(data, color)
     group_col = color if color_kind == "column" else None
-    groups, vals = long_form_1d(data_df, x_col, group_col)
+    groups, vals = long_form_1d(data, x, group_col)
+    opts = pack_opts(linewidth=linewidth, palette=palette,
+                     label=label, legend=legend)
     if color_kind == "literal" and color_value is not None:
-        kw["_color_literal"] = color_value
-    bins = kw.get("bins", 20)
-    density = kw.get("density", False)
+        opts["_color_literal"] = color_value
     vals = [_drop_nan(g) for g in vals]
     all_vals = [v for g in vals for v in g]
     if not all_vals:
         return {"type": "freqpoly", "groups": groups,
                 "_centers_groups": [[] for _ in vals],
-                "_heights_groups": [[] for _ in vals], "opts": kw}
+                "_heights_groups": [[] for _ in vals], "opts": opts}
     lo, hi = min(all_vals), max(all_vals)
     if lo == hi: hi = lo + 1
     width = (hi - lo) / bins
@@ -78,7 +73,7 @@ def _freqpoly_record(args, kw):
     return {"type": "freqpoly", "groups": groups,
             "_centers_groups": centers_groups,
             "_heights_groups": heights_groups,
-            "_lo": lo, "_hi": hi, "_w": width, "opts": kw}
+            "_lo": lo, "_hi": hi, "_w": width, "opts": opts}
 
 
 def _freqpoly_xdomain(a):
