@@ -1,10 +1,11 @@
 # Philosophy
 
-plotlet ships the **standard plotting vocabulary** plus the multi-panel
-composition and reproducibility infrastructure that lets you build figures
-on top of it. The library is also **designed to be extended**: domain-
-specific plot types live in your own project, with AI assistance making the
-per-extension cost low.
+plotlet ships the **standard plotting vocabulary** plus the infrastructure
+to build figures on top of it: multi-panel composition, swappable
+coordinate systems (Cartesian and circular), and reproducible output. The
+library is also **designed to be extended**: domain-specific plot types —
+and even new coordinate systems — can live in extensions, with AI assistance
+making the per-extension cost low.
 
 ## What's in the core
 
@@ -12,6 +13,10 @@ per-extension cost low.
   SVG, every stage inspectable (`to_ir`, `resolve_ir`, `.to_dict()`,
   `c.regions()`)
 - Scales: linear, log, category, time, symlog, power, sqrt
+- Coordinate systems: Cartesian by default; swap the per-panel projection
+  with `c.coordinate(pt.CircularCoordinate(...))` for circular / ring
+  layouts. The projection protocol is open — any object matching it adds a
+  new one ([COORDINATES.md](COORDINATES.md)).
 - Axis partitioning: `c.sectors(...)` — named regions along an axis,
   either continuous (length-weighted) or categorical (grouped members).
   Peer of scales: any artist works inside a sectored axis without
@@ -43,12 +48,10 @@ per-extension cost low.
 - Specialty scales beyond the basics
 - Interactivity, animation, dashboarding
 
-These belong in **your project**. Reference implementations to copy and adapt
-live in the separate [`plotlet-extensions`](https://github.com/gitbamboo42/plotlet-extensions)
-package (single-file artists) and the [`plotlet-cookbook`](https://github.com/gitbamboo42/plotlet-cookbook)
-repo (multi-file projects like annotated heatmaps).
-The line is "standard vocabulary in core, domain idioms in extensions" —
-borrow elegance where it doesn't fight the core.
+These live outside the core. The separate [`plotlet-extensions`](https://github.com/gitbamboo42/plotlet-extensions)
+package holds single-file artists you install and import (`pip install plotlet-extensions`,
+then `import plotlet.extensions.<name>`); the [`plotlet-cookbook`](https://github.com/gitbamboo42/plotlet-cookbook)
+repo holds multi-file projects (like annotated heatmaps) to copy and adapt.
 
 ## The replay model
 
@@ -72,7 +75,7 @@ artists can't resolve pixel positions or palettes at record time — see
 
 ## Why this shape
 
-Three claims:
+Four claims:
 
 1. **Reproducibility.** Text rendered as paths, deterministic replay — same
    script, byte-identical output, any machine. Baseline-image tests work;
@@ -112,8 +115,6 @@ plotlet will never:
 
 - Be interactive (no hover, zoom, pan, animation, ever)
 - Accept domain-specific plot types into the core (they belong in
-  [`plotlet-extensions`](https://github.com/gitbamboo42/plotlet-extensions)
-  or user projects — see the
-  list above)
-
-Tools that try to do everything age into legacy weight. We're not doing that.
+  [`plotlet-extensions`](https://github.com/gitbamboo42/plotlet-extensions),
+  [`plotlet-cookbook`](https://github.com/gitbamboo42/plotlet-cookbook), or
+  user projects — see the list above)

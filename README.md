@@ -1,6 +1,6 @@
 # plotlet
 
-plotlet is a Python library for reproducible, multi-panel scientific figures. Byte-identical output across machines, a standard plotting vocabulary, and a first-class extension story for custom plot types.
+plotlet is a Python library for reproducible, multi-panel scientific figures. Byte-identical output across machines, a standard plotting vocabulary, built-in Cartesian and circular coordinate systems, and an easy way to add your own plot types.
 
 ## Documentation
 
