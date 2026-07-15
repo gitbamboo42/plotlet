@@ -1,28 +1,23 @@
-"""Custom artist: dendrogram with curved (Bezier) branches.
+"""Test fixture: dendrogram with curved (Bezier) branches.
 
-Same data contract and cluster-aware behavior as the built-in
-`c.dendrogram(...)`, but each merge is rendered as a cubic Bezier
-between its two children instead of the orthogonal upside-down-U.
-Visual flourish — no algorithmic difference.
+Not a shipped artist — this lives in the test suite as an executable
+proof that an alternative tree renderer can be built using only the
+public clustering API (`pt.linkage_split` / `pt.cluster.layout_tree` /
+`pt.add_artist`), no private symbols and no plotlet-core changes. The
+`dendrogram_split_parent` baseline runs it as the second, independent
+renderer alongside the built-in `dendrogram`, so a regression in the
+public cluster API trips the baseline from two angles. If real demand
+for a curved dendrogram ever surfaces, it graduates to the
+plotlet-extensions package.
 
-Lives in extensions to demonstrate that an alternative tree renderer
-can be built using only the public clustering API
-(`pt.linkage_split` / `pt.cluster.layout_tree` / `pt.add_artist`) —
-no private symbols, no plotlet-core changes.
-
-API mirrors `dendrogram`:
+Same data contract and cluster-aware behavior as `c.dendrogram(...)`,
+but each merge renders as a cubic Bezier between its two children
+instead of the orthogonal upside-down-U — a visual restyle, no
+algorithmic difference. API mirrors `dendrogram`:
 
     c.curved_tree(data, labels=..., orientation="top",
                   clusters=groups, method="ward")
-
-`clusters=` is the parallel grouping vector that drives the two-level
-cluster (per-group within + centroid between); the resulting leaf order
-is exposed via `axis_order` so a peer heatmap follows automatically. The
-visual gap whitespace between blocks lives on the panel as
-`c.sectors(...)` — declare it once and any peer category-scale artist
-inherits the gaps.
 """
-SUMMARY = "Dendrogram variant rendering each merge as a cubic Bezier curve."
 import math
 
 import plotlet as pt
@@ -31,7 +26,7 @@ from plotlet.cluster import (layout_tree, layout_parent, leaf_position,
                              build_tree, tree_frame_defaults)
 from plotlet.registry import ArtistSpec, add_artist
 from plotlet.utils import pack_opts
-from ..draw import coord, stroke_w
+from plotlet.draw import coord, stroke_w
 
 
 

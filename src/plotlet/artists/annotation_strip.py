@@ -58,17 +58,14 @@ host heatmap so the cluster machinery groups equal values into single
 runs.
 """
 
-SUMMARY = 'Annotation strip — categorical/continuous fill, optional per-cell text, optional border. Band mode (per position) or block mode (per contiguous run of equal values) for group titles.'
 import math
-from pathlib import Path
 
-import plotlet as pt
-from plotlet.draw import rect, resolve_color
-from plotlet.draw import colormap, ContinuousNorm
-from plotlet.draw import text_path, cap_height, descender
-from plotlet.registry import ArtistSpec, add_artist
-from plotlet.utils import pack_opts, to_list
-from plotlet._splits import block_bbox_1d, blocks as _blocks
+from ..registry import ArtistSpec, add_artist, declare_coord_support
+from ..utils import pack_opts, to_list
+from ..draw import rect, resolve_color
+from ..draw import colormap, ContinuousNorm
+from ..draw import text_path, cap_height, descender
+from .._splits import block_bbox_1d, blocks as _blocks
 
 
 _VALID_SIDES = {"x": {"bottom", "top"}, "y": {"left", "right"}}
@@ -628,48 +625,4 @@ add_artist(ArtistSpec(
     uses_color_cycle=False,
     tight_domain=True,
 ))
-pt.declare_coord_support("Circular", ["annotation_strip"])
-
-
-def demo():
-    """Build the demonstration chart with synthetic data.
-
-    Three stacked strips on the same sample axis:
-
-    1. Block-mode group titles with palette fill + text + border.
-    2. Band-mode categorical strip (one cell per sample, palette fill).
-    3. Band-mode continuous strip with cmap and a gradient legend.
-
-    Returns a `pt.Chart` ready for `.save_svg()` or further composition."""
-    import math
-    samples = [f"S{i+1:02d}" for i in range(12)]
-    groups = (["ctrl"] * 4) + (["treat"] * 5) + (["resist"] * 3)
-    palette = {"ctrl": pt.TAB10[0], "treat": pt.TAB10[1], "resist": pt.TAB10[2]}
-    scores = [math.sin(i * 0.6) for i in range(12)]
-
-    df = {"sample": samples, "group": groups, "score": scores}
-
-    blocks = pt.chart(data_width=420, data_height=22)
-    blocks.annotation_strip(df, position="sample", value="group",
-                            mode="block", palette=palette, text=True,
-                            text_color="white", cell_border="#222",
-                            name="Cohort")
-    blocks.xticks([])
-
-    cat = pt.chart(data_width=420, data_height=24)
-    cat.annotation_strip(df, position="sample", value="group",
-                         palette=palette, name="Treatment")
-    cat.xticks([])
-
-    cont = pt.chart(data_width=420, data_height=24)
-    cont.annotation_strip(df, position="sample", value="score",
-                          cmap="RdBu_r", vmin=-1, vmax=1, name="Score")
-    cont.xticks(rotation=45)
-
-    return pt.grid([[blocks], [cat], [cont]]).share_x(True) | pt.legend()
-
-
-if __name__ == "__main__":
-    out = Path(__file__).with_suffix(".svg")
-    demo().save_svg(out)
-    print(f"wrote {out}")
+declare_coord_support("Circular", ["annotation_strip"])

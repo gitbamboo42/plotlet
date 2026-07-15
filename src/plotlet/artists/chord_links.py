@@ -34,14 +34,9 @@ through a cross-sector curve read as a layering bug. Sector *labels*
 still render.
 """
 
-SUMMARY = "Pairwise arcs between two x positions; renders as a linear arc diagram or, inside a CircularCoordinate inner disc, as Circos-style Bezier chords."
-
-from pathlib import Path
-
-import plotlet as pt
-from plotlet.draw import path as draw_path, segment, TAB10
-from plotlet.registry import ArtistSpec, add_artist
-from plotlet.utils import pack_opts, to_list, resolve_aes, palette_color
+from ..registry import ArtistSpec, add_artist, declare_coord_support
+from ..utils import pack_opts, to_list, resolve_aes, palette_color
+from ..draw import path as draw_path, segment, TAB10
 from ..draw import coord
 
 
@@ -173,7 +168,7 @@ def _chord_links_frame_defaults(args, kw):
     ]
 
 
-pt.add_artist(pt.ArtistSpec(
+add_artist(ArtistSpec(
     name="chord_links",
     record=_chord_links_record,
     xdomain=_chord_links_xdomain,
@@ -184,26 +179,4 @@ pt.add_artist(pt.ArtistSpec(
     crosses_sectors=True,
     tight_domain=True,
 ))
-pt.declare_coord_support("Circular", ["chord_links"])
-
-
-def demo():
-    """Linear arc-diagram demo — pairs of x positions colored by category."""
-    import pandas as pd
-    df = pd.DataFrame({
-        "src":  [10, 18, 25, 35, 50, 60, 72, 80],
-        "dst":  [40, 65, 55, 88, 78, 95, 90, 96],
-        "kind": ["a", "b", "a", "b", "a", "b", "a", "b"],
-    })
-    c = pt.chart(df, xlim=(0, 100))
-    c.chord_links(data=df, x1="src", x2="dst", color="kind", width=1.5,
-                  alpha=0.7)
-    c.title("Arc diagram").xlabel("position").yticks([]).ylabel("")
-    c.legend(True)
-    return c
-
-
-if __name__ == "__main__":
-    out = Path(__file__).with_suffix(".svg")
-    demo().save_svg(out)
-    print(f"wrote {out}")
+declare_coord_support("Circular", ["chord_links"])

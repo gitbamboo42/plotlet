@@ -14,7 +14,6 @@ import math
 import random
 
 import plotlet as pt
-import plotlet.extensions.numeric_bar  # noqa — registers numeric_bar
 import pytest
 
 
@@ -466,7 +465,6 @@ def ring_inner_chords():
     # panel that inherits the host's sector partition. Pins the root
     # wrap lowering — this exact shape used to render the ring but
     # silently drop the disc, while pt.grid([[...]]) wrapping worked.
-    import plotlet.extensions.chord_links  # noqa: F401 — registers the artist
     sec = pt.Sectors(names=("A", "B", "C"), lengths=(100.0, 80.0, 60.0),
                      gap=6)
     ring = pt.chart(title="ring + inner chords",
@@ -485,6 +483,35 @@ def ring_inner_chords():
     return ring
 
 
+def ring_chord_ribbon():
+    # Matrix-chord ribbons in the inner disc — three sectors, three
+    # ribbons of varying width. Pins the chord_ribbon circular draw path
+    # (cubic edges toward center + boundary-arc caps) and the sector
+    # remap of both endpoints.
+    sectors = pt.Sectors(names=["A", "B", "C"], lengths=[30, 25, 20], gap=4)
+    XL = (0, sectors.total())
+    df = {
+        "src":  ["A", "A", "B"],
+        "dst":  ["B", "C", "C"],
+        "x1a":  [0,  18,  0],
+        "x1b":  [10, 28, 15],
+        "x2a":  [0,  0,  0],
+        "x2b":  [10, 8, 12],
+    }
+    arcs = pt.chart(df, xlim=XL, data_width=400, data_height=400)
+    arcs.sectors(sectors, column="src", label=False)
+    arcs.chord_ribbon(x1_start="x1a", x1_end="x1b",
+                      x2_start="x2a", x2_end="x2b",
+                      x1_sector="src", x2_sector="dst",
+                      color="src", alpha=0.6)
+
+    ring = pt.chart(xlim=XL, ylim=(0, 1), data_width=400, data_height=400)
+    ring.sectors(sectors, column="x")
+    return pt.grid([[ring]]).coordinate(
+        pt.CircularCoordinate(r_inner=0.85, inner=arcs)
+    )
+
+
 # ---------------------------------------------------------------------------
 # Sector × CircularCoordinate guard
 # ---------------------------------------------------------------------------
@@ -496,7 +523,6 @@ def test_inner_disc_renders_from_bare_chart_root():
     wrap lowering routes both through `render_layout`; asserting equal
     chord counts, not byte equality — the forms owe the same *content*,
     not the same bytes."""
-    import plotlet.extensions.chord_links  # noqa: F401
 
     def ring():
         c = pt.chart(xlim=(0, 200), ylim=(0, 6))
@@ -573,6 +599,7 @@ PLOTS = {
     "ring_partial_arc_sectors":    ring_partial_arc_sectors,
     "ring_pile_titled":            ring_pile_titled,
     "ring_inner_chords":           ring_inner_chords,
+    "ring_chord_ribbon":           ring_chord_ribbon,
 }
 
 

@@ -355,13 +355,13 @@ universal and not repeated.
 
 ## Clustering helpers
 
-Independent of any artist; the dendrogram and `curved_tree` extension both build on these.
+Independent of any artist; the built-in dendrogram builds on these, and so can any third-party tree renderer.
 
 | call | returns | notes |
 | --- | --- | --- |
 | `pt.linkage(data, labels=, method=, metric=)` | `SplitTree` | One scipy.linkage on `data`; wraps as a one-block `SplitTree`. |
 | `pt.linkage_split(data, split=, labels=, method=, metric=)` | `SplitTree` | Two-level cluster: scipy.linkage per group (within-block) plus scipy.linkage on the per-group centroids (between-block order). |
-| `pt.SplitTree(blocks=, between_order=, between_Z=)` | dataclass | `blocks: [(Z, labels), ...]` + display order + the centroid linkage. Pass as `dendrogram(tree=...)` / `curved_tree(tree=...)` to skip redundant scipy work when the same cluster drives multiple charts. |
+| `pt.SplitTree(blocks=, between_order=, between_Z=)` | dataclass | `blocks: [(Z, labels), ...]` + display order + the centroid linkage. Pass as `dendrogram(tree=...)` to skip redundant scipy work when the same cluster drives multiple charts. |
 
 Deeper layout helpers — `layout_tree(tree)`, `layout_parent(tree)`, `fit_parent(...)`, `leaf_position(...)`, `block_apex_centers(...)`, `parent_leaf_px(...)`, `build_tree(...)`, `tree_frame_defaults(...)` — exist for writing new tree-shaped artists; import via `from plotlet.cluster import <helper>`. See [`EXTENDING.md`](EXTENDING.md).
 

@@ -4,10 +4,9 @@ Adding a custom plot type is a 3-step recipe: write three small functions,
 bundle them into an `ArtistSpec`, hand it to `add_artist(...)`. After that,
 `c.<your_name>(...)` Just Works on any `Chart` — autoscaling, gridlines,
 color cycling, and the legend integrate for free. No edits to `core.py`,
-no monkey-patching. Custom artists live in your project, in the separate
+no monkey-patching. Custom artists live in your project or in the separate
 [`plotlet-extensions`](https://github.com/gitbamboo42/plotlet-extensions)
-package, or (for the few core depends on) in
-[`src/plotlet/extensions/`](../src/plotlet/extensions/) — all good references.
+package — both are good references.
 
 ---
 
@@ -77,7 +76,6 @@ Worked example: [`lollipop.py`](https://github.com/gitbamboo42/plotlet-extension
 in the `plotlet-extensions` package — basic artist plus an optional
 `legend_entries` so the legend entry looks like a tiny lollipop. Every
 extension in [`plotlet-extensions`](https://github.com/gitbamboo42/plotlet-extensions)
-(and the few kept in [`src/plotlet/extensions/`](../src/plotlet/extensions/))
 is a working reference; skim a couple before writing your own.
 
 ## When your functions run
@@ -200,8 +198,9 @@ time. Don't compute scales or colors in `record` — they don't exist yet.
 If you're writing a dendrogram variant (radial, icicle, curved branches,
 sunburst, …), don't reach for `scipy.cluster.hierarchy` directly — the
 `plotlet.cluster` module exposes the full layout pipeline so a third-party
-tree artist is purely a *renderer*. Canonical example:
-[`extensions/curved_tree.py`](../src/plotlet/extensions/curved_tree.py).
+tree artist is purely a *renderer*. Canonical example: the `curved_tree`
+test fixture ([`tests/_curved_tree.py`](../tests/_curved_tree.py)), a
+curved-branch renderer built entirely on the public cluster API.
 
 The helpers below live in the `plotlet.cluster` module, reachable either
 as `pt.cluster.<helper>` or via `from plotlet.cluster import layout_tree,

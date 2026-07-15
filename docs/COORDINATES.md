@@ -88,25 +88,22 @@ link artists that share the t-axis with the rings but live in the
 inner disc. Sectors propagate from the layout to the inner chart by
 default.
 
-**Chord artists.** Three extension artists are designed for the inner
-disc: `chord_links` (pairwise Bezier arcs), `chord_ribbon` (oriented
-ribbons), and the `annotation_strip` track for sector labels. They
-self-register via `declare_coord_support("Circular", [...])` from their
-own modules — `import plotlet.extensions.chord_links` activates the
-artist.
+**Chord artists.** Three artists are designed for the inner disc:
+`chord_links` (pairwise Bezier arcs), `chord_ribbon` (oriented ribbons),
+and the `annotation_strip` track for sector labels.
 
 **Supported artists.** The authoritative list is the
 `declare_coord_support("Circular", [...])` block at the bottom of
 [`render/coordinates.py`](../src/plotlet/render/coordinates.py) — most
-of the standard vocabulary, including the reference and shape primitives
-and `text` / `annotate`. Everything warps through the standard `draw.*`
+of the standard vocabulary, including the reference and shape primitives,
+`text` / `annotate`, and the sector-oriented `numeric_bar`, `chord_links`,
+`chord_ribbon`, and `annotation_strip`. Everything warps through the standard `draw.*`
 subdivision: segments become arcs, rects become annular sectors (a bar →
 a wedge, a box → an annular box), polygons curve along the ring; point
 marks re-anchor but keep their glyph shape. Not supported: 2-D field
 marks (`imshow`, `hexbin`, `kde_2d`, `contour`) and the stacked-baseline
 `ridge` don't map to a 1-D-over-angle canvas; `dendrogram` awaits its
-own radial-tree treatment. Extensions: `numeric_bar`, `chord_links`,
-`chord_ribbon`, `annotation_strip` (each activates on import).
+own radial-tree treatment.
 
 **Per-artist coord knobs.** A few artists expose a kwarg that only
 matters under a non-Cartesian coord:
@@ -157,8 +154,8 @@ definition.
 
 ```python
 pt.declare_coord_support("Circular", [
-    "scatter", "line",                  # core
-    "numeric_bar",                      # extension (activates when imported)
+    "scatter", "line",                  # core built-ins
+    "my_custom_artist",                 # your extension (activates on import)
 ])
 ```
 

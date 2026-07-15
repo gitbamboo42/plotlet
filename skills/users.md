@@ -25,10 +25,10 @@ Chart methods chain. Charts compose with `|` (horizontal), `/`
   `grep -l "keyword" tests/test_*.py`.
 - `plotlet-extensions` package — ~45 domain-specific artists (sankey,
   alluvial, raincloud, mosaic, upset_plot, ...) in a separate install
-  (`pip install plotlet-extensions`). A few (`numeric_bar`, `curved_tree`,
-  `annotation_strip`, `chord_links`, `chord_ribbon`) ship in core under
-  `src/plotlet/extensions/*.py`. Either way, each file's top docstring shows
-  usage and `import plotlet.extensions.<name>` registers it.
+  (`pip install plotlet-extensions`). Each file's top docstring shows
+  usage and `import plotlet.extensions.<name>` registers it. (`numeric_bar`,
+  `annotation_strip`, `chord_links`, `chord_ribbon` are now core built-ins —
+  no import needed.)
 
 Copy the pattern, adapt the data.
 

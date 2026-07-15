@@ -8,7 +8,8 @@ Single-artist files (one plot type each):
   scatter, line, bar, hist, imshow, heatmap, dendrogram, errorbar
   boxplot, violin, swarm, strip
   pointplot, ecdf, rug, density_1d, regression, kde_2d, hexbin, hist2d
-  freqpoly, contour, ridge, qq
+  freqpoly, contour, ridge, qq, numeric_bar, annotation_strip
+  chord_links, chord_ribbon
 
 Category files (closely-related artists grouped):
   references — axhline, axvline, axhspan, axvspan, hlines, vlines
@@ -45,6 +46,10 @@ from . import freqpoly     # noqa: F401
 from . import contour      # noqa: F401
 from . import ridge        # noqa: F401
 from . import qq           # noqa: F401
+from . import numeric_bar      # noqa: F401
+from . import annotation_strip # noqa: F401
+from . import chord_links      # noqa: F401
+from . import chord_ribbon     # noqa: F401
 
 # Category files
 from . import references   # noqa: F401

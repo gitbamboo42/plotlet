@@ -727,23 +727,24 @@ def chart_dendrogram_split():
 
 
 def chart_dendrogram_split_parent():
-    """Both axes split + parent-tree on both sides: the curved_tree
-    extension on top, the built-in dendrogram on the left. Same grouping
-    vector flows to each tree via `clusters=`, and the panel declares
-    `c.sectors(...)` once on each axis for the visual gap whitespace —
-    both trees and the heatmap pick up the dendrogram's between-cluster
-    order through the artist `axis_order` precedence rule.
+    """Both axes split + parent-tree on both sides: the test-fixture
+    `curved_tree` renderer on top, the built-in dendrogram on the left.
+    Same grouping vector flows to each tree via `clusters=`, and the panel
+    declares `c.sectors(...)` once on each axis for the visual gap
+    whitespace — both trees and the heatmap pick up the dendrogram's
+    between-cluster order through the artist `axis_order` precedence rule.
 
     Stresses `cluster.fit_parent` on both orientation=top and
-    orientation=left, and on both renderers (built-in `dendrogram`,
-    extension `curved_tree`) — one per side — so a regression on either
-    renderer or on the public cluster API trips this baseline.
+    orientation=left, and on two independent renderers (built-in
+    `dendrogram`, the `_curved_tree` fixture built purely on the public
+    cluster API) — one per side — so a regression on either renderer or
+    on the public cluster API trips this baseline.
 
     Row names sit right of the heatmap (`yticks(side="right")` on the
     host, `yticks(labels=False)` on the tree so they don't draw twice) —
     the only baseline covering `side=` interacting with attachments."""
     import random
-    import plotlet.extensions.curved_tree  # registers c.curved_tree
+    import _curved_tree  # noqa: F401 — registers c.curved_tree (test fixture)
     rng = random.Random(7)
     nrows_hm, ncols_hm = 9, 12
     col_labels = [f"c{i+1}" for i in range(ncols_hm)]
@@ -792,7 +793,6 @@ def chart_heatmap_split_attached():
     # — no per-artist split kwargs on the attachments. The legend on the
     # right auto-harvests across all leaves (continuous gradient from the
     # heatmap, discrete swatches from the strip).
-    import plotlet.extensions.annotation_strip  # registers c.annotation_strip
     nrows, ncols = 8, 12
     matrix = [[r * ncols + c for c in range(ncols)] for r in range(nrows)]
     col_labels = [f"c{i+1}" for i in range(ncols)]
@@ -831,7 +831,6 @@ def chart_heatmap_block_titles():
     # Block-mode annotation_strip on top of a column-split heatmap:
     # one text label per group, no fill, no border. The shared scale
     # places labels at the centre of each column block.
-    import plotlet.extensions.annotation_strip
     nrows, ncols = 6, 9
     matrix = [[r * ncols + c for c in range(ncols)] for r in range(nrows)]
     col_labels = [f"c{i+1}" for i in range(ncols)]
@@ -857,7 +856,6 @@ def chart_heatmap_block_titles():
 def chart_heatmap_block_filled():
     # Block-mode strip with palette fill, white text, and a black
     # border outlining each block — the full filled-titles look.
-    import plotlet.extensions.annotation_strip
     nrows, ncols = 6, 9
     matrix = [[r * ncols + c for c in range(ncols)] for r in range(nrows)]
     col_labels = [f"c{i+1}" for i in range(ncols)]

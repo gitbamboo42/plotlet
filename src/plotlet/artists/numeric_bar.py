@@ -1,23 +1,17 @@
-"""Custom artist: numeric-x bar.
+"""Numeric-x bar.
 
-The built-in `c.bar(cats, vals)` is categorical: cats become a category
-scale, and bandwidth comes from the scale. That's the right call for the
-common case, but sometimes you want bars anchored at *numeric* positions
-(e.g. genome coordinates, time-series with explicit numeric x), where the
-bar width is a fixed data-unit distance you control directly.
+Sibling of the categorical `c.bar`: where `bar` places cats on a band
+scale and takes bandwidth from the scale, `numeric_bar` anchors bars at
+*numeric* positions (e.g. genome coordinates, time-series with explicit
+numeric x) with a fixed data-unit `width` you control directly.
 
-This recipe gives `c.numeric_bar(data=df, x='col', y='col', width=0.8, ...)` — bars
-on a numeric x scale, living in your project rather than core.
+  c.numeric_bar(data=df, x='col', y='col', width=0.8, ...)
 """
 
-SUMMARY = 'Bars anchored at numeric x with an explicit data-unit width (no category scale).'
-from pathlib import Path
-
-import plotlet as pt
-from plotlet.draw import rect
-from plotlet.registry import ArtistSpec, add_artist
-from plotlet.utils import pack_opts, to_list
-from plotlet._spec import _D
+from ..registry import ArtistSpec, add_artist, declare_coord_support
+from ..utils import pack_opts, to_list
+from ..draw import rect
+from .._spec import _D
 
 
 def numeric_bar_record(data=None,
@@ -88,22 +82,4 @@ add_artist(ArtistSpec(
     legend_entries=numeric_bar_legend_entries,
     force_zero_y=True,
 ))
-pt.declare_coord_support("Circular", ["numeric_bar"])
-
-
-def demo():
-    """Build the demonstration chart with synthetic data.
-
-    Returns a `pt.Chart` ready for `.save_svg()` or further composition."""
-    c = pt.chart()
-    c.numeric_bar({"x": [1.0, 2.5, 4.0, 5.5, 7.0], "y": [3, 7, 2, 9, 5]},
-                  x="x", y="y", width=0.6, label="counts")
-    c.title("Numeric-x bars").xlabel("position").ylabel("count")
-    c.legend(True)
-    return c
-
-
-if __name__ == "__main__":
-    out = Path(__file__).with_suffix(".svg")
-    demo().save_svg(out)
-    print(f"wrote {out}")
+declare_coord_support("Circular", ["numeric_bar"])

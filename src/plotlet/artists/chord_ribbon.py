@@ -42,14 +42,11 @@ sectors and get visually busy for thick ones; if that matters, drop
 the diagonal before passing the matrix in.
 """
 
-SUMMARY = "Filled ribbons between two x ranges inside a CircularCoordinate inner disc — the matrix-chord-diagram visual."
-
 import math
-from pathlib import Path
 
-import plotlet as pt
-from plotlet.draw import path as draw_path, polygon, TAB10
-from plotlet.utils import to_list, resolve_aes, palette_color, pack_opts
+from ..registry import ArtistSpec, add_artist, declare_coord_support
+from ..utils import to_list, resolve_aes, palette_color, pack_opts
+from ..draw import path as draw_path, polygon, TAB10
 from ..draw import coord
 
 
@@ -271,7 +268,7 @@ def _chord_ribbon_frame_defaults(args, kw):
     ]
 
 
-pt.add_artist(pt.ArtistSpec(
+add_artist(ArtistSpec(
     name="chord_ribbon",
     record=_chord_ribbon_record,
     xdomain=_chord_ribbon_xdomain,
@@ -282,37 +279,4 @@ pt.add_artist(pt.ArtistSpec(
     crosses_sectors=True,
     tight_domain=True,
 ))
-pt.declare_coord_support("Circular", ["chord_ribbon"])
-
-
-def demo():
-    """Tiny 3-sector demo with three ribbons of varying width."""
-    import pandas as pd
-    sectors = pt.Sectors(names=["A", "B", "C"], lengths=[30, 25, 20], gap=4)
-    XL = (0, sectors.total())
-    df = pd.DataFrame({
-        "src":  ["A", "A", "B"],
-        "dst":  ["B", "C", "C"],
-        "x1a":  [0,  18,  0],
-        "x1b":  [10, 28, 15],
-        "x2a":  [0,  0,  0],
-        "x2b":  [10, 8, 12],
-    })
-    arcs = pt.chart(df, xlim=XL, data_width=400, data_height=400)
-    arcs.sectors(sectors, column="src", label=False)
-    arcs.chord_ribbon(x1_start="x1a", x1_end="x1b",
-                      x2_start="x2a", x2_end="x2b",
-                      x1_sector="src", x2_sector="dst",
-                      color="src", alpha=0.6)
-
-    ring = pt.chart(xlim=XL, ylim=(0, 1), data_width=400, data_height=400)
-    ring.sectors(sectors, column="x")
-    return pt.grid([[ring]]).coordinate(
-        pt.CircularCoordinate(r_inner=0.85, inner=arcs)
-    )
-
-
-if __name__ == "__main__":
-    out = Path(__file__).with_suffix(".svg")
-    demo().save_svg(out)
-    print(f"wrote {out}")
+declare_coord_support("Circular", ["chord_ribbon"])

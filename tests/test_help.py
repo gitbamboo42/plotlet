@@ -11,12 +11,6 @@ def test_artist_doc_surfaces_on_recorder():
     assert c.line.__name__ == "line"
 
 
-def test_extension_artist_doc_surfaces():
-    import plotlet.extensions.numeric_bar  # noqa — registers numeric_bar
-    c = pt.chart()
-    assert "numeric" in (c.numeric_bar.__doc__ or "").lower()
-
-
 def test_frame_method_has_no_artist_doc():
     # Frame methods go through the recorder path too but have no artist
     # spec — they document via docs/API.md, not module docstrings. Pin
