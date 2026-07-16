@@ -517,15 +517,29 @@ class CircularCoordinate:
             # x-axis: only the outermost ring shows ticks/labels/sector
             # labels (conventionally, labels sit outside the
             # outermost track). Inner rings suppress unless the leaf's
-            # replay input already carries an xticks entry — user-
-            # explicit, or an artist frame-default (chord / heatmap
-            # rings set their own tick treatment), hence checking the
-            # expanded list, which is exactly what `_replay` will see.
+            # replay input already carries an xticks entry that decides
+            # tick CONTENT (positions or label text) — user-explicit,
+            # or an artist frame-default (chord rings set their own
+            # tick treatment), hence checking the expanded list, which
+            # is exactly what `_replay` will see. Style-only entries
+            # (marks=, rotation=, ...) don't opt out — a labeled
+            # dendrogram / heatmap turning marks off still wants its
+            # inner-ring labels suppressed like any other ring.
             # y-axis suppression comes from the leaf coord's own
             # `y_ticks=[]` default (`CircularCoordinate.__init__`);
             # opt in per leaf with an explicit `c.yticks(...)`.
+            def _decides_x_content(call):
+                name, args, kw = call[0], call[1], call[2]
+                if name != "xticks":
+                    return False
+                if any(a is not None for a in args[:2]):
+                    return True
+                if kw.get("ticks") is not None:
+                    return True
+                lbls = kw.get("labels")
+                return lbls is not None and not isinstance(lbls, bool)
             has_xticks = any(
-                c[0] == "xticks"
+                _decides_x_content(c)
                 for c in _expand_frame_defaults(leaf._calls[:n0]))
             if not is_outermost and not has_xticks:
                 leaf._calls.append(("xticks", [[]], {"labels": False}))

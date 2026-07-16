@@ -54,7 +54,7 @@ is overridable — the sections you'll typically touch:
   "font":     { "family": "...", "color": "...",
                 "tick_size": ..., "label_size": ..., "title_size": ... },
   "frame":    { "color": "...", "width": ..., "tick_length": ...,
-                "tick_direction": "...", "x_side": "...",
+                "tick_direction": "...", "tick_marks": true, "x_side": "...",
                 "spine_top": true, /* …one flag per side */ },
   "grid":     { "color": "...", "width": ..., "dasharray": "2,3",
                 "default_on": false },

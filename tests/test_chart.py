@@ -384,9 +384,9 @@ def chart_long_ylabel():
 
 
 def chart_despined():
-    # `c.spines(top=False, right=False)` mirrors matplotlib's despine. Tick
-    # marks on hidden sides drop too — an unanchored stub reads as a render
-    # bug. Tick labels (left/bottom) are unchanged.
+    # `c.spines(top=False, right=False)` mirrors matplotlib's despine.
+    # Ticks are independent of spine visibility (also matplotlib
+    # semantics) and live on the bottom/left sides, which stay visible.
     xs = _xs()
     df = {"t": xs, "v": [math.sin(x) for x in xs]}
     c = pt.chart(df, title="despined frame", xlabel="t", ylabel="v")

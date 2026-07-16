@@ -40,15 +40,14 @@ def chrome_stack_extents(st, inp):
     and ``_render_inner`` (to position the outermost label past it).
     Keeps the two in lockstep without a DRY violation.
     """
-    # Spine gate mirrors emit_chrome: a hidden spine draws no tick marks,
-    # so it reserves no tick-mark band either.
+    # Mark gate mirrors emit_chrome: reserve the tick-mark band only when
+    # an outward mark is actually drawn. Spine visibility is independent —
+    # ticks survive a hidden spine (matplotlib semantics).
     out_x = (_FRAME["tick_length"]
-             if (st["x_marks"] and inp.x_ticks and st["x_direction"] != "in"
-                 and st[f"spine_{inp.x_side}"])
+             if st["x_marks"] and inp.x_ticks and st["x_direction"] != "in"
              else 0)
     out_y = (_FRAME["tick_length"]
-             if (st["y_marks"] and inp.y_ticks and st["y_direction"] != "in"
-                 and st[f"spine_{inp.y_side}"])
+             if st["y_marks"] and inp.y_ticks and st["y_direction"] != "in"
              else 0)
 
     hide_x = inp.hide_b if inp.x_side == "bottom" else inp.hide_t
@@ -546,11 +545,12 @@ def emit_chrome(*, st, inp, iw, ih,
 
     # Spines — toggleable per side via `c.spines(top=False, right=False, ...)`,
     # restylable via `c.spines(top={"color": "red", "width": 1.5})`.
-    # Tick marks on a hidden side are dropped too (an unanchored tick mark
-    # reads as a render bug). On a joined share-pair side (hide_*), tick
-    # marks AND tick labels are dropped — the panels read as merged, with
-    # only the two parallel spines remaining (separated by the per-panel
-    # floor on each joined side).
+    # Spine visibility does NOT gate tick marks (matplotlib semantics:
+    # hiding a spine leaves the ticks; turn those off via xticks/yticks
+    # marks= or the frame `tick_marks` spec key). On a joined share-pair
+    # side (hide_*), tick marks AND tick labels are dropped — the panels
+    # read as merged, with only the two parallel spines remaining
+    # (separated by the per-panel floor on each joined side).
     # Style resolution for any spine target (a side name or "walls"):
     # per-target override > c.spines() base > _FRAME spec.
     def _pick(*candidates):
@@ -646,11 +646,10 @@ def emit_chrome(*, st, inp, iw, ih,
             x_endpoints = x_top_endpoints
             y_band_edge_sign = -1  # band grows upward from y=0
             x_band_y0 = 0
-        # No visible outward mark (inward, disabled, or spine hidden) →
-        # labels sit flush at tick_pad past the spine line.
+        # No visible outward mark (inward or disabled) → labels sit flush
+        # at tick_pad past the spine line.
         x_label_dy = (_FRAME["tick_pad"]
-                      if (x_dir == "in" or not x_marks
-                          or not st[f"spine_{x_side}"])
+                      if (x_dir == "in" or not x_marks)
                       else _FRAME["tick_length"] + _FRAME["tick_pad"])
 
         for t, lbl in zip(x_ticks, x_labels):
@@ -659,7 +658,7 @@ def emit_chrome(*, st, inp, iw, ih,
                 # Hidden sides (joined share-pair) drop tick marks too — marks
                 # bleeding into the inter-panel gap read as visual clutter
                 # when the two panels are meant to merge.
-                if st[f"spine_{x_spine_side}"] and not x_hide_axis:
+                if not x_hide_axis:
                     y1, y2 = x_endpoints
                     col, sw = _side_stroke(x_spine_side)
                     parts.append(segment(x, y1, x, y2, color=col, width=sw))
@@ -687,7 +686,7 @@ def emit_chrome(*, st, inp, iw, ih,
         # labels. Emit only when the user opted in via xticks(minor=True) or
         # xticks(minor=[...]).
         x_minor = _resolve_minor_ticks(st["x_minor"], x_scale, x_ticks)
-        if x_minor and x_marks and st[f"spine_{x_spine_side}"] and not x_hide_axis:
+        if x_minor and x_marks and not x_hide_axis:
             minor_len = _FRAME["tick_length"] * _FRAME["minor_tick_ratio"]
             col, sw = _side_stroke(x_spine_side)
             for t in x_minor:
@@ -902,8 +901,7 @@ def emit_chrome(*, st, inp, iw, ih,
         # by `y_side`: spine attachment, tick-mark endpoints, label anchor.
         y_side = inp.y_side
         y_label_dx = (_FRAME["tick_pad"]
-                      if (y_dir == "in" or not y_marks
-                          or not st[f"spine_{y_side}"])
+                      if (y_dir == "in" or not y_marks)
                       else _FRAME["tick_length"] + _FRAME["tick_pad"])
         if y_side == "left":
             y_spine_side, y_hide_axis = "left", hide_l
@@ -921,7 +919,7 @@ def emit_chrome(*, st, inp, iw, ih,
         for t, lbl in zip(y_ticks, y_labels):
             y = y_scale(t)
             if y_marks:
-                if st[f"spine_{y_spine_side}"] and not y_hide_axis:
+                if not y_hide_axis:
                     x1, x2 = y_endpoints
                     col, sw = _side_stroke(y_spine_side)
                     parts.append(segment(x1, y, x2, y, color=col, width=sw))
@@ -935,7 +933,7 @@ def emit_chrome(*, st, inp, iw, ih,
                                          tag="tick-y"))
 
         y_minor = _resolve_minor_ticks(st["y_minor"], y_scale, y_ticks)
-        if y_minor and y_marks and st[f"spine_{y_spine_side}"] and not y_hide_axis:
+        if y_minor and y_marks and not y_hide_axis:
             minor_len = _FRAME["tick_length"] * _FRAME["minor_tick_ratio"]
             col, sw = _side_stroke(y_spine_side)
             for t in y_minor:

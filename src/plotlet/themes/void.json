@@ -7,7 +7,8 @@
     "spine_right": false,
     "spine_bottom": false,
     "spine_left": false,
-    "tick_length": 0
+    "tick_length": 0,
+    "tick_marks": false
   },
   "grid": {
     "default_on": false

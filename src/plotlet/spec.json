@@ -35,6 +35,7 @@
     "minor_tick_ratio": 0.55,
     "tick_pad": 5,
     "tick_direction": "out",
+    "tick_marks": true,
     "tick_density_x_px": 65,
     "tick_density_y_px": 40,
     "x_side": "bottom",

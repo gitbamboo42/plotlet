@@ -424,8 +424,9 @@ def tree_frame_defaults(kw, *,
 
     Returns the list of `(name, args, kw)` tuples that any dendrogram-
     style renderer needs: spines off, hide the height-axis ticks, hide
-    the leaf-axis ticks when there are no labels, and a small root-side
-    data expand so the topmost merge doesn't clip against the inner clip.
+    the leaf-axis ticks when there are no labels (keep just the labels —
+    no mark stubs — when there are), and a small root-side data expand
+    so the topmost merge doesn't clip against the inner clip.
 
     Block gap whitespace and the scale's `splits` are owned by
     `c.sectors({cluster: [members]}, axis=...)` on the panel — any peer
@@ -438,7 +439,11 @@ def tree_frame_defaults(kw, *,
     out = [("spines", [], {"top": False, "right": False,
                             "bottom": False, "left": False}),
            ("yticks" if leaf_on_x else "xticks", [[]], {})]
-    if not has_labels:
+    if has_labels:
+        # Leaf labels without tick-mark stubs — spines are off, so a
+        # floating mark next to each label reads as clutter.
+        out.append(("xticks" if leaf_on_x else "yticks", [None], {"marks": False}))
+    else:
         out.append(("xticks" if leaf_on_x else "yticks", [[]], {}))
     expand_axis, expand_args = (
         ("y_expand", [0, root_expand_frac]) if orient == "top" else
