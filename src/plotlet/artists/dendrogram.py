@@ -25,6 +25,11 @@ via `axis_order`, so a peer heatmap with the same grouping vector picks
 up the two-level block order automatically — artist `axis_order` beats
 `frame_defaults` order in core's precedence rule.
 
+`palette=` (a `{group: color}` map) colors each block's branches by its
+group, leaving the between-cluster trunk neutral — driven off the same
+two-level block structure. Needs `clusters=` (or a `tree=` from
+`linkage_split`).
+
 **`labels=` indexes the ORIGINAL input order, NOT the display order.**
 scipy's Z matrix uses original observation indices throughout; so
 `labels[i]` must still refer to original observation `i` after the
@@ -59,7 +64,8 @@ def _dendrogram_record(data=None,
                        # layout
                        clusters=None, parent=False, orientation="top",
                        # style — packed into opts for the draw side
-                       color=None, linewidth=None, label=None, legend=None):
+                       color=None, palette=None,
+                       linewidth=None, label=None, legend=None):
     if orientation not in _ORIENTS:
         raise ValueError(
             f"dendrogram(): orientation={orientation!r}; "
@@ -95,6 +101,23 @@ def _dendrogram_record(data=None,
     # renderer keeps the unlabeled path active so `_leaf_axis_pos` uses
     # scale.idx instead of cat lookup.
     leaf_labels = final_labels if had_labels else None
+    # Per-group branch color: `palette` maps a cluster/group label to a
+    # color. Each block's branches take its group's color; blocks whose
+    # group isn't in the palette (and the between-cluster "trunk") stay
+    # the neutral `color`. Needs a two-level tree — `clusters=` (or a
+    # `tree=` from `linkage_split`) carries the per-block group labels.
+    block_colors = None
+    if palette is not None:
+        if tree_obj.block_groups is None:
+            raise ValueError(
+                "dendrogram(): palette= colors branches by group, which "
+                "needs a two-level tree — pass clusters= (or a tree= built "
+                "with linkage_split)."
+            )
+        # `blocks` is in display order (between_order); map each back to
+        # its group label, then to a palette color (None = keep neutral).
+        block_colors = [palette.get(tree_obj.block_groups[b])
+                        for b in tree_obj.between_order]
     all_dc = [v for _, dc, _ in blocks for row in dc for v in row]
     if parent_block is not None:
         all_dc.extend(v for row in parent_block[1] for v in row)
@@ -103,6 +126,7 @@ def _dendrogram_record(data=None,
         "type": "dendrogram",
         "_blocks": blocks,
         "_block_offsets": offsets,
+        "_block_colors": block_colors,
         "_parent": parent_block,
         "_n_leaves": sum(len(lv) for _, _, lv in blocks),
         "_max_h": max_h,
@@ -146,12 +170,19 @@ def _dendrogram_draw(a, ctx):
     max_h = a["_max_h"]
     labels = a["_leaf_labels"]
     leaf_on_x = orient in ("top", "bottom")
+    # Per-group colors (display order), aligned with `_blocks`. `None`
+    # entry (or no palette) → the neutral `col` for that block.
+    block_colors = a.get("_block_colors")
     out = []
     # One pass over blocks (single tree = one block, so this loop also
     # covers the unsplit case). Per-block leaf indices are local to the
     # block; `offset` shifts them into the global display coordinate.
     # The gap-aware scale lookup then places them at the right pixel.
-    for offset, (ic_block, dc_block, _) in zip(a["_block_offsets"], a["_blocks"]):
+    for bi, (offset, (ic_block, dc_block, _)) in enumerate(
+            zip(a["_block_offsets"], a["_blocks"])):
+        bcol = col
+        if block_colors is not None:
+            bcol = resolve_color(block_colors[bi]) or col
         for ic, dc in zip(ic_block, dc_block):
             xs, ys = _orient_xy(orient, ic, dc, max_h)
             pts = []
@@ -169,7 +200,7 @@ def _dendrogram_draw(a, ctx):
                 pts.append((px, py))
             if not ok:
                 continue
-            out.append(polyline(pts, color=col, width=lw))
+            out.append(polyline(pts, color=bcol, width=lw, project=ctx.warp))
     # Parent tree (optional, opt-in via `parent=True`/`parent=<frac>`):
     # leaves sit at block midpoints on the leaf axis; merges live above
     # the per-block region thanks to `_apply_parent_layout`'s dcoord
@@ -199,7 +230,7 @@ def _dendrogram_draw(a, ctx):
                 pts.append((px, py))
             if not ok:
                 continue
-            out.append(polyline(pts, color=col, width=lw))
+            out.append(polyline(pts, color=col, width=lw, project=ctx.warp))
     return "".join(out)
 
 

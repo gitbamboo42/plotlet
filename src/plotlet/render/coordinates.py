@@ -689,6 +689,7 @@ declare_coord_support("Circular", [
     "bar", "errorbar",
     "strip", "swarm", "qq", "rug", "ecdf", "freqpoly", "pointplot",
     "regression", "boxplot", "violin", "density_1d",
+    "dendrogram",
     "axhline", "axvline", "axhspan", "axvspan", "hlines", "vlines",
     "rect", "polygon", "polyline",
     "text", "annotate",

@@ -102,8 +102,7 @@ subdivision: segments become arcs, rects become annular sectors (a bar →
 a wedge, a box → an annular box), polygons curve along the ring; point
 marks re-anchor but keep their glyph shape. Not supported: 2-D field
 marks (`imshow`, `hexbin`, `kde_2d`, `contour`) and the stacked-baseline
-`ridge` don't map to a 1-D-over-angle canvas; `dendrogram` awaits its
-own radial-tree treatment.
+`ridge` don't map to a 1-D-over-angle canvas.
 
 **Per-artist coord knobs.** A few artists expose a kwarg that only
 matters under a non-Cartesian coord:

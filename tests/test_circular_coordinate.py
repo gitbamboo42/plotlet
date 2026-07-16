@@ -216,6 +216,82 @@ def ring_regression():
     return c
 
 
+def _tree_data(seed=0):
+    # 16 leaves in 3 latent groups so the tree has real structure.
+    rng = random.Random(seed)
+    profiles = [[2.0, 1.5, 0.0, -1.0, 0.5, 1.0],
+                [-1.0, 0.0, 2.0, 0.5, -1.5, 0.0],
+                [0.5, -1.5, -1.0, 2.0, 1.5, -0.5]]
+    labels, matrix = [], []
+    for i in range(16):
+        labels.append(f"L{i:02d}")
+        matrix.append([p + rng.gauss(0, 0.6) for p in profiles[i % 3]])
+    return labels, matrix
+
+
+def ring_dendrogram():
+    # Radial tree: leaf axis wraps the ring (t), merge height is radial (r).
+    # `orientation="bottom"` roots the tree at the inner edge so leaves fan
+    # out. Each U-shape warps — the connector bar becomes a constant-radius
+    # arc, the legs become radial spokes.
+    labels, matrix = _tree_data()
+    c = pt.chart(title="dendrogram — ring", xlim=(0, 1))
+    c.dendrogram(data=matrix, labels=labels, method="ward",
+                 orientation="bottom", color="#3B3B4F")
+    c.coordinate(pt.CircularCoordinate(r_inner=0.10, wrap_gap_deg=4))
+    return c
+
+
+def ring_dendrogram_heatmap():
+    # Radial tree (inner band) + heatmap ring (outer band) sharing one leaf
+    # axis: column i sits at leaf i's angle because both rings carry the
+    # same category order. The annotated-heatmap shape, wrapped onto a ring.
+    # Read the leaf order from a local tree (never handed to a chart, so the
+    # journal stays JSON-serializable); the tree ring re-clusters the same
+    # data/method and lands on the same order.
+    from plotlet.cluster import layout_tree
+    labels, matrix = _tree_data()
+    _, _, leaf_order = layout_tree(pt.linkage(matrix, labels=labels,
+                                              method="ward"))
+    row_by_label = dict(zip(labels, matrix))
+    data = {"leaf": leaf_order}
+    for j in range(len(matrix[0])):
+        data[f"f{j}"] = [row_by_label[l][j] for l in leaf_order]
+
+    tree_ring = pt.chart(xlim=(0, 1))
+    tree_ring.dendrogram(data=matrix, labels=labels, method="ward",
+                         orientation="bottom", color="#3B3B4F")
+    hm_ring = pt.chart(xlim=(0, 1), ylim=(0, 1))
+    hm_ring.heatmap(data=data, x="leaf",
+                    values=[f"f{j}" for j in range(len(matrix[0]))],
+                    cmap="RdBu_r", center=0)
+    pile = (hm_ring / tree_ring).coordinate(
+        pt.CircularCoordinate(r_inner=0.08, wrap_gap_deg=4))
+    pile.heights([1.0, 2.2])
+    return pile.title("tree + heatmap — ring")
+
+
+def ring_dendrogram_palette():
+    # `palette=` on a ring: each group's branches take its color while the
+    # between-cluster trunk (parent=True) stays neutral — the same demo as
+    # the Cartesian `dendrogram_palette`, warped. A sector per group carves
+    # the blocks into separate wedges. This confirms per-group color and
+    # the neutral parent survive the warp (color is assigned at record
+    # time; the warp only bends geometry).
+    labels, matrix = _tree_data()
+    groups = ["ABC"[i % 3] for i in range(len(labels))]
+    palette = {"A": "#1D9E75", "B": "#E6842A", "C": "#534AB7"}
+    by_group = {}
+    for lbl, g in zip(labels, groups):
+        by_group.setdefault(g, []).append(lbl)
+    c = pt.chart(title="dendrogram palette — ring", xlim=(0, 1))
+    c.sectors(by_group, axis="x", divider=False, label=False)
+    c.dendrogram(data=matrix, labels=labels, clusters=groups, method="ward",
+                 palette=palette, parent=True, orientation="bottom")
+    c.coordinate(pt.CircularCoordinate(r_inner=0.10, wrap_gap_deg=4))
+    return c
+
+
 def ring_x_sectors():
     # Three named wedges with a continuous-sector scale on x. Data carries
     # a `sec` tag so the sector remap routes each point to its wedge;
@@ -586,6 +662,9 @@ PLOTS = {
     "ring_freqpoly":               ring_freqpoly,
     "ring_density_1d":             ring_density_1d,
     "ring_regression":             ring_regression,
+    "ring_dendrogram":             ring_dendrogram,
+    "ring_dendrogram_heatmap":     ring_dendrogram_heatmap,
+    "ring_dendrogram_palette":     ring_dendrogram_palette,
     "ring_cat_sectors":            ring_cat_sectors,
     "ring_inner_outer":            ring_inner_outer,
     "ring_references":             ring_references,

@@ -42,10 +42,16 @@ class SplitTree:
       "parent tree" above the per-block trees. `None` for single-block
       trees (no between-cluster needed). Off by default in the
       dendrogram artist — opt in via `parent=True`/`parent=<frac>`.
+    - `block_groups`: the group label each block came from, in block
+      order (aligned with `blocks`). Set only by `linkage_split` (the
+      two-level path); `None` for single-cluster trees. Lets a renderer
+      color each block's branches by its group — see the dendrogram
+      artist's `palette=`.
     """
     blocks: list = field(default_factory=list)
     between_order: list = field(default_factory=list)
     between_Z: object = None
+    block_groups: list = None
 
     @property
     def n_blocks(self):
@@ -109,6 +115,9 @@ def linkage_split(data, split, labels=None,
     # picks the *display* order; this step just collects each group's
     # observations together so we can run scipy on each.
     perm, bounds = _splits.group_order(split)
+    # Group label per block, in first-seen (block) order — so a renderer
+    # can color each block by its group. Mirrors `group_order`'s ordering.
+    block_groups = list(dict.fromkeys(split))
     data_c = _splits.permute(data, perm)
     labs_c = _splits.permute(labs, perm)
     block_data = _splits.partition(data_c, bounds)
@@ -132,7 +141,8 @@ def linkage_split(data, split, labels=None,
 
     return SplitTree(blocks=list(zip(block_Zs, block_labs)),
                      between_order=between_order,
-                     between_Z=Z_between)
+                     between_Z=Z_between,
+                     block_groups=block_groups)
 
 
 # ---------------------------------------------------------------------------

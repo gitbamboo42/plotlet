@@ -1142,6 +1142,30 @@ def chart_dendrogram_labeled():
     return c
 
 
+def chart_dendrogram_palette():
+    # Per-group branch color: `palette` maps each group (the `clusters=`
+    # label) to a color; the between-cluster trunk (parent=True) stays the
+    # neutral default, driven off plotlet's existing two-level block
+    # structure.
+    import random
+    rng = random.Random(5)
+    base = {"A": [2, 1, 0, -1, 0.5], "B": [-1, 0, 2, 0.5, -1.5],
+            "C": [0.5, -1.5, -1, 2, 1.5]}
+    palette = {"A": "#1D9E75", "B": "#E6842A", "C": "#534AB7"}
+    items, groups, matrix = [], [], []
+    for i in range(24):
+        grp = "ABC"[i % 3]
+        items.append(f"x{i:02d}")
+        groups.append(grp)
+        matrix.append([v + rng.gauss(0, 0.5) for v in base[grp]])
+    c = pt.chart(title="dendrogram — per-group color", data_height=200)
+    c.sectors(_by_label(items, groups), axis="x", divider=False, label=False)
+    c.dendrogram(matrix, labels=items, clusters=groups, method="ward",
+                 palette=palette, parent=True, linewidth=1.3)
+    c.xticks(rotation=90)
+    return c
+
+
 def chart_long_rotated_xticks():
     # Long x-tick labels rotated 45° — the rotated bbox height grows the
     # bottom margin so labels don't overflow the canvas. Without rotation
@@ -2511,6 +2535,7 @@ PLOTS = {
     "dendrogram_left":     chart_dendrogram_left,
     "dendrogram_styled":   chart_dendrogram_styled,
     "dendrogram_labeled":  chart_dendrogram_labeled,
+    "dendrogram_palette":  chart_dendrogram_palette,
     "tick_format_string":  chart_tick_format_string,
     "tick_format_named":    chart_tick_format_named,
     "time_axis_dates":     chart_time_axis_dates,
