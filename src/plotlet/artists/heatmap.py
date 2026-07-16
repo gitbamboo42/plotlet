@@ -215,9 +215,9 @@ def _heatmap_frame_defaults(args, kw):
     if not all_numeric(xs):
         out.append(("xscale", ["category"],
                     {"order": [str(x) for x in xs], "padding": 0}))
-        out.append(("xticks", [None], {"marks": False}))
+        out.append(("xticks", [], {"marks": False}))
     out.append(("yscale", ["category"], {"order": tracks, "padding": 0}))
-    out.append(("yticks", [None], {"marks": False}))
+    out.append(("yticks", [], {"marks": False}))
     # Default `border=False` — the colored cells alone define the data
     # block, which is the typical look when wrapping the heatmap with
     # annotation strips. Pass `border=True` to draw the axis-spine

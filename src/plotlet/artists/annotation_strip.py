@@ -605,7 +605,7 @@ def annotation_strip_frame_defaults(args, kw):
     if interval_mode:
         out.append((pos_ticks, [[]], {}))
     else:
-        out.append((pos_ticks, [None], {"marks": False}))
+        out.append((pos_ticks, [], {"marks": False}))
     if name is not None:
         out.append((orth_ticks, [[0.5], [name]], {"marks": False}))
     else:

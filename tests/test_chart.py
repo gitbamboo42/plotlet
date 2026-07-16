@@ -1142,6 +1142,17 @@ def chart_dendrogram_labeled():
     return c
 
 
+def chart_dendrogram_explicit_xticks():
+    # Explicit tick subset recorded BEFORE the artist: the dendrogram's
+    # `marks=False` frame default toggles marks only — it must not reset
+    # tick content, so exactly the two named leaves keep their labels.
+    labels = ["sample_" + ch for ch in "ABCDEFGH"]
+    c = pt.chart(title="dendrogram — explicit tick subset", data_height=200)
+    c.xticks(["sample_A", "sample_D"])
+    c.dendrogram(_dendro_sample(), method="ward", labels=labels)
+    return c
+
+
 def chart_dendrogram_palette():
     # Per-group branch color: `palette` maps each group (the `clusters=`
     # label) to a color; the between-cluster trunk (parent=True) stays the
@@ -2535,6 +2546,7 @@ PLOTS = {
     "dendrogram_left":     chart_dendrogram_left,
     "dendrogram_styled":   chart_dendrogram_styled,
     "dendrogram_labeled":  chart_dendrogram_labeled,
+    "dendrogram_explicit_xticks": chart_dendrogram_explicit_xticks,
     "dendrogram_palette":  chart_dendrogram_palette,
     "tick_format_string":  chart_tick_format_string,
     "tick_format_named":    chart_tick_format_named,

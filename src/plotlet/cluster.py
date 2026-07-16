@@ -442,7 +442,7 @@ def tree_frame_defaults(kw, *,
     if has_labels:
         # Leaf labels without tick-mark stubs — spines are off, so a
         # floating mark next to each label reads as clutter.
-        out.append(("xticks" if leaf_on_x else "yticks", [None], {"marks": False}))
+        out.append(("xticks" if leaf_on_x else "yticks", [], {"marks": False}))
     else:
         out.append(("xticks" if leaf_on_x else "yticks", [[]], {}))
     expand_axis, expand_args = (
