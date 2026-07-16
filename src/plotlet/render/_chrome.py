@@ -40,20 +40,18 @@ def chrome_stack_extents(st, inp):
     and ``_render_inner`` (to position the outermost label past it).
     Keeps the two in lockstep without a DRY violation.
     """
-    # Mark gate mirrors emit_chrome: reserve the tick-mark band only when
-    # an outward mark is actually drawn. Spine visibility is independent —
-    # ticks survive a hidden spine (matplotlib semantics).
-    out_x = (_FRAME["tick_length"]
-             if st["x_marks"] and inp.x_ticks and st["x_direction"] != "in"
-             else 0)
-    out_y = (_FRAME["tick_length"]
-             if st["y_marks"] and inp.y_ticks and st["y_direction"] != "in"
-             else 0)
+    # Reserve the tick-mark band only when an outward mark is actually
+    # drawn — `inp.chrome` carries the decided flags (see `_policy`), so
+    # this reservation and `emit_chrome` walk the same booleans.
+    out_x = _FRAME["tick_length"] if (inp.chrome["x"]["outward_mark"]
+                                      and inp.x_ticks) else 0
+    out_y = _FRAME["tick_length"] if (inp.chrome["y"]["outward_mark"]
+                                      and inp.y_ticks) else 0
 
-    hide_x = inp.hide_b if inp.x_side == "bottom" else inp.hide_t
-    hide_y = inp.hide_l if inp.y_side == "left"   else inp.hide_r
+    hide_x = inp.chrome["x"]["hidden"]
+    hide_y = inp.chrome["y"]["hidden"]
 
-    x_band = out_x if not hide_x else 0
+    x_band = out_x
     has_xtl = (not inp.suppress_xt) and any(str(l) for l in inp.x_labels)
     if has_xtl:
         x_band += _FRAME["tick_pad"] + tick_band_height(inp.x_labels, inp.x_size, inp.x_rot,
@@ -68,7 +66,7 @@ def chrome_stack_extents(st, inp):
         top_gap = _SECTORSPEC["label_pad"] if has_xtl else _FRAME["tick_pad"]
         x_band += top_gap + _sec_h
 
-    y_band = out_y if not hide_y else 0
+    y_band = out_y
     has_ytl = (not inp.suppress_yt) and any(str(l) for l in inp.y_labels)
     if has_ytl:
         max_ytl_w = max((measure_text(str(l), inp.y_size, inp.y_style, inp.y_weight)
@@ -541,16 +539,15 @@ def emit_chrome(*, st, inp, iw, ih,
     x_decor = st.get("x_decoration") or "none"
     y_decor = st.get("y_decoration") or "none"
     x_dir, y_dir = st["x_direction"], st["y_direction"]
-    x_marks, y_marks = st["x_marks"], st["y_marks"]
+    # Decided visibility flags (see `_policy.resolve_axis_chrome`) —
+    # spine toggles, tick marks (share-pair hiding already folded in;
+    # spine visibility deliberately doesn't gate ticks — matplotlib
+    # semantics), tick labels. Emit reads these; it doesn't re-derive.
+    spine_on = inp.chrome["spines"]
+    x_pol, y_pol = inp.chrome["x"], inp.chrome["y"]
 
     # Spines — toggleable per side via `c.spines(top=False, right=False, ...)`,
     # restylable via `c.spines(top={"color": "red", "width": 1.5})`.
-    # Spine visibility does NOT gate tick marks (matplotlib semantics:
-    # hiding a spine leaves the ticks; turn those off via xticks/yticks
-    # marks= or the frame `tick_marks` spec key). On a joined share-pair
-    # side (hide_*), tick marks AND tick labels are dropped — the panels
-    # read as merged, with only the two parallel spines remaining
-    # (separated by the per-panel floor on each joined side).
     # Style resolution for any spine target (a side name or "walls"):
     # per-target override > c.spines() base > _FRAME spec.
     def _pick(*candidates):
@@ -587,7 +584,7 @@ def emit_chrome(*, st, inp, iw, ih,
             continue
         if side == "bottom" and has_x_frame:
             continue
-        if not st[f"spine_{side}"]:
+        if not spine_on[side]:
             continue
         col, w = _side_stroke(side)
         dash = _side_dash(side)
@@ -625,8 +622,8 @@ def emit_chrome(*, st, inp, iw, ih,
                 "tick_pad":      _FRAME["tick_pad"],
                 "x_fontsize":    x_size,
                 "font_color":    _FONTSPEC["color"],
-                "x_marks":       x_marks,
-                "x_show_labels": not suppress_xt,
+                "x_marks":       x_pol["draw_marks"],
+                "x_show_labels": x_pol["draw_labels"],
                 "x_fontstyle":   x_style,
                 "x_fontweight":  x_weight,
                 "x_decoration":  x_decor,
@@ -637,31 +634,29 @@ def emit_chrome(*, st, inp, iw, ih,
         # by `x_side`: spine attachment, tick-mark endpoints, label anchor.
         x_side = inp.x_side
         if x_side == "bottom":
-            x_spine_side, x_hide_axis = "bottom", hide_b
             x_endpoints = x_bot_endpoints
             y_band_edge_sign = 1   # band grows downward from y=ih
             x_band_y0 = ih
         else:
-            x_spine_side, x_hide_axis = "top", hide_t
             x_endpoints = x_top_endpoints
             y_band_edge_sign = -1  # band grows upward from y=0
             x_band_y0 = 0
-        # No visible outward mark (inward or disabled) → labels sit flush
-        # at tick_pad past the spine line.
-        x_label_dy = (_FRAME["tick_pad"]
-                      if (x_dir == "in" or not x_marks)
-                      else _FRAME["tick_length"] + _FRAME["tick_pad"])
+        # No visible outward mark (inward, disabled, or dropped on a
+        # joined share-pair side) → labels sit flush at tick_pad past
+        # the spine line.
+        x_label_dy = (_FRAME["tick_length"] + _FRAME["tick_pad"]
+                      if x_pol["outward_mark"]
+                      else _FRAME["tick_pad"])
 
         for t, lbl in zip(x_ticks, x_labels):
             x = x_scale(t)
-            if x_marks:
-                # Hidden sides (joined share-pair) drop tick marks too — marks
-                # bleeding into the inter-panel gap read as visual clutter
-                # when the two panels are meant to merge.
-                if not x_hide_axis:
-                    y1, y2 = x_endpoints
-                    col, sw = _side_stroke(x_spine_side)
-                    parts.append(segment(x, y1, x, y2, color=col, width=sw))
+            # draw_marks already folds share-pair hiding — marks bleeding
+            # into the inter-panel gap read as visual clutter when the
+            # two panels are meant to merge.
+            if x_pol["draw_marks"]:
+                y1, y2 = x_endpoints
+                col, sw = _side_stroke(x_side)
+                parts.append(segment(x, y1, x, y2, color=col, width=sw))
             # Drop only labels redundant with a sharing sibling. A small label
             # overflow into a joined neighbor's collapsed margin is acceptable.
             if not suppress_xt:
@@ -686,9 +681,9 @@ def emit_chrome(*, st, inp, iw, ih,
         # labels. Emit only when the user opted in via xticks(minor=True) or
         # xticks(minor=[...]).
         x_minor = _resolve_minor_ticks(st["x_minor"], x_scale, x_ticks)
-        if x_minor and x_marks and not x_hide_axis:
+        if x_minor and x_pol["draw_marks"]:
             minor_len = _FRAME["tick_length"] * _FRAME["minor_tick_ratio"]
-            col, sw = _side_stroke(x_spine_side)
+            col, sw = _side_stroke(x_side)
             for t in x_minor:
                 x = x_scale(t)
                 if not math.isfinite(x):
@@ -748,7 +743,7 @@ def emit_chrome(*, st, inp, iw, ih,
                 _max_w = max((measure_text(str(l), x_size, x_style, x_weight)
                               for l in x_labels), default=0.0)
                 x_chrome_extent = _tl + _tp + _max_w
-            elif x_marks and x_ticks:
+            elif x_pol["draw_marks"] and x_ticks:
                 x_chrome_extent = _tl
             else:
                 x_chrome_extent = 0.0
@@ -769,12 +764,12 @@ def emit_chrome(*, st, inp, iw, ih,
                     "label_fontstyle":   x_style,
                     "label_fontweight":  x_weight,
                     "label_decoration":  x_decor,
-                    "draw_dividers":     bool(sec.divider) and st["spine_walls"] and not _crossers,
+                    "draw_dividers":     bool(sec.divider) and spine_on["walls"] and not _crossers,
                     "draw_labels":       bool(sec.label) and not suppress_xt,
                 },
             ))
         else:
-            if sec.divider and st["spine_walls"] and not _crossers:
+            if sec.divider and spine_on["walls"] and not _crossers:
                 for x in divider_xs:
                     parts.append(segment(x, 0, x, ih,
                                          color=sec_col, width=sec_w, dash=sec_dash,
@@ -828,7 +823,7 @@ def emit_chrome(*, st, inp, iw, ih,
         else:
             label_ys = [(lo + hi) / 2 for lo, hi in spans]
         divider_ys = _sector_walls(spans)
-        if sec.divider and st["spine_walls"]:
+        if sec.divider and spine_on["walls"]:
             for y in divider_ys:
                 parts.append(segment(0, y, iw, y,
                                      color=sec_col, width=sec_w, dash=sec_dash,
@@ -885,32 +880,30 @@ def emit_chrome(*, st, inp, iw, ih,
                 "tick_pad":      _FRAME["tick_pad"],
                 "y_fontsize":    y_size,
                 "font_color":    _FONTSPEC["color"],
-                "y_marks":       y_marks,
-                "y_show_labels": not suppress_yt,
+                "y_marks":       y_pol["draw_marks"],
+                "y_show_labels": y_pol["draw_labels"],
                 "y_fontstyle":   y_style,
                 "y_fontweight":  y_weight,
                 "y_decoration":  y_decor,
                 "y_side":        inp.y_side,
                 "sector_ts":     _y_sector_ts,
-                "spine_top":     st["spine_top"],
-                "spine_bottom":  st["spine_bottom"],
+                "spine_top":     spine_on["top"],
+                "spine_bottom":  spine_on["bottom"],
             }
         ))
     else:
         # y-ticks + labels — Cartesian. Like the x-block above, flip wholesale
         # by `y_side`: spine attachment, tick-mark endpoints, label anchor.
         y_side = inp.y_side
-        y_label_dx = (_FRAME["tick_pad"]
-                      if (y_dir == "in" or not y_marks)
-                      else _FRAME["tick_length"] + _FRAME["tick_pad"])
+        y_label_dx = (_FRAME["tick_length"] + _FRAME["tick_pad"]
+                      if y_pol["outward_mark"]
+                      else _FRAME["tick_pad"])
         if y_side == "left":
-            y_spine_side, y_hide_axis = "left", hide_l
             y_endpoints = y_left_endpoints
             x_band_edge_sign = -1  # band grows leftward from x=0
             y_band_x0 = 0
             y_label_x = -y_label_dx
         else:
-            y_spine_side, y_hide_axis = "right", hide_r
             y_endpoints = y_right_endpoints
             x_band_edge_sign = 1   # band grows rightward from x=iw
             y_band_x0 = iw
@@ -918,11 +911,10 @@ def emit_chrome(*, st, inp, iw, ih,
 
         for t, lbl in zip(y_ticks, y_labels):
             y = y_scale(t)
-            if y_marks:
-                if not y_hide_axis:
-                    x1, x2 = y_endpoints
-                    col, sw = _side_stroke(y_spine_side)
-                    parts.append(segment(x1, y, x2, y, color=col, width=sw))
+            if y_pol["draw_marks"]:
+                x1, x2 = y_endpoints
+                col, sw = _side_stroke(y_side)
+                parts.append(segment(x1, y, x2, y, color=col, width=sw))
             if not suppress_yt:
                 # `y + cap_height/2` places the baseline so the cap is vertically
                 # centered on the tick line (cap top at y - cap/2, cap bottom at y + cap/2).
@@ -933,9 +925,9 @@ def emit_chrome(*, st, inp, iw, ih,
                                          tag="tick-y"))
 
         y_minor = _resolve_minor_ticks(st["y_minor"], y_scale, y_ticks)
-        if y_minor and y_marks and not y_hide_axis:
+        if y_minor and y_pol["draw_marks"]:
             minor_len = _FRAME["tick_length"] * _FRAME["minor_tick_ratio"]
-            col, sw = _side_stroke(y_spine_side)
+            col, sw = _side_stroke(y_side)
             for t in y_minor:
                 y = y_scale(t)
                 if not math.isfinite(y):

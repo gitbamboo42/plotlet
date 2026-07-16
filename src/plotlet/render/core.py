@@ -38,6 +38,7 @@ from ..draw import measure_text, text_block_height
 from ..draw import coord, rect, segment, text_path
 from .. import _regions
 from . import _chrome
+from ._policy import resolve_axis_chrome
 from ..utils import (hist_bin_edges, hist_bin_counts, hist_transform,
                      collect_categories, group_color)
 from ..registry import RenderContext, get_artist, _COORD_SUPPORT
@@ -1264,16 +1265,23 @@ def _resolve_panel_inputs(st, *, x_scale, y_scale, dw, dh, po):
     hide_l = po.hide_left
     hide_r = po.hide_right
 
-    # `xticks(labels=False)` joins forces with the share-pair label
-    # suppression — either one drops tick labels on the corresponding
-    # side. Routed by axis side so a flipped axis pulls suppression from
-    # the matching joined edge (top edge for x_side="top", etc.).
-    x_side = st["x_side"]
-    y_side = st["y_side"]
-    suppress_xt = getattr(po, f"suppress_{x_side}_labels") or not st["x_show_labels"]
-    suppress_yt = getattr(po, f"suppress_{y_side}_labels") or not st["y_show_labels"]
+    # Decided chrome visibility — the one place state and layout flags
+    # combine into "draw it?" booleans (see `_policy`). `xticks
+    # (labels=False)` joins forces with the share-pair label suppression
+    # there — either one drops tick labels on the corresponding side,
+    # routed by axis side so a flipped axis pulls suppression from the
+    # matching joined edge (top edge for x_side="top", etc.).
+    chrome = resolve_axis_chrome(
+        st,
+        hide={"top": hide_t, "bottom": hide_b, "left": hide_l, "right": hide_r},
+        suppress={s: getattr(po, f"suppress_{s}_labels")
+                  for s in ("top", "bottom", "left", "right")},
+    )
+    suppress_xt = not chrome["x"]["draw_labels"]
+    suppress_yt = not chrome["y"]["draw_labels"]
 
     return SimpleNamespace(
+        chrome=chrome,
         x_scale=x_scale, y_scale=y_scale,
         x_ticks=x_ticks, x_labels=x_labels,
         y_ticks=y_ticks, y_labels=y_labels,
@@ -1291,9 +1299,9 @@ def _resolve_panel_inputs(st, *, x_scale, y_scale, dw, dh, po):
         suppress_xt=suppress_xt, suppress_yt=suppress_yt,
         hide_t=hide_t, hide_b=hide_b, hide_l=hide_l, hide_r=hide_r,
         # Side routing pre-resolved so chrome functions don't re-derive.
-        x_side=x_side, y_side=y_side,
-        hide_xlabel=(x_side == "bottom" and hide_b) or (x_side == "top" and hide_t),
-        hide_ylabel=(y_side == "left"   and hide_l) or (y_side == "right" and hide_r),
+        x_side=chrome["x"]["side"], y_side=chrome["y"]["side"],
+        hide_xlabel=chrome["x"]["hidden"],
+        hide_ylabel=chrome["y"]["hidden"],
     )
 
 

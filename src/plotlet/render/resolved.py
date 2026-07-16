@@ -55,6 +55,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from ..scales import _AxisDescriptor as IRScale
+from ._policy import resolve_axis_chrome
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +100,8 @@ class IRPanel:
     coord: IRCoord
     scales: dict         # {"x": IRScale, "y": IRScale} for data leaves
     artists: tuple       # curated view of state["artists"]
-    chrome: dict         # curated view of identity/spine state
+    chrome: dict         # curated identity/spine state + "visibility":
+                         # the decided draw-it? flags (see `_policy`)
     state: dict          # the FULL replayed state the emit pass draws from
                          # (minus "insets"/"coordinate", lifted to fields)
     attachments: dict    # {"left","right","top","bottom"} → tuple[IRPanel]
@@ -351,7 +353,6 @@ def _chart_to_ir(chart, panel_opts, states, pids):
                 if coord_obj else IRCoord(kind="cartesian"))
 
     artists = tuple(_artist_to_ir(a) for a in st.get("artists", ()))
-    chrome = _extract_chrome(st)
     state = {k: v for k, v in st.items() if k not in _LIFTED_STATE_KEYS}
 
     attachments = {
@@ -378,6 +379,11 @@ def _chart_to_ir(chart, panel_opts, states, pids):
             for s in ("left", "right", "top", "bottom")}
     suppress = {s: getattr(po, f"suppress_{s}_labels", False) if po else False
                 for s in ("left", "right", "top", "bottom")}
+    chrome = _extract_chrome(st)
+    # The same decided flags the emit pass reads (via
+    # `core._resolve_panel_inputs`) — the projection shows what will be
+    # drawn, not just the raw ingredients.
+    chrome["visibility"] = resolve_axis_chrome(st, hide, suppress)
     share = {
         "x": pids.get(id(chart._share_x)) if chart._share_x is not None else None,
         "y": pids.get(id(chart._share_y)) if chart._share_y is not None else None,
@@ -495,7 +501,9 @@ def _coerce_param(v, panel_opts, states, pids):
 def _extract_chrome(st):
     """Chrome-relevant state fields for a data leaf: the curated
     identity fields plus resolved spine state (visibility flags are
-    always present; per-side style overrides only when set)."""
+    always present; per-side style overrides only when set). The
+    caller adds a "visibility" key with the decided per-axis draw
+    flags from `_policy.resolve_axis_chrome`."""
     keys = (
         "title", "xlabel", "ylabel",
         "xscale", "yscale",
