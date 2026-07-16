@@ -536,6 +536,22 @@ def ring_pile_titled():
     return pile.title("two rings — layout title")
 
 
+def ring_inner_step_ticks():
+    # Inner rings default to tick suppression (outermost-only labels),
+    # but a content-deciding xticks call — step= here, likewise ticks=/
+    # count=/format= — opts the ring back in. Pins TICK_CONTENT_KW
+    # against `resolve_layout`'s style-only classification, which would
+    # otherwise wipe the inner ring's requested ticks.
+    outer = pt.chart(xlim=(0, 1), ylim=(0, 1))
+    outer.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
+               color="#1D9E75", linewidth=1.5)
+    inner = pt.chart(xlim=(0, 1), ylim=(0, 1))
+    inner.scatter(data={"x": _SCATTER_T, "y": _SCATTER_V}, x="x", y="y",
+                  color="#534AB7", size=2.5, alpha=0.6)
+    inner.xticks(step=0.25)
+    return (outer / inner).coordinate(pt.CircularCoordinate())
+
+
 def ring_inner_chords():
     # Bare-chart root with `inner=`: the central disc hosts a chord
     # panel that inherits the host's sector partition. Pins the root
@@ -677,6 +693,7 @@ PLOTS = {
     "ring_partial_arc_right_side": ring_partial_arc_right_side,
     "ring_partial_arc_sectors":    ring_partial_arc_sectors,
     "ring_pile_titled":            ring_pile_titled,
+    "ring_inner_step_ticks":       ring_inner_step_ticks,
     "ring_inner_chords":           ring_inner_chords,
     "ring_chord_ribbon":           ring_chord_ribbon,
 }

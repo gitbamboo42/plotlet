@@ -127,6 +127,16 @@ def _record_scale(st, axis, args, kw, *, from_default=False):
     if "groups" in kw:    st[f"{axis}_groups"]    = dict(kw["groups"]) if kw["groups"] else None
 
 
+# xticks()/yticks() kwargs that decide tick CONTENT — which ticks exist
+# and what their labels say — as opposed to styling them (rotation=,
+# fontsize=, marks=, ...). `labels` is content too unless passed as the
+# bool form (`labels=False`), which only toggles label visibility.
+# `CircularCoordinate.resolve_layout` checks this set to tell
+# content-deciding calls from style-only ones; keep it in sync with the
+# kwarg handling in `_record_ticks` below.
+TICK_CONTENT_KW = frozenset({"ticks", "step", "count", "format", "minor"})
+
+
 def _record_ticks(st, axis, args, kw):
     """Decode the xticks()/yticks() call into state.
 

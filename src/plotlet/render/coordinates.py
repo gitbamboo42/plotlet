@@ -445,7 +445,7 @@ class CircularCoordinate:
         `layout_size` and `render_layout` never re-probe a spliced
         tree."""
         from ._layout_engine import _build_panel_opts, _title_band_h
-        from .core import _expand_frame_defaults
+        from .core import TICK_CONTENT_KW, _expand_frame_defaults
 
         leaves = list(root._iter_leaves())
         if not leaves:
@@ -543,7 +543,7 @@ class CircularCoordinate:
                     return False
                 if any(a is not None for a in args[:2]):
                     return True
-                if kw.get("ticks") is not None:
+                if any(kw.get(k) is not None for k in TICK_CONTENT_KW):
                     return True
                 lbls = kw.get("labels")
                 return lbls is not None and not isinstance(lbls, bool)
