@@ -33,7 +33,8 @@ def resolve_axis_chrome(st, hide, suppress):
 
         {"spines": {side: bool, ..., "walls": bool},
          "x": {"side", "hidden", "draw_marks", "outward_mark",
-               "draw_labels"},
+               "draw_labels", "draw_sector_dividers",
+               "draw_sector_labels"},
          "y": {same keys}}
 
     Per axis: `side` is where the axis band sits (`x_side` / `y_side`
@@ -45,19 +46,43 @@ def resolve_axis_chrome(st, hide, suppress):
     whether tick labels are drawn. Spine visibility is deliberately
     NOT an input to any tick flag — hiding a spine leaves the ticks
     (matplotlib semantics).
+
+    Sector chrome: `draw_sector_dividers` is the sector walls toggle
+    (`Sectors.divider` AND `c.spines(walls=)`; on x additionally no
+    artist with `crosses_sectors` — walls cutting through cross-sector
+    curves read as a layering bug). `draw_sector_labels` follows tick
+    labels: sector names drop wherever tick labels are suppressed or
+    the side is share-joined.
     """
+    from ..registry import get_artist
+
+    # Artists that span sectors (chord_links, ribbons) suppress the
+    # x-axis walls. y-sector walls have no crossing artists today.
+    x_crossers = any(
+        (spec := get_artist(a["type"])) is not None and spec.crosses_sectors
+        for a in st["artists"]
+    )
+
+    spines = {side: st[f"spine_{side}"] for side in _SIDES}
+    spines["walls"] = st["spine_walls"]
+
     def _axis(axis):
         side = st[f"{axis}_side"]
         hidden = hide[side]
         draw_marks = st[f"{axis}_marks"] and not hidden
+        draw_labels = st[f"{axis}_show_labels"] and not suppress[side]
+        sec = st[f"{axis}_sectors"]
         return {
             "side": side,
             "hidden": hidden,
             "draw_marks": draw_marks,
             "outward_mark": draw_marks and st[f"{axis}_direction"] != "in",
-            "draw_labels": st[f"{axis}_show_labels"] and not suppress[side],
+            "draw_labels": draw_labels,
+            "draw_sector_dividers": (sec is not None and bool(sec.divider)
+                                     and spines["walls"]
+                                     and not (axis == "x" and x_crossers)),
+            "draw_sector_labels": (sec is not None and bool(sec.label)
+                                   and draw_labels and not hidden),
         }
 
-    spines = {side: st[f"spine_{side}"] for side in _SIDES}
-    spines["walls"] = st["spine_walls"]
     return {"spines": spines, "x": _axis("x"), "y": _axis("y")}

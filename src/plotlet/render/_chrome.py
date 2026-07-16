@@ -48,16 +48,13 @@ def chrome_stack_extents(st, inp):
     out_y = _FRAME["tick_length"] if (inp.chrome["y"]["outward_mark"]
                                       and inp.y_ticks) else 0
 
-    hide_x = inp.chrome["x"]["hidden"]
-    hide_y = inp.chrome["y"]["hidden"]
-
     x_band = out_x
     has_xtl = (not inp.suppress_xt) and any(str(l) for l in inp.x_labels)
     if has_xtl:
         x_band += _FRAME["tick_pad"] + tick_band_height(inp.x_labels, inp.x_size, inp.x_rot,
                                                         inp.x_style, inp.x_weight)
     x_sec = st["x_sectors"]
-    if x_sec is not None and x_sec.label and not hide_x:
+    if inp.chrome["x"]["draw_sector_labels"]:
         _sec_x_size = x_sec.fontsize if x_sec.fontsize is not None else _SECTORSPEC["label_size"]
         _sec_x_rot  = x_sec.rotation if x_sec.rotation is not None else 0
         _max_sec_w  = max((measure_text(str(n), _sec_x_size, inp.x_style, inp.x_weight)
@@ -74,7 +71,7 @@ def chrome_stack_extents(st, inp):
         ytl_bbox_w, _ = rotated_label_bbox(max_ytl_w, inp.y_size, inp.y_rot)
         y_band += _FRAME["tick_pad"] + ytl_bbox_w
     y_sec = st["y_sectors"]
-    if y_sec is not None and y_sec.label and not hide_y:
+    if inp.chrome["y"]["draw_sector_labels"]:
         _sec_y_size = y_sec.fontsize if y_sec.fontsize is not None else _SECTORSPEC["label_size"]
         sec_lbl_w = max((measure_text(str(n), _sec_y_size, inp.y_style, inp.y_weight)
                          for n in y_sec.names), default=0.0)
@@ -530,8 +527,6 @@ def emit_chrome(*, st, inp, iw, ih,
     x_size, y_size = inp.x_size, inp.y_size
     x_rot, y_rot = inp.x_rot, inp.y_rot
     suppress_xt, suppress_yt = inp.suppress_xt, inp.suppress_yt
-    hide_t, hide_b = inp.hide_t, inp.hide_b
-    hide_l, hide_r = inp.hide_l, inp.hide_r
     x_style = st.get("x_fontstyle") or "normal"
     y_style = st.get("y_fontstyle") or "normal"
     x_weight = st.get("x_fontweight") or "normal"
@@ -700,16 +695,10 @@ def emit_chrome(*, st, inp, iw, ih,
 
     # Sector chrome — internal walls + sector-name labels along the sectored
     # axis. Walls are conceptually side spines, so style resolves through
-    # the same _side_stroke/_side_dash with "walls" as the target. The
-    # c.spines(walls=False) toggle suppresses walls regardless of
-    # `Sectors.divider`. Artists that span sectors (chord_links, ribbons)
-    # also suppress walls via `ArtistSpec.crosses_sectors` — walls cutting
-    # through cross-sector curves read as a layering bug.
-    from ..registry import get_artist as _get_artist
-    _crossers = any(
-        (_spec := _get_artist(a["type"])) is not None and _spec.crosses_sectors
-        for a in st["artists"]
-    )
+    # the same _side_stroke/_side_dash with "walls" as the target.
+    # Visibility (walls toggle, crossing-artist wall suppression, label
+    # suppression / hiding) is decided in `_policy` — the
+    # `draw_sector_dividers` / `draw_sector_labels` flags below.
     if x_sec is not None and (x_sec.divider or x_sec.label):
         sec_col, sec_w = _side_stroke("walls")
         sec_dash = _side_dash("walls")
@@ -764,18 +753,17 @@ def emit_chrome(*, st, inp, iw, ih,
                     "label_fontstyle":   x_style,
                     "label_fontweight":  x_weight,
                     "label_decoration":  x_decor,
-                    "draw_dividers":     bool(sec.divider) and spine_on["walls"] and not _crossers,
-                    "draw_labels":       bool(sec.label) and not suppress_xt,
+                    "draw_dividers":     x_pol["draw_sector_dividers"],
+                    "draw_labels":       x_pol["draw_sector_labels"],
                 },
             ))
         else:
-            if sec.divider and spine_on["walls"] and not _crossers:
+            if x_pol["draw_sector_dividers"]:
                 for x in divider_xs:
                     parts.append(segment(x, 0, x, ih,
                                          color=sec_col, width=sec_w, dash=sec_dash,
                                          tag="sector-divider"))
-            _x_sec_hide = hide_b if inp.x_side == "bottom" else hide_t
-            if sec.label and not suppress_xt and not _x_sec_hide:
+            if x_pol["draw_sector_labels"]:
                 # Sector label band sits flush against the spine when no
                 # tick band is between them (continuous-no-user-ticks case);
                 # otherwise it stacks past the tick band. Same rule for
@@ -823,13 +811,12 @@ def emit_chrome(*, st, inp, iw, ih,
         else:
             label_ys = [(lo + hi) / 2 for lo, hi in spans]
         divider_ys = _sector_walls(spans)
-        if sec.divider and spine_on["walls"]:
+        if y_pol["draw_sector_dividers"]:
             for y in divider_ys:
                 parts.append(segment(0, y, iw, y,
                                      color=sec_col, width=sec_w, dash=sec_dash,
                                      tag="sector-divider"))
-        _y_sec_hide = hide_l if inp.y_side == "left" else hide_r
-        if sec.label and not suppress_yt and not _y_sec_hide:
+        if y_pol["draw_sector_labels"]:
             # Sector label column sits flush against the spine when no
             # tick label column exists to its inside; otherwise it stacks
             # past the tick labels. Same rule for categorical (always has
