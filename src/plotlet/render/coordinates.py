@@ -119,39 +119,48 @@ def _circular_x_tick_labels(st, dw):
 def _circular_chrome_pad(st, dw) -> float:
     """Radial pixels of chrome past the outer arc for the outermost ring.
 
-    Mirrors the stacking logic in ``emit_chrome`` / ``draw_x_sector_chrome``
-    but works from the chart state dict (available after ``_build_panel_opts``)
-    rather than from a live scale.  ``dw`` is the t-axis pixel span (the
-    panel width auto ticks resolve against), used to resolve the real tick
-    labels. Used by ``render_layout`` to grow the canvas outward around
-    the data annulus so labels don't get clipped by the viewBox.
+    Visibility comes from the same `_policy.resolve_axis_chrome` the
+    emit pass reads — rings carry no share-pair hiding or label
+    suppression, so the layout flags are all False. Only the radial
+    stacking arithmetic is local: it mirrors the ``draw_x_chrome`` /
+    ``draw_x_sector_chrome`` geometry, which has no linear counterpart.
+    ``dw`` is the t-axis pixel span (the panel width auto ticks resolve
+    against), used to resolve the real tick labels. Used by
+    ``render_layout`` to grow the canvas outward around the data
+    annulus so labels don't get clipped by the viewBox.
 
     Returns 0 when no chrome is drawn outside the ring.
     """
     from .._spec import SPEC, _FRAME, _FONTSPEC
     from ..draw import cap_height, measure_text
+    from ._policy import resolve_axis_chrome
+
+    _off = {s: False for s in ("top", "bottom", "left", "right")}
+    pol = resolve_axis_chrome(st, hide=_off, suppress=_off)["x"]
 
     tl        = _FRAME["tick_length"]
     tp        = _FRAME["tick_pad"]
     tick_size = _FONTSPEC["tick_size"]
     x_size    = st["x_fontsize"] if st["x_fontsize"] is not None else tick_size
-    show_lbl  = st["x_show_labels"]
     x_ticks_v = st.get("x_ticks")   # None=auto, []=suppressed, [...]= explicit
 
     x_chrome = 0.0
     labels = (_circular_x_tick_labels(st, dw)
-              if (show_lbl and x_ticks_v != []) else [])
+              if (pol["draw_labels"] and x_ticks_v != []) else [])
     if labels:
         x_style  = st.get("x_fontstyle") or "normal"
         x_weight = st.get("x_fontweight") or "normal"
         max_w  = max(measure_text(l, x_size, x_style, x_weight) for l in labels)
         x_chrome = tl + tp + max_w
-    elif st.get("x_marks", True) and x_ticks_v != []:
+    elif pol["draw_marks"] and x_ticks_v != []:
+        # `draw_marks`, not `outward_mark`: circular tick marks always
+        # point radially outward regardless of the tick direction state
+        # (see draw_x_chrome), so the full tick_length is reserved.
         x_chrome = tl                # marks only, no labels (or none drawn)
 
     # Sector labels stack outside tick chrome (same rule as linear)
     x_sec = st.get("x_sectors")
-    if x_sec is not None and getattr(x_sec, "label", False) and show_lbl:
+    if pol["draw_sector_labels"]:
         sec_size  = x_sec.fontsize if x_sec.fontsize is not None else SPEC["sectors"]["label_size"]
         sec_cap   = cap_height(sec_size)
         label_pad = SPEC["sectors"]["label_pad"]
