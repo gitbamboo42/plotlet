@@ -383,7 +383,7 @@ def _chart_to_ir(chart, panel_opts, states, pids):
     # The same decided flags the emit pass reads (via
     # `core._resolve_panel_inputs`) — the projection shows what will be
     # drawn, not just the raw ingredients.
-    chrome["visibility"] = resolve_axis_chrome(st, hide, suppress)
+    chrome["visibility"] = resolve_axis_chrome(st, po)
     share = {
         "x": pids.get(id(chart._share_x)) if chart._share_x is not None else None,
         "y": pids.get(id(chart._share_y)) if chart._share_y is not None else None,
@@ -500,10 +500,11 @@ def _coerce_param(v, panel_opts, states, pids):
 
 def _extract_chrome(st):
     """Chrome-relevant state fields for a data leaf: the curated
-    identity fields plus resolved spine state (visibility flags are
-    always present; per-side style overrides only when set). The
-    caller adds a "visibility" key with the decided per-axis draw
-    flags from `_policy.resolve_axis_chrome`."""
+    identity fields plus per-target spine style overrides (only when
+    set). Spine visibility is NOT copied here — it lives under the
+    "visibility" key the caller adds with the decided per-axis draw
+    flags from `_policy.resolve_axis_chrome`, the one authoritative
+    copy."""
     keys = (
         "title", "xlabel", "ylabel",
         "xscale", "yscale",
@@ -513,9 +514,12 @@ def _extract_chrome(st):
         "grid", "facecolor",
         "legend",
     )
+    spine_vis = {"spine_top", "spine_bottom", "spine_left", "spine_right",
+                 "spine_walls"}
     chrome = {k: st[k] for k in keys if k in st and st[k] is not None}
     chrome.update({k: v for k, v in st.items()
-                   if k.startswith("spine_") and v is not None})
+                   if k.startswith("spine_") and k not in spine_vis
+                   and v is not None})
     return chrome
 
 

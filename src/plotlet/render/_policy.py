@@ -20,14 +20,14 @@ here instead of gating at the emit site.
 _SIDES = ("top", "bottom", "left", "right")
 
 
-def resolve_axis_chrome(st, hide, suppress):
+def resolve_axis_chrome(st, po=None):
     """Decide chrome visibility for one data panel.
 
-    `st` is the replayed chart state; `hide` and `suppress` are
-    per-side bool dicts (keys `top/bottom/left/right`) from the layout
-    pre-pass — `hide` marks sides joined to a share-pair neighbor,
-    `suppress` marks sides whose tick labels a sharing sibling already
-    renders.
+    `st` is the replayed chart state; `po` is the panel's layout
+    pre-pass `_PanelOpts` (or `None` for a panel outside any layout
+    pass, e.g. a circular ring) — its `hide_*` flags mark sides joined
+    to a share-pair neighbor, its `suppress_*_labels` flags mark sides
+    whose tick labels a sharing sibling already renders.
 
     Returns::
 
@@ -55,6 +55,13 @@ def resolve_axis_chrome(st, hide, suppress):
     the side is share-joined.
     """
     from ..registry import get_artist
+
+    if po is None:
+        hide = suppress = {side: False for side in _SIDES}
+    else:
+        hide = {side: getattr(po, f"hide_{side}") for side in _SIDES}
+        suppress = {side: getattr(po, f"suppress_{side}_labels")
+                    for side in _SIDES}
 
     # Artists that span sectors (chord_links, ribbons) suppress the
     # x-axis walls. y-sector walls have no crossing artists today.

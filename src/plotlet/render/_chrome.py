@@ -31,30 +31,31 @@ def chrome_stack_extents(st, inp):
     of chrome past the data edge on that side, up to BUT NOT INCLUDING
     the outermost frame label (title / xlabel / ylabel).
 
-    The x-axis band sits on whichever side ``inp.x_side`` names
-    (``"bottom"`` default or ``"top"``); the y-axis band on
-    ``inp.y_side`` (``"left"`` default or ``"right"``). Stack from data
-    edge outward on the axis side: marks → tick band → sector band.
+    The x-axis band sits on whichever side ``inp.chrome["x"]["side"]``
+    names (``"bottom"`` default or ``"top"``); the y-axis band on
+    ``inp.chrome["y"]["side"]`` (``"left"`` default or ``"right"``).
+    Stack from data edge outward on the axis side: marks → tick band →
+    sector band.
 
     One formula, used by both ``_required_margin`` (to reserve the band)
     and ``_render_inner`` (to position the outermost label past it).
     Keeps the two in lockstep without a DRY violation.
     """
+    x_pol, y_pol = inp.chrome["x"], inp.chrome["y"]
+
     # Reserve the tick-mark band only when an outward mark is actually
     # drawn — `inp.chrome` carries the decided flags (see `_policy`), so
     # this reservation and `emit_chrome` walk the same booleans.
-    out_x = _FRAME["tick_length"] if (inp.chrome["x"]["outward_mark"]
-                                      and inp.x_ticks) else 0
-    out_y = _FRAME["tick_length"] if (inp.chrome["y"]["outward_mark"]
-                                      and inp.y_ticks) else 0
+    out_x = _FRAME["tick_length"] if (x_pol["outward_mark"] and inp.x_ticks) else 0
+    out_y = _FRAME["tick_length"] if (y_pol["outward_mark"] and inp.y_ticks) else 0
 
     x_band = out_x
-    has_xtl = (not inp.suppress_xt) and any(str(l) for l in inp.x_labels)
+    has_xtl = x_pol["draw_labels"] and any(str(l) for l in inp.x_labels)
     if has_xtl:
         x_band += _FRAME["tick_pad"] + tick_band_height(inp.x_labels, inp.x_size, inp.x_rot,
                                                         inp.x_style, inp.x_weight)
     x_sec = st["x_sectors"]
-    if inp.chrome["x"]["draw_sector_labels"]:
+    if x_pol["draw_sector_labels"]:
         _sec_x_size = x_sec.fontsize if x_sec.fontsize is not None else _SECTORSPEC["label_size"]
         _sec_x_rot  = x_sec.rotation if x_sec.rotation is not None else 0
         _max_sec_w  = max((measure_text(str(n), _sec_x_size, inp.x_style, inp.x_weight)
@@ -64,14 +65,14 @@ def chrome_stack_extents(st, inp):
         x_band += top_gap + _sec_h
 
     y_band = out_y
-    has_ytl = (not inp.suppress_yt) and any(str(l) for l in inp.y_labels)
+    has_ytl = y_pol["draw_labels"] and any(str(l) for l in inp.y_labels)
     if has_ytl:
         max_ytl_w = max((measure_text(str(l), inp.y_size, inp.y_style, inp.y_weight)
                          for l in inp.y_labels), default=0.0)
         ytl_bbox_w, _ = rotated_label_bbox(max_ytl_w, inp.y_size, inp.y_rot)
         y_band += _FRAME["tick_pad"] + ytl_bbox_w
     y_sec = st["y_sectors"]
-    if inp.chrome["y"]["draw_sector_labels"]:
+    if y_pol["draw_sector_labels"]:
         _sec_y_size = y_sec.fontsize if y_sec.fontsize is not None else _SECTORSPEC["label_size"]
         sec_lbl_w = max((measure_text(str(n), _sec_y_size, inp.y_style, inp.y_weight)
                          for n in y_sec.names), default=0.0)
@@ -79,10 +80,10 @@ def chrome_stack_extents(st, inp):
         y_band += top_gap + sec_lbl_w
 
     return {
-        "top":    x_band if inp.x_side == "top"    else 0,
-        "bottom": x_band if inp.x_side == "bottom" else 0,
-        "left":   y_band if inp.y_side == "left"   else 0,
-        "right":  y_band if inp.y_side == "right"  else 0,
+        "top":    x_band if x_pol["side"] == "top"    else 0,
+        "bottom": x_band if x_pol["side"] == "bottom" else 0,
+        "left":   y_band if y_pol["side"] == "left"   else 0,
+        "right":  y_band if y_pol["side"] == "right"  else 0,
     }
 
 
@@ -115,13 +116,14 @@ def label_band_sizes(st, inp, dw, dh):
     """
     label_size = _FONTSPEC["label_size"]
     title_size = _FONTSPEC["title_size"]
+    x_pol, y_pol = inp.chrome["x"], inp.chrome["y"]
 
     # Cross-axis spillover: per-tick label AABB widths/positions used to
     # compute the leftmost/rightmost x-tick label overhang past the data
     # area edges. The chrome stack itself is handled by `chrome_stack_extents`
     # below; here we just measure the bits `_required_margin` needs for
     # cross-axis reservation.
-    has_xtl = (not inp.suppress_xt) and any(str(l) for l in inp.x_labels)
+    has_xtl = x_pol["draw_labels"] and any(str(l) for l in inp.x_labels)
     if has_xtl:
         n_x = min(len(inp.x_ticks), len(inp.x_labels))
         x_tick_px = [inp.x_scale(t) for t in inp.x_ticks[:n_x]]
@@ -141,7 +143,7 @@ def label_band_sizes(st, inp, dw, dh):
 
     # y-axis cross-axis spillover (asymmetric for rot=0: cap/2 above,
     # cap/2 + descender below — rotated labels use the rotated AABB).
-    has_ytl = (not inp.suppress_yt) and any(str(l) for l in inp.y_labels)
+    has_ytl = y_pol["draw_labels"] and any(str(l) for l in inp.y_labels)
     if has_ytl:
         n_y = min(len(inp.y_ticks), len(inp.y_labels))
         y_tick_px = [inp.y_scale(t) for t in inp.y_ticks[:n_y]]
@@ -172,9 +174,9 @@ def label_band_sizes(st, inp, dw, dh):
     # side x_side names; the title is its own block above the xlabel when
     # they share the top edge.
     xlabel_band = (2 + text_block_height(st["xlabel"], label_size) + _PADSPEC["xlabel"]
-                   if st["xlabel"] and not inp.hide_xlabel else 0)
+                   if st["xlabel"] and not x_pol["hidden"] else 0)
     ylabel_band = (2 + text_block_height(st["ylabel"], label_size) + _PADSPEC["ylabel"]
-                   if st["ylabel"] and not inp.hide_ylabel else 0)
+                   if st["ylabel"] and not y_pol["hidden"] else 0)
 
     # Title sits past the top chrome band + any top-side xlabel block,
     # then adds `pad.title` + its glyph-block height for its own block —
@@ -193,10 +195,10 @@ def label_band_sizes(st, inp, dw, dh):
                 title_top += _PADSPEC["subtitle"]
         if st["title"]:
             title_top += text_block_height(st["title"], title_size)
-    top    = chrome["top"]    + (xlabel_band if inp.x_side == "top"    else 0) + title_top
-    bottom = chrome["bottom"] + (xlabel_band if inp.x_side == "bottom" else 0)
-    left   = chrome["left"]   + (ylabel_band if inp.y_side == "left"   else 0)
-    right  = chrome["right"]  + (ylabel_band if inp.y_side == "right"  else 0)
+    top    = chrome["top"]    + (xlabel_band if x_pol["side"] == "top"    else 0) + title_top
+    bottom = chrome["bottom"] + (xlabel_band if x_pol["side"] == "bottom" else 0)
+    left   = chrome["left"]   + (ylabel_band if y_pol["side"] == "left"   else 0)
+    right  = chrome["right"]  + (ylabel_band if y_pol["side"] == "right"  else 0)
 
     # Cross-axis tick-label spillover past the data edges. The x-tick labels
     # overhang the LEFT / RIGHT of the panel regardless of which edge they
@@ -212,7 +214,7 @@ def label_band_sizes(st, inp, dw, dh):
         left_share, right_share = 1.0, 0.0
     else:
         left_share, right_share = 0.0, 1.0
-    if inp.x_side == "top":
+    if x_pol["side"] == "top":
         left_share, right_share = right_share, left_share
     left_xtl_overhang  = (0.0 if inp.hide_l
                           else max(0.0, left_lbl_w  * left_share  - left_inset))
@@ -239,7 +241,7 @@ def emit_frame_labels(st, inp, iw, ih, chrome, *, top_legend_outset=0,
     fragments. Walks inside-out from the data area: past the chrome band
     on the active side, past the label's own (2-px gap + label_size)
     block, then the subtitle and title blocks above the top-side xlabel
-    (when ``inp.x_side == "top"``). The caption is the outermost bottom
+    (when the x band sits on top). The caption is the outermost bottom
     element — small, right-aligned (ggplot's `labs(caption=)`).
 
     ``top_legend_outset`` / ``bottom_legend_outset`` are the extra strips
@@ -249,9 +251,10 @@ def emit_frame_labels(st, inp, iw, ih, chrome, *, top_legend_outset=0,
     label_size = _FONTSPEC["label_size"]
     title_size = _FONTSPEC["title_size"]
     text_color = _FONTSPEC["color"]
+    x_pol, y_pol = inp.chrome["x"], inp.chrome["y"]
     parts = []
     xlabel_band = (2 + text_block_height(st["xlabel"], label_size) + _PADSPEC["xlabel"]
-                   if st["xlabel"] and not inp.hide_xlabel else 0)
+                   if st["xlabel"] and not x_pol["hidden"] else 0)
 
     # `text_path` anchors multi-line text at the FIRST line's baseline with
     # lines flowing downward. On bottom/right sides the block naturally
@@ -260,13 +263,13 @@ def emit_frame_labels(st, inp, iw, ih, chrome, *, top_legend_outset=0,
     # (`block - size`, zero for one line) so the LAST line lands in the
     # single-line slot and the block grows outward instead of into the axis.
 
-    if st["xlabel"] and not inp.hide_xlabel:
+    if st["xlabel"] and not x_pol["hidden"]:
         # Walk past the chrome stack + 2-px gap + full label_size, then back
         # up by descender to land on the baseline. Bottom: y positive past
         # ih. Top: y negative past 0 — same descender adjustment lands the
         # visible glyph bottom at the band's inner edge.
         xlabel_extra = text_block_height(st["xlabel"], label_size) - label_size
-        if inp.x_side == "bottom":
+        if x_pol["side"] == "bottom":
             xlabel_baseline = ih + chrome["bottom"] + 2 + label_size - descender(label_size)
         else:
             xlabel_baseline = -(chrome["top"] + 2 + descender(label_size) + xlabel_extra)
@@ -274,14 +277,14 @@ def emit_frame_labels(st, inp, iw, ih, chrome, *, top_legend_outset=0,
                                 label_size, anchor="middle", color=text_color,
                                 tag="xlabel"))
 
-    if st["ylabel"] and not inp.hide_ylabel:
+    if st["ylabel"] and not y_pol["hidden"]:
         # Walk past the chrome stack + 2-px gap, then half label_size to
         # land on the rotated text's center. Left: cx negative (outside
         # panel on left) — under rotate=90 extra lines flow toward +x
         # (the panel), so the anchor shifts left by the extra-lines
         # height. Right: cx positive past iw, extra lines flow outward.
         ylabel_extra = text_block_height(st["ylabel"], label_size) - label_size
-        if inp.y_side == "left":
+        if y_pol["side"] == "left":
             ylabel_cx = -(chrome["left"] + 2 + label_size / 2 + ylabel_extra)
         else:
             ylabel_cx = iw + chrome["right"] + 2 + label_size / 2
@@ -290,7 +293,7 @@ def emit_frame_labels(st, inp, iw, ih, chrome, *, top_legend_outset=0,
                                 color=text_color, rotate=90, tag="ylabel"))
 
     if st["title"] or st["subtitle"]:
-        top_xlabel = xlabel_band if inp.x_side == "top" else 0
+        top_xlabel = xlabel_band if x_pol["side"] == "top" else 0
         outer = chrome["top"] + top_xlabel + top_legend_outset + _PADSPEC["title"]
         if st["subtitle"]:
             subtitle_size = _FONTSPEC["subtitle_size"]
@@ -314,7 +317,7 @@ def emit_frame_labels(st, inp, iw, ih, chrome, *, top_legend_outset=0,
         # xlabel block, and any bottom-position legend. First-line
         # baseline anchored so multi-line captions grow downward.
         caption_size = _FONTSPEC["caption_size"]
-        bottom_xlabel = xlabel_band if inp.x_side == "bottom" else 0
+        bottom_xlabel = xlabel_band if x_pol["side"] == "bottom" else 0
         caption_y = (ih + chrome["bottom"] + bottom_xlabel
                      + bottom_legend_outset + _PADSPEC["caption"]
                      + caption_size - descender(caption_size))
@@ -517,16 +520,15 @@ def emit_chrome(*, st, inp, iw, ih,
     ``parts``.
 
     ``inp`` carries the resolved per-panel axis context (scales, ticks,
-    labels, sizes, rotations, suppress / hide flags, side routing);
-    everything else here is pure render state pulled from ``st`` or
-    the coord descriptor args.
+    labels, sizes, rotations, and the decided ``chrome`` visibility
+    flags with their side routing); everything else here is pure render
+    state pulled from ``st`` or the coord descriptor args.
     """
     x_scale, y_scale = inp.x_scale, inp.y_scale
     x_ticks, x_labels = inp.x_ticks, inp.x_labels
     y_ticks, y_labels = inp.y_ticks, inp.y_labels
     x_size, y_size = inp.x_size, inp.y_size
     x_rot, y_rot = inp.x_rot, inp.y_rot
-    suppress_xt, suppress_yt = inp.suppress_xt, inp.suppress_yt
     x_style = st.get("x_fontstyle") or "normal"
     y_style = st.get("y_fontstyle") or "normal"
     x_weight = st.get("x_fontweight") or "normal"
@@ -627,7 +629,7 @@ def emit_chrome(*, st, inp, iw, ih,
     else:
         # x-ticks + labels — always Cartesian. Whole block flips wholesale
         # by `x_side`: spine attachment, tick-mark endpoints, label anchor.
-        x_side = inp.x_side
+        x_side = x_pol["side"]
         if x_side == "bottom":
             x_endpoints = x_bot_endpoints
             y_band_edge_sign = 1   # band grows downward from y=ih
@@ -643,18 +645,19 @@ def emit_chrome(*, st, inp, iw, ih,
                       if x_pol["outward_mark"]
                       else _FRAME["tick_pad"])
 
+        # draw_marks already folds share-pair hiding — marks bleeding
+        # into the inter-panel gap read as visual clutter when the
+        # two panels are meant to merge.
+        if x_pol["draw_marks"]:
+            y1, y2 = x_endpoints
+            col, sw = _side_stroke(x_side)
         for t, lbl in zip(x_ticks, x_labels):
             x = x_scale(t)
-            # draw_marks already folds share-pair hiding — marks bleeding
-            # into the inter-panel gap read as visual clutter when the
-            # two panels are meant to merge.
             if x_pol["draw_marks"]:
-                y1, y2 = x_endpoints
-                col, sw = _side_stroke(x_side)
                 parts.append(segment(x, y1, x, y2, color=col, width=sw))
             # Drop only labels redundant with a sharing sibling. A small label
             # overflow into a joined neighbor's collapsed margin is acceptable.
-            if not suppress_xt:
+            if x_pol["draw_labels"]:
                 # Visible edge of the label band sits `x_label_dy` past the
                 # spine (flush with `tick_pad` past the visible mark, or the
                 # spine itself when the mark is inward / suppressed). Anchor
@@ -698,8 +701,9 @@ def emit_chrome(*, st, inp, iw, ih,
     # the same _side_stroke/_side_dash with "walls" as the target.
     # Visibility (walls toggle, crossing-artist wall suppression, label
     # suppression / hiding) is decided in `_policy` — the
-    # `draw_sector_dividers` / `draw_sector_labels` flags below.
-    if x_sec is not None and (x_sec.divider or x_sec.label):
+    # `draw_sector_dividers` / `draw_sector_labels` flags gate entry and
+    # emission alike; `x_sec` supplies geometry only.
+    if x_pol["draw_sector_dividers"] or x_pol["draw_sector_labels"]:
         sec_col, sec_w = _side_stroke("walls")
         sec_dash = _side_dash("walls")
         sec_pad  = _SECTORSPEC["label_pad"]
@@ -724,7 +728,7 @@ def emit_chrome(*, st, inp, iw, ih,
             # sector labels fall back to the plain tick_pad gap.
             _tl = _FRAME["tick_length"]
             _tp = _FRAME["tick_pad"]
-            _has_x_labels = any(str(l) for l in x_labels) and not suppress_xt
+            _has_x_labels = any(str(l) for l in x_labels) and x_pol["draw_labels"]
             if _has_x_labels:
                 # Tick labels are radial: inner edge at R+tl+tp, center at
                 # R+tl+tp+w/2 (per label), outer edge at R+tl+tp+w. Use the
@@ -780,7 +784,7 @@ def emit_chrome(*, st, inp, iw, ih,
                 if has_xtl:
                     _sec_band += tick_band_height(x_labels, x_size, x_rot,
                                                   x_style, x_weight) + sec_pad
-                if inp.x_side == "bottom":
+                if x_pol["side"] == "bottom":
                     # cap_height * cos(rot) is the y-offset from the band top
                     # to the anchor — 0 at 90° (anchor at top, text hangs
                     # down), cap_height at 0° (baseline one cap below).
@@ -796,11 +800,11 @@ def emit_chrome(*, st, inp, iw, ih,
                 for name, cx in zip(sec.names, label_xs):
                     parts.append(_tick_label(str(name), cx, sec_baseline,
                                              _sec_x_size, _sec_x_rot, axis="x",
-                                             side=inp.x_side,
+                                             side=x_pol["side"],
                                              fontstyle=x_style, fontweight=x_weight,
                                              decoration=x_decor,
                                              tag="sector-label"))
-    if y_sec is not None and (y_sec.divider or y_sec.label):
+    if y_pol["draw_sector_dividers"] or y_pol["draw_sector_labels"]:
         sec_col, sec_w = _side_stroke("walls")
         sec_dash = _side_dash("walls")
         sec_pad  = _SECTORSPEC["label_pad"]
@@ -830,7 +834,7 @@ def emit_chrome(*, st, inp, iw, ih,
                 ytl_w = max((measure_text(str(l), y_size, y_style, y_weight)
                              for l in y_labels), default=0.0)
                 _sec_band += ytl_w + sec_pad
-            if inp.y_side == "left":
+            if y_pol["side"] == "left":
                 y_label_x = -_sec_band
             else:
                 y_label_x = iw + _sec_band
@@ -838,7 +842,7 @@ def emit_chrome(*, st, inp, iw, ih,
                 parts.append(_tick_label(str(name), y_label_x,
                                          cy + cap_height(_sec_y_size) / 2,
                                          _sec_y_size, 0, axis="y",
-                                         side=inp.y_side,
+                                         side=y_pol["side"],
                                          fontstyle=y_style, fontweight=y_weight,
                                          decoration=y_decor,
                                          tag="sector-label"))
@@ -872,7 +876,7 @@ def emit_chrome(*, st, inp, iw, ih,
                 "y_fontstyle":   y_style,
                 "y_fontweight":  y_weight,
                 "y_decoration":  y_decor,
-                "y_side":        inp.y_side,
+                "y_side":        y_pol["side"],
                 "sector_ts":     _y_sector_ts,
                 "spine_top":     spine_on["top"],
                 "spine_bottom":  spine_on["bottom"],
@@ -881,7 +885,7 @@ def emit_chrome(*, st, inp, iw, ih,
     else:
         # y-ticks + labels — Cartesian. Like the x-block above, flip wholesale
         # by `y_side`: spine attachment, tick-mark endpoints, label anchor.
-        y_side = inp.y_side
+        y_side = y_pol["side"]
         y_label_dx = (_FRAME["tick_length"] + _FRAME["tick_pad"]
                       if y_pol["outward_mark"]
                       else _FRAME["tick_pad"])
@@ -896,13 +900,14 @@ def emit_chrome(*, st, inp, iw, ih,
             y_band_x0 = iw
             y_label_x = iw + y_label_dx
 
+        if y_pol["draw_marks"]:
+            x1, x2 = y_endpoints
+            col, sw = _side_stroke(y_side)
         for t, lbl in zip(y_ticks, y_labels):
             y = y_scale(t)
             if y_pol["draw_marks"]:
-                x1, x2 = y_endpoints
-                col, sw = _side_stroke(y_side)
                 parts.append(segment(x1, y, x2, y, color=col, width=sw))
-            if not suppress_yt:
+            if y_pol["draw_labels"]:
                 # `y + cap_height/2` places the baseline so the cap is vertically
                 # centered on the tick line (cap top at y - cap/2, cap bottom at y + cap/2).
                 parts.append(_tick_label(str(lbl), y_label_x, y + cap_height(y_size) / 2,

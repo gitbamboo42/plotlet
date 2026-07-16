@@ -135,8 +135,7 @@ def _circular_chrome_pad(st, dw) -> float:
     from ..draw import cap_height, measure_text
     from ._policy import resolve_axis_chrome
 
-    _off = {s: False for s in ("top", "bottom", "left", "right")}
-    pol = resolve_axis_chrome(st, hide=_off, suppress=_off)["x"]
+    pol = resolve_axis_chrome(st)["x"]
 
     tl        = _FRAME["tick_length"]
     tp        = _FRAME["tick_pad"]

@@ -1281,14 +1281,7 @@ def _resolve_panel_inputs(st, *, x_scale, y_scale, dw, dh, po):
     # there — either one drops tick labels on the corresponding side,
     # routed by axis side so a flipped axis pulls suppression from the
     # matching joined edge (top edge for x_side="top", etc.).
-    chrome = resolve_axis_chrome(
-        st,
-        hide={"top": hide_t, "bottom": hide_b, "left": hide_l, "right": hide_r},
-        suppress={s: getattr(po, f"suppress_{s}_labels")
-                  for s in ("top", "bottom", "left", "right")},
-    )
-    suppress_xt = not chrome["x"]["draw_labels"]
-    suppress_yt = not chrome["y"]["draw_labels"]
+    chrome = resolve_axis_chrome(st, po)
 
     return SimpleNamespace(
         chrome=chrome,
@@ -1306,12 +1299,7 @@ def _resolve_panel_inputs(st, *, x_scale, y_scale, dw, dh, po):
         y_style=st["y_fontstyle"] or "normal",
         x_weight=st["x_fontweight"] or "normal",
         y_weight=st["y_fontweight"] or "normal",
-        suppress_xt=suppress_xt, suppress_yt=suppress_yt,
         hide_t=hide_t, hide_b=hide_b, hide_l=hide_l, hide_r=hide_r,
-        # Side routing pre-resolved so chrome functions don't re-derive.
-        x_side=chrome["x"]["side"], y_side=chrome["y"]["side"],
-        hide_xlabel=chrome["x"]["hidden"],
-        hide_ylabel=chrome["y"]["hidden"],
     )
 
 
@@ -1414,11 +1402,11 @@ def _required_margin(st, dw, dh, po: "_PanelOpts") -> dict:
         caption_size = _FONTSPEC["caption_size"]
         bottom += _PADSPEC["caption"] + text_block_height(st["caption"], caption_size)
         left = max(left, max(0.0, measure_text(st["caption"], caption_size) - dw))
-    if st["xlabel"] and not inp.hide_xlabel:
+    if st["xlabel"] and not inp.chrome["x"]["hidden"]:
         xlabel_overhang = max(0.0, (measure_text(st["xlabel"], label_size) - dw) / 2.0)
         left  = max(left,  xlabel_overhang)
         right = max(right, xlabel_overhang)
-    if st["ylabel"] and not inp.hide_ylabel:
+    if st["ylabel"] and not inp.chrome["y"]["hidden"]:
         ylabel_overhang = max(0.0, (measure_text(st["ylabel"], label_size) - dh) / 2.0)
         top    = max(top,    ylabel_overhang)
         bottom = max(bottom, ylabel_overhang)
