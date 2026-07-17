@@ -92,16 +92,19 @@ def _run_invariants() -> int:
             print(f"FAIL   {msg}")
 
     # Size lock: attached chart's perpendicular dim matches host; parallel
-    # preserved. `to_svg()` renders a materialized copy and never mutates
-    # the user's objects, so the lock is asserted on the render tree
-    # (`_render_root()` + engine pass), not on the user's charts.
+    # preserved. Rendering resolves a materialized copy and never mutates
+    # the user's objects, so the lock is asserted on the hydrated render
+    # tree after `_build_plan` (which runs the share-scaling pass that
+    # stamps the locked dims), not on the user's charts.
+    from plotlet.render import hydrate
+    from plotlet.render._layout_engine import _build_plan
     host = pt.chart(data_width=200, data_height=150)
     host.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
     left = pt.chart(data_width=40, data_height=999)
     left.annotate("L", xy=(0.5, 1.0))
     host.attach_left(left)
-    root = host._render_root()
-    root._to_svg_unchecked()
+    root = hydrate(pt.to_ir(host))
+    _build_plan(root)
     # the root is the lone chart's 1×1 layout wrapper; the host leaf
     # (and its attachments) is its sole child
     (r_host,) = root._children
@@ -116,8 +119,8 @@ def _run_invariants() -> int:
     host2.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
     top.line(data={"x": [0, 1, 2], "y": [1, 2, 1]}, x="x", y="y")
     host2.attach_above(top)
-    root2 = host2._render_root()
-    root2._to_svg_unchecked()
+    root2 = hydrate(pt.to_ir(host2))
+    _build_plan(root2)
     (r_host2,) = root2._children
     r_top = r_host2._attached_above[0]
     _check(r_top._data_width == 200 and r_top._data_height == 40,

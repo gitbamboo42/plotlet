@@ -121,16 +121,6 @@ class _Renderable:
         from .render import render_svg
         return render_svg(to_ir(self), clean=clean)
 
-    def _render_root(self):
-        """Lower this tree to the figure IR and hydrate the renderer's
-        private node tree from it. Every user-facing render goes
-        journal → IR → plot — one pipeline, so the IR provably carries
-        everything the renderer consumes. The user's own tree is never
-        handed to the engine (and never mutated by it)."""
-        from ._ir import to_ir
-        from .render import hydrate
-        return hydrate(to_ir(self))
-
     def regions(self) -> list[dict]:
         """Return the chrome regions emitted during a render of this
         chart — title, axis labels, ticks, spines, panel, legend and
@@ -831,9 +821,9 @@ class Layout(_Renderable):
         # Opt-in so plain `(a | b) / (c | d)` keeps natural per-row sizing.
         self._virtual_grid_aligned: bool = False
         # Set by `.coordinate(...)` to apply a single coordinate transform
-        # to the whole composition. When set, `_render_layout` delegates
-        # to `coord.render_layout(root)` — the coord owns its own render
-        # strategy (overlay, faceting, etc.).
+        # to the whole composition. When set, the render pipeline
+        # delegates to `coord.render_layout(root)` — the coord owns its
+        # own render strategy (overlay, faceting, etc.).
         self._coordinate = None
         # Wire children's back-link so `_require_render_root` and share
         # resolution can walk up.

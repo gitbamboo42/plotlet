@@ -32,8 +32,10 @@ Pipeline (in order):
     composition derives the parent's total from its children plus gaps;
     `_allocate` walks the tree and assigns each leaf a pixel rect.
 
-  * **Emit** — `_render_layout` writes one outer `<svg>` with one
+  * **Emit** — `_emit_plan` writes one outer `<svg>` with one
     `<g transform>` per leaf, calling `_render_inner` from `core.py`.
+    Every render reaches it through `resolve_ir(ir).to_svg()` — the
+    plan it consumes is always rehydrated from a `ResolvedIR`.
 
 See `docs/SUBPLOTS.md` for the design rationale.
 """
@@ -936,10 +938,10 @@ def _build_panel_opts(root, *, measure_margins=True
     Legend leaves are skipped — they have no x/y axes, no artists, and
     render through their own pipeline (see `legend.py`).
 
-    Assumes `materialize(root)` has already run (e.g. via
-    `_render_layout`). Internal callers (tests, debugging) that
-    bypass `_render_layout` must materialize themselves first — same
-    contract as `_measure`, `_allocate`, `_natural_size`."""
+    Assumes `materialize(root)` has already run (`_build_plan` does it
+    at entry). Internal callers (tests, debugging) that bypass
+    `_build_plan` must materialize themselves first — same contract as
+    `_measure`, `_allocate`, `_natural_size`."""
     leaves = [l for l in _iter_leaves(root) if l._leaf_kind == "data"]
     # Replay each leaf under its own theme so state defaults (spine
     # visibility, tick direction) and any measurement reads pick up the
@@ -1260,39 +1262,6 @@ def _render_coord_root(root, outer=None) -> str:
                 f'<rect width="{Wt}" height="{Ht}" '
                 f'fill="{SPEC["figure"]["background"]}"/>'
                 f'{wrap}{body}{close}</svg>')
-
-
-def _render_layout(root, outer=None) -> str:
-    """Tree-in, SVG-out — the internal entry used by embedded renders
-    (insets, attachment routing) and tools that hold a raw tree. The
-    public path (`render.render_svg`) goes `resolve_ir(ir).to_svg()`,
-    which runs the same two passes with the `ResolvedIR` artifact as
-    the explicit seam between them."""
-    # Rehydrated nodes (from a ResolvedIR projection) carry their plan —
-    # emit it directly. Checked before materialize: rehydrated nodes
-    # have no journals at all (state rides in explicit fields), so a
-    # materialize pass would wipe the rehydrated wiring instead of
-    # rebuilding it.
-    plan = getattr(root, "_resolved_plan", None)
-    if plan is not None:
-        return _emit_plan(plan, outer=outer)
-    # Materialize first — replay the recorded journals to populate
-    # `_share_x/y`, `_coordinate`, `_gap*`, `_attached_*`, etc. before
-    # anything reads them. Normally `root` is the hydrated render tree
-    # (`render.hydrate`); the pass is duck-typed, so internal
-    # callers may hand it a recorder tree too.
-    from ._nodes import materialize
-    materialize(root)
-    # If the root has a container coord that implements `render_layout`,
-    # delegate the entire render to it — the coord owns its strategy.
-    coord_obj = getattr(root, "_coordinate", None)
-    if coord_obj is not None and hasattr(coord_obj, "render_layout"):
-        return _render_coord_root(root, outer=outer)
-    # Default: rectangular stack. Coord-bearing sub-Layouts are treated as
-    # atomic blocks by `_measure` / `_allocate` (see `_is_atomic`) and
-    # rendered through their coord's own strategy at placement time —
-    # the rect path stays unaware of coord internals.
-    return _emit_plan(_build_plan(root), outer=outer)
 
 
 def _emit_plan(plan: RenderPlan, outer=None) -> str:

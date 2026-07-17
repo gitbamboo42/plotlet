@@ -650,9 +650,9 @@ def _rehydrate_panel(panel: "IRPanel", ctx, *, parent):
     for rect, sub in panel.insets:
         inode = _rehydrate_panel(sub, ctx, parent=None)
         inode._inset_owner = node
-        # The inset renders through `_render_layout`, which uses this
-        # cached plan instead of re-resolving (rehydrated journals are
-        # empty — there'd be no artists to replay).
+        # Emit renders the inset from this cached plan instead of
+        # re-resolving (rehydrated journals are empty — there'd be no
+        # artists to replay).
         inode._resolved_plan = RenderPlan(
             inode,
             {id(inode): ctx.panel_opts[id(inode)]},

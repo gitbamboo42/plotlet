@@ -13,7 +13,7 @@ Ops are already normalized: aes / data injection happened at record
 time, and artist frame_defaults regenerate inside `_replay`.
 `materialize` then derives the wired field state (share anchors,
 attachment lists, layout gaps, coordinates, per-node style and layout
-title) from those ops before the engine reads it — `_render_layout`
+title) from those ops before the engine reads it — `_build_plan`
 calls it at entry. Past materialize, the engine reads fields only;
 journals are consumed once more at `_replay` and never at emit.
 """
@@ -68,10 +68,6 @@ class RenderNode:
         self._theme: str | None = None
         self._font: str | None = None
 
-    def _to_svg_unchecked(self, *, outer=None) -> str:
-        from ._layout_engine import _render_layout
-        return _render_layout(self, outer=outer)
-
 
 class RenderLayout:
     """A composition node — mirrors `Layout`'s engine-facing surface."""
@@ -122,10 +118,6 @@ class RenderLayout:
                 yield from child._iter_leaves()
             else:
                 yield child
-
-    def _to_svg_unchecked(self, *, outer=None) -> str:
-        from ._layout_engine import _render_layout
-        return _render_layout(self, outer=outer)
 
 
 # ---------------------------------------------------------------------------
@@ -381,7 +373,7 @@ def materialize(root):
     directly off the journal at replay time.
 
     Duck-typed: works on the hydrated render tree (the normal case —
-    `_render_layout` calls this at entry) and equally on a recorder
+    `_build_plan` calls this at entry) and equally on a recorder
     tree, for internal tests and tools that poke engine functions
     directly. Idempotent."""
     nodes = list(_walk_tree(root))

@@ -37,15 +37,13 @@ def regions(ir, *, outer: bool = True) -> list[dict]:
     """Render `ir` under a region-collecting sink and return the chrome
     regions — title, axis labels, ticks, spines, panel, legend
     sub-elements — as `{"kind", "bbox", "name", "meta"}` dicts. The SVG
-    is discarded; rendering is deterministic, so a `render_svg` call on
-    the same IR is byte-identical to the render these regions came
-    from. `outer` matches `render_svg`'s."""
+    is discarded; this runs the same `resolve(ir).to_svg()` pipeline as
+    `render_svg`, so the regions describe exactly that render. `outer`
+    matches `render_svg`'s."""
     from .. import _regions
-    from .._spec import _OUTER_MARGIN
 
-    root = hydrate(ir)
     with _regions.collecting() as sink:
-        root._to_svg_unchecked(outer=dict(_OUTER_MARGIN) if outer else None)
+        resolve(ir).to_svg(outer=outer)
     return [{"kind": r.kind, "bbox": r.bbox, "name": r.name, "meta": r.meta}
             for r in sink.regions]
 

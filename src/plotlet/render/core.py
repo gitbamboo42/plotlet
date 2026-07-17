@@ -2,9 +2,10 @@
 
 The deferred-render pipeline:
   1. A `Chart` (defined in `chart.py`) records user calls into `_calls`.
-  2. `Chart.to_svg()` delegates to `_layout_engine._render_layout`.
-  3. That runs the layout pre-pass (`_build_panel_opts`, share
-     coordination, margin resolution) then, per placement, opens a
+  2. `Chart.to_svg()` lowers to the figure IR and renders it via
+     `render.render_svg` — `resolve_ir(ir).to_svg()`.
+  3. Resolution runs the layout pre-pass (`_build_panel_opts`, share
+     coordination, margin resolution); emit then, per placement, opens a
      panel `<g>` via `_panel_open` and fills it via `_render_inner`.
   4. `_render_inner` does: pre-process → domain → scales → grid →
      artists → spines/ticks → labels/title → legend.
@@ -2070,13 +2071,15 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
         parts.append(f'<svg x="0" y="0" width="{iw:.10g}" height="{ih:.10g}" overflow="hidden">')
     for inset_rect, inset_chart in insets:
         x_frac, y_frac, w_frac, h_frac = inset_rect
-        # Render the inset first; this populates `_last_M_eff` so we can
-        # offset the translate to align the inset's data region (not its
-        # canvas) with the requested axes-fraction rect. The sink is
-        # suppressed because the translate offset isn't known until this
-        # render finishes — regions are recorded by the re-render below.
+        # Emit the inset from its cached resolution. Every inset reaching
+        # emit is a rehydrated node carrying `_resolved_plan` (stamped by
+        # `resolved._rehydrate_panel`) — there is no other emit path. The
+        # sink is suppressed because the translate offset isn't known
+        # until this render finishes — regions are recorded by the
+        # re-render below.
+        from ._layout_engine import _emit_plan
         with _regions.suppressed():
-            inset_svg = inset_chart._to_svg_unchecked()
+            inset_svg = _emit_plan(inset_chart._resolved_plan)
         inset_M = inset_chart._last_M_eff or {"left": 0, "right": 0, "top": 0, "bottom": 0}
         # Bottom-left origin: y-frac 0 = bottom of data, 1 = top.
         # Subtract the inset's own margin so its data region (not its
@@ -2088,7 +2091,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
             # is deterministic, so the emission matches `inset_svg` and
             # is discarded. Only runs under `regions()` collection.
             with _regions.translate(tx, ty):
-                inset_chart._to_svg_unchecked()
+                _emit_plan(inset_chart._resolved_plan)
         # Opaque background covering the inset's data area only — tick
         # labels in the inset's margins stay transparent.
         bg_x = inset_M["left"]
