@@ -381,7 +381,7 @@ def _chart_to_ir(chart, panel_opts, states, pids):
                 for s in ("left", "right", "top", "bottom")}
     chrome = _extract_chrome(st)
     # The same decided flags the emit pass reads (via
-    # `core._resolve_panel_inputs`) — the projection shows what will be
+    # `_resolution._resolve_panel_inputs`) — the projection shows what will be
     # drawn, not just the raw ingredients.
     chrome["visibility"] = resolve_axis_chrome(st, po)
     share = {
@@ -596,7 +596,7 @@ def _rehydrate_node(ir, ctx, *, parent):
 def _rehydrate_panel(panel: "IRPanel", ctx, *, parent):
     from ._layout_engine import RenderPlan
     from ._nodes import RenderNode
-    from .core import _PanelOpts, _PanelState
+    from ._resolution import _PanelOpts, _PanelState
 
     node = RenderNode()
     node._parent = parent

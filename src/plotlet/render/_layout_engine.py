@@ -33,7 +33,7 @@ Pipeline (in order):
     `_allocate` walks the tree and assigns each leaf a pixel rect.
 
   * **Emit** — `_emit_plan` writes one outer `<svg>` with one
-    `<g transform>` per leaf, calling `_render_inner` from `core.py`.
+    `<g transform>` per leaf, calling `_render_inner` from `_emit.py`.
     Every render reaches it through `resolve_ir(ir).to_svg()` — the
     plan it consumes is always rehydrated from a `ResolvedIR`.
 
@@ -49,13 +49,13 @@ from itertools import count
 
 from .._spec import (SPEC, _FIGSPEC, _LAYOUTSPEC, _FONTSPEC, _PADSPEC,
                      active_font, active_theme)
-from .core import (
-    _render_inner, _replay, _enforce_floors, _required_margin,
+from ._resolution import (
+    _replay, _enforce_floors, _required_margin,
     _axis_descriptor,
     _PanelOpts,
-    _figure_root_attrs, _panel_open,
     _prebin_hist, _stamp_artist_colors,
 )
+from ._emit import _figure_root_attrs, _panel_open, _render_inner
 from ..scales import _AxisDescriptor
 from .._tree import iter_leaves as _iter_leaves
 from . import _attachments

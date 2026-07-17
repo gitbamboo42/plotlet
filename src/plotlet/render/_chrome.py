@@ -1,6 +1,6 @@
 """Panel chrome emission: spines, ticks, sector chrome, coord-owned frames.
 
-Called from `core._render_inner` once per panel, between the data-layer pass
+Called from `_emit._render_inner` once per panel, between the data-layer pass
 and the margin-band pass. ``emit_chrome`` returns a list of SVG-fragment
 strings; the caller extends its own ``parts`` list with the result. Every
 input arrives through the explicit keyword arguments — no module globals,
@@ -111,7 +111,7 @@ def label_band_sizes(st, inp, dw, dh):
     slots. ``_required_margin`` recomputes the title/xlabel/ylabel
     overhang inline.
 
-    ``inp`` is the resolved panel inputs from ``core._resolve_panel_inputs``
+    ``inp`` is the resolved panel inputs from ``_resolution._resolve_panel_inputs``
     — keeps the reservation and render passes walking identical numbers.
     """
     label_size = _FONTSPEC["label_size"]
@@ -330,7 +330,7 @@ def emit_frame_labels(st, inp, iw, ih, chrome, *, top_legend_outset=0,
 
 # ---------------------------------------------------------------------------
 # Tick label, minor-tick resolution, sectored spine segmentation
-# (moved verbatim from core.py — only the chrome block uses these)
+# (only the chrome block uses these)
 # ---------------------------------------------------------------------------
 
 def _tick_label(s, x, y, size, angle, axis, side,

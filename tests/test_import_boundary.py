@@ -13,6 +13,9 @@ Two directions: a subprocess proves importing the recording half loads
 no render module; a static import scan proves no render module names a
 front-half module. A regression in either direction is an architecture
 bug, not a style nit — fix the import, don't widen the lists here.
+The render half's internal seam is pinned alongside: `_emit.py`
+(transcribe) may import from `_resolution.py` (decide) only the allowlist at
+the bottom of this file — "emit never re-resolves", made mechanical.
 Two consequences of the laziness are pinned alongside: rendering does
 load the render half, and `{"$coord": ...}` envelopes decode in a cold
 process (built-in coords register on import of `render/coordinates.py`,
@@ -146,4 +149,74 @@ def test_render_half_imports_no_front_half_module():
     assert not offenders, (
         "render/ must not import the recording half — its input is the "
         "FigureIR:\n  " + "\n  ".join(offenders)
+    )
+
+
+# The resolve/emit seam inside the render half: `_resolution.py` (with the
+# layout pre-pass) makes decisions, `_emit.py` transcribes them into SVG
+# — "emit never re-resolves" (docs/ARCHITECTURE.md). Emit may import
+# from `_resolution` only this list: types, constants, and shared derivations —
+# functions the resolution pass itself also calls, so emit re-running
+# one is idempotent and cannot decide anything new. Needing a name
+# outside this list means emit is about to make a decision of its own —
+# move the decision into `_chrome_policy` / resolution instead of
+# widening the list (see `_emit.py`'s docstring).
+EMIT_RESOLUTION_ALLOWED = {
+    "_INSIDE_POSITIONS", "_PanelOpts",
+    "_inline_legend_layout", "_prebin_hist", "_resolve_panel_inputs",
+    "_stamp_artist_colors",
+}
+
+
+def _render_source(name: str) -> Path:
+    import plotlet.render
+    return Path(plotlet.render.__path__[0]) / name
+
+
+def test_emit_imports_from_resolution_only_shared_derivations():
+    """`_emit.py` may reach into `_resolution` only through the from-import
+    allowlist above — no `import ..._resolution` module access, which would
+    put all of resolution one attribute lookup away."""
+    path = _render_source("_emit.py")
+    tree = ast.parse(path.read_text(), filename=str(path))
+    from_resolution, module_access = set(), []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.level >= 1:
+            if node.module == "_resolution":
+                from_resolution.update(a.name for a in node.names)
+            elif node.module is None and any(a.name == "_resolution"
+                                             for a in node.names):
+                module_access.append(node.lineno)
+        elif isinstance(node, ast.Import):
+            if any(a.name.split(".")[-1] == "_resolution" for a in node.names):
+                module_access.append(node.lineno)
+    assert not module_access, (
+        f"_emit.py imports the resolution module wholesale at lines "
+        f"{module_access} — import the allowed names explicitly"
+    )
+    extra = sorted(from_resolution - EMIT_RESOLUTION_ALLOWED)
+    assert not extra, (
+        "emit must not re-resolve: _emit.py imports resolution-side "
+        f"names from _resolution outside the allowlist: {extra}. If emit needs "
+        "a new decision, decide it in resolution (`_chrome_policy`) and "
+        "read the decided flag."
+    )
+
+
+def test_resolution_never_imports_emit():
+    """The seam's other direction: `_resolution.py` must not
+    depend on how its decisions get transcribed."""
+    path = _render_source("_resolution.py")
+    tree = ast.parse(path.read_text(), filename=str(path))
+    offenders = [
+        node.lineno for node in ast.walk(tree)
+        if (isinstance(node, ast.ImportFrom)
+            and (node.module == "_emit"
+                 or (node.module is None
+                     and any(a.name == "_emit" for a in node.names))))
+        or (isinstance(node, ast.Import)
+            and any("_emit" in a.name.split(".") for a in node.names))
+    ]
+    assert not offenders, (
+        f"_resolution.py imports _emit at lines {offenders}"
     )

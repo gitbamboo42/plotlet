@@ -108,7 +108,7 @@ Op names are interpreted per kind:
 - chart-family nodes (`chart`, `legend`, `diagram`): a registered
   artist, a frame method (`title`, `xlim`, `xscale`, `xticks`,
   `spines`, `grid`, `legend`, `clip`, `facecolor`, `coordinate`,
-  `sectors`, `theme`, ... — `_FRAME_OPS` in `render/core.py` is the
+  `sectors`, `theme`, ... — `_FRAME_OPS` in `render/_resolution.py` is the
   authoritative set), or `attach_left/right/above/below`.
 - `layout` nodes: `share_x`, `share_y`, `align_x`, `align_y`, `gap`,
   `coordinate`, `sectors`, `title`, `heights` (`_LAYOUT_MATERIALIZED` ∪

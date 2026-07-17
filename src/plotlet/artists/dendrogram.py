@@ -23,7 +23,7 @@ on the same shared scale pick up the gaps automatically.
 When clusters are in play, the dendrogram exposes its final leaf order
 via `axis_order`, so a peer heatmap with the same grouping vector picks
 up the two-level block order automatically — artist `axis_order` beats
-`frame_defaults` order in core's precedence rule.
+`frame_defaults` order in `_resolution`'s precedence rule.
 
 `palette=` (a `{group: color}` map) colors each block's branches by its
 group, leaving the between-cluster trunk neutral — driven off the same

@@ -209,7 +209,7 @@ def _heatmap_frame_defaults(args, kw):
     # scatter/line). A string `x` column → categorical labels. The value
     # columns (tracks) are always categorical rows. `order=` provides the
     # heatmap's first-seen order as a default — it routes to
-    # `*_order_default` in core, so a peer dendrogram's `axis_order` and
+    # `*_order_default` in `_resolution`, so a peer dendrogram's `axis_order` and
     # any categorical ``c.sectors(...)`` can still override it.
     out = []
     if not all_numeric(xs):

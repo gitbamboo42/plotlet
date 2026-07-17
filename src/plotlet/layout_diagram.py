@@ -2,7 +2,7 @@
 decisions. Pure SVG introspection consumer of the `data-plotlet-*`
 schema (see docs/AI_ATTRS.md).
 
-This module lives separately from core / layout because it's a *consumer*
+This module lives separately from the render half because it's a *consumer*
 of plotlet's output, not part of the rendering pipeline: every layout
 decision is recovered from the public schema, no private internals are
 imported. That makes `layout_diagram` doubly useful — it's a debug tool

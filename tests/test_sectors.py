@@ -273,7 +273,7 @@ def test_sectors_after_artist_still_remaps():
     `_calls` after any prior artist. `_replay`'s sectors-to-front pass
     enforces the sectors-before-artists invariant independent of
     recording order; this test pins that behavior."""
-    from plotlet.render.core import _replay
+    from plotlet.render._resolution import _replay
     c = pt.chart(data_width=200, data_height=80, ylim=(0, 1))
     c.scatter(
         data={"grp": ["g1", "g2"], "x": [25, 25], "y": [0.5, 0.5]},

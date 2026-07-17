@@ -28,7 +28,7 @@ from .._spec import _D, _DASH, _FONTSPEC, _FRAME, _LEGSPEC
 
 def _adaptive_n_ticks(strip_h: float) -> int:
     """Cap tick count for short strips so labels (~11 px tall each) don't
-    crowd. Mirrors the axis-tick-density rule in core._render_inner."""
+    crowd. Mirrors the axis-tick-density rule in _emit._render_inner."""
     return max(2, min(5, int(strip_h // 18)))
 
 
@@ -179,7 +179,7 @@ def _entry_columns(entries: list, ncols: int) -> list[list]:
 def _render_discrete_entry(entry: dict, a: dict, ctx_for,
                            x: float, y_mid: float) -> str:
     """One discrete legend row: swatch + label. Shared between the inline
-    legend (core._render_inner) and the standalone legend leaf
+    legend (_emit._render_inner) and the standalone legend leaf
     (_render_legend) so swatch behavior — paint callback, default color,
     alpha aesthetic, `legend={"glyph": ...}` override — stays in one place.
 

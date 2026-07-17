@@ -4,7 +4,7 @@
 pre-pass flags (share-pair side hiding, tick-label suppression) into
 plain booleans. It is the ONE place such combinations live:
 
-- `core._resolve_panel_inputs` calls it and puts the result on the
+- `_resolution._resolve_panel_inputs` calls it and puts the result on the
   panel inputs (`inp.chrome`), so the margin reservation
   (`_chrome.chrome_stack_extents` / `label_band_sizes`) and the emit
   pass (`_chrome.emit_chrome`) read identical decisions;

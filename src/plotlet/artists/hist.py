@@ -138,7 +138,7 @@ def _hist_record(data=None,
                  x=None, fill=None, weights=None,
                  position="overlay",
                  # binning & stats — validated here, applied at render
-                 # (`_prebin_hist` in render/core.py reads them from opts)
+                 # (`_prebin_hist` in render/_resolution.py reads them from opts)
                  bins=None, binwidth=None, binrange=None,
                  density=None, cumulative=None,
                  # style — packed into opts for the draw/legend side

@@ -122,7 +122,7 @@ def _hexbin_draw(a, ctx):
 def _hexbin_legend_gradient(a):
     vmax = a["opts"].get("vmax")
     if vmax is None:
-        env = a.get("_env")   # panel scales, stamped by the render core
+        env = a.get("_env")   # panel scales, stamped by the render half
         if env is not None and a["xs"]:
             bins = _hexbin_bins(a, env.x_scale, env.y_scale, env.iw)
             vmax = max(bins.values())

@@ -16,7 +16,7 @@ A spec bundles the four things `_render_inner` needs to know about a plot type:
         An artist that fans one `color=`-column call out into per-level
         records keeps the grouping symbolic: each record carries `groups`
         (the level list), `_j` (its index), and `opts["palette"]` — never
-        a resolved color. The render core stamps each record's `_color`
+        a resolved color. The render half stamps each record's `_color`
         via `utils.group_color` at draw context (and skips the color
         cycle: sibling records are one logical artist).
 

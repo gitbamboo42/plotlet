@@ -474,13 +474,13 @@ def materialize(root):
 
 # Strip every `data-plotlet-*="..."` attribute. The leading space is part of
 # the match so we don't leave a double space behind — every attr is emitted
-# with a leading separator (see `_attrs_str` in core.py and the inline
+# with a leading separator (see `_attrs_str` in _emit.py and the inline
 # `f'data-plotlet-...'` writes in `_layout_engine.py`, which sit after another
 # attr or end up with their own trailing space).
 _CLEAN_ATTR_RE = re.compile(r' data-plotlet-[\w-]+="[^"]*"')
 # Strip `<metadata data-plotlet-payload="...">...</metadata>` blocks. CDATA
 # content can include `<` `>` `&` and even a literal `</metadata>`, so the
-# match anchors on `]]></metadata>` — `_category_metadata` in core.py splits
+# match anchors on `]]></metadata>` — `_category_metadata` in _emit.py splits
 # every content `]]>` across CDATA sections, so that terminator sequence
 # appears exactly once per block.
 _CLEAN_METADATA_RE = re.compile(

@@ -3,7 +3,7 @@
 Adding a custom plot type is a 3-step recipe: write three small functions,
 bundle them into an `ArtistSpec`, hand it to `add_artist(...)`. After that,
 `c.<your_name>(...)` Just Works on any `Chart` — autoscaling, gridlines,
-color cycling, and the legend integrate for free. No edits to `core.py`,
+color cycling, and the legend integrate for free. No edits to plotlet internals,
 no monkey-patching. Custom artists live in your project or in the separate
 [`plotlet-extensions`](https://github.com/gitbamboo42/plotlet-extensions)
 package — both are good references.

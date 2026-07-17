@@ -381,7 +381,7 @@ def group_color(groups, palette, j, fallback):
     """Per-group color for artists with column-driven grouping: ungrouped
     (`groups == [None]`) → fallback (the artist's cycle/literal color);
     grouped → palette lookup with TAB10 wraparound. Also the rule the
-    render core applies when stamping `_color` on fan-out group records
+    render half applies when stamping `_color` on fan-out group records
     (`groups` + `_j` in the record) — see `_render_inner`."""
     if groups == [None]:
         return fallback

@@ -320,7 +320,7 @@ class Chart(_Renderable):
         if kwargs:
             raise TypeError(f"Chart() got unexpected keyword arguments: {list(kwargs)!r}")
 
-        # ---- Render-state init (leaf-only fields used by core._render_inner) ----
+        # ---- Render-state init (leaf-only fields used by render/_emit.py's _render_inner) ----
         # Resolve unit-suffixed strings (`"4in"`, `"10cm"`, …) once at the
         # boundary so internal math stays in pixels.
         data_width  = _to_px(data_width)
@@ -577,7 +577,7 @@ class Chart(_Renderable):
                     args = tuple(_normalize_data(a) for a in args)
                 # Only the user action is recorded — an artist's
                 # frame_defaults regenerate inside `_replay` on every
-                # render (see `_expand_frame_defaults` in core.py).
+                # render (see `_expand_frame_defaults` in render/_resolution.py).
                 self._calls.append((name, list(args), dict(kwargs)))
                 return self
             # Surface the artist's module docstring on the recorder so

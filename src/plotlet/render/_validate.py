@@ -48,7 +48,7 @@ def _err(msg: str) -> ValueError:
 
 def _chart_op_ok(name: str) -> bool:
     from ..registry import get_artist
-    from .core import _FRAME_OPS
+    from ._resolution import _FRAME_OPS
     return (name in _FRAME_OPS or name in _ATTACH_OPS
             or get_artist(name) is not None)
 

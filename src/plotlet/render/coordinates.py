@@ -93,7 +93,7 @@ def _circular_x_tick_labels(st, dw):
     axis draws NO auto tick labels (they're meaningless on a global-offset
     coord) — so reserving for phantom numeric ticks over-shrinks the ring.
     """
-    from .core import (_axis_descriptor, _auto_major_ticks,
+    from ._resolution import (_axis_descriptor, _auto_major_ticks,
                        _resolve_tick_formatter)
     from .._spec import _FRAME
     x_axis = _axis_descriptor([st], "x")
@@ -444,7 +444,7 @@ class CircularCoordinate:
         `layout_size` and `render_layout` never re-probe a spliced
         tree."""
         from ._layout_engine import _build_panel_opts, _title_band_h
-        from .core import TICK_CONTENT_KW, _expand_frame_defaults
+        from ._resolution import TICK_CONTENT_KW, _expand_frame_defaults
 
         leaves = list(root._iter_leaves())
         if not leaves:
@@ -636,7 +636,7 @@ class CircularCoordinate:
         everything (per-ring states, panel opts, canvas metrics)."""
         from itertools import count
         from ._layout_engine import _emit_layout_title, _node_style
-        from .core import _panel_open, _render_inner
+        from ._emit import _panel_open, _render_inner
         from .. import _regions
         _ZERO_MARGIN = {"left": 0, "right": 0, "top": 0, "bottom": 0}
         # Shared across leaves so coord-clip `<clipPath id>`s don't

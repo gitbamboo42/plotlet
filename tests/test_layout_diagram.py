@@ -6,7 +6,7 @@
     python tests/test_layout_diagram.py --gallery  # write baseline_images/layout_diagram/index.html
 
 Locks in the visual format of the layout-diagram helper so refactors to
-core/layout (which alter the panel-bbox / data-area attrs the diagram
+the render internals (which alter the panel-bbox / data-area attrs the diagram
 reads) surface as a baseline diff here too.
 """
 from __future__ import annotations
