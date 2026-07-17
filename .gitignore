@@ -76,6 +76,8 @@ debug.md
 
 # Local pipeline-comparison snapshot pages (not published)
 snapshot_v*.html
+# work-notes
+resolve-pipeline.md
 
 # Speculative drafts / aspirational docs — not part of the project yet
 future/
