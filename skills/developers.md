@@ -17,7 +17,7 @@ your tool expects. Human contributors can read it directly.
 
 Deferred-rendering SVG plot library — artist calls record into a
 journal, and rendering lowers it journal → `FigureIR` → SVG. The
-recording half (`chart.py`, `_journal.py`, `_ir.py`, …) never imports
+recording half (`chart.py`, `journal.py`, `figure_ir.py`, …) never imports
 the render half at module level; the [`render/`](src/plotlet/render/)
 package never imports the recording half at all — the `FigureIR` is the
 one contract between them ([docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), enforced by

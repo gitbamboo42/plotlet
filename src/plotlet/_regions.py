@@ -15,7 +15,7 @@ The mechanism enforces this:
     When set, the primitive records its bbox under that name. When
     unset (the default), nothing is recorded — so artist `draw()`
     bodies, which never pass `tag=`, produce no regions for free.
-  * Central code (`render/_chrome.py`, `render/_emit.py`, `legend.py`)
+  * Central code (`render/_chrome.py`, `render/emit.py`, `legend.py`)
     passes `tag="title"` /
     `"spine"` / `"tick-x"` / `"legend-text"` etc. at the chrome
     emission sites. The tag is right there in the call, grep-able,
@@ -86,7 +86,7 @@ _CURRENT: contextvars.ContextVar = contextvars.ContextVar(
 def record(kind: str, bbox, *, name: str, **meta) -> None:
     """Record a region into the active sink, if any. Called by
     `draw.*` primitives when they receive a `tag=` kwarg, and by
-    central code (`render/_chrome.py`, `render/_emit.py`, `legend.py`)
+    central code (`render/_chrome.py`, `render/emit.py`, `legend.py`)
     for chrome that has no
     primitive call to wrap (panel boundary, canonical legend swatch).
     No-op when no sink is active — the common render path."""

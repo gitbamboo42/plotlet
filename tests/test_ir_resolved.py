@@ -22,7 +22,7 @@ import pytest
 
 import plotlet as pt
 from plotlet import resolve_ir
-from plotlet.render.resolved import (
+from plotlet.render.resolved_ir import (
     IRArtist,
     IRCoord,
     IRLayout,
@@ -208,7 +208,7 @@ def test_figures_emit_from_projection_alone():
     is load-bearing. Holds for container-coordinate figures too: the
     rehydrated layout rebuilds the coord's overlay plan from projected
     ring states."""
-    from plotlet.render.resolved import ResolvedIR
+    from plotlet.render.resolved_ir import ResolvedIR
 
     for build in (_rect_chart, _rect_layout, _circular):
         rir = resolve_ir(pt.to_ir(build()))
@@ -224,7 +224,7 @@ def test_rehydrated_tree_has_no_journal():
     every node in the rebuilt working tree carries empty `_calls`
     (except ring leaves, whose journals the rebuilt coord plan ignores:
     their states are already resolved)."""
-    from plotlet.render.resolved import _rehydrate
+    from plotlet.render.resolved_ir import _rehydrate
 
     def walk(n):
         assert n._calls == [], \

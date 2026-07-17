@@ -7,7 +7,7 @@ The deferred-render pipeline:
   3. Resolution — this module plus the layout pre-pass in
      `_layout_engine.py` — replays states and decides everything:
      domains, scales, tick content, margins, colors, chrome flags.
-  4. Emit (`_emit.py`) transcribes those decisions into SVG: per
+  4. Emit (`emit.py`) transcribes those decisions into SVG: per
      placement it opens a panel `<g>` via `_panel_open` and fills it
      via `_render_inner` (grid → artists → chrome → labels → legend).
 

@@ -4,7 +4,7 @@ Everything under this package is the rendering side of the
 recording/rendering split: replay, layout, chrome, legend harvest, and
 SVG emission, operating on the private node tree hydrated from a
 `FigureIR` (`_nodes.py`). Nothing here imports the recording half
-(`chart`, `facet`, `_journal`) — the IR is the only input, and the
+(`chart`, `facet`, `journal`) — the IR is the only input, and the
 shared vocabulary (`registry`, `draw`, `_spec`, `sectors`, `utils`,
 `_tree`, `_json_layer`, `scales`, `_regions`) is the only other
 dependency. The contract lives in `docs/ARCHITECTURE.md`; `validate` enforces it
@@ -30,7 +30,7 @@ from ._nodes import (  # noqa: F401
     RenderNode, RenderLayout, hydrate, materialize, render_svg,
 )
 from ._validate import validate  # noqa: F401
-from .resolved import resolve_ir as resolve  # noqa: F401
+from .resolved_ir import resolve_ir as resolve  # noqa: F401
 
 
 def regions(ir, *, outer: bool = True) -> list[dict]:

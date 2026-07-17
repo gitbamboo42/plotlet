@@ -1,7 +1,7 @@
 """Resolved IR — the render pipeline's middle stage.
 
 Second lowering of the pipeline, and the stage the render path passes
-through: `render.render_svg` is `resolve_ir(ir).to_svg()`. `_ir.py`
+through: `render.render_svg` is `resolve_ir(ir).to_svg()`. `figure_ir.py`
 compiles the journal into the figure IR (`FigureIR`) — loss-free,
 round-trippable, still in user terms (ops, data columns, palette
 names). `resolve_ir` lowers one step further and returns a `ResolvedIR`

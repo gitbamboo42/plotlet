@@ -37,7 +37,7 @@ Node ids: opaque monotonic ints from a per-journal counter starting at
 diffing is sane.
 
 Rendering goes journal → IR → plot: at render time the journal is
-lowered to the figure IR (`_ir.py`) — the per-node compiled form — and
+lowered to the figure IR (`figure_ir.py`) — the per-node compiled form — and
 the render half hydrates its private node tree from that
 (`render/_nodes.py`) and runs the pipeline. Round-trip proves the
 journal is complete; the IR is the surface for inspection and
@@ -105,7 +105,7 @@ _JOURNAL_VERSION = 1
 
 class JournalNode:
     """Handle wrapping (journal, root_nid). `to_svg()` lowers the
-    journal to the figure IR (`_ir.py`) and renders it through the
+    journal to the figure IR (`figure_ir.py`) and renders it through the
     render half's seam.
 
     Users don't build JournalNodes directly — they come from
@@ -116,7 +116,7 @@ class JournalNode:
         self._root_nid = root_nid
 
     def _to_ir(self):
-        from ._ir import journal_to_ir
+        from .figure_ir import journal_to_ir
         return journal_to_ir(self._journal, root_nid=self._root_nid)
 
     def to_svg(self, *, clean: bool = False) -> str:
@@ -373,5 +373,5 @@ def from_json(blob: dict) -> JournalNode:
 
 
 # Rendering lives behind the render half's seam: the journal lowers to
-# the figure IR (`journal_to_ir` in `_ir.py`), and `render.render_svg`
+# the figure IR (`journal_to_ir` in `figure_ir.py`), and `render.render_svg`
 # hydrates its private node tree from the IR. Contract: `docs/ARCHITECTURE.md`.

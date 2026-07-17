@@ -66,7 +66,7 @@ def _collect(chart) -> tuple[list[dict], float, float]:
     renders — rendering is deterministic, so the regions and the parsed
     size describe the same figure."""
     chart = _materialize(chart)
-    from ._ir import to_ir
+    from .figure_ir import to_ir
     from .render import regions, render_svg
     ir = to_ir(chart)
     regs = regions(ir)

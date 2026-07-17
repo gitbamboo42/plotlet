@@ -227,7 +227,7 @@ def hydrate(ir):
 # Derived state — re-derive wired fields from the recorded ops. The sole
 # writer of `_share_*`, `_attached_*`, `_coordinate`, `_gap*`,
 # `_virtual_grid_aligned`, `_had_state`, `_title_text`, `_theme`,
-# `_font` on the tree it's given. (The rehydrator in `resolved.py` sets
+# `_font` on the tree it's given. (The rehydrator in `resolved_ir.py` sets
 # the same fields directly from the projection — its trees never pass
 # through here.)
 # ---------------------------------------------------------------------------
@@ -474,13 +474,13 @@ def materialize(root):
 
 # Strip every `data-plotlet-*="..."` attribute. The leading space is part of
 # the match so we don't leave a double space behind — every attr is emitted
-# with a leading separator (see `_attrs_str` in _emit.py and the inline
+# with a leading separator (see `_attrs_str` in emit.py and the inline
 # `f'data-plotlet-...'` writes in `_layout_engine.py`, which sit after another
 # attr or end up with their own trailing space).
 _CLEAN_ATTR_RE = re.compile(r' data-plotlet-[\w-]+="[^"]*"')
 # Strip `<metadata data-plotlet-payload="...">...</metadata>` blocks. CDATA
 # content can include `<` `>` `&` and even a literal `</metadata>`, so the
-# match anchors on `]]></metadata>` — `_category_metadata` in _emit.py splits
+# match anchors on `]]></metadata>` — `_category_metadata` in emit.py splits
 # every content `]]>` across CDATA sections, so that terminator sequence
 # appears exactly once per block.
 _CLEAN_METADATA_RE = re.compile(
@@ -509,5 +509,5 @@ def render_svg(ir, *, clean: bool = False, outer: bool = True) -> str:
     rendering are two views of one resolution. `outer=False` drops the
     figure-level breathing-room margin — the inner render tools embed
     (`layout_diagram`) or measure against."""
-    from .resolved import resolve_ir
+    from .resolved_ir import resolve_ir
     return resolve_ir(ir).to_svg(clean=clean, outer=outer)

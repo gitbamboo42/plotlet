@@ -87,7 +87,7 @@ def layout_diagram(chart: Chart) -> Chart:
     # Two seam calls, two renders — deterministic, so the regions match
     # the parsed SVG exactly.
     chart._require_render_root()
-    from ._ir import to_ir
+    from .figure_ir import to_ir
     from .render import regions, render_svg
     ir = to_ir(chart)
     src_svg = render_svg(ir, outer=False)

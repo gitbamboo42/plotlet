@@ -639,7 +639,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
         x_frac, y_frac, w_frac, h_frac = inset_rect
         # Emit the inset from its cached resolution. Every inset reaching
         # emit is a rehydrated node carrying `_resolved_plan` (stamped by
-        # `resolved._rehydrate_panel`) — there is no other emit path. The
+        # `resolved_ir._rehydrate_panel`) — there is no other emit path. The
         # sink is suppressed because the translate offset isn't known
         # until this render finishes — regions are recorded by the
         # re-render below.

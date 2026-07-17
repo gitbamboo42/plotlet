@@ -1,6 +1,6 @@
 """Panel chrome emission: spines, ticks, sector chrome, coord-owned frames.
 
-Called from `_emit._render_inner` once per panel, between the data-layer pass
+Called from `emit._render_inner` once per panel, between the data-layer pass
 and the margin-band pass. ``emit_chrome`` returns a list of SVG-fragment
 strings; the caller extends its own ``parts`` list with the result. Every
 input arrives through the explicit keyword arguments — no module globals,

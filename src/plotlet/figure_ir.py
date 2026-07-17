@@ -3,7 +3,7 @@
 Three representations of one plot, ordered by distance from the user:
 
     journal   flat event log of user actions, in the order they happened
-              (`_journal.py`). "What the user did."
+              (`journal.py`). "What the user did."
     IR        per-node structured form: a table of nodes in dependency
               order, each carrying its construction state, its method
               ops, and its insets. "What the figure is."
@@ -48,7 +48,7 @@ are shared with the journal — the IR stores values exactly as
 `to_journal` encoded them, and `_json_layer._decode` resolves them back
 at hydration time.
 
-A second lowering stage lives in `render/resolved.py`: `FigureIR.resolve()`
+A second lowering stage lives in `render/resolved_ir.py`: `FigureIR.resolve()`
 returns the resolved IR (trained scales, baked palettes, effective
 margins) — the stage the render path itself passes through
 (`render_svg` is `resolve_ir(ir).to_svg()`), so inspecting it and
@@ -113,7 +113,7 @@ class FigureIR:
         return svg
 
     def resolve(self):
-        """Lower one step further: the resolved IR (`render/resolved.py`)
+        """Lower one step further: the resolved IR (`render/resolved_ir.py`)
         — trained scales, baked palettes, effective margins. This is
         the render pipeline's own middle stage (`to_svg()` goes through
         it), inspectable via `.root` and renderable via `.to_svg()`.
@@ -201,7 +201,7 @@ def journal_to_ir(journal, root_nid: int | None = None) -> FigureIR:
     # rendered SVG is unchanged.
     if any(e["nid"] == root_nid and e["op"] == "new_facet_grid"
            for e in journal.entries):
-        from ._journal import to_journal
+        from .journal import to_journal
         return journal_to_ir(to_journal(_expand_facet(journal, root_nid)))
 
     nodes: dict[int, IRNode] = {}
@@ -397,7 +397,7 @@ def ir_to_journal(ir: FigureIR):
     """Flatten a `FigureIR` back into a `Journal`. Nodes emit in the
     IR's dependency order — create event, then ops, then insets — which
     is a valid journal ordering (every reference resolves backwards)."""
-    from ._journal import Journal
+    from .journal import Journal
     journal = Journal(root_nid=ir.root_nid)
     for n in ir.nodes:
         if n.kind in ("legend", "diagram"):
@@ -426,7 +426,7 @@ def to_ir(node) -> FigureIR:
     """Compile a plot to its `FigureIR`. Accepts a `Chart` / `Layout` /
     `FacetGrid` (journaled first via `to_journal`), a `Journal`, or a
     `JournalNode`."""
-    from ._journal import Journal, JournalNode, to_journal
+    from .journal import Journal, JournalNode, to_journal
     if isinstance(node, FigureIR):
         return node
     if isinstance(node, JournalNode):
@@ -446,7 +446,7 @@ def from_ir(blob) -> FigureIR:
 
 def resolve_ir(node):
     """Lower a plot to its resolved IR — the pre-layout render plan
-    (`render/resolved.py`). Accepts anything `to_ir` does: a `Chart` /
+    (`render/resolved_ir.py`). Accepts anything `to_ir` does: a `Chart` /
     `Layout` / `FacetGrid`, a `Journal`, a `JournalNode`, or a
     `FigureIR`."""
     return to_ir(node).resolve()

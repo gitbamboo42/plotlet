@@ -1,7 +1,7 @@
 """The recording/rendering split, enforced as tests.
 
 The contract (plan of record: `docs/ARCHITECTURE.md`): the recording half
-(`chart`, `facet`, `legend`, `_journal`, `_ir`, ...) never imports the
+(`chart`, `facet`, `legend`, `journal`, `figure_ir`, ...) never imports the
 render half at module level — `plotlet.render` loads lazily on first
 render — and the render half never imports the recording half at all;
 its only input is the `FigureIR`. Everything both halves share is
@@ -13,7 +13,7 @@ Two directions: a subprocess proves importing the recording half loads
 no render module; a static import scan proves no render module names a
 front-half module. A regression in either direction is an architecture
 bug, not a style nit — fix the import, don't widen the lists here.
-The render half's internal seam is pinned alongside: `_emit.py`
+The render half's internal seam is pinned alongside: `emit.py`
 (transcribe) may import from `_resolution.py` (decide) only the allowlist at
 the bottom of this file — "emit never re-resolves", made mechanical.
 Two consequences of the laziness are pinned alongside: rendering does
@@ -36,7 +36,7 @@ from pathlib import Path
 # shared vocabulary (or render-internal).
 FRONT_HALF = {
     "chart", "facet", "legend", "lint", "layout_diagram",
-    "_journal", "_ir",
+    "journal", "figure_ir",
 }
 
 
@@ -46,8 +46,8 @@ def test_importing_the_recording_half_never_loads_render():
     code = (
         "import sys\n"
         "import plotlet\n"
-        "import plotlet._journal\n"
-        "import plotlet._ir\n"
+        "import plotlet.journal\n"
+        "import plotlet.figure_ir\n"
         "import plotlet.chart\n"
         "loaded = sorted(m for m in sys.modules"
         " if m.startswith('plotlet.render'))\n"
@@ -153,14 +153,14 @@ def test_render_half_imports_no_front_half_module():
 
 
 # The resolve/emit seam inside the render half: `_resolution.py` (with the
-# layout pre-pass) makes decisions, `_emit.py` transcribes them into SVG
+# layout pre-pass) makes decisions, `emit.py` transcribes them into SVG
 # — "emit never re-resolves" (docs/ARCHITECTURE.md). Emit may import
 # from `_resolution` only this list: types, constants, and shared derivations —
 # functions the resolution pass itself also calls, so emit re-running
 # one is idempotent and cannot decide anything new. Needing a name
 # outside this list means emit is about to make a decision of its own —
 # move the decision into `_chrome_policy` / resolution instead of
-# widening the list (see `_emit.py`'s docstring).
+# widening the list (see `emit.py`'s docstring).
 EMIT_RESOLUTION_ALLOWED = {
     "_INSIDE_POSITIONS", "_PanelOpts",
     "_inline_legend_layout", "_prebin_hist", "_resolve_panel_inputs",
@@ -174,10 +174,10 @@ def _render_source(name: str) -> Path:
 
 
 def test_emit_imports_from_resolution_only_shared_derivations():
-    """`_emit.py` may reach into `_resolution` only through the from-import
+    """`emit.py` may reach into `_resolution` only through the from-import
     allowlist above — no `import ..._resolution` module access, which would
     put all of resolution one attribute lookup away."""
-    path = _render_source("_emit.py")
+    path = _render_source("emit.py")
     tree = ast.parse(path.read_text(), filename=str(path))
     from_resolution, module_access = set(), []
     for node in ast.walk(tree):
@@ -191,12 +191,12 @@ def test_emit_imports_from_resolution_only_shared_derivations():
             if any(a.name.split(".")[-1] == "_resolution" for a in node.names):
                 module_access.append(node.lineno)
     assert not module_access, (
-        f"_emit.py imports the resolution module wholesale at lines "
+        f"emit.py imports the resolution module wholesale at lines "
         f"{module_access} — import the allowed names explicitly"
     )
     extra = sorted(from_resolution - EMIT_RESOLUTION_ALLOWED)
     assert not extra, (
-        "emit must not re-resolve: _emit.py imports resolution-side "
+        "emit must not re-resolve: emit.py imports resolution-side "
         f"names from _resolution outside the allowlist: {extra}. If emit needs "
         "a new decision, decide it in resolution (`_chrome_policy`) and "
         "read the decided flag."
@@ -211,12 +211,12 @@ def test_resolution_never_imports_emit():
     offenders = [
         node.lineno for node in ast.walk(tree)
         if (isinstance(node, ast.ImportFrom)
-            and (node.module == "_emit"
+            and (node.module == "emit"
                  or (node.module is None
-                     and any(a.name == "_emit" for a in node.names))))
+                     and any(a.name == "emit" for a in node.names))))
         or (isinstance(node, ast.Import)
-            and any("_emit" in a.name.split(".") for a in node.names))
+            and any("emit" in a.name.split(".") for a in node.names))
     ]
     assert not offenders, (
-        f"_resolution.py imports _emit at lines {offenders}"
+        f"_resolution.py imports emit at lines {offenders}"
     )

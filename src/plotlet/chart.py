@@ -25,7 +25,7 @@ Composition operators:
     shape the user typed so the journal stays append-only.
 
 Rendering goes journal → IR → plot: `to_svg()` lowers the tree to the
-figure IR (`_ir.py`, contract in `docs/ARCHITECTURE.md`) and hands it to the
+figure IR (`figure_ir.py`, contract in `docs/ARCHITECTURE.md`) and hands it to the
 render half through the `render` package's seam — the IR path is the
 only render path, and this half never sees the pipeline internals.
 
@@ -117,7 +117,7 @@ class _Renderable:
         want a plain SVG for embedding or sharing and don't need the
         AI/schema surface documented in `docs/AI_ATTRS.md`."""
         self._require_render_root()
-        from ._ir import to_ir
+        from .figure_ir import to_ir
         from .render import render_svg
         return render_svg(to_ir(self), clean=clean)
 
@@ -136,7 +136,7 @@ class _Renderable:
         region-collecting sink and discards the SVG: cheap,
         deterministic, no chart state change."""
         self._require_render_root()
-        from ._ir import to_ir
+        from .figure_ir import to_ir
         from .render import regions
         return regions(to_ir(self))
 
@@ -241,7 +241,7 @@ class _Renderable:
 
         Returns a fresh copy; the original is unchanged."""
         from copy import deepcopy
-        from ._ir import to_ir
+        from .figure_ir import to_ir
         from ._spec import _OUTER_MARGIN
         from .render import data_total_size, natural_size
         cls_name = type(self).__name__
@@ -320,7 +320,7 @@ class Chart(_Renderable):
         if kwargs:
             raise TypeError(f"Chart() got unexpected keyword arguments: {list(kwargs)!r}")
 
-        # ---- Render-state init (leaf-only fields used by render/_emit.py's _render_inner) ----
+        # ---- Render-state init (leaf-only fields used by render/emit.py's _render_inner) ----
         # Resolve unit-suffixed strings (`"4in"`, `"10cm"`, …) once at the
         # boundary so internal math stays in pixels.
         data_width  = _to_px(data_width)

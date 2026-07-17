@@ -16,7 +16,7 @@ is no other render path, so each stage provably carries everything the
 next one consumes.
 
 - **journal** — the recorder's event log; `Chart` methods append, never
-  execute. Owned by the recording half (`_journal.py`, `chart.py`);
+  execute. Owned by the recording half (`journal.py`, `chart.py`);
   the replay model is described in
   [PHILOSOPHY.md](PHILOSOPHY.md#the-replay-model).
 - **FigureIR** — the journal compiled to a per-node table, loss-free
@@ -26,14 +26,14 @@ next one consumes.
 - **ResolvedIR** — the render plan after resolution: replayed states,
   trained scales, measured margins, baked colors. One-way, unversioned,
   in-process by design; it lives entirely inside the render half and is
-  documented where it's defined (`render/resolved.py`).
+  documented where it's defined (`render/resolved_ir.py`).
 - **SVG** — written by the emit pass, which only transcribes decisions
   already in the ResolvedIR (pinned: emit never re-resolves).
 
 ## The FigureIR contract
 
 The specified boundary between plotlet's two halves. The **recording
-half** (`chart.py`, `facet.py`, `legend.py`, `_journal.py`, `_ir.py`)
+half** (`chart.py`, `facet.py`, `legend.py`, `journal.py`, `figure_ir.py`)
 turns user actions into a `FigureIR`; the **render half** (the
 `render/` package) turns a `FigureIR` into an SVG and never imports the
 recording half. Everything below is contract: the render half may

@@ -33,7 +33,7 @@ Pipeline (in order):
     `_allocate` walks the tree and assigns each leaf a pixel rect.
 
   * **Emit** — `_emit_plan` writes one outer `<svg>` with one
-    `<g transform>` per leaf, calling `_render_inner` from `_emit.py`.
+    `<g transform>` per leaf, calling `_render_inner` from `emit.py`.
     Every render reaches it through `resolve_ir(ir).to_svg()` — the
     plan it consumes is always rehydrated from a `ResolvedIR`.
 
@@ -55,7 +55,7 @@ from ._resolution import (
     _PanelOpts,
     _prebin_hist, _stamp_artist_colors,
 )
-from ._emit import _figure_root_attrs, _panel_open, _render_inner
+from .emit import _figure_root_attrs, _panel_open, _render_inner
 from ..scales import _AxisDescriptor
 from .._tree import iter_leaves as _iter_leaves
 from . import _attachments
@@ -1185,7 +1185,7 @@ class RenderPlan:
     pass consumes. `root` is the materialized render tree (canvases
     grown to their measured margins), `states` the replayed per-leaf
     state dicts, `panel_opts` the per-leaf axis descriptors + effective
-    margins. Wrapped by the public `ResolvedIR` (`resolved.py`): the
+    margins. Wrapped by the public `ResolvedIR` (`resolved_ir.py`): the
     projection users inspect and this plan are two views of one
     resolution — the emit pass renders from exactly what `resolve_ir`
     reports."""

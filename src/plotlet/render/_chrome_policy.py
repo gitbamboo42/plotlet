@@ -8,7 +8,7 @@ plain booleans. It is the ONE place such combinations live:
   panel inputs (`inp.chrome`), so the margin reservation
   (`_chrome.chrome_stack_extents` / `label_band_sizes`) and the emit
   pass (`_chrome.emit_chrome`) read identical decisions;
-- `resolved._chart_to_ir` projects the same result into
+- `resolved_ir._chart_to_ir` projects the same result into
   `IRPanel.chrome["visibility"]`, so the resolved IR shows what will
   be drawn, not just the raw ingredients.
 

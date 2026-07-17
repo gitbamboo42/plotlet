@@ -636,7 +636,7 @@ class CircularCoordinate:
         everything (per-ring states, panel opts, canvas metrics)."""
         from itertools import count
         from ._layout_engine import _emit_layout_title, _node_style
-        from ._emit import _panel_open, _render_inner
+        from .emit import _panel_open, _render_inner
         from .. import _regions
         _ZERO_MARGIN = {"left": 0, "right": 0, "top": 0, "bottom": 0}
         # Shared across leaves so coord-clip `<clipPath id>`s don't

@@ -2798,7 +2798,7 @@ def test_facet_mode_validation():
 
 def test_facet_grid_json_roundtrip():
     import json
-    from plotlet._journal import to_json, from_json
+    from plotlet.journal import to_json, from_json
 
     def build():
         g = pt.facet(_facet_grid_df(), row="r", col="c")

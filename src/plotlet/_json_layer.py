@@ -2,7 +2,7 @@
 
 Envelopes Python values that aren't JSON-native (tuple, set, date,
 datetime, dicts with non-string keys, DataFrameLite) so a Journal can
-be dumped through `json.dumps` and rehydrated. Kept out of `_journal.py`
+be dumped through `json.dumps` and rehydrated. Kept out of `journal.py`
 so the journal core has no coupling — the journal is an event log; JSON
 support is a separate concern.
 
@@ -125,7 +125,7 @@ def _decode(value: Any, nid_to_node: dict) -> Any:
     journals and IRs whether or not they ever touch JSON, and decode at
     hydration time. Shared vocabulary — used by the render tree's
     hydrator (`render.hydrate`) and by the facet expansion in
-    `_ir.py`."""
+    `figure_ir.py`."""
     if isinstance(value, dict):
         if "$node" in value and len(value) == 1:
             return nid_to_node[value["$node"]]

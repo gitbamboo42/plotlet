@@ -29,9 +29,9 @@ from .cluster import linkage, linkage_split, SplitTree
 from .formatters import (register_formatter, list_formatters,
                          superscript, subscript)
 from ._coord_registry import register_coord_codec
-from ._journal import (to_journal, from_journal, to_json, from_json,
+from .journal import (to_journal, from_journal, to_json, from_json,
                        JournalNode, Journal)
-from ._ir import to_ir, from_ir, resolve_ir, FigureIR, IRNode
+from .figure_ir import to_ir, from_ir, resolve_ir, FigureIR, IRNode
 from . import draw, utils
 
 

@@ -18,7 +18,7 @@ import json
 import pytest
 
 import plotlet as pt
-from plotlet._ir import journal_to_ir, ir_to_journal, _node_refs
+from plotlet.figure_ir import journal_to_ir, ir_to_journal, _node_refs
 
 from test_journal_roundtrip import PLOTS
 
