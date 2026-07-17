@@ -336,11 +336,28 @@ _FRAME_OPS = frozenset({
 })
 
 
+class _PanelState(dict):
+    """Panel state dict with a closed key set. The `_replay` initializer
+    below defines every valid key; writing or `get`ing any other key
+    raises instead of silently creating (or missing) an entry. Without
+    this, a misspelled key — including a bad `f"{axis}_..."` prefix —
+    renders a wrong figure with no error anywhere."""
+    def __setitem__(self, key, value):
+        if key not in self:
+            raise KeyError(f"unknown panel state key {key!r}")
+        dict.__setitem__(self, key, value)
+
+    def get(self, key, default=None):
+        if key not in self:
+            raise KeyError(f"unknown panel state key {key!r}")
+        return dict.__getitem__(self, key)
+
+
 def _replay(calls):
     """Walk a Chart's recorded calls into a state dict consumed by the
     renderer. Pure function of `calls` and the artist registry — same input
     + same registry → same output."""
-    st = {
+    st = _PanelState({
         "artists": [], "title": "", "subtitle": "", "caption": "",
         "xlabel": "", "ylabel": "",
         "xlim": None, "ylim": None, "xscale": "linear", "yscale": "linear",
@@ -414,6 +431,9 @@ def _replay(calls):
         "clip": True,
         "facecolor": None,
         "coordinate": None,
+        # Inset panels bound to this chart — overwritten by the resolve
+        # pass right after replay (`_build_panel_opts`).
+        "insets": [],
         # Data-space aspect-ratio lock (mpl `set_aspect` / ggplot
         # `coord_fixed`). None = free; a number r pins one y data unit
         # to r× the pixel length of one x data unit. The layout pre-pass
@@ -432,7 +452,7 @@ def _replay(calls):
         "x_sector_column": None,  # column name on artist data for continuous
         "y_sectors": None,
         "y_sector_column": None,
-    }
+    })
     # Stable-sort sectors entries to the front. Sectors set the state
     # `_sector_remap_data` reads while processing artist calls; an
     # ordering bug would silently no-op the remap (every row stacked into

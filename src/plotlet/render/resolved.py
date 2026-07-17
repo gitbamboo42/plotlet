@@ -596,7 +596,7 @@ def _rehydrate_node(ir, ctx, *, parent):
 def _rehydrate_panel(panel: "IRPanel", ctx, *, parent):
     from ._layout_engine import RenderPlan
     from ._nodes import RenderNode
-    from .core import _PanelOpts
+    from .core import _PanelOpts, _PanelState
 
     node = RenderNode()
     node._parent = parent
@@ -640,8 +640,10 @@ def _rehydrate_panel(panel: "IRPanel", ctx, *, parent):
         return node
 
     # Data leaf: rebuild state + panel opts. State is shallow-copied so
-    # the lifted keys can be reinstated without touching the projection.
-    st = dict(panel.state)
+    # the lifted keys can be reinstated without touching the projection;
+    # they're seeded here because the closed key set (`_PanelState`)
+    # rejects writes of keys absent from the projection.
+    st = _PanelState({**panel.state, "coordinate": None, "insets": []})
     if panel.coord.kind != "cartesian":
         st["coordinate"] = _rehydrate_coord(panel.coord, ctx)
     node._last_M_eff = dict(panel.margin)
