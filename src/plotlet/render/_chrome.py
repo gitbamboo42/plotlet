@@ -44,7 +44,7 @@ def chrome_stack_extents(st, inp):
     x_pol, y_pol = inp.chrome["x"], inp.chrome["y"]
 
     # Reserve the tick-mark band only when an outward mark is actually
-    # drawn — `inp.chrome` carries the decided flags (see `_policy`), so
+    # drawn — `inp.chrome` carries the decided flags (see `_chrome_policy`), so
     # this reservation and `emit_chrome` walk the same booleans.
     out_x = _FRAME["tick_length"] if (x_pol["outward_mark"] and inp.x_ticks) else 0
     out_y = _FRAME["tick_length"] if (y_pol["outward_mark"] and inp.y_ticks) else 0
@@ -174,9 +174,9 @@ def label_band_sizes(st, inp, dw, dh):
     # side x_side names; the title is its own block above the xlabel when
     # they share the top edge.
     xlabel_band = (2 + text_block_height(st["xlabel"], label_size) + _PADSPEC["xlabel"]
-                   if st["xlabel"] and not x_pol["hidden"] else 0)
+                   if x_pol["draw_axis_label"] else 0)
     ylabel_band = (2 + text_block_height(st["ylabel"], label_size) + _PADSPEC["ylabel"]
-                   if st["ylabel"] and not y_pol["hidden"] else 0)
+                   if y_pol["draw_axis_label"] else 0)
 
     # Title sits past the top chrome band + any top-side xlabel block,
     # then adds `pad.title` + its glyph-block height for its own block —
@@ -254,7 +254,7 @@ def emit_frame_labels(st, inp, iw, ih, chrome, *, top_legend_outset=0,
     x_pol, y_pol = inp.chrome["x"], inp.chrome["y"]
     parts = []
     xlabel_band = (2 + text_block_height(st["xlabel"], label_size) + _PADSPEC["xlabel"]
-                   if st["xlabel"] and not x_pol["hidden"] else 0)
+                   if x_pol["draw_axis_label"] else 0)
 
     # `text_path` anchors multi-line text at the FIRST line's baseline with
     # lines flowing downward. On bottom/right sides the block naturally
@@ -263,7 +263,7 @@ def emit_frame_labels(st, inp, iw, ih, chrome, *, top_legend_outset=0,
     # (`block - size`, zero for one line) so the LAST line lands in the
     # single-line slot and the block grows outward instead of into the axis.
 
-    if st["xlabel"] and not x_pol["hidden"]:
+    if x_pol["draw_axis_label"]:
         # Walk past the chrome stack + 2-px gap + full label_size, then back
         # up by descender to land on the baseline. Bottom: y positive past
         # ih. Top: y negative past 0 — same descender adjustment lands the
@@ -277,7 +277,7 @@ def emit_frame_labels(st, inp, iw, ih, chrome, *, top_legend_outset=0,
                                 label_size, anchor="middle", color=text_color,
                                 tag="xlabel"))
 
-    if st["ylabel"] and not y_pol["hidden"]:
+    if y_pol["draw_axis_label"]:
         # Walk past the chrome stack + 2-px gap, then half label_size to
         # land on the rotated text's center. Left: cx negative (outside
         # panel on left) — under rotate=90 extra lines flow toward +x
@@ -536,7 +536,7 @@ def emit_chrome(*, st, inp, iw, ih,
     x_decor = st.get("x_decoration") or "none"
     y_decor = st.get("y_decoration") or "none"
     x_dir, y_dir = st["x_direction"], st["y_direction"]
-    # Decided visibility flags (see `_policy.resolve_axis_chrome`) —
+    # Decided visibility flags (see `_chrome_policy.resolve_axis_chrome`) —
     # spine toggles, tick marks (share-pair hiding already folded in;
     # spine visibility deliberately doesn't gate ticks — matplotlib
     # semantics), tick labels. Emit reads these; it doesn't re-derive.
@@ -700,7 +700,7 @@ def emit_chrome(*, st, inp, iw, ih,
     # axis. Walls are conceptually side spines, so style resolves through
     # the same _side_stroke/_side_dash with "walls" as the target.
     # Visibility (walls toggle, crossing-artist wall suppression, label
-    # suppression / hiding) is decided in `_policy` — the
+    # suppression / hiding) is decided in `_chrome_policy` — the
     # `draw_sector_dividers` / `draw_sector_labels` flags gate entry and
     # emission alike; `x_sec` supplies geometry only.
     if x_pol["draw_sector_dividers"] or x_pol["draw_sector_labels"]:

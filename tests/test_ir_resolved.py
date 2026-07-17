@@ -78,18 +78,20 @@ def test_resolve_ir_structural(label, fn):
             assert isinstance(artist, IRArtist)
             assert isinstance(artist.kind, str) and artist.kind != "unknown"
         # Decided chrome visibility rides on every data panel — the
-        # same flags the emit pass reads (see render/_policy.py).
+        # same flags the emit pass reads (see render/_chrome_policy.py).
         vis = panel.chrome["visibility"]
         assert set(vis["spines"]) == {"top", "bottom", "left", "right",
                                       "walls"}
         for axis in ("x", "y"):
             assert set(vis[axis]) == {"side", "hidden", "draw_marks",
                                       "outward_mark", "draw_labels",
+                                      "draw_axis_label",
                                       "draw_sector_dividers",
                                       "draw_sector_labels"}
             assert all(isinstance(vis[axis][k], bool)
                        for k in ("hidden", "draw_marks", "outward_mark",
-                                 "draw_labels", "draw_sector_dividers",
+                                 "draw_labels", "draw_axis_label",
+                                 "draw_sector_dividers",
                                  "draw_sector_labels"))
 
 

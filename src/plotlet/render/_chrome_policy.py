@@ -33,8 +33,8 @@ def resolve_axis_chrome(st, po=None):
 
         {"spines": {side: bool, ..., "walls": bool},
          "x": {"side", "hidden", "draw_marks", "outward_mark",
-               "draw_labels", "draw_sector_dividers",
-               "draw_sector_labels"},
+               "draw_labels", "draw_axis_label",
+               "draw_sector_dividers", "draw_sector_labels"},
          "y": {same keys}}
 
     Per axis: `side` is where the axis band sits (`x_side` / `y_side`
@@ -43,7 +43,10 @@ def resolve_axis_chrome(st, po=None):
     joined — marks bleeding into the inter-panel gap read as clutter),
     `outward_mark` whether a drawn mark extends outside the data area
     (drives the tick-band margin and the label offset), `draw_labels`
-    whether tick labels are drawn. Spine visibility is deliberately
+    whether tick labels are drawn, `draw_axis_label` whether the
+    xlabel/ylabel text is drawn (set AND the side is not share-joined;
+    the title has no such flag — it renders even on a joined edge,
+    it's the panel's identity). Spine visibility is deliberately
     NOT an input to any tick flag — hiding a spine leaves the ticks
     (matplotlib semantics).
 
@@ -85,6 +88,7 @@ def resolve_axis_chrome(st, po=None):
             "draw_marks": draw_marks,
             "outward_mark": draw_marks and st[f"{axis}_direction"] != "in",
             "draw_labels": draw_labels,
+            "draw_axis_label": bool(st[f"{axis}label"]) and not hidden,
             "draw_sector_dividers": (sec is not None and bool(sec.divider)
                                      and spines["walls"]
                                      and not (axis == "x" and x_crossers)),

@@ -38,7 +38,7 @@ from ..draw import measure_text, text_block_height
 from ..draw import coord, rect, segment, text_path
 from .. import _regions
 from . import _chrome
-from ._policy import resolve_axis_chrome
+from ._chrome_policy import resolve_axis_chrome
 from ..utils import (hist_bin_edges, hist_bin_counts, hist_transform,
                      collect_categories, group_color)
 from ..registry import RenderContext, get_artist, _COORD_SUPPORT
@@ -1276,7 +1276,7 @@ def _resolve_panel_inputs(st, *, x_scale, y_scale, dw, dh, po):
     hide_r = po.hide_right
 
     # Decided chrome visibility — the one place state and layout flags
-    # combine into "draw it?" booleans (see `_policy`). `xticks
+    # combine into "draw it?" booleans (see `_chrome_policy`). `xticks
     # (labels=False)` joins forces with the share-pair label suppression
     # there — either one drops tick labels on the corresponding side,
     # routed by axis side so a flipped axis pulls suppression from the
@@ -1402,11 +1402,11 @@ def _required_margin(st, dw, dh, po: "_PanelOpts") -> dict:
         caption_size = _FONTSPEC["caption_size"]
         bottom += _PADSPEC["caption"] + text_block_height(st["caption"], caption_size)
         left = max(left, max(0.0, measure_text(st["caption"], caption_size) - dw))
-    if st["xlabel"] and not inp.chrome["x"]["hidden"]:
+    if inp.chrome["x"]["draw_axis_label"]:
         xlabel_overhang = max(0.0, (measure_text(st["xlabel"], label_size) - dw) / 2.0)
         left  = max(left,  xlabel_overhang)
         right = max(right, xlabel_overhang)
-    if st["ylabel"] and not inp.chrome["y"]["hidden"]:
+    if inp.chrome["y"]["draw_axis_label"]:
         ylabel_overhang = max(0.0, (measure_text(st["ylabel"], label_size) - dh) / 2.0)
         top    = max(top,    ylabel_overhang)
         bottom = max(bottom, ylabel_overhang)

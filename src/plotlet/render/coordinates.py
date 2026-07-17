@@ -119,7 +119,7 @@ def _circular_x_tick_labels(st, dw):
 def _circular_chrome_pad(st, dw) -> float:
     """Radial pixels of chrome past the outer arc for the outermost ring.
 
-    Visibility comes from the same `_policy.resolve_axis_chrome` the
+    Visibility comes from the same `_chrome_policy.resolve_axis_chrome` the
     emit pass reads — rings carry no share-pair hiding or label
     suppression, so the layout flags are all False. Only the radial
     stacking arithmetic is local: it mirrors the ``draw_x_chrome`` /
@@ -133,7 +133,7 @@ def _circular_chrome_pad(st, dw) -> float:
     """
     from .._spec import SPEC, _FRAME, _FONTSPEC
     from ..draw import cap_height, measure_text
-    from ._policy import resolve_axis_chrome
+    from ._chrome_policy import resolve_axis_chrome
 
     pol = resolve_axis_chrome(st)["x"]
 

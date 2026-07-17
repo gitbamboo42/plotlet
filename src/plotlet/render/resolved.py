@@ -55,7 +55,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from ..scales import _AxisDescriptor as IRScale
-from ._policy import resolve_axis_chrome
+from ._chrome_policy import resolve_axis_chrome
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +101,7 @@ class IRPanel:
     scales: dict         # {"x": IRScale, "y": IRScale} for data leaves
     artists: tuple       # curated view of state["artists"]
     chrome: dict         # curated identity/spine state + "visibility":
-                         # the decided draw-it? flags (see `_policy`)
+                         # the decided draw-it? flags (see `_chrome_policy`)
     state: dict          # the FULL replayed state the emit pass draws from
                          # (minus "insets"/"coordinate", lifted to fields)
     attachments: dict    # {"left","right","top","bottom"} → tuple[IRPanel]
@@ -503,7 +503,7 @@ def _extract_chrome(st):
     identity fields plus per-target spine style overrides (only when
     set). Spine visibility is NOT copied here — it lives under the
     "visibility" key the caller adds with the decided per-axis draw
-    flags from `_policy.resolve_axis_chrome`, the one authoritative
+    flags from `_chrome_policy.resolve_axis_chrome`, the one authoritative
     copy."""
     keys = (
         "title", "xlabel", "ylabel",
