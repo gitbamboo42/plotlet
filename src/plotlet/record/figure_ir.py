@@ -63,7 +63,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ._json_layer import _decode
+from .._json_layer import _decode
 
 _IR_VERSION = 1
 
@@ -101,7 +101,7 @@ class FigureIR:
     root_nid: int
 
     def to_svg(self, *, clean: bool = False) -> str:
-        from .render import render_svg
+        from ..render import render_svg
         return render_svg(self, clean=clean)
 
     def to_html(self, full_page: bool = False) -> str:
@@ -118,7 +118,7 @@ class FigureIR:
         the render pipeline's own middle stage (`to_svg()` goes through
         it), inspectable via `.root` and renderable via `.to_svg()`.
         One-way — not a round-trip peer."""
-        from .render import resolve
+        from ..render import resolve
         return resolve(self)
 
     def validate(self) -> "FigureIR":
@@ -126,14 +126,14 @@ class FigureIR:
         without rendering — useful when hand-authoring or transforming
         IRs. Raises `ValueError` on the first violation; returns `self`
         so calls chain. Rendering validates implicitly."""
-        from .render import validate
+        from ..render import validate
         validate(self)
         return self
 
     def to_dict(self) -> dict:
         """JSON-safe dict form — `json.dumps(...)` produces the string
         form; `FigureIR.from_dict` is the inverse."""
-        from ._json_layer import json_safe
+        from .._json_layer import json_safe
         return {
             "version": _IR_VERSION,
             "root_nid": self.root_nid,
@@ -148,7 +148,7 @@ class FigureIR:
 
     @classmethod
     def from_dict(cls, d: dict) -> "FigureIR":
-        from ._json_layer import json_hydrate
+        from .._json_layer import json_hydrate
         ver = d.get("version")
         if ver != _IR_VERSION:
             raise ValueError(

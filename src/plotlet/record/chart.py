@@ -44,10 +44,10 @@ from pathlib import Path
 
 import resvg_py
 
-from ._spec import _SIZESPEC, _MARGIN_FLOOR
-from ._tree import compute_share_classes, normalize_share_mode
-from .utils import _to_px, _normalize_data, _data_has_column
-from .registry import get_artist, all_artist_names
+from .._spec import _SIZESPEC, _MARGIN_FLOOR
+from .._tree import compute_share_classes, normalize_share_mode
+from ..utils import _to_px, _normalize_data, _data_has_column
+from ..registry import get_artist, all_artist_names
 
 
 # Frame-state methods recordable on a Chart (replayed by `_replay`). Lives
@@ -118,7 +118,7 @@ class _Renderable:
         AI/schema surface documented in `docs/AI_ATTRS.md`."""
         self._require_render_root()
         from .figure_ir import to_ir
-        from .render import render_svg
+        from ..render import render_svg
         return render_svg(to_ir(self), clean=clean)
 
     def regions(self) -> list[dict]:
@@ -137,7 +137,7 @@ class _Renderable:
         deterministic, no chart state change."""
         self._require_render_root()
         from .figure_ir import to_ir
-        from .render import regions
+        from ..render import regions
         return regions(to_ir(self))
 
     def to_html(self, full_page: bool = False) -> str:
@@ -242,8 +242,8 @@ class _Renderable:
         Returns a fresh copy; the original is unchanged."""
         from copy import deepcopy
         from .figure_ir import to_ir
-        from ._spec import _OUTER_MARGIN
-        from .render import data_total_size, natural_size
+        from .._spec import _OUTER_MARGIN
+        from ..render import data_total_size, natural_size
         cls_name = type(self).__name__
         W = _to_px(canvas_width)
         H = _to_px(canvas_height)

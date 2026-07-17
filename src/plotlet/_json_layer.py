@@ -2,13 +2,13 @@
 
 Envelopes Python values that aren't JSON-native (tuple, set, date,
 datetime, dicts with non-string keys, DataFrameLite) so a Journal can
-be dumped through `json.dumps` and rehydrated. Kept out of `journal.py`
+be dumped through `json.dumps` and rehydrated. Kept out of `record/journal.py`
 so the journal core has no coupling — the journal is an event log; JSON
 support is a separate concern.
 
 DataFrame-shaped and numpy inputs never reach this layer: they're
 normalized to `DataFrameLite` / plain lists at the recorder boundary
-in `chart.py` (via `utils._normalize_data`). So the JSON layer is
+in `record/chart.py` (via `utils._normalize_data`). So the JSON layer is
 data-library-neutral by construction — it never imports pandas or
 numpy, never grows a branch per data library.
 
@@ -125,7 +125,7 @@ def _decode(value: Any, nid_to_node: dict) -> Any:
     journals and IRs whether or not they ever touch JSON, and decode at
     hydration time. Shared vocabulary — used by the render tree's
     hydrator (`render.hydrate`) and by the facet expansion in
-    `figure_ir.py`."""
+    `record/figure_ir.py`."""
     if isinstance(value, dict):
         if "$node" in value and len(value) == 1:
             return nid_to_node[value["$node"]]

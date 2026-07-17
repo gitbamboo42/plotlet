@@ -6,17 +6,18 @@ through the same four representations (the middle two are IRs —
 "intermediate representations", the compiler term), ordered by
 distance from the user:
 
-    journal     flat append-only event log — "what the user did"
-    FigureIR    compiled per-node table    — "what the figure is"
-    ResolvedIR  resolved render plan       — "what was decided"
-    SVG         the rendered plot
+    journal     "what the user did"    record/journal.py
+    FigureIR    "what the figure is"   record/figure_ir.py
+    ResolvedIR  "what was decided"     render/resolved_ir.py
+    SVG         the rendered plot      render/emit.py
 
 `Chart.to_svg()` itself goes journal → IR → resolved IR → SVG; there
 is no other render path, so each stage provably carries everything the
 next one consumes.
 
 - **journal** — the recorder's event log; `Chart` methods append, never
-  execute. Owned by the recording half (`journal.py`, `chart.py`);
+  execute. Owned by the recording half (`record/journal.py`,
+  `record/chart.py`);
   the replay model is described in
   [PHILOSOPHY.md](PHILOSOPHY.md#the-replay-model).
 - **FigureIR** — the journal compiled to a per-node table, loss-free
@@ -33,7 +34,8 @@ next one consumes.
 ## The FigureIR contract
 
 The specified boundary between plotlet's two halves. The **recording
-half** (`chart.py`, `facet.py`, `legend.py`, `journal.py`, `figure_ir.py`)
+half** (the `record/` package: `chart.py`, `facet.py`, `legend.py`,
+`journal.py`, `figure_ir.py`)
 turns user actions into a `FigureIR`; the **render half** (the
 `render/` package) turns a `FigureIR` into an SVG and never imports the
 recording half. Everything below is contract: the render half may

@@ -1,5 +1,5 @@
 """Coord codec registry — a neutral home for the `class_name → class` map
-that both `serialize.py` and `journal.py` need for round-tripping coord
+that `record/journal.py` needs for round-tripping coord
 objects like `CircularCoordinate`.
 
 Lives here rather than in either consumer so that removing one of them

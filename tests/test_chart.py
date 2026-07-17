@@ -2798,7 +2798,7 @@ def test_facet_mode_validation():
 
 def test_facet_grid_json_roundtrip():
     import json
-    from plotlet.journal import to_json, from_json
+    from plotlet.record.journal import to_json, from_json
 
     def build():
         g = pt.facet(_facet_grid_df(), row="r", col="c")
@@ -3108,7 +3108,7 @@ def test_repr_mimebundle_png():
     svg = c.to_svg()
     assert f'width="{w}" height="{h}"' in svg[:200]
     # pixels are rendered at _REPR_SCALE x the logical size
-    from plotlet.chart import _REPR_SCALE
+    from plotlet.record.chart import _REPR_SCALE
     assert _png_dims(png) == (w * _REPR_SCALE, h * _REPR_SCALE)
     # deterministic — same journal, byte-identical PNG
     data2, _ = c._repr_mimebundle_()
@@ -3118,7 +3118,7 @@ def test_repr_mimebundle_png():
 def test_save_png_scale(tmp_path):
     c = pt.chart(title="t")
     c.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
-    from plotlet.chart import _svg_size
+    from plotlet.record.chart import _svg_size
     w, h = _svg_size(c.to_svg())
     c.save_png(tmp_path / "one.png")
     c.save_png(tmp_path / "two.png", scale=2)
@@ -3148,7 +3148,7 @@ def test_png_paints_figure_background():
 
     c = pt.chart(title="t")
     c.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
-    from plotlet.chart import _svg_to_png
+    from plotlet.record.chart import _svg_to_png
     assert corner_rgba(_svg_to_png(c.to_svg())) == (255, 255, 255, 255)
 
     d = pt.chart(theme="dark", title="t")

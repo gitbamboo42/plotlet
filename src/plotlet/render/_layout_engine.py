@@ -936,7 +936,7 @@ def _build_panel_opts(root, *, measure_margins=True
     away.
 
     Legend leaves are skipped — they have no x/y axes, no artists, and
-    render through their own pipeline (see `legend.py`).
+    render through their own pipeline (see `render/_legend.py`).
 
     Assumes `materialize(root)` has already run (`_build_plan` does it
     at entry). Internal callers (tests, debugging) that bypass

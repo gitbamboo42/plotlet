@@ -17,21 +17,21 @@ from ._spec import SPEC
 from .draw import TAB10, palette, list_palettes
 from .draw import colormap, list_colormaps, register_colormap
 from . import artists  # noqa: F401  — registers built-in artists on import
-from .chart import Chart, Layout, chart, grid
-from .legend import legend
+from .record.chart import Chart, Layout, chart, grid
+from .record.legend import legend
 from .registry import ArtistSpec, add_artist, artist_table, declare_coord_support
 from .sectors import Sectors
 from .layout_diagram import layout_diagram
 from .themes import load_theme, list_themes, register_theme
-from .facet import facet, FacetGrid
+from .record.facet import facet, FacetGrid
 from .datasets import load_dataset, list_datasets
 from .cluster import linkage, linkage_split, SplitTree
 from .formatters import (register_formatter, list_formatters,
                          superscript, subscript)
 from ._coord_registry import register_coord_codec
-from .journal import (to_journal, from_journal, to_json, from_json,
+from .record.journal import (to_journal, from_journal, to_json, from_json,
                        JournalNode, Journal)
-from .figure_ir import to_ir, from_ir, resolve_ir, FigureIR, IRNode
+from .record.figure_ir import to_ir, from_ir, resolve_ir, FigureIR, IRNode
 from . import draw, utils
 
 

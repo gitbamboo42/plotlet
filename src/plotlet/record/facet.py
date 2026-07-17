@@ -30,7 +30,7 @@ from __future__ import annotations
 import math
 
 from .chart import Chart, chart, grid, _REPR_SCALE
-from .utils import _normalize_data
+from ..utils import _normalize_data
 
 
 def facet(data, *, by=None, row=None, col=None, col_wrap=None,

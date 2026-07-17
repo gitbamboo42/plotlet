@@ -85,7 +85,7 @@ def legend(*sources: Chart, names: dict | None = None,
     # it from harvested content at render time, unless the user passed
     # an explicit canvas_*. Legend leaves have no data region — the
     # canvas IS the dimensional primitive (see `Chart._new_sized_leaf`).
-    from .utils import _to_px
+    from ..utils import _to_px
     cw = _to_px(canvas_width) if canvas_width is not None else 1
     ch = _to_px(canvas_height) if canvas_height is not None else 1
     leaf = Chart._new_sized_leaf(canvas_width=cw, canvas_height=ch,

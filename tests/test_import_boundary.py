@@ -1,7 +1,7 @@
 """The recording/rendering split, enforced as tests.
 
 The contract (plan of record: `docs/ARCHITECTURE.md`): the recording half
-(`chart`, `facet`, `legend`, `journal`, `figure_ir`, ...) never imports the
+(the `record/` package) never imports the
 render half at module level — `plotlet.render` loads lazily on first
 render — and the render half never imports the recording half at all;
 its only input is the `FigureIR`. Everything both halves share is
@@ -29,14 +29,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Front-half modules the render half must never import: the recorder
-# types, their factories and sugar, the journal, and the IR compiler.
+# Front-half modules the render half must never import: the `record/`
+# package (recorder types, their factories and sugar, the journal, the
+# IR compiler) plus the root-level consumers of the recording API.
 # (`FigureIR` instances cross the seam duck-typed — the render half
 # needs no import to consume one.) Everything else under plotlet/ is
 # shared vocabulary (or render-internal).
 FRONT_HALF = {
-    "chart", "facet", "legend", "lint", "layout_diagram",
-    "journal", "figure_ir",
+    "record", "lint", "layout_diagram",
 }
 
 
@@ -46,9 +46,9 @@ def test_importing_the_recording_half_never_loads_render():
     code = (
         "import sys\n"
         "import plotlet\n"
-        "import plotlet.journal\n"
-        "import plotlet.figure_ir\n"
-        "import plotlet.chart\n"
+        "import plotlet.record.journal\n"
+        "import plotlet.record.figure_ir\n"
+        "import plotlet.record.chart\n"
         "loaded = sorted(m for m in sys.modules"
         " if m.startswith('plotlet.render'))\n"
         "assert not loaded, f'render half loaded at import time: {loaded}'\n"

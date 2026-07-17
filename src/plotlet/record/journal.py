@@ -80,7 +80,7 @@ class Journal:
         envelope the remaining non-JSON-native types (tuple, set,
         date, datetime, DataFrameLite); plotlet envelopes ($node etc.)
         were already added at `to_journal` time."""
-        from ._json_layer import json_safe
+        from .._json_layer import json_safe
         return {
             "version": _JOURNAL_VERSION,
             "root_nid": self.root_nid,
@@ -89,7 +89,7 @@ class Journal:
 
     @classmethod
     def from_dict(cls, d: dict) -> "Journal":
-        from ._json_layer import json_hydrate
+        from .._json_layer import json_hydrate
         ver = d.get("version")
         if ver != _JOURNAL_VERSION:
             raise ValueError(
@@ -176,13 +176,13 @@ def to_journal(root) -> Journal:
         class, so a stale or hand-authored lie fails loudly."""
         # Late import to avoid a cycle with chart.py at module load.
         from .chart import _Renderable
-        from .sectors import Sectors
+        from ..sectors import Sectors
         if isinstance(value, _Renderable):
             _emit_node(value)
             return {"$node": _nid_of(value)}
         if isinstance(value, Sectors):
             return {"$sectors": _encode(value._to_dict())}
-        from ._coord_registry import _COORD_REGISTRY
+        from .._coord_registry import _COORD_REGISTRY
         if type(value).__name__ in _COORD_REGISTRY:
             return {
                 "$coord": type(value).__name__,
