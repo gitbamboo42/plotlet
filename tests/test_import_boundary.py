@@ -159,7 +159,7 @@ def test_render_half_imports_no_front_half_module():
 # functions the resolution pass itself also calls, so emit re-running
 # one is idempotent and cannot decide anything new. Needing a name
 # outside this list means emit is about to make a decision of its own —
-# move the decision into `_chrome_policy` / resolution instead of
+# move the decision into `_chrome_visibility` / resolution instead of
 # widening the list (see `emit.py`'s docstring).
 EMIT_RESOLUTION_ALLOWED = {
     "_INSIDE_POSITIONS", "_PanelOpts",
@@ -198,7 +198,7 @@ def test_emit_imports_from_resolution_only_shared_derivations():
     assert not extra, (
         "emit must not re-resolve: emit.py imports resolution-side "
         f"names from _resolution outside the allowlist: {extra}. If emit needs "
-        "a new decision, decide it in resolution (`_chrome_policy`) and "
+        "a new decision, decide it in resolution (`_chrome_visibility`) and "
         "read the decided flag."
     )
 

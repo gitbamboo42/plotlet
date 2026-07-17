@@ -875,7 +875,7 @@ class Layout(_Renderable):
         fan-out into leaf `_calls` — Layout never mutates a leaf's
         journal. `_replay`'s sectors-to-front pass keeps recorded order
         among sectors, so a leaf-level ``c.sectors(...)`` appended later
-        still wins via last-write on `st[\"{axis}_sectors\"]`.
+        still wins via last-write on `state[\"{axis}_sectors\"]`.
         """
         kw = {"axis": axis, "divider": divider, "label": label}
         if column is not None:

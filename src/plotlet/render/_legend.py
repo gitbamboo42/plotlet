@@ -90,11 +90,11 @@ def _build_groups(sources: list, states: dict[int, dict],
     entries (`pt.legend(entries=)`) form one final headerless section."""
     raw = []
     for src in sources:
-        st = states.get(id(src))
-        if st is None:
+        state = states.get(id(src))
+        if state is None:
             continue
         cont, disc = [], []
-        for a in st["artists"]:
+        for a in state["artists"]:
             spec = get_artist(a["type"])
             if spec is None:
                 continue
@@ -117,7 +117,7 @@ def _build_groups(sources: list, states: dict[int, dict],
         elif any(c.get("label") for c in cont):
             header = None         # entry's own label already names the gradient
         else:
-            header = st.get("title")
+            header = state.get("title")
         raw.append({"header": header, "cont": cont, "disc": disc})
 
     if not group_by_chart and raw:

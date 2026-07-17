@@ -74,7 +74,7 @@ def attach_with_peer_legend():
 # ---------------------------------------------------------------------------
 
 def _run_invariants() -> int:
-    # These invariants poke layout-engine internals (`_build_panel_opts`,
+    # These invariants poke layout-engine internals (`_resolve_panels`,
     # `_measure`, …) directly. Those expect a materialized tree —
     # render entry points (`to_svg`) materialize automatically, but
     # internal pokes must materialize themselves. The derive pass is
@@ -179,14 +179,14 @@ def _run_invariants() -> int:
     left2.annotate("L", xy=(0.5, 2.0))
     h6.attach_left(left2)
     materialize(h6)
-    from plotlet.render._layout_engine import _build_panel_opts, _measure, _allocate
-    po, _ = _build_panel_opts(h6)
+    from plotlet.render._layout_engine import _resolve_panels, _measure, _allocate
+    panel_opts, _ = _resolve_panels(h6)
     W, H = _measure(h6)
     placements = []
     _allocate(h6, 0, 0, W, H, placements)
     rects = dict(placements)
-    h6_M = po[id(h6)].M_eff
-    left_M = po[id(left2)].M_eff
+    h6_M = panel_opts[id(h6)].M_eff
+    left_M = panel_opts[id(left2)].M_eff
     h6_data_y = rects[h6][1] + h6_M["top"]
     left_data_y = rects[left2][1] + left_M["top"]
     _check(h6_data_y == left_data_y,
@@ -194,7 +194,7 @@ def _run_invariants() -> int:
            f"left_data_y={left_data_y})")
 
     # Sector inheritance: above-attachment picks up host's x-sectors.
-    from plotlet.render._layout_engine import _build_panel_opts as _bpo
+    from plotlet.render._layout_engine import _resolve_panels as _rp
     h7 = pt.chart(data_width=240, data_height=100)
     h7.sectors({"chr1": 100, "chr2": 200}, axis="x", column="chr",
                divider=True, label=True)
@@ -203,7 +203,7 @@ def _run_invariants() -> int:
     top7.line(data={"chr": ["chr2"], "x": [10], "y": [1]}, x="x", y="y")
     h7.attach_above(top7)
     materialize(h7)
-    _, states7 = _bpo(h7)
+    _, states7 = _rp(h7)
     st_top = states7[id(top7)]
     _check(st_top["x_sectors"] is not None,
            "above attachment inherits host's x_sectors")
@@ -230,7 +230,7 @@ def _run_invariants() -> int:
     left8.line(data={"x": [1, 2, 1, 2], "y": rows7}, x="x", y="y")
     h8.attach_left(left8)
     materialize(h8)
-    _, states8 = _bpo(h8)
+    _, states8 = _rp(h8)
     _check(states8[id(left8)]["y_sectors"] is not None,
            "left attachment inherits host's y_sectors (categorical)")
 
@@ -244,19 +244,19 @@ def _run_invariants() -> int:
     top9.line(data={"chr": ["chr1"], "x": [50], "y": [1]}, x="x", y="y")
     h9.attach_above(top9)
     materialize(h9)
-    _, states9 = _bpo(h9)
+    _, states9 = _rp(h9)
     _check(states9[id(top9)]["x_sectors"] is not None
            and states9[id(top9)]["x_sectors"].divider is True,
            "explicit c.sectors() on attachment overrides inheritance")
 
     # Non-mutation: attachment sector inheritance now emits a cascade
-    # entry at the call site in `_build_panel_opts` instead of mutating
+    # entry at the call site in `_resolve_panels` instead of mutating
     # `top7._calls`. Re-running the pre-pass must not touch the leaf
     # journal (idempotence is automatic, but pin the no-mutation
     # property explicitly so a regression resurrecting an insert(0)
     # path would surface here).
     snapshot = list(top7._calls)
-    _bpo(h7)  # second pass
+    _rp(h7)  # second pass
     _check(top7._calls == snapshot,
            "attachment sector inheritance does not mutate attached leaf _calls")
 

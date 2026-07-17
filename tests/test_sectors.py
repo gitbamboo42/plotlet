@@ -282,11 +282,11 @@ def test_sectors_after_artist_still_remaps():
     c.coordinate(pt.CircularCoordinate()).sectors(
         {"g1": 100, "g2": 100}, column="grp",
     )
-    st = _replay(c._calls)
-    assert st["x_sectors"] is not None, "sectors recorded after artist must reach replay state"
+    state = _replay(c._calls)
+    assert state["x_sectors"] is not None, "sectors recorded after artist must reach replay state"
     # Both rows tagged grp=g1/g2 with the same local x=25. After remap,
     # g2's x must be offset to 25 + 100 = 125 (g1's offset is 0).
-    [artist] = st["artists"]
+    [artist] = state["artists"]
     assert artist["xs"] == [25.0, 125.0], (
         f"sector remap must offset g2's x by g1's length; got xs={artist['xs']!r}"
     )
@@ -295,7 +295,7 @@ def test_sectors_after_artist_still_remaps():
 def test_layout_sectors_cascade_no_leaf_mutation():
     """Regression: `Layout.sectors(...)` no longer fans out via insert(0)
     into each leaf's `_calls`. Instead the entry stays on the Layout's
-    own journal and `_build_panel_opts` prepends it via parent-chain
+    own journal and `_resolve_panels` prepends it via parent-chain
     cascade. This test pins that the leaf's journal is not touched, so
     a Layout-level sectors call composes cleanly with re-renders /
     fit() / regions() without leaking entries between calls."""

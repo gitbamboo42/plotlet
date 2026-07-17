@@ -38,7 +38,7 @@ ring panel's dims ARE the shared overlay canvas — plus the resolved
 title band (`IRLayout.coord_band`), and rehydration rebuilds the
 overlay plan from them, so the coord's `render_layout` emits without
 re-resolving or re-measuring (pinned: emit never touches
-`_build_panel_opts`).
+`_resolve_panels`).
 
 The resolved IR is one-way, not a round-trip peer: it deliberately
 drops what's needed to rebuild the journal. Same journal → same
@@ -47,7 +47,7 @@ gives a read-only JSON view for inspecting the pipeline (no loader, no
 version — a real wire form waits for a consumer).
 
 Draw-derived artist keys (`_color`, hist `_bin_groups`) are stamped at
-resolve time (`_build_panel_opts`), so the projection carries final
+resolve time (`_resolve_panels`), so the projection carries final
 colors and a rendered `ResolvedIR` stays field-equal to a fresh one.
 """
 from __future__ import annotations
@@ -55,7 +55,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from ..scales import _AxisDescriptor as IRScale
-from ._chrome_policy import resolve_axis_chrome
+from ._chrome_visibility import resolve_axis_chrome
 
 
 # ---------------------------------------------------------------------------
@@ -95,13 +95,24 @@ class IRPanel:
 
     Non-data leaves carry sizing plus their own config; `scales` /
     `artists` / `state` / `chrome` are empty for them.
+
+    Panel data appears at three altitudes, on purpose:
+      * `state` — the FULL replayed state dict, and the ONLY one the
+        emit pass reads (rehydration rebuilds the panel from it);
+      * `chrome` and `artists` — curated read-only views for humans and
+        tests. Emit never reads them; `chrome["visibility"]` in
+        particular is re-derived at emit time from `state` + the
+        hide/suppress flags (see `to_svg`).
+    The curation rules live in `_LIFTED_STATE_KEYS` (what `state` drops
+    because it was lifted to real fields) and `_extract_chrome` (which
+    keys the `chrome` view selects).
     """
     pid: int             # stable panel id within this ResolvedIR
     coord: IRCoord
     scales: dict         # {"x": IRScale, "y": IRScale} for data leaves
     artists: tuple       # curated view of state["artists"]
     chrome: dict         # curated identity/spine state + "visibility":
-                         # the decided draw-it? flags (see `_chrome_policy`)
+                         # the decided draw-it? flags (see `_chrome_visibility`)
     state: dict          # the FULL replayed state the emit pass draws from
                          # (minus "insets"/"coordinate", lifted to fields)
     attachments: dict    # {"left","right","top","bottom"} → tuple[IRPanel]
@@ -282,9 +293,9 @@ def _layout_to_ir(layout, panel_opts, states, pids):
     coord_plan = getattr(layout, "_coord_plan", None)
     if coord_plan is not None:
         states = {**states,
-                  **{id(l): st for l, st, _po in coord_plan.rings}}
+                  **{id(l): state for l, state, _po in coord_plan.rings}}
         panel_opts = {**panel_opts,
-                      **{id(l): po for l, _st, po in coord_plan.rings}}
+                      **{id(l): layout_opts for l, _st, layout_opts in coord_plan.rings}}
     share_x = _last_call(layout, "share_x")
     share_y = _last_call(layout, "share_y")
     gap = {"gap": layout._gap, "gap_x": layout._gap_x, "gap_y": layout._gap_y}
@@ -332,8 +343,8 @@ def _chart_to_ir(chart, panel_opts, states, pids):
     if chart._leaf_kind != "data":
         return _nondata_leaf_to_ir(chart, pids)
 
-    st = states.get(id(chart))
-    if st is None:
+    state = states.get(id(chart))
+    if state is None:
         # Not resolved by the plan this projection was taken from (an
         # inset's own attachment, say) — resolve it in isolation, the
         # same resolution its render would run.
@@ -341,19 +352,20 @@ def _chart_to_ir(chart, panel_opts, states, pids):
         sub = _build_plan(chart)
         return _chart_to_ir(chart, sub.panel_opts, sub.states, pids)
 
-    po = panel_opts.get(id(chart))
+    layout_opts = panel_opts.get(id(chart))
     scales = {}
-    if po and po.x_axis is not None:
-        scales["x"] = po.x_axis
-    if po and po.y_axis is not None:
-        scales["y"] = po.y_axis
+    if layout_opts and layout_opts.x_axis is not None:
+        scales["x"] = layout_opts.x_axis
+    if layout_opts and layout_opts.y_axis is not None:
+        scales["y"] = layout_opts.y_axis
 
-    coord_obj = st.get("coordinate")
+    coord_obj = state.get("coordinate")
     ir_coord = (_coord_to_ir(coord_obj, panel_opts, states, pids)
                 if coord_obj else IRCoord(kind="cartesian"))
 
-    artists = tuple(_artist_to_ir(a) for a in st.get("artists", ()))
-    state = {k: v for k, v in st.items() if k not in _LIFTED_STATE_KEYS}
+    artists = tuple(_artist_to_ir(a) for a in state.get("artists", ()))
+    projected_state = {k: v for k, v in state.items()
+                       if k not in _LIFTED_STATE_KEYS}
 
     attachments = {
         "left":   tuple(_chart_to_ir(a, panel_opts, states, pids)
@@ -374,16 +386,16 @@ def _chart_to_ir(chart, panel_opts, states, pids):
         for rect, inset_chart in chart._insets
     )
 
-    margin = dict(po.M_eff) if po and po.M_eff else dict(chart._margin)
-    hide = {s: getattr(po, f"hide_{s}", False) if po else False
+    margin = dict(layout_opts.M_eff) if layout_opts and layout_opts.M_eff else dict(chart._margin)
+    hide = {s: getattr(layout_opts, f"hide_{s}", False) if layout_opts else False
             for s in ("left", "right", "top", "bottom")}
-    suppress = {s: getattr(po, f"suppress_{s}_labels", False) if po else False
+    suppress = {s: getattr(layout_opts, f"suppress_{s}_labels", False) if layout_opts else False
                 for s in ("left", "right", "top", "bottom")}
-    chrome = _extract_chrome(st)
+    chrome = _extract_chrome(state)
     # The same decided flags the emit pass reads (via
     # `_resolution._resolve_panel_inputs`) — the projection shows what will be
     # drawn, not just the raw ingredients.
-    chrome["visibility"] = resolve_axis_chrome(st, po)
+    chrome["visibility"] = resolve_axis_chrome(state, layout_opts)
     share = {
         "x": pids.get(id(chart._share_x)) if chart._share_x is not None else None,
         "y": pids.get(id(chart._share_y)) if chart._share_y is not None else None,
@@ -395,7 +407,7 @@ def _chart_to_ir(chart, panel_opts, states, pids):
         scales=scales,
         artists=artists,
         chrome=chrome,
-        state=state,
+        state=projected_state,
         attachments=attachments,
         insets=insets,
         data_width=chart._data_width,
@@ -498,12 +510,12 @@ def _coerce_param(v, panel_opts, states, pids):
     return v
 
 
-def _extract_chrome(st):
+def _extract_chrome(state):
     """Chrome-relevant state fields for a data leaf: the curated
     identity fields plus per-target spine style overrides (only when
     set). Spine visibility is NOT copied here — it lives under the
     "visibility" key the caller adds with the decided per-axis draw
-    flags from `_chrome_policy.resolve_axis_chrome`, the one authoritative
+    flags from `_chrome_visibility.resolve_axis_chrome`, the one authoritative
     copy."""
     keys = (
         "title", "xlabel", "ylabel",
@@ -516,8 +528,8 @@ def _extract_chrome(st):
     )
     spine_vis = {"spine_top", "spine_bottom", "spine_left", "spine_right",
                  "spine_walls"}
-    chrome = {k: st[k] for k in keys if k in st and st[k] is not None}
-    chrome.update({k: v for k, v in st.items()
+    chrome = {k: state[k] for k in keys if k in state and state[k] is not None}
+    chrome.update({k: v for k, v in state.items()
                    if k.startswith("spine_") and k not in spine_vis
                    and v is not None})
     return chrome
@@ -643,9 +655,9 @@ def _rehydrate_panel(panel: "IRPanel", ctx, *, parent):
     # the lifted keys can be reinstated without touching the projection;
     # they're seeded here because the closed key set (`_PanelState`)
     # rejects writes of keys absent from the projection.
-    st = _PanelState({**panel.state, "coordinate": None, "insets": []})
+    state = _PanelState({**panel.state, "coordinate": None, "insets": []})
     if panel.coord.kind != "cartesian":
-        st["coordinate"] = _rehydrate_coord(panel.coord, ctx)
+        state["coordinate"] = _rehydrate_coord(panel.coord, ctx)
     node._last_M_eff = dict(panel.margin)
 
     insets = []
@@ -662,9 +674,9 @@ def _rehydrate_panel(panel: "IRPanel", ctx, *, parent):
         )
         insets.append((tuple(rect), inode))
         node._insets.append((tuple(rect), inode))
-    st["insets"] = insets
+    state["insets"] = insets
 
-    po = _PanelOpts(
+    layout_opts = _PanelOpts(
         x_axis=panel.scales.get("x"),
         y_axis=panel.scales.get("y"),
         hide_left=panel.hide["left"], hide_right=panel.hide["right"],
@@ -675,8 +687,8 @@ def _rehydrate_panel(panel: "IRPanel", ctx, *, parent):
         suppress_bottom_labels=panel.suppress["bottom"],
         M_eff=dict(panel.margin),
     )
-    ctx.states[id(node)] = st
-    ctx.panel_opts[id(node)] = po
+    ctx.states[id(node)] = state
+    ctx.panel_opts[id(node)] = layout_opts
     return node
 
 

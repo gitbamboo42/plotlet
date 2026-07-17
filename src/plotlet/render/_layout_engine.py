@@ -5,7 +5,7 @@ field protocol, so tests can poke engine functions with any tree that
 mirrors those fields.
 
 Used by both single-chart and multi-panel renders: a lone leaf is
-treated as a degenerate single-cell tree by `_build_panel_opts`, sharing
+treated as a degenerate single-cell tree by `_resolve_panels`, sharing
 the same coordination pipeline that multi-panel layouts use. This is
 what makes the outside-legend reservation and the per-leaf theme scoping
 have one source of truth.
@@ -87,7 +87,7 @@ def _node_style(node):
     directly by the rehydrator) — never the journal; `None` is a
     passthrough for `active_theme` / `active_font`. A node missing the
     fields was never materialized — same caller contract as
-    `_build_panel_opts` / `_measure` / `_allocate`; fail with the
+    `_resolve_panels` / `_measure` / `_allocate`; fail with the
     contract spelled out, not an incidental AttributeError."""
     if not hasattr(node, "_theme") or not hasattr(node, "_font"):
         raise AssertionError(
@@ -382,7 +382,7 @@ def _natural_size(root) -> tuple[int, int]:
 
     Mutates `root` — pass a deep copy if you need a non-destructive
     measurement. Used by `Chart.fit()`."""
-    _, states = _build_panel_opts(root)
+    _, states = _resolve_panels(root)
     # Legend leaves harvest their content size from sibling data leaves;
     # without this, layouts containing a layout-level legend would report
     # a stale 1×1 placeholder canvas.
@@ -453,7 +453,7 @@ _CASCADING_NAMES = frozenset({"sectors"})
 
 def _ancestor_calls(leaf) -> list[tuple]:
     """Collect cascadable `_calls` entries from `leaf`'s ancestors,
-    yielded root-first. Used by `_build_panel_opts` to prepend ancestor
+    yielded root-first. Used by `_resolve_panels` to prepend ancestor
     state declarations to the leaf's own `_calls` before `_replay`.
     Cascade replaces the old "Layout pushes into each leaf's _calls at
     index 0" propagation: Layout never mutates a leaf's journal;
@@ -472,7 +472,7 @@ def _ancestor_calls(leaf) -> list[tuple]:
     Entries returned in root-to-leaf order so they replay first;
     `_replay`'s sectors-to-front pass orders sectors among themselves
     by appearance, and a leaf's own sectors entry (later in the
-    combined list) wins via last-write-wins on `st[\"{axis}_sectors\"]`.
+    combined list) wins via last-write-wins on `state[\"{axis}_sectors\"]`.
     """
     # Walk only layout ancestors. An attached chart's `_parent` is its
     # host (a leaf), and an attached chart shares only one axis with
@@ -609,14 +609,14 @@ def _aspect_span(desc, axis: str) -> float:
     )
 
 
-def _aspect_dims(st, xd, yd, w: float, h: float, *,
+def _aspect_dims(state, xd, yd, w: float, h: float, *,
                  w_locked: bool, h_locked: bool) -> tuple[float, float]:
-    """Rederive one panel's data dims so `st["aspect"]` holds: one y data
+    """Rederive one panel's data dims so `state["aspect"]` holds: one y data
     unit spans `aspect` × the pixels of one x data unit. The width is the
     free variable's anchor (body-first: `data_width` is what the user
     declared) unless a share class already locks the height."""
-    r = st["aspect"]
-    if st.get("coordinate") is not None:
+    r = state["aspect"]
+    if state.get("coordinate") is not None:
         raise ValueError("c.aspect(...) applies to Cartesian panels only.")
     if xd.kind != yd.kind:
         raise ValueError(
@@ -916,8 +916,41 @@ def _propagate_grid_joins(node, out: dict[int, _PanelOpts]) -> None:
             _propagate_grid_joins(cell, out)
 
 
-def _build_panel_opts(root, *, measure_margins=True
-                      ) -> tuple[dict[int, _PanelOpts], dict[int, dict]]:
+def _replay_leaves(leaves) -> dict[int, dict]:
+    """Replay every data leaf's effective call list into its state dict.
+
+    Each leaf replays under its own theme so state defaults (spine
+    visibility, tick direction) and any measurement reads pick up the
+    theme's values. Multi-panel layouts may mix themes; each leaf
+    carries its own context.
+
+    Effective replay input per leaf: ancestor Layout cascade, then
+    attachment inheritance from the host (dampened sectors), then the
+    leaf's own `_calls`. Three sources, concatenated in priority
+    order — `_replay`'s sectors-to-front pass orders sectors among
+    themselves by appearance, and the leaf's own entry (last) wins
+    via last-write on `state["{axis}_sectors"]`. No node ever mutates
+    another node's journal."""
+    states = {}
+    for l in leaves:
+        with _node_style(l):
+            effective = (_ancestor_calls(l)
+                         + _attachments.attachment_inherited_calls(l)
+                         + l._calls)
+            state = _replay(effective)
+            state["insets"] = getattr(l, "_insets", [])
+            # Stamp draw-derived artist keys at resolve time — the
+            # resolved IR carries final colors and hist bins, and a
+            # rendered ResolvedIR stays field-equal to a fresh one
+            # (the draw-side recomputation is idempotent).
+            _prebin_hist(state)
+            _stamp_artist_colors(state)
+            states[id(l)] = state
+    return states
+
+
+def _resolve_panels(root, *, measure_margins=True
+                    ) -> tuple[dict[int, _PanelOpts], dict[int, dict]]:
     """One pass over the tree that produces (panel_opts, replayed states).
 
     For body-first leaves, also computes a measure-driven effective
@@ -942,47 +975,27 @@ def _build_panel_opts(root, *, measure_margins=True
     at entry). Internal callers (tests, debugging) that bypass
     `_build_plan` must materialize themselves first — same contract as
     `_measure`, `_allocate`, `_natural_size`."""
+    # Collect data leaves.
     leaves = [l for l in _iter_leaves(root) if l._leaf_kind == "data"]
-    # Replay each leaf under its own theme so state defaults (spine
-    # visibility, tick direction) and any measurement reads pick up the
-    # theme's values. Multi-panel layouts may mix themes; each leaf
-    # carries its own context.
-    #
-    # Effective replay input per leaf: ancestor Layout cascade, then
-    # attachment inheritance from the host (dampened sectors), then the
-    # leaf's own `_calls`. Three sources, concatenated in priority
-    # order — `_replay`'s sectors-to-front pass orders sectors among
-    # themselves by appearance, and the leaf's own entry (last) wins
-    # via last-write on `st["{axis}_sectors"]`. No node ever mutates
-    # another node's journal.
-    states = {}
-    for l in leaves:
-        with _node_style(l):
-            effective = (_ancestor_calls(l)
-                         + _attachments.attachment_inherited_calls(l)
-                         + l._calls)
-            st = _replay(effective)
-            st["insets"] = getattr(l, "_insets", [])
-            # Stamp draw-derived artist keys at resolve time — the
-            # resolved IR carries final colors and hist bins, and a
-            # rendered ResolvedIR stays field-equal to a fresh one
-            # (the draw-side recomputation is idempotent).
-            _prebin_hist(st)
-            _stamp_artist_colors(st)
-            states[id(l)] = st
-    # Descriptors before share scaling: both are pure data-space (no
-    # pixel dims involved), and the scaling pass needs the resolved
+    # Replay every leaf into its settled state dict.
+    states = _replay_leaves(leaves)
+    # Axis descriptors before share scaling: both are pure data-space
+    # (no pixel dims involved), and the scaling pass needs the resolved
     # domains to honor `c.aspect(...)` locks.
     x_desc, y_desc = _build_axis_descriptors(leaves, states)
     _apply_share_scaling(leaves, states, x_desc, y_desc)
+    # Blank per-leaf opts; the annotation passes below fill them in.
     panel_opts = {
         id(l): _PanelOpts(x_axis=x_desc[id(l)], y_axis=y_desc[id(l)])
         for l in leaves
     }
+    # Joined-edge annotation: siblings, attachments, then grid rows/cols.
     _annotate_collapses(root, states, panel_opts)
     _attachments.annotate_joined_pairs(leaves, states, panel_opts)
     _propagate_grid_joins(root, panel_opts)
+    # Move a host's title/subtitle to its outermost top attachment.
     _attachments.promote_titles(leaves, states)
+    # Margins: measure per leaf, align per row/column, grow canvases.
     if measure_margins:
         _compute_measured_margins(leaves, states, panel_opts)
         _coordinate_margins(root, panel_opts)
@@ -1005,14 +1018,14 @@ def _compute_measured_margins(leaves: list,
     values that affect margins (tick_length, font sizes, pad spec)
     reflect the leaf's theme overrides, not the ambient theme."""
     for leaf in leaves:
-        po = panel_opts[id(leaf)]
+        layout_opts = panel_opts[id(leaf)]
         with _node_style(leaf):
             M_floor = _enforce_floors(leaf._margin)
             M_req = _required_margin(states[id(leaf)],
                                      leaf._data_width,
                                      leaf._data_height,
-                                     po=po)
-        po.M_eff = {side: M_floor[side] + M_req[side] for side in M_floor}
+                                     layout_opts=layout_opts)
+        layout_opts.M_eff = {side: M_floor[side] + M_req[side] for side in M_floor}
 
 
 def _body_cell(cell, panel_opts: dict[int, _PanelOpts]) -> bool:
@@ -1036,8 +1049,8 @@ def _coordinate_pair(cells: list, panel_opts: dict[int, _PanelOpts],
     m1 = max(panel_opts[id(c)].M_eff[s1] for c in cells)
     m2 = max(panel_opts[id(c)].M_eff[s2] for c in cells)
     for c in cells:
-        po = panel_opts[id(c)]
-        po.M_eff = {**po.M_eff, s1: m1, s2: m2}
+        layout_opts = panel_opts[id(c)]
+        layout_opts.M_eff = {**layout_opts.M_eff, s1: m1, s2: m2}
 
 
 def _virtual_grid_children(node, inner_kind: str) -> list | None:
@@ -1201,10 +1214,17 @@ def _build_plan(root) -> RenderPlan:
     train axis descriptors, coordinate share scaling and margins, size
     legend leaves, and resolve every container-coord layout's overlay
     plan. Everything downstream (`_emit_plan`, and the coord
-    `render_layout` delegation) consumes the plan; nothing re-resolves."""
+    `render_layout` delegation) consumes the plan; nothing re-resolves.
+
+    Despite the pure-sounding name, this pass MUTATES the hydrated tree
+    in place: `_apply_share_scaling` writes `_data_width`/`_data_height`,
+    the margin passes write `_last_M_eff` and `_canvas_width`/
+    `_canvas_height`. Each mutating pass resets from the `_orig_*`
+    fields first, so re-running the whole pass is idempotent — see
+    those two functions for the per-field details."""
     from ._nodes import materialize
     materialize(root)
-    panel_opts, states = _build_panel_opts(root)
+    panel_opts, states = _resolve_panels(root)
     # Override each legend leaf's intrinsic _fig size with its
     # content-driven size before measure runs.
     from ._legend import _size_legends
@@ -1341,13 +1361,13 @@ def _emit_plan(plan: RenderPlan, outer=None) -> str:
             parts.append(leaf._diagram_inner)
             parts.append('</g>')
             continue
-        po = panel_opts[id(leaf)]
+        layout_opts = panel_opts[id(leaf)]
         # Coordinated margin from `_compute_measured_margins` (hide-aware
         # `_required_margin`); copied so per-leaf mutation can't leak back.
-        M_eff = dict(po.M_eff)
+        M_eff = dict(layout_opts.M_eff)
         iw = w - M_eff["left"] - M_eff["right"]
         ih = h - M_eff["top"] - M_eff["bottom"]
-        st = states[id(leaf)]
+        state = states[id(leaf)]
         transform = f'translate({coord(x + M_eff["left"])},{coord(y + M_eff["top"])})'
         # Per-leaf theme + font wrap both panel-opening attrs and inner
         # render, so frame draws (spines, ticks, text) read the leaf's
@@ -1358,13 +1378,13 @@ def _emit_plan(plan: RenderPlan, outer=None) -> str:
         with _node_style(leaf):
             # panel-bbox attr is documented as outer-SVG coords; add the
             # outer offset (ol, ot) since we live inside a translate wrapper.
-            parts.append(_panel_open(st, po, transform, M_eff, iw, ih,
+            parts.append(_panel_open(state, layout_opts, transform, M_eff, iw, ih,
                                      (x + ol, y + ot, w, h)))
             # Add the outer offset (ol, ot) so chrome bboxes land in
             # outer-SVG coords; matches the `<g transform="translate(ol, ot)">`
             # wrapper on the SVG side.
             with _regions.translate(x + M_eff["left"] + ol, y + M_eff["top"] + ot):
-                parts.append(_render_inner(st, iw, ih, M_eff, po,
+                parts.append(_render_inner(state, iw, ih, M_eff, layout_opts,
                                            clip_counter=clip_counter))
             parts.append('</g>')
         data_leaves.append(leaf)

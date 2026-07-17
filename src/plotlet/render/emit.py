@@ -10,12 +10,12 @@ attr helpers encode the AI-readable `data-plotlet-*` schema. Resolution
 
 The `from ._resolution import ...` list below is the contract's edge, enforced
 by `tests/test_import_boundary.py`: every *function* in it is one the
-resolution pass also calls (`_required_margin`, `_build_panel_opts`),
+resolution pass also calls (`_required_margin`, `_resolve_panels`),
 so re-running it here is idempotent — emit re-derives values the
 resolved IR already carries (necessary because the circular coord's
 per-leaf path reaches `_render_inner` with freshly replayed states),
 never new ones. Widening the list means emit is about to make a
-decision of its own — put the decided flag in `_chrome_policy` /
+decision of its own — put the decided flag in `_chrome_visibility` /
 resolution instead.
 """
 from __future__ import annotations
@@ -101,7 +101,7 @@ def _figure_root_attrs() -> str:
     })
 
 
-def _panel_attrs_and_meta(st, M, iw, ih, x_axis, y_axis,
+def _panel_attrs_and_meta(state, M, iw, ih, x_axis, y_axis,
                           panel_bbox: tuple[float, float, float, float]
                           ) -> tuple[str, str]:
     """Build (attrs, metadata) for one panel <g>. `attrs` is the attribute
@@ -109,9 +109,9 @@ def _panel_attrs_and_meta(st, M, iw, ih, x_axis, y_axis,
     children placed at the start of the <g> body (currently: x/y category
     lists)."""
     attrs = {"kind": "panel"}
-    if st["title"]:  attrs["title"]  = st["title"]
-    if st["xlabel"]: attrs["xlabel"] = st["xlabel"]
-    if st["ylabel"]: attrs["ylabel"] = st["ylabel"]
+    if state["title"]:  attrs["title"]  = state["title"]
+    if state["xlabel"]: attrs["xlabel"] = state["xlabel"]
+    if state["ylabel"]: attrs["ylabel"] = state["ylabel"]
     attrs["xscale"] = x_axis.kind
     attrs["yscale"] = y_axis.kind
 
@@ -170,7 +170,7 @@ def _wrap_artist(a, idx: int, body: str) -> str:
 # pixel materialization — decided descriptors → closures
 # ---------------------------------------------------------------------------
 
-def _build_xy_scales(st, iw, ih, panel_opts: _PanelOpts):
+def _build_xy_scales(state, iw, ih, panel_opts: _PanelOpts):
     """Instantiate pixel-bound scales. `panel_opts.x_axis` / `y_axis` come
     from the layout pre-pass (share-equivalence class descriptor). y-category
     runs top-to-bottom (cats on rows); y-linear/log runs cartesian unless
@@ -210,7 +210,7 @@ def _make_px_warp(project, iw, ih):
 # render orchestrator — generic over the registry
 # ---------------------------------------------------------------------------
 
-def _panel_open(st, panel_opts: _PanelOpts, transform: str,
+def _panel_open(state, panel_opts: _PanelOpts, transform: str,
                 M: dict, iw: float, ih: float,
                 panel_bbox: tuple[float, float, float, float]) -> str:
     """Open a panel `<g>` with transform + structural data attrs, and emit
@@ -219,7 +219,7 @@ def _panel_open(st, panel_opts: _PanelOpts, transform: str,
     `_render_inner(...)` then `</g>`."""
     x_axis = panel_opts.x_axis
     y_axis = panel_opts.y_axis
-    attrs, meta = _panel_attrs_and_meta(st, M, iw, ih, x_axis, y_axis, panel_bbox)
+    attrs, meta = _panel_attrs_and_meta(state, M, iw, ih, x_axis, y_axis, panel_bbox)
     return f'<g transform="{transform}"{attrs}>{meta}'
 
 
@@ -320,40 +320,40 @@ def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal, gradient_h,
     return ''.join(parts)
 
 
-def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
+def _render_inner(state, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
     """Body fragment for one panel — the string appended inside the panel
     `<g>` opened by `_panel_open`. Coordinates are panel-local: data area
     at `(0,0)`→`(iw,ih)`, chrome placed relative to `M`. `panel_opts`
     supplies axis descriptors and joined-side flags. `clip_counter` is
     shared across panels so coord-clip ids stay unique in the SVG."""
-    _prebin_hist(st)
+    _prebin_hist(state)
 
-    x_scale, y_scale, x_is_cat = _build_xy_scales(st, iw, ih, panel_opts)
-    inp = _resolve_panel_inputs(st, x_scale=x_scale, y_scale=y_scale,
-                                 dw=iw, dh=ih, po=panel_opts)
+    x_scale, y_scale, x_is_cat = _build_xy_scales(state, iw, ih, panel_opts)
+    inp = _resolve_panel_inputs(state, x_scale=x_scale, y_scale=y_scale,
+                                 dw=iw, dh=ih, layout_opts=panel_opts)
     # Label bands + raw chrome stack — both passes share the chrome dict
     # so we only compute it once per render. `label_bands` feeds the
     # inline-legend block; `chrome` feeds frame-label placement and the
     # top-legend gap below.
-    label_bands, chrome = _chrome.label_band_sizes(st, inp, iw, ih)
-    _x_sec = st["x_sectors"]
-    _y_sec = st["y_sectors"]
+    label_bands, chrome = _chrome.label_band_sizes(state, inp, iw, ih)
+    _x_sec = state["x_sectors"]
+    _y_sec = state["y_sectors"]
 
     # Color assignment — normally already stamped at resolve time
-    # (`_build_panel_opts` calls `_stamp_artist_colors` so the resolved
+    # (`_resolve_panels` calls `_stamp_artist_colors` so the resolved
     # IR carries final colors); recomputed here because this function
     # is also reached with freshly replayed states (the circular coord's
     # per-leaf render). Idempotent — identical values either way. Runs
     # before the legend harvest below: entries capture `_color` at
     # harvest time (a `legend={...}` override harvests from a *copy* of
     # the record, so later in-place stamping wouldn't reach it).
-    _stamp_artist_colors(st)
+    _stamp_artist_colors(state)
 
     # In-frame legend geometry is computed up front because a top-position
     # legend sits between the title and the data area — the title's y
     # offset depends on it. For other positions / inside / no legend, the
     # title stays at `_PADSPEC["title"]`.
-    leg = _inline_legend_layout(st, env=SimpleNamespace(
+    leg = _inline_legend_layout(state, env=SimpleNamespace(
         x_scale=x_scale, y_scale=y_scale, iw=iw, ih=ih))
     legend_pos = leg["position"] if leg is not None else None
     legend_gap = _LAYOUTSPEC["legend_gap"]
@@ -368,7 +368,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
     # Lifted above the grid block so the grid/spine/x-tick passes below can
     # check the coordinate's optional hooks (draw_x_frame, clip_path_d)
     # before emitting anything.
-    _coord_object = st.get("coordinate")
+    _coord_object = state.get("coordinate")
     _coord_project = _coord_object({}, iw, ih) if _coord_object is not None else None
 
     _has_coord_frame   = _coord_object is not None and hasattr(_coord_object, "draw_frame")
@@ -400,7 +400,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
     if _coord_object is not None:
         coord_short = type(_coord_object).__name__.removesuffix("Coordinate")
         supported = _COORD_SUPPORT.get(coord_short, set())
-        bad = sorted({a["type"] for a in st["artists"]
+        bad = sorted({a["type"] for a in state["artists"]
                       if a["type"] not in supported})
         if bad:
             coord_name = type(_coord_object).__name__
@@ -418,15 +418,15 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
     # ---- emit body fragment ----
     parts = []
 
-    if st["facecolor"] is not None:
-        parts.append(rect(0, 0, iw, ih, fill=resolve_color(st["facecolor"])))
+    if state["facecolor"] is not None:
+        parts.append(rect(0, 0, iw, ih, fill=resolve_color(state["facecolor"])))
 
     # grid — straight Cartesian lines; suppressed when the coordinate owns
     # the x-axis (e.g. CircularCoordinate) because horizontals/verticals
     # render outside the ring after the warp would naturally apply.
-    if st["grid"] and not _has_x_frame:
+    if state["grid"] and not _has_x_frame:
         gcol = _GRIDSPEC["color"]
-        which = st["grid_which"]
+        which = state["grid_which"]
         # Minor lines first so major lines paint on top where they meet.
         # grid(which="minor"/"both") is itself the explicit ask, so when
         # the user hasn't configured minor ticks the auto subdivisions
@@ -434,7 +434,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
         if which in ("minor", "both"):
             mw = _GRIDSPEC["minor_width"]; md = _GRIDSPEC["minor_dasharray"]
             if not x_is_cat:
-                xm = st["x_minor"]
+                xm = state["x_minor"]
                 for t in _chrome._resolve_minor_ticks(
                         xm if xm not in (None, False) else True,
                         x_scale, inp.x_ticks):
@@ -442,7 +442,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
                     parts.append(segment(x, 0, x, ih,
                                          color=gcol, width=mw, dash=md))
             if panel_opts.y_axis.kind != "category":
-                ym = st["y_minor"]
+                ym = state["y_minor"]
                 for t in _chrome._resolve_minor_ticks(
                         ym if ym not in (None, False) else True,
                         y_scale, inp.y_ticks):
@@ -486,11 +486,11 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
     # AI consumers can read structural attrs (type, label, color, range,
     # etc.) without parsing geometry.
     by_layer = {"background": [], "data": [], "foreground": []}
-    for idx, a in enumerate(st["artists"]):
+    for idx, a in enumerate(state["artists"]):
         spec = get_artist(a["type"])
         if spec is None: continue
         by_layer[spec.layer].append((idx, a))
-    clip_data = st.get("clip", True)
+    clip_data = state.get("clip", True)
 
     # For coordinate frames the clip region is the projected data area,
     # not the Cartesian rectangle. By default we emit a polygon from the
@@ -548,7 +548,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
             parts.append('</g>' if _clip_id else '</svg>')
 
     parts.extend(_chrome.emit_chrome(
-        st=st, inp=inp, iw=iw, ih=ih,
+        state=state, inp=inp, iw=iw, ih=ih,
         coord_object=_coord_object, coord_project=_coord_project,
         has_coord_frame=_has_coord_frame, has_x_frame=_has_x_frame,
         has_x_sector_chrome=_has_x_sector_chrome,
@@ -565,7 +565,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
     bottom_legend_outset = (leg["lh"] + legend_gap
                             if legend_pos == "bottom" else 0)
     parts.extend(_chrome.emit_frame_labels(
-        st, inp, iw, ih, chrome, top_legend_outset=top_legend_outset,
+        state, inp, iw, ih, chrome, top_legend_outset=top_legend_outset,
         bottom_legend_outset=bottom_legend_outset,
     ))
 
@@ -632,7 +632,7 @@ def _render_inner(st, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
     # sit on top of the data layer (and on top of the legend). Wrapped
     # in a data-area clip so the inset's canvas can't paint over the
     # parent's title/labels if its own margins overhang.
-    insets = st.get("insets") or []
+    insets = state.get("insets") or []
     if insets:
         parts.append(f'<svg x="0" y="0" width="{iw:.10g}" height="{ih:.10g}" overflow="hidden">')
     for inset_rect, inset_chart in insets:

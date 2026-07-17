@@ -83,7 +83,7 @@ from ..registry import declare_coord_support
 
 
 
-def _circular_x_tick_labels(st, dw):
+def _circular_x_tick_labels(state, dw):
     """The x-tick label strings the ring will actually draw.
 
     Mirrors the render's resolution (``_resolve_panel_inputs``) exactly, so
@@ -96,30 +96,30 @@ def _circular_x_tick_labels(st, dw):
     from ._resolution import (_axis_descriptor, _auto_major_ticks,
                        _resolve_tick_formatter)
     from .._spec import _FRAME
-    x_axis = _axis_descriptor([st], "x")
+    x_axis = _axis_descriptor([state], "x")
     x_scale = (x_axis.build(0, dw)
                if (x_axis.kind == "category" or not x_axis.flip)
                else x_axis.build(dw, 0))
-    x_ticks = (st["x_ticks"] if st["x_ticks"] is not None
+    x_ticks = (state["x_ticks"] if state["x_ticks"] is not None
                else _auto_major_ticks(x_scale, max(2, min(8, int(dw // _FRAME["tick_density_x_px"]))),
-                                      st["x_step"], st["x_count"]))
-    x_fmt = _resolve_tick_formatter(st["x_format"], x_scale)
-    x_labels = (st["x_labels"] if st["x_labels"] is not None
+                                      state["x_step"], state["x_count"]))
+    x_fmt = _resolve_tick_formatter(state["x_format"], x_scale)
+    x_labels = (state["x_labels"] if state["x_labels"] is not None
                 else [x_fmt(t) for t in x_ticks])
     # Continuous sectors: auto ticks are suppressed; explicit ticks are
     # replicated per-sector. Same branch as `_resolve_panel_inputs`.
-    x_sec = st.get("x_sectors")
+    x_sec = state.get("x_sectors")
     if x_sec is not None and x_sec.kind == "continuous":
         _, x_labels = x_sec.expand_ticks(
-            x_ticks if st["x_ticks"] is not None else [],
-            x_labels if st["x_ticks"] is not None else [])
+            x_ticks if state["x_ticks"] is not None else [],
+            x_labels if state["x_ticks"] is not None else [])
     return x_labels
 
 
-def _circular_chrome_pad(st, dw) -> float:
+def _circular_chrome_pad(state, dw) -> float:
     """Radial pixels of chrome past the outer arc for the outermost ring.
 
-    Visibility comes from the same `_chrome_policy.resolve_axis_chrome` the
+    Visibility comes from the same `_chrome_visibility.resolve_axis_chrome` the
     emit pass reads — rings carry no share-pair hiding or label
     suppression, so the layout flags are all False. Only the radial
     stacking arithmetic is local: it mirrors the ``draw_x_chrome`` /
@@ -133,22 +133,22 @@ def _circular_chrome_pad(st, dw) -> float:
     """
     from .._spec import SPEC, _FRAME, _FONTSPEC
     from ..draw import cap_height, measure_text
-    from ._chrome_policy import resolve_axis_chrome
+    from ._chrome_visibility import resolve_axis_chrome
 
-    pol = resolve_axis_chrome(st)["x"]
+    pol = resolve_axis_chrome(state)["x"]
 
     tl        = _FRAME["tick_length"]
     tp        = _FRAME["tick_pad"]
     tick_size = _FONTSPEC["tick_size"]
-    x_size    = st["x_fontsize"] if st["x_fontsize"] is not None else tick_size
-    x_ticks_v = st.get("x_ticks")   # None=auto, []=suppressed, [...]= explicit
+    x_size    = state["x_fontsize"] if state["x_fontsize"] is not None else tick_size
+    x_ticks_v = state.get("x_ticks")   # None=auto, []=suppressed, [...]= explicit
 
     x_chrome = 0.0
-    labels = (_circular_x_tick_labels(st, dw)
+    labels = (_circular_x_tick_labels(state, dw)
               if (pol["draw_labels"] and x_ticks_v != []) else [])
     if labels:
-        x_style  = st.get("x_fontstyle") or "normal"
-        x_weight = st.get("x_fontweight") or "normal"
+        x_style  = state.get("x_fontstyle") or "normal"
+        x_weight = state.get("x_fontweight") or "normal"
         max_w  = max(measure_text(l, x_size, x_style, x_weight) for l in labels)
         x_chrome = tl + tp + max_w
     elif pol["draw_marks"] and x_ticks_v != []:
@@ -158,7 +158,7 @@ def _circular_chrome_pad(st, dw) -> float:
         x_chrome = tl                # marks only, no labels (or none drawn)
 
     # Sector labels stack outside tick chrome (same rule as linear)
-    x_sec = st.get("x_sectors")
+    x_sec = state.get("x_sectors")
     if pol["draw_sector_labels"]:
         sec_size  = x_sec.fontsize if x_sec.fontsize is not None else SPEC["sectors"]["label_size"]
         sec_cap   = cap_height(sec_size)
@@ -369,17 +369,17 @@ class CircularCoordinate:
         fixpoint: auto-tick density reads the t-axis pixel span (= W),
         which itself depends on the pad. Tick count is monotone in the
         span and capped, so this settles in one or two rounds."""
-        from ._layout_engine import _build_panel_opts
+        from ._layout_engine import _resolve_panels
         D = self._resolved_diameter()
         # State-only probe: the chrome pad reads the replayed states,
         # never margins or canvases — those are the circular resolve's
         # to dictate, so the rect margin measurement is skipped.
-        _, probe_states = _build_panel_opts(root, measure_margins=False)
-        st = probe_states[id(leaves[0])]
-        pad = _circular_chrome_pad(st, D)
+        _, probe_states = _resolve_panels(root, measure_margins=False)
+        state = probe_states[id(leaves[0])]
+        pad = _circular_chrome_pad(state, D)
         for _ in range(4):
             W = int(math.ceil(D + 2 * pad))
-            pad2 = _circular_chrome_pad(st, W)
+            pad2 = _circular_chrome_pad(state, W)
             if pad2 == pad:
                 break
             pad = pad2
@@ -443,7 +443,7 @@ class CircularCoordinate:
         replay it into a state dict. Caches the plan on `root` so
         `layout_size` and `render_layout` never re-probe a spliced
         tree."""
-        from ._layout_engine import _build_panel_opts, _title_band_h
+        from ._layout_engine import _resolve_panels, _title_band_h
         from ._resolution import TICK_CONTENT_KW, _expand_frame_defaults
 
         leaves = list(root._iter_leaves())
@@ -554,7 +554,7 @@ class CircularCoordinate:
             leaf._data_width  = W
             leaf._data_height = H
             # `_orig_data_*` too: the share-scaling reset inside
-            # `_build_panel_opts` restores dims from these, and once the
+            # `_resolve_panels` restores dims from these, and once the
             # leaf is spliced onto the shared overlay canvas the ring
             # dims ARE its declared dims — the pre-splice user value has
             # no consumer left.
@@ -570,16 +570,16 @@ class CircularCoordinate:
             # zero margin is assigned as the truth, and the leaf records
             # what actually renders: a zero-margin panel on the W×H
             # overlay canvas (emit draws with `_ZERO_MARGIN`).
-            _panel_opts, _states = _build_panel_opts(leaf,
+            _panel_opts, _states = _resolve_panels(leaf,
                                                      measure_margins=False)
-            po = _panel_opts[id(leaf)]
-            po.M_eff = {"left": 0, "right": 0, "top": 0, "bottom": 0}
+            layout_opts = _panel_opts[id(leaf)]
+            layout_opts.M_eff = {"left": 0, "right": 0, "top": 0, "bottom": 0}
             # Share-scaling's aspect rederivation is the one canvas
             # writer left inside the pre-pass — re-force after it.
             leaf._canvas_width  = W
             leaf._canvas_height = H
-            leaf._last_M_eff = dict(po.M_eff)
-            return leaf, _states[id(leaf)], po
+            leaf._last_M_eff = dict(layout_opts.M_eff)
+            return leaf, _states[id(leaf)], layout_opts
 
         rings = [_resolve_leaf(leaf, c, is_outermost=(i == 0))
                  for i, (leaf, c) in enumerate(zip(leaves, leaf_coords))]
@@ -645,15 +645,15 @@ class CircularCoordinate:
         W, H, band = plan.W, plan.H, plan.band
 
         bodies = []
-        for leaf, st, po in plan.rings:
+        for leaf, state, layout_opts in plan.rings:
             with _node_style(leaf):
                 # Emit just the panel body (no <svg> wrapper) — the
                 # caller concatenates each leaf's body into the shared
                 # overlay canvas (below the title band, when present).
                 with _regions.translate(0, band):
-                    inner = _render_inner(st, W, H, _ZERO_MARGIN, po,
+                    inner = _render_inner(state, W, H, _ZERO_MARGIN, layout_opts,
                                           clip_counter=_clip_counter)
-                bodies.append(_panel_open(st, po, "translate(0,0)",
+                bodies.append(_panel_open(state, layout_opts, "translate(0,0)",
                                           _ZERO_MARGIN, W, H, (0, 0, W, H))
                               + inner + '</g>')
 

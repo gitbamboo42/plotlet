@@ -77,7 +77,7 @@ def test_resolve_structural(label, fn):
             assert isinstance(artist, IRArtist)
             assert isinstance(artist.kind, str) and artist.kind != "unknown"
         # Decided chrome visibility rides on every data panel — the
-        # same flags the emit pass reads (see render/_chrome_policy.py).
+        # same flags the emit pass reads (see render/_chrome_visibility.py).
         vis = panel.chrome["visibility"]
         assert set(vis["spines"]) == {"top", "bottom", "left", "right",
                                       "walls"}
@@ -262,21 +262,21 @@ def test_resolved_ir_stable_under_render():
                          ids=["chart", "layout", "circular"])
 def test_emit_never_resolves(build):
     """Once resolved, emitting runs zero resolution — `to_svg()` on a
-    ResolvedIR must not touch `_build_panel_opts`, circular included
+    ResolvedIR must not touch `_resolve_panels`, circular included
     (its overlay plan is rebuilt from projected ring states)."""
     from plotlet.render import _layout_engine
 
     rir = pt.to_ir(build()).resolve()
-    orig = _layout_engine._build_panel_opts
+    orig = _layout_engine._resolve_panels
 
     def forbidden(root):
         raise AssertionError("emit re-entered resolution")
 
-    _layout_engine._build_panel_opts = forbidden
+    _layout_engine._resolve_panels = forbidden
     try:
         svg = rir.to_svg()
     finally:
-        _layout_engine._build_panel_opts = orig
+        _layout_engine._resolve_panels = orig
     assert svg.lstrip().startswith("<svg")
 
 
@@ -288,15 +288,15 @@ def test_render_resolves_exactly_once():
     from plotlet.render import _layout_engine
 
     calls = {"n": 0}
-    orig = _layout_engine._build_panel_opts
+    orig = _layout_engine._resolve_panels
 
     def counting(root):
         calls["n"] += 1
         return orig(root)
 
-    _layout_engine._build_panel_opts = counting
+    _layout_engine._resolve_panels = counting
     try:
         _rect_chart().to_svg()
     finally:
-        _layout_engine._build_panel_opts = orig
+        _layout_engine._resolve_panels = orig
     assert calls["n"] == 1

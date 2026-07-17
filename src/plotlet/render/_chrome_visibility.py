@@ -1,4 +1,4 @@
-"""Chrome visibility policy — decided per-panel "draw it?" flags.
+"""Chrome visibility — decided per-panel "draw it?" flags.
 
 `resolve_axis_chrome` combines the replayed chart state with the layout
 pre-pass flags (share-pair side hiding, tick-label suppression) into
@@ -20,10 +20,10 @@ here instead of gating at the emit site.
 _SIDES = ("top", "bottom", "left", "right")
 
 
-def resolve_axis_chrome(st, po=None):
+def resolve_axis_chrome(state, layout_opts=None):
     """Decide chrome visibility for one data panel.
 
-    `st` is the replayed chart state; `po` is the panel's layout
+    `state` is the replayed chart state; `layout_opts` is the panel's layout
     pre-pass `_PanelOpts` (or `None` for a panel outside any layout
     pass, e.g. a circular ring) — its `hide_*` flags mark sides joined
     to a share-pair neighbor, its `suppress_*_labels` flags mark sides
@@ -59,36 +59,36 @@ def resolve_axis_chrome(st, po=None):
     """
     from ..registry import get_artist
 
-    if po is None:
+    if layout_opts is None:
         hide = suppress = {side: False for side in _SIDES}
     else:
-        hide = {side: getattr(po, f"hide_{side}") for side in _SIDES}
-        suppress = {side: getattr(po, f"suppress_{side}_labels")
+        hide = {side: getattr(layout_opts, f"hide_{side}") for side in _SIDES}
+        suppress = {side: getattr(layout_opts, f"suppress_{side}_labels")
                     for side in _SIDES}
 
     # Artists that span sectors (chord_links, ribbons) suppress the
     # x-axis walls. y-sector walls have no crossing artists today.
     x_crossers = any(
         (spec := get_artist(a["type"])) is not None and spec.crosses_sectors
-        for a in st["artists"]
+        for a in state["artists"]
     )
 
-    spines = {side: st[f"spine_{side}"] for side in _SIDES}
-    spines["walls"] = st["spine_walls"]
+    spines = {side: state[f"spine_{side}"] for side in _SIDES}
+    spines["walls"] = state["spine_walls"]
 
     def _axis(axis):
-        side = st[f"{axis}_side"]
+        side = state[f"{axis}_side"]
         hidden = hide[side]
-        draw_marks = st[f"{axis}_marks"] and not hidden
-        draw_labels = st[f"{axis}_show_labels"] and not suppress[side]
-        sec = st[f"{axis}_sectors"]
+        draw_marks = state[f"{axis}_marks"] and not hidden
+        draw_labels = state[f"{axis}_show_labels"] and not suppress[side]
+        sec = state[f"{axis}_sectors"]
         return {
             "side": side,
             "hidden": hidden,
             "draw_marks": draw_marks,
-            "outward_mark": draw_marks and st[f"{axis}_direction"] != "in",
+            "outward_mark": draw_marks and state[f"{axis}_direction"] != "in",
             "draw_labels": draw_labels,
-            "draw_axis_label": bool(st[f"{axis}label"]) and not hidden,
+            "draw_axis_label": bool(state[f"{axis}label"]) and not hidden,
             "draw_sector_dividers": (sec is not None and bool(sec.divider)
                                      and spines["walls"]
                                      and not (axis == "x" and x_crossers)),

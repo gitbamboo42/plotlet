@@ -173,7 +173,7 @@ def _is_sectors_call(call, axis: str) -> bool:
 def attachment_inherited_calls(leaf) -> list[tuple]:
     """Sector entries that an attached leaf inherits from its host —
     returned as a list of journal entries, *not* inserted into the
-    leaf's `_calls`. Callers in the render path (`_build_panel_opts`)
+    leaf's `_calls`. Callers in the render path (`_resolve_panels`)
     prepend the result to the leaf's effective replay input.
 
     For each axis the attachment auto-shares with its host

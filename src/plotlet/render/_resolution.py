@@ -35,7 +35,7 @@ from ..scales import (_nice_domain, _fmt_tick, _to_epoch,
 from ..sectors import SectoredValue
 from ..draw import measure_text, text_block_height
 from . import _chrome
-from ._chrome_policy import resolve_axis_chrome
+from ._chrome_visibility import resolve_axis_chrome
 from ..utils import (hist_bin_edges, hist_bin_counts, hist_transform,
                      collect_categories, group_color)
 from ..registry import get_artist
@@ -88,7 +88,7 @@ class _PanelOpts:
     M_eff:       dict | None = None
 
 
-def _record_scale(st, axis, args, kw, *, from_default=False):
+def _record_scale(state, axis, args, kw, *, from_default=False):
     """Decode an xscale()/yscale() call into state.
 
     `args[0]` is the scale kind ("linear", "log", "symlog", "sqrt",
@@ -101,17 +101,17 @@ def _record_scale(st, axis, args, kw, *, from_default=False):
     instead of `<axis>_order`, so a peer artist's `axis_order` hook can
     win over an artist-suggested order while a user-explicit
     `c.xscale(order=...)` still wins over both."""
-    st[f"{axis}scale"] = args[0]
+    state[f"{axis}scale"] = args[0]
     if "order" in kw:
         target = f"{axis}_order_default" if from_default else f"{axis}_order"
-        st[target] = list(kw["order"])
-    if "padding" in kw:   st[f"{axis}_padding"]   = kw["padding"]
-    if "linthresh" in kw: st[f"{axis}_linthresh"] = float(kw["linthresh"])
-    if "exponent" in kw:  st[f"{axis}_exponent"]  = float(kw["exponent"])
-    if "reverse" in kw:   st[f"{axis}_reverse"]   = bool(kw["reverse"])
-    if "splits" in kw:    st[f"{axis}_splits"]    = list(kw["splits"]) if kw["splits"] else None
-    if "split_gap" in kw: st[f"{axis}_split_gap"] = float(kw["split_gap"])
-    if "groups" in kw:    st[f"{axis}_groups"]    = dict(kw["groups"]) if kw["groups"] else None
+        state[target] = list(kw["order"])
+    if "padding" in kw:   state[f"{axis}_padding"]   = kw["padding"]
+    if "linthresh" in kw: state[f"{axis}_linthresh"] = float(kw["linthresh"])
+    if "exponent" in kw:  state[f"{axis}_exponent"]  = float(kw["exponent"])
+    if "reverse" in kw:   state[f"{axis}_reverse"]   = bool(kw["reverse"])
+    if "splits" in kw:    state[f"{axis}_splits"]    = list(kw["splits"]) if kw["splits"] else None
+    if "split_gap" in kw: state[f"{axis}_split_gap"] = float(kw["split_gap"])
+    if "groups" in kw:    state[f"{axis}_groups"]    = dict(kw["groups"]) if kw["groups"] else None
 
 
 # xticks()/yticks() kwargs that decide tick CONTENT — which ticks exist
@@ -124,7 +124,7 @@ def _record_scale(st, axis, args, kw, *, from_default=False):
 TICK_CONTENT_KW = frozenset({"ticks", "step", "count", "format", "minor"})
 
 
-def _record_ticks(st, axis, args, kw):
+def _record_ticks(state, axis, args, kw):
     """Decode the xticks()/yticks() call into state.
 
     Signature: xticks(ticks=None, labels=None, *, rotation=0, fontsize=None,
@@ -134,12 +134,12 @@ def _record_ticks(st, axis, args, kw):
     rotates without disturbing auto positions.
     """
     if args:
-        st[f"{axis}_ticks"] = list(args[0]) if args[0] is not None else None
+        state[f"{axis}_ticks"] = list(args[0]) if args[0] is not None else None
         if len(args) > 1 and args[1] is not None:
-            st[f"{axis}_labels"] = list(args[1])
+            state[f"{axis}_labels"] = list(args[1])
     if "ticks" in kw:
         v = kw["ticks"]
-        st[f"{axis}_ticks"] = list(v) if v is not None else None
+        state[f"{axis}_ticks"] = list(v) if v is not None else None
     if "labels" in kw:
         v = kw["labels"]
         if v is False:
@@ -148,20 +148,20 @@ def _record_ticks(st, axis, args, kw):
             # tick marks are meant as visual cues but their numeric
             # labels would crowd a different label (e.g. a sector name
             # as xlabel under per-sector tick marks).
-            st[f"{axis}_show_labels"] = False
+            state[f"{axis}_show_labels"] = False
         else:
-            st[f"{axis}_labels"] = list(v) if v is not None else None
-    if "rotation" in kw:  st[f"{axis}_rotation"]  = kw["rotation"]
-    if "fontsize" in kw:  st[f"{axis}_fontsize"]  = kw["fontsize"]
-    if "fontstyle" in kw: st[f"{axis}_fontstyle"] = kw["fontstyle"]
-    if "fontweight" in kw: st[f"{axis}_fontweight"] = kw["fontweight"]
-    if "decoration" in kw: st[f"{axis}_decoration"] = kw["decoration"]
-    if "direction" in kw: st[f"{axis}_direction"] = kw["direction"]
-    if "marks" in kw:     st[f"{axis}_marks"]     = bool(kw["marks"])
-    if "format" in kw:    st[f"{axis}_format"]    = kw["format"]
-    if "minor" in kw:     st[f"{axis}_minor"]     = kw["minor"]
-    if "step" in kw:      st[f"{axis}_step"]      = float(kw["step"])
-    if "count" in kw:     st[f"{axis}_count"]     = int(kw["count"])
+            state[f"{axis}_labels"] = list(v) if v is not None else None
+    if "rotation" in kw:  state[f"{axis}_rotation"]  = kw["rotation"]
+    if "fontsize" in kw:  state[f"{axis}_fontsize"]  = kw["fontsize"]
+    if "fontstyle" in kw: state[f"{axis}_fontstyle"] = kw["fontstyle"]
+    if "fontweight" in kw: state[f"{axis}_fontweight"] = kw["fontweight"]
+    if "decoration" in kw: state[f"{axis}_decoration"] = kw["decoration"]
+    if "direction" in kw: state[f"{axis}_direction"] = kw["direction"]
+    if "marks" in kw:     state[f"{axis}_marks"]     = bool(kw["marks"])
+    if "format" in kw:    state[f"{axis}_format"]    = kw["format"]
+    if "minor" in kw:     state[f"{axis}_minor"]     = kw["minor"]
+    if "step" in kw:      state[f"{axis}_step"]      = float(kw["step"])
+    if "count" in kw:     state[f"{axis}_count"]     = int(kw["count"])
     # Primary axis placement. Matches plotly's `side`, ggplot2's `position`,
     # d3's axisTop/axisRight. Moves the spine, ticks, labels and the
     # xlabel/ylabel as a single block to the named edge.
@@ -170,10 +170,10 @@ def _record_ticks(st, axis, args, kw):
         if kw["side"] not in valid:
             raise ValueError(f"{axis}ticks(side=...) must be one of {valid}, "
                              f"got {kw['side']!r}")
-        st[f"{axis}_side"] = kw["side"]
+        state[f"{axis}_side"] = kw["side"]
 
 
-def _sector_remap_data(call_kw, st):
+def _sector_remap_data(call_kw, state):
     """Offset an artist call's x/y values into global sector coordinates
     when continuous sectors are active on that axis.
 
@@ -197,8 +197,8 @@ def _sector_remap_data(call_kw, st):
     new_cols = {}
     consumed = set()      # per-endpoint sector kwargs eaten by remap
     for axis in ("x", "y"):
-        sec     = st[f"{axis}_sectors"]
-        sec_col = st[f"{axis}_sector_column"]
+        sec     = state[f"{axis}_sectors"]
+        sec_col = state[f"{axis}_sector_column"]
         if sec is None or sec.kind != "continuous":
             continue
         # Resolve sector names → indices once; SectoredValue carries the
@@ -325,7 +325,7 @@ def _replay(calls):
     """Walk a Chart's recorded calls into a state dict consumed by the
     renderer. Pure function of `calls` and the artist registry — same input
     + same registry → same output."""
-    st = _PanelState({
+    state = _PanelState({
         "artists": [], "title": "", "subtitle": "", "caption": "",
         "xlabel": "", "ylabel": "",
         "xlim": None, "ylim": None, "xscale": "linear", "yscale": "linear",
@@ -400,7 +400,7 @@ def _replay(calls):
         "facecolor": None,
         "coordinate": None,
         # Inset panels bound to this chart — overwritten by the resolve
-        # pass right after replay (`_build_panel_opts`).
+        # pass right after replay (`_resolve_panels`).
         "insets": [],
         # Data-space aspect-ratio lock (mpl `set_aspect` / ggplot
         # `coord_fixed`). None = free; a number r pins one y data unit
@@ -430,7 +430,7 @@ def _replay(calls):
     #     `coordinate` returns self, so the trailing `.sectors()` lands
     #     after any prior artist) still applies its sectors.
     #   - Ancestor sector entries prepended by the parent-cascade walk
-    #     (in `_build_panel_opts`) still apply, then a leaf-level
+    #     (in `_resolve_panels`) still apply, then a leaf-level
     #     `c.sectors(...)` later in the list overwrites (last-write-wins).
     # Sort is stable, so cascade order is preserved among sectors.
     calls = sorted(_expand_frame_defaults(calls),
@@ -476,26 +476,26 @@ def _replay(calls):
             # Silent passthrough when the data lacks the sector column
             # (cross-sector annotations like reflines or single-value
             # artists).
-            if st["x_sectors"] is not None or st["y_sectors"] is not None:
-                call_kw = _sector_remap_data(call_kw, st)
+            if state["x_sectors"] is not None or state["y_sectors"] is not None:
+                call_kw = _sector_remap_data(call_kw, state)
             result = spec.record(*call_args, **call_kw)
             if isinstance(result, list):
-                st["artists"].extend(result)
+                state["artists"].extend(result)
             else:
-                st["artists"].append(result)
-        elif name == "title":  st["title"] = args[0]
-        elif name == "subtitle": st["subtitle"] = args[0]
-        elif name == "caption":  st["caption"] = args[0]
-        elif name == "xlabel": st["xlabel"] = args[0]
-        elif name == "ylabel": st["ylabel"] = args[0]
-        elif name == "xlim":   st["xlim"] = (args[0], args[1])
-        elif name == "ylim":   st["ylim"] = (args[0], args[1])
-        elif name == "xscale": _record_scale(st, "x", args, kw, from_default=from_default)
-        elif name == "yscale": _record_scale(st, "y", args, kw, from_default=from_default)
-        elif name == "xticks": _record_ticks(st, "x", args, kw)
-        elif name == "yticks": _record_ticks(st, "y", args, kw)
-        elif name == "x_expand": st["x_expand"] = _normalize_expand(args)
-        elif name == "y_expand": st["y_expand"] = _normalize_expand(args)
+                state["artists"].append(result)
+        elif name == "title":  state["title"] = args[0]
+        elif name == "subtitle": state["subtitle"] = args[0]
+        elif name == "caption":  state["caption"] = args[0]
+        elif name == "xlabel": state["xlabel"] = args[0]
+        elif name == "ylabel": state["ylabel"] = args[0]
+        elif name == "xlim":   state["xlim"] = (args[0], args[1])
+        elif name == "ylim":   state["ylim"] = (args[0], args[1])
+        elif name == "xscale": _record_scale(state, "x", args, kw, from_default=from_default)
+        elif name == "yscale": _record_scale(state, "y", args, kw, from_default=from_default)
+        elif name == "xticks": _record_ticks(state, "x", args, kw)
+        elif name == "yticks": _record_ticks(state, "y", args, kw)
+        elif name == "x_expand": state["x_expand"] = _normalize_expand(args)
+        elif name == "y_expand": state["y_expand"] = _normalize_expand(args)
         elif name == "spines":
             # Top-level color/width/linestyle = base style, inherited by
             # any side and by walls unless overridden. Per-target value
@@ -503,44 +503,44 @@ def _replay(calls):
             # dict ({color, width, linestyle, visible}, visible defaults
             # True). "walls" is the inter-sector wall target.
             for k in ("color", "width", "linestyle"):
-                if k in kw: st[f"spine_base_{k}"] = kw[k]
+                if k in kw: state[f"spine_base_{k}"] = kw[k]
             for target in ("top", "right", "bottom", "left", "walls"):
                 if target not in kw: continue
                 v = kw[target]
                 if isinstance(v, dict):
-                    st[f"spine_{target}"] = bool(v.get("visible", True))
+                    state[f"spine_{target}"] = bool(v.get("visible", True))
                     for attr in ("color", "width", "linestyle"):
-                        if attr in v: st[f"spine_{target}_{attr}"] = v[attr]
+                        if attr in v: state[f"spine_{target}_{attr}"] = v[attr]
                 else:
-                    st[f"spine_{target}"] = bool(v)
+                    state[f"spine_{target}"] = bool(v)
         elif name == "gridlines":
             # c.gridlines() / c.gridlines(False) toggle; c.gridlines("both")
             # or c.gridlines(which="minor") select which tick set draws lines.
             v = args[0] if args else True
             if isinstance(v, str):
-                st["grid"] = True
-                st["grid_which"] = v
+                state["grid"] = True
+                state["grid_which"] = v
             else:
-                st["grid"] = bool(v)
+                state["grid"] = bool(v)
             if "which" in kw:
-                st["grid_which"] = kw["which"]
-            if st["grid_which"] not in ("major", "minor", "both"):
+                state["grid_which"] = kw["which"]
+            if state["grid_which"] not in ("major", "minor", "both"):
                 raise ValueError(
-                    f"c.gridlines(which={st['grid_which']!r}) — pass "
+                    f"c.gridlines(which={state['grid_which']!r}) — pass "
                     f"\"major\", \"minor\", or \"both\"."
                 )
         elif name == "legend":
-            st["legend"] = (args[0] if args else True)
+            state["legend"] = (args[0] if args else True)
             if "position" in kw:
-                st["legend_position"] = kw["position"]
+                state["legend_position"] = kw["position"]
             if "ncols" in kw:
-                st["legend_ncols"] = kw["ncols"]
+                state["legend_ncols"] = kw["ncols"]
             if "reverse" in kw:
-                st["legend_reverse"] = kw["reverse"]
+                state["legend_reverse"] = kw["reverse"]
             if "entries" in kw:
-                st["legend_manual"] = kw["entries"]
-        elif name == "clip":   st["clip"] = bool(args[0]) if args else True
-        elif name == "facecolor": st["facecolor"] = args[0] if args else None
+                state["legend_manual"] = kw["entries"]
+        elif name == "clip":   state["clip"] = bool(args[0]) if args else True
+        elif name == "facecolor": state["facecolor"] = args[0] if args else None
         elif name == "aspect":
             v = args[0] if args else 1.0
             if v == "equal":
@@ -551,15 +551,15 @@ def _replay(calls):
                     f"c.aspect({v!r}) — pass \"equal\" or a positive "
                     f"number (pixel length of one y unit per one x unit)."
                 )
-            st["aspect"] = float(v)
+            state["aspect"] = float(v)
         elif name == "coordinate":
-            st["coordinate"] = args[0]
+            state["coordinate"] = args[0]
             # Coord-supplied `y_ticks` default (Cartesian: no attribute →
             # skipped). `is None` check respects any user-set value
             # regardless of call order.
             _cyt = getattr(args[0], "y_ticks", None)
-            if _cyt is not None and st.get("y_ticks") is None:
-                st["y_ticks"] = _cyt
+            if _cyt is not None and state.get("y_ticks") is None:
+                state["y_ticks"] = _cyt
         elif name == "sectors":
             from ..sectors import Sectors
             col  = kw.get("column")
@@ -589,8 +589,8 @@ def _replay(calls):
             # to `_CategoryScale.split_gap`. Continuous: routed to the
             # `_SectoredLinearScale` via `_AxisDescriptor.sector_gap_px`
             # — both paths absorb the gap at scale-construction time.
-            st[f"{axis}_sectors"] = sec
-            st[f"{axis}_sector_column"] = col
+            state[f"{axis}_sectors"] = sec
+            state[f"{axis}_sector_column"] = col
         elif name in ("theme", "font"):
             # Applied outside replay (`_layout_engine` wraps each leaf's
             # measurement and render in `_node_style(...)` — theme +
@@ -602,11 +602,11 @@ def _replay(calls):
     # visible. Categorical sectors land on a category scale where ``lim``
     # isn't meaningful — skip them here.
     for axis in ("x", "y"):
-        sec = st[f"{axis}_sectors"]
+        sec = state[f"{axis}_sectors"]
         if (sec is not None and sec.kind == "continuous"
-                and st[f"{axis}lim"] is None):
-            st[f"{axis}lim"] = (0.0, sec.total())
-    return st
+                and state[f"{axis}lim"] is None):
+            state[f"{axis}lim"] = (0.0, sec.total())
+    return state
 
 
 # ---------------------------------------------------------------------------
@@ -796,12 +796,12 @@ def _enforce_floors(M):
     }
 
 
-def _prebin_hist(st):
-    """Compute hist bins on `st["artists"]` so they participate in domain
+def _prebin_hist(state):
+    """Compute hist bins on `state["artists"]` so they participate in domain
     scanning. All groups of one call share bin edges so the bars are
     comparable (and stack/dodge/fill positions line up). Idempotent
     (guarded by `_bin_groups` presence)."""
-    for a in st["artists"]:
+    for a in state["artists"]:
         if a["type"] != "hist" or "_bin_groups" in a:
             continue
         opts = a["opts"]
@@ -856,15 +856,15 @@ def _is_categorical_axis(artists, axis):
     return False
 
 
-def _leaf_axis_kind(st, axis):
+def _leaf_axis_kind(state, axis):
     """Classify a leaf's natural axis kind on `axis`: 'categorical', 'numeric',
     'time', or 'empty' (no artists contributing). Explicit `*scale("category")`
     overrides artist-derived classification."""
-    if st[f"{axis}scale"] == "category":
+    if state[f"{axis}scale"] == "category":
         return "categorical"
-    if st[f"{axis}scale"] == "time":
+    if state[f"{axis}scale"] == "time":
         return "time"
-    artists = st["artists"]
+    artists = state["artists"]
     if not artists:
         return "empty"
     has_str = has_num = False
@@ -895,7 +895,7 @@ def _check_share_kinds_compatible(states, axis):
     floats). Without this check, the mismatch crashes deep in
     `_scan_domain` (`'<' not supported between str and float`) or
     silently produces a category scale over mixed string/numeric values."""
-    kinds = {_leaf_axis_kind(st, axis) for st in states}
+    kinds = {_leaf_axis_kind(state, axis) for state in states}
     kinds.discard("empty")
     if len(kinds) <= 1:
         return
@@ -956,10 +956,10 @@ def _axis_descriptor(states: list[dict], axis: str) -> _AxisDescriptor:
     """
     if len(states) > 1:
         _check_share_kinds_compatible(states, axis)
-    for st in states:
-        _prebin_hist(st)
+    for state in states:
+        _prebin_hist(state)
     anchor = states[0]
-    artists = [a for st in states for a in st["artists"]]
+    artists = [a for state in states for a in state["artists"]]
     sec = anchor[f"{axis}_sectors"]
     sec_cat = sec is not None and sec.kind == "categorical"
     explicit_cat = anchor[f"{axis}scale"] == "category"
@@ -1072,13 +1072,13 @@ def _resolve_shared_padding(states: list[dict], key: str) -> float:
     anchor = states[0]
     if anchor[key] is not None:
         return anchor[key]
-    others = [st[key] for st in states[1:] if st[key] is not None]
+    others = [state[key] for state in states[1:] if state[key] is not None]
     if others:
         return min(others)
     return _D["category_padding"]
 
 
-def _inline_legend_layout(st, env=None):
+def _inline_legend_layout(state, env=None):
     """Geometry for the in-frame legend a leaf paints.
 
     Returns a dict with `disc` (list of `(artist, entry)` pairs from
@@ -1104,12 +1104,12 @@ def _inline_legend_layout(st, env=None):
     whose range depends on render geometry (hexbin's pixel-space bin
     counts) can label exactly what draw will paint. The standalone
     `pt.legend()` leaf harvests without a panel and passes no env."""
-    if not st["legend"]:
+    if not state["legend"]:
         return None
     from ._legend import _legend_source_artist, _manual_entry
     disc = []
     cont = []
-    for a in st["artists"]:
+    for a in state["artists"]:
         spec = get_artist(a["type"])
         if spec is None:
             continue
@@ -1124,10 +1124,10 @@ def _inline_legend_layout(st, env=None):
             for entry in spec.legend_entries(a):
                 disc.append((a, entry))
     manual = []
-    for e in st.get("legend_manual") or []:
+    for e in state.get("legend_manual") or []:
         entry = _manual_entry(e)
         manual.append((entry["_a"], entry))
-    if st.get("legend_reverse"):
+    if state.get("legend_reverse"):
         # Mirror the pt.legend() leaf: reverse= flips each section
         # internally; manual rows stay appended after the harvested ones.
         disc.reverse()
@@ -1136,7 +1136,7 @@ def _inline_legend_layout(st, env=None):
     if not disc and not cont:
         return None
 
-    requested = st.get("legend_position", "right")
+    requested = state.get("legend_position", "right")
     if cont and disc and requested in ("top", "bottom"):
         raise ValueError(
             f"chart.legend(position={requested!r}) mixing a continuous "
@@ -1156,7 +1156,7 @@ def _inline_legend_layout(st, env=None):
     # `ncols > 1` switches top/bottom from the single-row layout to the
     # same N-column grid the vertical positions use (ggplot2: setting
     # ncol overrides the horizontal direction's one-row default).
-    ncols = st.get("legend_ncols", 1)
+    ncols = state.get("legend_ncols", 1)
     horizontal = pos in ("top", "bottom") and ncols == 1 and not cont
 
     row_h = _LEGSPEC["row_height"]
@@ -1219,7 +1219,7 @@ def _inline_legend_layout(st, env=None):
             "position": pos, "ncols": ncols}
 
 
-def _resolve_panel_inputs(st, *, x_scale, y_scale, dw, dh, po):
+def _resolve_panel_inputs(state, *, x_scale, y_scale, dw, dh, layout_opts):
     """Resolve ticks, labels, sizes, rotations, suppress flags and hide
     flags for one panel. Shared by `_required_margin` (via
     `_chrome.label_band_sizes`) and `_render_inner` so the reservation
@@ -1234,60 +1234,60 @@ def _resolve_panel_inputs(st, *, x_scale, y_scale, dw, dh, po):
     # Same tick-density rule on both call sites.
     x_n = max(2, min(8, int(dw // _FRAME["tick_density_x_px"])))
     y_n = max(2, min(8, int(dh // _FRAME["tick_density_y_px"])))
-    x_ticks = (st["x_ticks"] if st["x_ticks"] is not None
-               else _auto_major_ticks(x_scale, x_n, st["x_step"], st["x_count"]))
-    y_ticks = (st["y_ticks"] if st["y_ticks"] is not None
-               else _auto_major_ticks(y_scale, y_n, st["y_step"], st["y_count"]))
-    x_fmt = _resolve_tick_formatter(st["x_format"], x_scale)
-    y_fmt = _resolve_tick_formatter(st["y_format"], y_scale)
-    x_labels = (st["x_labels"] if st["x_labels"] is not None
+    x_ticks = (state["x_ticks"] if state["x_ticks"] is not None
+               else _auto_major_ticks(x_scale, x_n, state["x_step"], state["x_count"]))
+    y_ticks = (state["y_ticks"] if state["y_ticks"] is not None
+               else _auto_major_ticks(y_scale, y_n, state["y_step"], state["y_count"]))
+    x_fmt = _resolve_tick_formatter(state["x_format"], x_scale)
+    y_fmt = _resolve_tick_formatter(state["y_format"], y_scale)
+    x_labels = (state["x_labels"] if state["x_labels"] is not None
                 else [x_fmt(t) for t in x_ticks])
-    y_labels = (st["y_labels"] if st["y_labels"] is not None
+    y_labels = (state["y_labels"] if state["y_labels"] is not None
                 else [y_fmt(t) for t in y_ticks])
 
     # Continuous sectors: auto ticks are meaningless on a global-offset
     # coord, so the default is none. User-supplied ticks via xticks/yticks
     # are interpreted as per-sector LOCAL positions and replicated at
     # each sector's offset.
-    if st["x_sectors"] is not None and st["x_sectors"].kind == "continuous":
-        x_ticks, x_labels = st["x_sectors"].expand_ticks(
-            x_ticks if st["x_ticks"] is not None else [],
-            x_labels if st["x_ticks"] is not None else [])
-    if st["y_sectors"] is not None and st["y_sectors"].kind == "continuous":
-        y_ticks, y_labels = st["y_sectors"].expand_ticks(
-            y_ticks if st["y_ticks"] is not None else [],
-            y_labels if st["y_ticks"] is not None else [])
+    if state["x_sectors"] is not None and state["x_sectors"].kind == "continuous":
+        x_ticks, x_labels = state["x_sectors"].expand_ticks(
+            x_ticks if state["x_ticks"] is not None else [],
+            x_labels if state["x_ticks"] is not None else [])
+    if state["y_sectors"] is not None and state["y_sectors"].kind == "continuous":
+        y_ticks, y_labels = state["y_sectors"].expand_ticks(
+            y_ticks if state["y_ticks"] is not None else [],
+            y_labels if state["y_ticks"] is not None else [])
 
     # Joined-side hide flags — drop reservations the renderer skips.
-    hide_t = po.hide_top
-    hide_b = po.hide_bottom
-    hide_l = po.hide_left
-    hide_r = po.hide_right
+    hide_t = layout_opts.hide_top
+    hide_b = layout_opts.hide_bottom
+    hide_l = layout_opts.hide_left
+    hide_r = layout_opts.hide_right
 
     # Decided chrome visibility — the one place state and layout flags
-    # combine into "draw it?" booleans (see `_chrome_policy`). `xticks
+    # combine into "draw it?" booleans (see `_chrome_visibility`). `xticks
     # (labels=False)` joins forces with the share-pair label suppression
     # there — either one drops tick labels on the corresponding side,
     # routed by axis side so a flipped axis pulls suppression from the
     # matching joined edge (top edge for x_side="top", etc.).
-    chrome = resolve_axis_chrome(st, po)
+    chrome = resolve_axis_chrome(state, layout_opts)
 
     return SimpleNamespace(
         chrome=chrome,
         x_scale=x_scale, y_scale=y_scale,
         x_ticks=x_ticks, x_labels=x_labels,
         y_ticks=y_ticks, y_labels=y_labels,
-        x_size=st["x_fontsize"] if st["x_fontsize"] is not None else tick_size,
-        y_size=st["y_fontsize"] if st["y_fontsize"] is not None else tick_size,
-        x_rot=st["x_rotation"] or 0,
-        y_rot=st["y_rotation"] or 0,
+        x_size=state["x_fontsize"] if state["x_fontsize"] is not None else tick_size,
+        y_size=state["y_fontsize"] if state["y_fontsize"] is not None else tick_size,
+        x_rot=state["x_rotation"] or 0,
+        y_rot=state["y_rotation"] or 0,
         # Variant faces have their own advance widths — the margin
         # reservation must measure with the same style/weight the render
         # pass draws with.
-        x_style=st["x_fontstyle"] or "normal",
-        y_style=st["y_fontstyle"] or "normal",
-        x_weight=st["x_fontweight"] or "normal",
-        y_weight=st["y_fontweight"] or "normal",
+        x_style=state["x_fontstyle"] or "normal",
+        y_style=state["y_fontstyle"] or "normal",
+        x_weight=state["x_fontweight"] or "normal",
+        y_weight=state["y_fontweight"] or "normal",
         hide_t=hide_t, hide_b=hide_b, hide_l=hide_l, hide_r=hide_r,
     )
 
@@ -1328,7 +1328,7 @@ def _resolve_panel_inputs(st, *, x_scale, y_scale, dw, dh, po):
 # ---------------------------------------------------------------------------
 
 
-def _required_margin(st, dw, dh, po: "_PanelOpts") -> dict:
+def _required_margin(state, dw, dh, layout_opts: "_PanelOpts") -> dict:
     """Margin a body-first leaf actually needs to fit its title, axis
     labels, tick labels, and any outside-positioned in-frame legend.
 
@@ -1337,7 +1337,7 @@ def _required_margin(st, dw, dh, po: "_PanelOpts") -> dict:
     are fixed, so tick density and labels are deterministic and the
     computation is a single pass (no chicken-and-egg with margin).
 
-    `po` lets the formula drop reservations for content the renderer is
+    `layout_opts` lets the formula drop reservations for content the renderer is
     going to suppress (joined share-pair sides): tick labels via
     `suppress_*_labels`, xlabel/ylabel/title via `hide_*`.
 
@@ -1347,8 +1347,8 @@ def _required_margin(st, dw, dh, po: "_PanelOpts") -> dict:
     # are decided up front, no iteration needed. Reservation pass uses the
     # per-panel descriptor (not the layout-coordinated one); render pass
     # picks the coordinated one via `_build_xy_scales` instead.
-    x_axis = _axis_descriptor([st], "x")
-    y_axis = _axis_descriptor([st], "y")
+    x_axis = _axis_descriptor([state], "x")
+    y_axis = _axis_descriptor([state], "y")
     if x_axis.kind == "category" or not x_axis.flip:
         x_scale = x_axis.build(0, dw)
     else:
@@ -1357,9 +1357,9 @@ def _required_margin(st, dw, dh, po: "_PanelOpts") -> dict:
         y_scale = y_axis.build(0, dh)
     else:
         y_scale = y_axis.build(dh, 0)
-    inp = _resolve_panel_inputs(st, x_scale=x_scale, y_scale=y_scale,
-                                 dw=dw, dh=dh, po=po)
-    bands, _ = _chrome.label_band_sizes(st, inp, dw, dh)
+    inp = _resolve_panel_inputs(state, x_scale=x_scale, y_scale=y_scale,
+                                 dw=dw, dh=dh, layout_opts=layout_opts)
+    bands, _ = _chrome.label_band_sizes(state, inp, dw, dh)
     top, right, bottom, left = bands["top"], bands["right"], bands["bottom"], bands["left"]
 
     # Cross-side text overhang: a title / xlabel longer than `dw` is
@@ -1374,29 +1374,29 @@ def _required_margin(st, dw, dh, po: "_PanelOpts") -> dict:
     # wide title shouldn't displace the ylabel from its natural slot.
     label_size = _FONTSPEC["label_size"]
     title_size = _FONTSPEC["title_size"]
-    if st["title"]:
-        title_overhang = max(0.0, (measure_text(st["title"], title_size) - dw) / 2.0)
+    if state["title"]:
+        title_overhang = max(0.0, (measure_text(state["title"], title_size) - dw) / 2.0)
         left  = max(left,  title_overhang)
         right = max(right, title_overhang)
-    if st["subtitle"]:
-        sub_overhang = max(0.0, (measure_text(st["subtitle"], _FONTSPEC["subtitle_size"]) - dw) / 2.0)
+    if state["subtitle"]:
+        sub_overhang = max(0.0, (measure_text(state["subtitle"], _FONTSPEC["subtitle_size"]) - dw) / 2.0)
         left  = max(left,  sub_overhang)
         right = max(right, sub_overhang)
-    if st["caption"]:
+    if state["caption"]:
         # Caption band is not part of `label_band_sizes` — the bottom
         # band positions the outside-bottom legend, and the caption sits
         # past that legend (see `emit_frame_labels`). Reserve it here,
         # additively like the legend below. Anchored right at x=dw, a
         # caption wider than the data area spills left only.
         caption_size = _FONTSPEC["caption_size"]
-        bottom += _PADSPEC["caption"] + text_block_height(st["caption"], caption_size)
-        left = max(left, max(0.0, measure_text(st["caption"], caption_size) - dw))
+        bottom += _PADSPEC["caption"] + text_block_height(state["caption"], caption_size)
+        left = max(left, max(0.0, measure_text(state["caption"], caption_size) - dw))
     if inp.chrome["x"]["draw_axis_label"]:
-        xlabel_overhang = max(0.0, (measure_text(st["xlabel"], label_size) - dw) / 2.0)
+        xlabel_overhang = max(0.0, (measure_text(state["xlabel"], label_size) - dw) / 2.0)
         left  = max(left,  xlabel_overhang)
         right = max(right, xlabel_overhang)
     if inp.chrome["y"]["draw_axis_label"]:
-        ylabel_overhang = max(0.0, (measure_text(st["ylabel"], label_size) - dh) / 2.0)
+        ylabel_overhang = max(0.0, (measure_text(state["ylabel"], label_size) - dh) / 2.0)
         top    = max(top,    ylabel_overhang)
         bottom = max(bottom, ylabel_overhang)
     # Rightmost x-tick label's rotated AABB extends past x=iw by half its
@@ -1416,7 +1416,7 @@ def _required_margin(st, dw, dh, po: "_PanelOpts") -> dict:
     # legend block sits beyond the title/labels rather than overlapping
     # them. Inside-corner positions paint over the data area and reserve
     # nothing extra.
-    leg = _inline_legend_layout(st, env=SimpleNamespace(
+    leg = _inline_legend_layout(state, env=SimpleNamespace(
         x_scale=x_scale, y_scale=y_scale, iw=dw, ih=dh))
     if leg is not None and leg["position"] not in _INSIDE_POSITIONS:
         lw, lh = leg["lw"], leg["lh"]
@@ -1433,7 +1433,7 @@ def _required_margin(st, dw, dh, po: "_PanelOpts") -> dict:
 
     # Coordinate-aware frame: the projected parallelogram may extend outside
     # the data area.  Inflate each side by however far the frame sticks out.
-    _margin_cobj = st.get("coordinate")
+    _margin_cobj = state.get("coordinate")
     if (_margin_cobj is not None
             and (hasattr(_margin_cobj, "draw_frame")
                  or hasattr(_margin_cobj, "svg_transform"))):
@@ -1458,13 +1458,13 @@ def _required_margin(st, dw, dh, po: "_PanelOpts") -> dict:
 # color assignment — decided at resolve time, stamped on the records
 # ---------------------------------------------------------------------------
 
-def _stamp_artist_colors(st) -> None:
+def _stamp_artist_colors(state) -> None:
     """Stamp each artist record's final `_color` — only color-cycle
     artists consume the cycle. Deterministic and idempotent; called at
-    resolve time (`_build_panel_opts`) so the resolved IR carries final
+    resolve time (`_resolve_panels`) so the resolved IR carries final
     colors, and again defensively at draw."""
     color_idx = 0
-    for a in st["artists"]:
+    for a in state["artists"]:
         spec = get_artist(a["type"])
         # Honor either `color=` (stroke-defaulted artists) or `fill=`
         # literal (fill-defaulted artists, e.g. bar) as the artist's

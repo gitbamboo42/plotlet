@@ -428,10 +428,10 @@ def _run_invariants():
     src = pt.chart(); src.line(data={"x": [0, 10], "y": [0, 100]}, x="x", y="y")
     shr = pt.chart(); shr.line(data={"x": [0, 10], "y": [-5, 5]}, x="x", y="y")
     parent = (src | shr).share_y()
-    from plotlet.render._layout_engine import _build_panel_opts
+    from plotlet.render._layout_engine import _resolve_panels
     from plotlet.render import materialize
     materialize(parent)
-    panel_opts, _ = _build_panel_opts(parent)
+    panel_opts, _ = _resolve_panels(parent)
     src_y = panel_opts[id(src)].y_axis
     shr_y = panel_opts[id(shr)].y_axis
     if src_y is not shr_y:
