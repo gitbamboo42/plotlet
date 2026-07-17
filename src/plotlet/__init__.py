@@ -31,7 +31,7 @@ from .formatters import (register_formatter, list_formatters,
 from ._coord_registry import register_coord_codec
 from .record.journal import (to_journal, from_journal, to_json, from_json,
                        JournalNode, Journal)
-from .record.figure_ir import to_ir, from_ir, resolve_ir, FigureIR, IRNode
+from .record.figure_ir import to_ir, from_ir, FigureIR, IRNode
 from . import draw, utils
 
 
@@ -60,7 +60,7 @@ __all__ = ["chart", "Chart", "Layout", "SPEC", "TAB10",
            "superscript", "subscript",
            "to_json", "from_json", "register_coord_codec",
            "to_journal", "from_journal", "JournalNode", "Journal",
-           "to_ir", "from_ir", "FigureIR", "IRNode", "resolve_ir",
+           "to_ir", "from_ir", "FigureIR", "IRNode",
            "draw", "utils"]
 
 # Single source of truth: pyproject.toml. importlib.metadata reads it at

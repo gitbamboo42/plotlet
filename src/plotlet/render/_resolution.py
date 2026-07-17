@@ -3,7 +3,7 @@
 The deferred-render pipeline:
   1. A `Chart` (defined in `chart.py`) records user calls into `_calls`.
   2. `Chart.to_svg()` lowers to the figure IR and renders it via
-     `render.render_svg` — `resolve_ir(ir).to_svg()`.
+     `render.render_svg`.
   3. Resolution — this module plus the layout pre-pass in
      `_layout_engine.py` — replays states and decides everything:
      domains, scales, tick content, margins, colors, chrome flags.

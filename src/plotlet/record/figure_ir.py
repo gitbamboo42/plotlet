@@ -50,9 +50,9 @@ at hydration time.
 
 A second lowering stage lives in `render/resolved_ir.py`: `FigureIR.resolve()`
 returns the resolved IR (trained scales, baked palettes, effective
-margins) — the stage the render path itself passes through
-(`render_svg` is `resolve_ir(ir).to_svg()`), so inspecting it and
-rendering the figure are two views of one resolution.
+margins) — the stage the render path itself passes through, so
+inspecting it and rendering the figure are two views of one
+resolution.
 
 The full contract — node kinds, init keys, op normalization, envelope
 forms, ordering — is written down in `docs/ARCHITECTURE.md`; `render.validate`
@@ -443,10 +443,3 @@ def from_ir(blob) -> FigureIR:
         return blob
     return FigureIR.from_dict(blob)
 
-
-def resolve_ir(node):
-    """Lower a plot to its resolved IR — the pre-layout render plan
-    (`render/resolved_ir.py`). Accepts anything `to_ir` does: a `Chart` /
-    `Layout` / `FacetGrid`, a `Journal`, a `JournalNode`, or a
-    `FigureIR`."""
-    return to_ir(node).resolve()

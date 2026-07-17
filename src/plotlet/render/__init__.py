@@ -18,28 +18,36 @@ The front half calls in through this seam — every function takes a
     natural_size(ir)                      figure (W, H) after measurement
     data_total_size(ir)                   summed data-area (w, h)
     resolve(ir)                           the resolved IR — the render
-                                          path's own middle stage;
-                                          render_svg is
-                                          resolve(ir).to_svg()
+                                          path's own middle stage
+                                          (resolved_ir.py)
     validate(ir)                          contract check, ValueError on
                                           violation
     hydrate(ir) / materialize(tree)       the render tree, for tools
                                           that walk or measure it
 """
 from ._nodes import (  # noqa: F401
-    RenderNode, RenderLayout, hydrate, materialize, render_svg,
+    RenderNode, RenderLayout, hydrate, materialize,
 )
 from ._validate import validate  # noqa: F401
-from .resolved_ir import resolve_ir as resolve  # noqa: F401
+from .resolved_ir import resolve  # noqa: F401
+
+
+def render_svg(ir, *, clean: bool = False, outer: bool = True) -> str:
+    """Render a `FigureIR` to the standalone SVG string. Why every
+    render passes through the resolved stage is `resolved_ir.py`'s
+    docstring. `outer=False` drops the figure-level breathing-room
+    margin — the inner render tools embed (`layout_diagram`) or
+    measure against."""
+    return resolve(ir).to_svg(clean=clean, outer=outer)
 
 
 def regions(ir, *, outer: bool = True) -> list[dict]:
     """Render `ir` under a region-collecting sink and return the chrome
     regions — title, axis labels, ticks, spines, panel, legend
     sub-elements — as `{"kind", "bbox", "name", "meta"}` dicts. The SVG
-    is discarded; this runs the same `resolve(ir).to_svg()` pipeline as
-    `render_svg`, so the regions describe exactly that render. `outer`
-    matches `render_svg`'s."""
+    is discarded; this runs the same pipeline as `render_svg`, so the
+    regions describe exactly that render. `outer` matches
+    `render_svg`'s."""
     from .. import _regions
 
     with _regions.collecting() as sink:

@@ -1,4 +1,4 @@
-"""Resolved-IR sanity: for every baseline plot, `resolve_ir` must:
+"""Resolved-IR sanity: for every baseline plot, `to_ir(fig).resolve()` must:
 
   * run without error
   * produce a JSON-safe projection (envelopes only via `_json_layer`)
@@ -6,7 +6,7 @@
   * emit valid IRScale kinds and populated IRArtist kinds
 
 The resolved IR is the second stage of the render pipeline:
-`render.render_svg` is `resolve_ir(ir).to_svg()`, so the projection
+`render.render_svg` is `resolve(ir).to_svg()`, so the projection
 under `.root` and the rendered SVG are two views of one resolution.
 The staged-pipeline pins at the bottom hold that property in place.
 The byte-identical round-trip proof lives with the journal / figure-IR
@@ -21,7 +21,6 @@ import math
 import pytest
 
 import plotlet as pt
-from plotlet import resolve_ir
 from plotlet.render.resolved_ir import (
     IRArtist,
     IRCoord,
@@ -53,9 +52,9 @@ def _walk_panels(ir):
 
 
 @pytest.mark.parametrize("label,fn", PLOTS, ids=[p[0] for p in PLOTS])
-def test_resolve_ir_structural(label, fn):
+def test_resolve_structural(label, fn):
     fig = fn()
-    rir = resolve_ir(fig)
+    rir = pt.to_ir(fig).resolve()
 
     assert isinstance(rir, ResolvedIR)
     ir = rir.root
@@ -115,32 +114,30 @@ def _nan_eq(a, b):
 
 
 @pytest.mark.parametrize("label,fn", PLOTS, ids=[p[0] for p in PLOTS])
-def test_resolve_ir_deterministic(label, fn):
-    ir1 = resolve_ir(fn())
-    ir2 = resolve_ir(fn())
+def test_resolve_deterministic(label, fn):
+    ir1 = pt.to_ir(fn()).resolve()
+    ir2 = pt.to_ir(fn()).resolve()
     assert _nan_eq(ir1.root, ir2.root), \
         "resolved IR should be identical across two builds"
 
 
 @pytest.mark.parametrize("label,fn", PLOTS, ids=[p[0] for p in PLOTS])
-def test_resolve_ir_json_safe(label, fn):
+def test_resolve_json_safe(label, fn):
     """`to_dict()` — the read-only JSON debug view — dumps cleanly for
     every baseline figure. Enveloping walks the whole tree, so a
     non-JSON-safe leaf value raises somewhere; then json.dumps must not
     fail either."""
-    d = resolve_ir(fn()).to_dict()
+    d = pt.to_ir(fn()).resolve().to_dict()
     json.dumps(d)
     assert set(d) == {"root"}
 
 
 def test_figure_ir_resolve_method():
-    """`FigureIR.resolve()` and `pt.resolve_ir(fig)` agree."""
+    """`FigureIR.resolve()` — the method form on a hand-built IR."""
     data = {"x": [1, 2, 3], "y": [2.0, 3.1, 4.5]}
     c = pt.chart(data_width=200, data_height=140, title="t")
     c.scatter(data=data, x="x", y="y")
     via_method = pt.to_ir(c).resolve()
-    via_fn = pt.resolve_ir(c)
-    assert _nan_eq(via_method.root, via_fn.root)
     # a lone chart resolves through its 1×1 layout wrapper; the panel
     # title lives on the leaf
     assert isinstance(via_method.root, IRLayout)
@@ -158,9 +155,9 @@ def test_layout_title_projected():
         b.line(x="x", y="y")
         return a | b
 
-    assert pt.resolve_ir(pair().title("first").title("Figure title")).root.title \
+    assert pt.to_ir(pair().title("first").title("Figure title")).resolve().root.title \
         == "Figure title"
-    assert pt.resolve_ir(pair()).root.title is None
+    assert pt.to_ir(pair()).resolve().root.title is None
 
 
 # ---------------------------------------------------------------------------
@@ -194,12 +191,12 @@ def _circular():
 @pytest.mark.parametrize("build", [_rect_chart, _rect_layout, _circular],
                          ids=["chart", "layout", "circular"])
 def test_resolved_ir_renders_byte_identical(build):
-    """`resolve_ir(fig).to_svg()` and the normal render agree byte for
+    """`ir.resolve().to_svg()` and the normal render agree byte for
     byte — the resolved IR is the artifact the SVG comes from, not a
     parallel account of it. (The whole baseline suite proves this too:
     `render_svg` itself routes through the projection.)"""
     ir = pt.to_ir(build())
-    assert resolve_ir(ir).to_svg() == ir.to_svg()
+    assert ir.resolve().to_svg() == ir.to_svg()
 
 
 def test_figures_emit_from_projection_alone():
@@ -211,7 +208,7 @@ def test_figures_emit_from_projection_alone():
     from plotlet.render.resolved_ir import ResolvedIR
 
     for build in (_rect_chart, _rect_layout, _circular):
-        rir = resolve_ir(pt.to_ir(build()))
+        rir = pt.to_ir(build()).resolve()
         # Rebuilding the wrapper from the projection alone renders
         # identically — nothing rides outside `.root`.
         rebuilt = ResolvedIR(root=rir.root)
@@ -242,7 +239,7 @@ def test_rehydrated_tree_has_no_journal():
                 walk(inset)
 
     for build in (_rect_chart, _rect_layout, _circular):
-        plan = _rehydrate(resolve_ir(pt.to_ir(build())).root)
+        plan = _rehydrate(pt.to_ir(build()).resolve().root)
         walk(plan.root)
 
 
@@ -256,9 +253,9 @@ def test_resolved_ir_stable_under_render():
         c.scatter(data={"x": [1.0, 2.0], "y": [1.0, 2.0]}, x="x", y="y")
         return pt.to_ir(c)
 
-    rendered = resolve_ir(build())
+    rendered = pt.to_ir(build()).resolve()
     rendered.to_svg()
-    assert _nan_eq(rendered.root, resolve_ir(build()).root)
+    assert _nan_eq(rendered.root, pt.to_ir(build()).resolve().root)
 
 
 @pytest.mark.parametrize("build", [_rect_chart, _rect_layout, _circular],
@@ -269,7 +266,7 @@ def test_emit_never_resolves(build):
     (its overlay plan is rebuilt from projected ring states)."""
     from plotlet.render import _layout_engine
 
-    rir = resolve_ir(pt.to_ir(build()))
+    rir = pt.to_ir(build()).resolve()
     orig = _layout_engine._build_panel_opts
 
     def forbidden(root):

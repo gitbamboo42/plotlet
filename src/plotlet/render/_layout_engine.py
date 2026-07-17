@@ -34,7 +34,7 @@ Pipeline (in order):
 
   * **Emit** — `_emit_plan` writes one outer `<svg>` with one
     `<g transform>` per leaf, calling `_render_inner` from `emit.py`.
-    Every render reaches it through `resolve_ir(ir).to_svg()` — the
+    Every render reaches it through the resolved stage — the
     plan it consumes is always rehydrated from a `ResolvedIR`.
 
 See `docs/SUBPLOTS.md` for the design rationale.
@@ -1187,7 +1187,7 @@ class RenderPlan:
     state dicts, `panel_opts` the per-leaf axis descriptors + effective
     margins. Wrapped by the public `ResolvedIR` (`resolved_ir.py`): the
     projection users inspect and this plan are two views of one
-    resolution — the emit pass renders from exactly what `resolve_ir`
+    resolution — the emit pass renders from exactly what `resolve`
     reports."""
 
     def __init__(self, root, panel_opts: dict, states: dict):

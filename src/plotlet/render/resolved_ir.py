@@ -1,10 +1,10 @@
 """Resolved IR — the render pipeline's middle stage.
 
 Second lowering of the pipeline, and the stage the render path passes
-through: `render.render_svg` is `resolve_ir(ir).to_svg()`. `figure_ir.py`
+through: `render.render_svg` is `resolve(ir).to_svg()`. `figure_ir.py`
 compiles the journal into the figure IR (`FigureIR`) — loss-free,
 round-trippable, still in user terms (ops, data columns, palette
-names). `resolve_ir` lowers one step further and returns a `ResolvedIR`
+names). `resolve` lowers one step further and returns a `ResolvedIR`
 whose `.root` is a **complete render plan**: the emit pass runs from a
 tree rehydrated out of `.root` alone (`_rehydrate`), so every field
 here is load-bearing — delete one and rendering breaks, not just
@@ -206,17 +206,17 @@ def _to_plain(v):
 # ---------------------------------------------------------------------------
 
 
-def resolve_ir(ir) -> ResolvedIR:
+def resolve(ir) -> ResolvedIR:
     """Lower a `FigureIR` to its resolved IR — the second stage of the
-    render pipeline. (The public `plotlet.resolve_ir` wraps this with
-    `to_ir` coercion, so users can hand it a `Chart` / `Layout` /
-    journal directly — this render-side entry takes the IR only, like
-    everything behind the seam.)
+    render pipeline. (Users reach this as `pt.to_ir(fig).resolve()` —
+    `to_ir` coerces a `Chart` / `Layout` / journal to the IR first.
+    This render-side entry takes the IR only, like everything behind
+    the seam.)
 
-    `render.render_svg` is `resolve_ir(ir).to_svg()` — every rendered
-    figure passes through the artifact returned here, and the emit pass
-    runs from the projection alone (container-coord roots excepted).
-    One-way; same journal → same resolved IR."""
+    Every rendered figure passes through the artifact returned here
+    (module docstring), and the emit pass runs from the projection
+    alone (container-coord roots excepted). One-way; same journal →
+    same resolved IR."""
     from ._layout_engine import _build_plan
     from ._nodes import hydrate
 

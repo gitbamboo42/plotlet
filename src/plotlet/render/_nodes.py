@@ -469,7 +469,7 @@ def materialize(root):
 
 
 # ---------------------------------------------------------------------------
-# Render entry — the seam the front half calls, IR in, SVG out.
+# Clean-SVG helper — strips the AI/schema metadata for `to_svg(clean=True)`.
 # ---------------------------------------------------------------------------
 
 # Strip every `data-plotlet-*="..."` attribute. The leading space is part of
@@ -498,16 +498,3 @@ def _strip_plotlet_attrs(svg: str) -> str:
     svg = _CLEAN_METADATA_RE.sub("", svg)
     svg = _CLEAN_ATTR_RE.sub("", svg)
     return svg
-
-
-def render_svg(ir, *, clean: bool = False, outer: bool = True) -> str:
-    """Render a `FigureIR` to the standalone SVG string — the staged
-    pipeline: `resolve_ir(ir)` lowers to the resolved IR (hydrate,
-    materialize, replay, train scales, coordinate margins), then
-    `.to_svg()` emits from that artifact. Every rendered figure passes
-    through the resolved stage — inspection (`pt.resolve_ir`) and
-    rendering are two views of one resolution. `outer=False` drops the
-    figure-level breathing-room margin — the inner render tools embed
-    (`layout_diagram`) or measure against."""
-    from .resolved_ir import resolve_ir
-    return resolve_ir(ir).to_svg(clean=clean, outer=outer)

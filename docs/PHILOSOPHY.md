@@ -10,7 +10,7 @@ making the per-extension cost low.
 ## What's in the core
 
 - The deferred-render pipeline — journal → figure IR → resolved IR →
-  SVG, every stage inspectable (`to_ir`, `resolve_ir`, `.to_dict()`,
+  SVG, every stage inspectable (`to_ir`, `.resolve()`, `.to_dict()`,
   `c.regions()`)
 - Scales: linear, log, category, time, symlog, power, sqrt
 - Coordinate systems: Cartesian by default; swap the per-panel projection

@@ -423,7 +423,7 @@ class CircularCoordinate:
         Two staged halves: `resolve_layout` (canvas fixpoint, band
         derivation, ring journals spliced and replayed → per-ring
         states) and `emit_layout` (draw each ring from its state). The
-        resolved plan caches on the layout node, so `resolve_ir` can
+        resolved plan caches on the layout node, so `resolve` can
         run the resolution ahead of time and this call only emits.
 
         Future coords (polar wedges, geographic facets, etc.) implement
