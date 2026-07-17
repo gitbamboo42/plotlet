@@ -2,11 +2,12 @@
 
 `hydrate` builds this tree from a `FigureIR`; the layout engine walks
 and mutates it freely (share scaling, measured margins, canvas growth)
-without ever touching the user's `Chart` / `Layout` objects. Field
-names deliberately mirror the recorder classes' — the engine is
-duck-typed over them, so recorder trees and render trees stay drop-in
-interchangeable for every walker (internal tests and tools poke engine
-functions with recorder trees directly).
+without ever touching the user's `Chart` / `Layout` objects. The
+hydrated tree is the engine's ONLY input — everything that reaches an
+engine function goes through `hydrate` first (tests included: build a
+recorder figure, then `hydrate(to_ir(fig))`). Field names mirror the
+recorder classes' for readability, but the engine reads render nodes,
+not recorder objects.
 
 Hydration copies IR ops verbatim into `_calls` — no recorder re-entry.
 Ops are already normalized: aes / data injection happened at record
@@ -114,7 +115,7 @@ class RenderLayout:
         for child in self._children:
             if child is None:
                 continue
-            if getattr(child, "_is_parent", False):
+            if child._is_parent:
                 yield from child._iter_leaves()
             else:
                 yield child
@@ -372,10 +373,9 @@ def materialize(root):
     long-lived field; the cascade in `_ancestor_calls` reads it
     directly off the journal at replay time.
 
-    Duck-typed: works on the hydrated render tree (the normal case —
-    `_build_plan` calls this at entry) and equally on a recorder
-    tree, for internal tests and tools that poke engine functions
-    directly. Idempotent."""
+    Takes the hydrated render tree only — `_build_plan` calls this at
+    entry, and callers that poke engine functions directly (tests,
+    `natural_size`) hydrate first. Idempotent."""
     nodes = list(_walk_tree(root))
     layouts = [n for n in nodes if n._is_parent]
     charts  = [n for n in nodes if not n._is_parent]

@@ -429,11 +429,13 @@ def _run_invariants():
     shr = pt.chart(); shr.line(data={"x": [0, 10], "y": [-5, 5]}, x="x", y="y")
     parent = (src | shr).share_y()
     from plotlet.render._layout_engine import _resolve_panels
-    from plotlet.render import materialize
-    materialize(parent)
-    panel_opts, _ = _resolve_panels(parent)
-    src_y = panel_opts[id(src)].y_axis
-    shr_y = panel_opts[id(shr)].y_axis
+    from plotlet.render import hydrate, materialize
+    root = hydrate(pt.to_ir(parent))
+    materialize(root)
+    panel_opts, _ = _resolve_panels(root)
+    r_src, r_shr = root._iter_leaves()
+    src_y = panel_opts[id(r_src)].y_axis
+    shr_y = panel_opts[id(r_shr)].y_axis
     if src_y is not shr_y:
         failures.append(
             f"share_y did not produce a shared descriptor: "

@@ -148,7 +148,8 @@ def _run_invariants() -> int:
 
     # Warning on existing share, but host wins. The warning fires at
     # `attach_left` call time (validation); the field write is done by
-    # `materialize()` at render, so we trigger it explicitly here.
+    # `materialize()` on the hydrated tree, so we hydrate and run it
+    # explicitly here.
     h4 = pt.chart(); h4.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
     other = pt.chart(); other.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
     side = pt.chart(); side.annotate("s", xy=(0.5, 1.0))
@@ -156,9 +157,12 @@ def _run_invariants() -> int:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         h4.attach_left(side)
-    materialize(h4)
+    root4 = hydrate(pt.to_ir(h4))
+    materialize(root4)
+    (r_h4,) = root4._children
+    r_side = r_h4._attached_left[0]
     _check(any("share_y" in str(w.message) for w in caught)
-           and side._share_y is h4,
+           and r_side._share_y is r_h4,
            "existing share warns and host overrides")
 
     # Peer composition still works: host's _parent stays None until composed.
@@ -178,17 +182,20 @@ def _run_invariants() -> int:
     left2 = pt.chart(data_width=40)
     left2.annotate("L", xy=(0.5, 2.0))
     h6.attach_left(left2)
-    materialize(h6)
+    root6 = hydrate(pt.to_ir(h6))
+    materialize(root6)
+    (r_h6,) = root6._children
+    r_left2 = r_h6._attached_left[0]
     from plotlet.render._layout_engine import _resolve_panels, _measure, _allocate
-    panel_opts, _ = _resolve_panels(h6)
-    W, H = _measure(h6)
+    panel_opts, _ = _resolve_panels(root6)
+    W, H = _measure(root6)
     placements = []
-    _allocate(h6, 0, 0, W, H, placements)
+    _allocate(root6, 0, 0, W, H, placements)
     rects = dict(placements)
-    h6_M = panel_opts[id(h6)].M_eff
-    left_M = panel_opts[id(left2)].M_eff
-    h6_data_y = rects[h6][1] + h6_M["top"]
-    left_data_y = rects[left2][1] + left_M["top"]
+    h6_M = panel_opts[id(r_h6)].M_eff
+    left_M = panel_opts[id(r_left2)].M_eff
+    h6_data_y = rects[r_h6][1] + h6_M["top"]
+    left_data_y = rects[r_left2][1] + left_M["top"]
     _check(h6_data_y == left_data_y,
            f"host/left data areas align in y (host_data_y={h6_data_y}, "
            f"left_data_y={left_data_y})")
@@ -202,9 +209,12 @@ def _run_invariants() -> int:
     top7 = pt.chart(data_height=30)
     top7.line(data={"chr": ["chr2"], "x": [10], "y": [1]}, x="x", y="y")
     h7.attach_above(top7)
-    materialize(h7)
-    _, states7 = _rp(h7)
-    st_top = states7[id(top7)]
+    root7 = hydrate(pt.to_ir(h7))
+    materialize(root7)
+    (r_h7,) = root7._children
+    r_top7 = r_h7._attached_above[0]
+    _, states7 = _rp(root7)
+    st_top = states7[id(r_top7)]
     _check(st_top["x_sectors"] is not None,
            "above attachment inherits host's x_sectors")
     _check(st_top["x_sectors"] is not None
@@ -229,9 +239,12 @@ def _run_invariants() -> int:
     left8.yscale("category", order=rows7, padding=0)
     left8.line(data={"x": [1, 2, 1, 2], "y": rows7}, x="x", y="y")
     h8.attach_left(left8)
-    materialize(h8)
-    _, states8 = _rp(h8)
-    _check(states8[id(left8)]["y_sectors"] is not None,
+    root8 = hydrate(pt.to_ir(h8))
+    materialize(root8)
+    (r_h8,) = root8._children
+    r_left8 = r_h8._attached_left[0]
+    _, states8 = _rp(root8)
+    _check(states8[id(r_left8)]["y_sectors"] is not None,
            "left attachment inherits host's y_sectors (categorical)")
 
     # Explicit attachment-side sectors call wins over inheritance.
@@ -243,10 +256,13 @@ def _run_invariants() -> int:
                  divider=True, label=True)
     top9.line(data={"chr": ["chr1"], "x": [50], "y": [1]}, x="x", y="y")
     h9.attach_above(top9)
-    materialize(h9)
-    _, states9 = _rp(h9)
-    _check(states9[id(top9)]["x_sectors"] is not None
-           and states9[id(top9)]["x_sectors"].divider is True,
+    root9 = hydrate(pt.to_ir(h9))
+    materialize(root9)
+    (r_h9,) = root9._children
+    r_top9 = r_h9._attached_above[0]
+    _, states9 = _rp(root9)
+    _check(states9[id(r_top9)]["x_sectors"] is not None
+           and states9[id(r_top9)]["x_sectors"].divider is True,
            "explicit c.sectors() on attachment overrides inheritance")
 
     # Non-mutation: attachment sector inheritance now emits a cascade
@@ -255,9 +271,9 @@ def _run_invariants() -> int:
     # journal (idempotence is automatic, but pin the no-mutation
     # property explicitly so a regression resurrecting an insert(0)
     # path would surface here).
-    snapshot = list(top7._calls)
-    _rp(h7)  # second pass
-    _check(top7._calls == snapshot,
+    snapshot = list(r_top7._calls)
+    _rp(root7)  # second pass
+    _check(r_top7._calls == snapshot,
            "attachment sector inheritance does not mutate attached leaf _calls")
 
     if failed:

@@ -68,7 +68,7 @@ def _funnel_leaf(root):
     `journal_to_ir` mints around a lone chart — or `None` for roots
     with sibling panels."""
     node = root
-    while getattr(node, "_is_parent", False):
+    while node._is_parent:
         children = [c for c in node._children if c is not None]
         if len(children) != 1:
             return None
@@ -85,15 +85,7 @@ def _node_style(node):
     `font` call overrides the theme's `font.family`. Reads the explicit
     `_theme` / `_font` fields (stamped by `materialize`, or set
     directly by the rehydrator) — never the journal; `None` is a
-    passthrough for `active_theme` / `active_font`. A node missing the
-    fields was never materialized — same caller contract as
-    `_resolve_panels` / `_measure` / `_allocate`; fail with the
-    contract spelled out, not an incidental AttributeError."""
-    if not hasattr(node, "_theme") or not hasattr(node, "_font"):
-        raise AssertionError(
-            f"_node_style: {type(node).__name__} carries no _theme/_font "
-            f"fields. Run materialize(root) over the tree before "
-            f"measurement or emit.")
+    passthrough for `active_theme` / `active_font`."""
     with active_theme(node._theme):
         with active_font(node._font):
             yield
@@ -126,7 +118,7 @@ def _layout_title(node) -> str:
     """A layout's figure-title text ('' when untitled or not a layout)
     — the explicit `_title_text` field stamped by `materialize` (or set
     directly by the rehydrator)."""
-    if not getattr(node, "_is_parent", False):
+    if not node._is_parent:
         return ""
     return node._title_text
 
@@ -176,7 +168,7 @@ def _share_root(leaf, axis: str):
     cur = leaf
     seen: set[int] = set()
     while True:
-        nxt = getattr(cur, attr, None)
+        nxt = getattr(cur, attr)
         if nxt is None or id(nxt) in seen:
             return cur
         seen.add(id(cur))
@@ -207,7 +199,7 @@ def _resolve_gap(a, b, *, axis: str) -> float:
     parent = (a._parent if a is not None else None) \
           or (b._parent if b is not None else None)
     while parent is not None:
-        per_axis = getattr(parent, per_axis_attr, None)
+        per_axis = getattr(parent, per_axis_attr)
         if per_axis is not None:
             return per_axis
         if parent._gap is not None:
@@ -298,9 +290,9 @@ def _is_atomic(node) -> bool:
     `_measure` / `_allocate` stop at them keeps the rect path unaware of
     coord internals; the placement loop dispatches on the coord at emit
     time."""
-    if not getattr(node, "_is_parent", False):
+    if not node._is_parent:
         return True
-    coord = getattr(node, "_coordinate", None)
+    coord = node._coordinate
     return coord is not None and hasattr(coord, "render_layout")
 
 
@@ -312,7 +304,7 @@ def _atomic_size(node) -> tuple[int, int]:
     max-of-leaf-dims formula."""
     if not node._is_parent:
         return _leaf_rect_size(node)
-    coord = getattr(node, "_coordinate", None)
+    coord = node._coordinate
     if coord is not None and hasattr(coord, "layout_size"):
         return coord.layout_size(node)
     leaves = [l for l in node._iter_leaves() if l._leaf_kind == "data"]
@@ -481,14 +473,14 @@ def _ancestor_calls(leaf) -> list[tuple]:
     # by `_attachments.attachment_inherited_calls` with axis filtering
     # and display damping (`divider=False`, `label=False`).
     chain = []
-    p = getattr(leaf, "_parent", None)
-    while p is not None and getattr(p, "_is_parent", False):
+    p = leaf._parent
+    while p is not None and p._is_parent:
         chain.append(p)
-        p = getattr(p, "_parent", None)
+        p = p._parent
     chain.reverse()
     out: list[tuple] = []
     for node in chain:
-        for c in getattr(node, "_calls", ()):
+        for c in node._calls:
             if c[0] in _CASCADING_NAMES:
                 out.append(c)
     return out
@@ -825,7 +817,7 @@ def _mark_joined_pair(a, b, *, axis: str,
     # cell in the pair has it off, skip the hide/suppress on this joint so
     # both panels render their own labels at the shared boundary.
     hide_attr = f"_share_hide_labels_{share_axis}"
-    if not (getattr(a, hide_attr, True) and getattr(b, hide_attr, True)):
+    if not (getattr(a, hide_attr) and getattr(b, hide_attr)):
         return
     if axis == "h":
         # h-stack: a (left) joins b (right) along their shared y-axis.
@@ -938,7 +930,7 @@ def _replay_leaves(leaves) -> dict[int, dict]:
                          + _attachments.attachment_inherited_calls(l)
                          + l._calls)
             state = _replay(effective)
-            state["insets"] = getattr(l, "_insets", [])
+            state["insets"] = l._insets
             # Stamp draw-derived artist keys at resolve time — the
             # resolved IR carries final colors and hist bins, and a
             # rendered ResolvedIR stays field-equal to a fresh one
@@ -1060,7 +1052,7 @@ def _virtual_grid_children(node, inner_kind: str) -> list | None:
     keeps its "two independent rows" semantics by default; alignment is
     opt-in via share so the user can't be surprised by phantom padding
     when their per-cell widths happen not to match across rows."""
-    if not getattr(node, "_virtual_grid_aligned", False):
+    if not node._virtual_grid_aligned:
         return None
     kids = node._effective_children()
     if not kids:
@@ -1201,7 +1193,13 @@ class RenderPlan:
     margins. Wrapped by the public `ResolvedIR` (`resolved_ir.py`): the
     projection users inspect and this plan are two views of one
     resolution — the emit pass renders from exactly what `resolve`
-    reports."""
+    reports.
+
+    Invariant: the plan `_build_plan` returns (nodes still carrying
+    their journals in `_calls`) is only ever projected into a
+    `ResolvedIR`, never emitted. Every plan `_emit_plan` consumes —
+    figure and insets alike — is rehydrated from a projection and has
+    empty journals; past resolution, all information lives in fields."""
 
     def __init__(self, root, panel_opts: dict, states: dict):
         self.root = root
@@ -1241,11 +1239,11 @@ def _resolve_coord_layouts(node) -> None:
     before its parent might consult it. Coords that implement
     `render_layout` without the staged `resolve_layout` keep their
     old at-emit behavior."""
-    if node is None or not getattr(node, "_is_parent", False):
+    if node is None or not node._is_parent:
         return
     for child in node._children:
         _resolve_coord_layouts(child)
-    coord_obj = getattr(node, "_coordinate", None)
+    coord_obj = node._coordinate
     if (coord_obj is not None and hasattr(coord_obj, "resolve_layout")
             and getattr(node, "_coord_plan", None) is None):
         coord_obj.resolve_layout(node)

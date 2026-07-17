@@ -46,9 +46,9 @@ def all_attachments(chart) -> list:
 
 def _gap(c) -> float:
     """Per-attachment gap to inward neighbor (host or previous attachment).
-    Returns 0 for unattached charts (defensive — placement only iterates
-    over already-attached lists)."""
-    return getattr(c, "_attachment_gap", 0.0)
+    `_attachment_gap` is stamped by `_apply_attach` at materialize time
+    and carried through rehydration; only attached charts reach here."""
+    return c._attachment_gap
 
 
 def attached_size_h(host) -> tuple[float, float]:
@@ -196,7 +196,7 @@ def attachment_inherited_calls(leaf) -> list[tuple]:
         return []
     out: list[tuple] = []
     for share_attr, axis in (("_share_y", "y"), ("_share_x", "x")):
-        host = getattr(leaf, share_attr, None)
+        host = getattr(leaf, share_attr)
         if host is None:
             continue
         host_effective = _ancestor_calls(host) + list(host._calls)

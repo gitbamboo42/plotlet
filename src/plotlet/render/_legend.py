@@ -561,8 +561,8 @@ def _render_legend(leaf, w: float, h: float,
     `pt.legend(ncols=N)` wraps each discrete block into columns filled
     down-then-across; headers and gradient strips span the full width."""
     sources = leaf._legend_sources or data_leaves
-    names = getattr(leaf, "_legend_names", {}) or {}
-    group_by_chart = getattr(leaf, "_legend_group_by_chart", True)
+    names = leaf._legend_names or {}
+    group_by_chart = leaf._legend_group_by_chart
     valign = leaf._legend_valign
 
     groups = _build_groups(sources, states, names, group_by_chart,
