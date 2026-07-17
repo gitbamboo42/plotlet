@@ -1,10 +1,15 @@
-"""JSON layer for Journal.
+"""JSON envelope layer — shared by `record/` and `render/`.
 
 Envelopes Python values that aren't JSON-native (tuple, set, date,
-datetime, dicts with non-string keys, DataFrameLite) so a Journal can
-be dumped through `json.dumps` and rehydrated. Kept out of `record/journal.py`
-so the journal core has no coupling — the journal is an event log; JSON
-support is a separate concern.
+datetime, dicts with non-string keys, DataFrameLite) so they can be
+dumped through `json.dumps` and rehydrated. Four consumers: the
+journal's JSON form (`record/journal.py`), the FigureIR wire format
+(`record/figure_ir.py`), value-envelope decoding at render hydration
+(`_decode`, `render/_nodes.py`), and the resolved IR's debug view
+(`render/resolved_ir.py`). It sits at the package root because both
+`record/` and `render/` need it and neither may import the other
+(`tests/test_import_boundary.py`). It also keeps JSON support out of
+`journal.py` itself — the journal stays a plain event log.
 
 DataFrame-shaped and numpy inputs never reach this layer: they're
 normalized to `DataFrameLite` / plain lists at the recorder boundary

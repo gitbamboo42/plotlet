@@ -1,7 +1,7 @@
 """Artist registry — the extension point.
 
 Every plot type (built-in or user-added) is an `ArtistSpec` registered here.
-A spec bundles the four things `_render_inner` needs to know about a plot type:
+A spec bundles everything the pipeline needs to know about a plot type:
 
   - `record(*args, **kwargs) -> dict`
         Convert positional/keyword args into the artist dict. Write it

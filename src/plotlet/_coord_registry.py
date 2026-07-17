@@ -1,11 +1,16 @@
-"""Coord codec registry — a neutral home for the `class_name → class` map
-that `record/journal.py` needs for round-tripping coord
-objects like `CircularCoordinate`.
+"""Coord codec registry — the `class_name → class` map behind
+`{"$coord": ...}` envelopes, for coord objects like
+`CircularCoordinate`.
 
-Lives here rather than in either consumer so that removing one of them
-later (e.g. retiring the JSON tree serializer once the journal covers
-the same ground) doesn't leave the registry orphaned. The public API
-`plotlet.register_coord_codec` re-exports from this module directly.
+`record/journal.py` encodes a coord object to its class name;
+`_json_layer._decode` turns the name back into the class via
+`resolve_coord`, which imports the built-in coord module on the first
+miss so cold processes decode without a prior render. The render half
+reads the map too (`render/_validate.py` cross-checks the `container`
+flag, `render/resolved_ir.py` rehydrates coords), so the registry sits
+at the package root, where `record/` and `render/` may both import it.
+The public API `plotlet.register_coord_codec` re-exports from this
+module directly.
 """
 from __future__ import annotations
 

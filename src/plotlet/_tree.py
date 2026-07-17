@@ -3,7 +3,7 @@
 Both halves walk the same tree shape — the recording side at
 validation time (over `Chart` / `Layout`), the render side when
 deriving field state and building share classes (over the render
-nodes in `_render_nodes.py`). The protocol is structural:
+nodes in `render/_nodes.py`). The protocol is structural:
 `_is_parent`, `_children`, `_effective_children()`, `_layout_kind`,
 `_grid_rows` / `_grid_cols`, `_leaf_kind`, and the `_attached_*`
 lists. Nothing here imports either half.
