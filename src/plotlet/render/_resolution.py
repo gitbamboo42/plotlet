@@ -321,11 +321,14 @@ class _PanelState(dict):
         return dict.__getitem__(self, key)
 
 
-def _replay(calls):
-    """Walk a Chart's recorded calls into a state dict consumed by the
-    renderer. Pure function of `calls` and the artist registry — same input
-    + same registry → same output."""
-    state = _PanelState({
+def _default_state() -> _PanelState:
+    """Fresh panel state with every key at its default — the one
+    definition of the closed key set. Defaults that read `_FRAME` / spec
+    values pick up the ambient theme, so callers wrap this in
+    `active_theme` / `active_font` for the panel they mean: replay does
+    (via `_node_style`), and the resolved-IR projection and rehydration
+    do the same so default-eliding stays symmetric."""
+    return _PanelState({
         "artists": [], "title": "", "subtitle": "", "caption": "",
         "xlabel": "", "ylabel": "",
         "xlim": None, "ylim": None, "xscale": "linear", "yscale": "linear",
@@ -421,6 +424,13 @@ def _replay(calls):
         "y_sectors": None,
         "y_sector_column": None,
     })
+
+
+def _replay(calls):
+    """Walk a Chart's recorded calls into a state dict consumed by the
+    renderer. Pure function of `calls` and the artist registry — same input
+    + same registry → same output."""
+    state = _default_state()
     # Stable-sort sectors entries to the front. Sectors set the state
     # `_sector_remap_data` reads while processing artist calls; an
     # ordering bug would silently no-op the remap (every row stacked into
@@ -1219,9 +1229,10 @@ def _inline_legend_layout(state, env=None):
             "position": pos, "ncols": ncols}
 
 
-def _resolve_panel_inputs(state, *, x_scale, y_scale, dw, dh, layout_opts):
-    """Resolve ticks, labels, sizes, rotations, suppress flags and hide
-    flags for one panel. Shared by `_required_margin` (via
+def _derive_panel_inputs(state, *, x_scale, y_scale, dw, dh, layout_opts):
+    """Derive ticks, labels, sizes, rotations, suppress flags and hide
+    flags for one panel — a pure function of resolved state, scales,
+    and pixel dims; no new decisions. Shared by `_required_margin` (via
     `_chrome.label_band_sizes`) and `_render_inner` so the reservation
     and render passes walk identical numbers.
 
@@ -1357,8 +1368,8 @@ def _required_margin(state, dw, dh, layout_opts: "_PanelOpts") -> dict:
         y_scale = y_axis.build(0, dh)
     else:
         y_scale = y_axis.build(dh, 0)
-    inp = _resolve_panel_inputs(state, x_scale=x_scale, y_scale=y_scale,
-                                 dw=dw, dh=dh, layout_opts=layout_opts)
+    inp = _derive_panel_inputs(state, x_scale=x_scale, y_scale=y_scale,
+                               dw=dw, dh=dh, layout_opts=layout_opts)
     bands, _ = _chrome.label_band_sizes(state, inp, dw, dh)
     top, right, bottom, left = bands["top"], bands["right"], bands["bottom"], bands["left"]
 

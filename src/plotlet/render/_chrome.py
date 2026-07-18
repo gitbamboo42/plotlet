@@ -111,7 +111,7 @@ def label_band_sizes(state, inp, dw, dh):
     slots. ``_required_margin`` recomputes the title/xlabel/ylabel
     overhang inline.
 
-    ``inp`` is the resolved panel inputs from ``_resolution._resolve_panel_inputs``
+    ``inp`` is the derived panel inputs from ``_resolution._derive_panel_inputs``
     — keeps the reservation and render passes walking identical numbers.
     """
     label_size = _FONTSPEC["label_size"]

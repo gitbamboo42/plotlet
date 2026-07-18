@@ -86,7 +86,7 @@ from ..registry import declare_coord_support
 def _circular_x_tick_labels(state, dw):
     """The x-tick label strings the ring will actually draw.
 
-    Mirrors the render's resolution (``_resolve_panel_inputs``) exactly, so
+    Mirrors the render's derivation (``_derive_panel_inputs``) exactly, so
     the chrome reservation matches what's drawn — not a guess. Two cases the
     naive estimate got wrong: an autoscaled ring's labels ("0.0" … "1.0")
     are far wider than a ``max(xlim)`` estimate, and a *continuous-sector*
@@ -107,7 +107,7 @@ def _circular_x_tick_labels(state, dw):
     x_labels = (state["x_labels"] if state["x_labels"] is not None
                 else [x_fmt(t) for t in x_ticks])
     # Continuous sectors: auto ticks are suppressed; explicit ticks are
-    # replicated per-sector. Same branch as `_resolve_panel_inputs`.
+    # replicated per-sector. Same branch as `_derive_panel_inputs`.
     x_sec = state.get("x_sectors")
     if x_sec is not None and x_sec.kind == "continuous":
         _, x_labels = x_sec.expand_ticks(

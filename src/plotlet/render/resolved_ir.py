@@ -15,10 +15,12 @@ What resolution bakes into the projection:
   * axes are `IRScale` — an alias of `scales._AxisDescriptor`, the same
     pre-pixel type the layout engine builds and consumes (zero schema
     drift); share classes reference one descriptor per class
-  * `state` is the full replayed per-leaf state — artists with baked
-    per-group hex colors, sector partitions, tick config, spines —
-    exactly what the emit pass draws from (`chrome` is a curated view
-    of the same dict for quick inspection)
+  * `state` is the replayed per-leaf state the emit pass draws from —
+    artists with baked per-group hex colors, sector partitions, tick
+    config, spines. Keys still at their default are omitted and
+    reseeded at rehydration (under the panel's own theme, the same
+    context replay ran in), so the projection carries each decision
+    exactly once and nothing that was left alone
   * effective margins (`margin` = `M_eff`), grown canvases, and the
     joined-edge `hide`/`suppress` annotations from the layout engine's
     measurement pre-pass
@@ -54,8 +56,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .._spec import active_font, active_theme
 from ..scales import _AxisDescriptor as IRScale
-from ._chrome_visibility import resolve_axis_chrome
+from ._resolution import _default_state
 
 
 # ---------------------------------------------------------------------------
@@ -65,18 +68,6 @@ from ._chrome_visibility import resolve_axis_chrome
 # `IRScale` above is `scales._AxisDescriptor` — same fields, same
 # semantics. Aliased so the resolved IR's surface reads as "IR types"
 # while the definition stays with the scale classes it factories.
-
-
-@dataclass(frozen=True)
-class IRArtist:
-    """One artist entry post-`_replay`.
-
-    `_replay` has already split `color=<column>` into per-group entries
-    with resolved hex colors and legend labels in `props["opts"]` — no
-    palette lookup left. Consumers read colors off `props`.
-    """
-    kind: str
-    props: dict
 
 
 @dataclass(frozen=True)
@@ -94,27 +85,25 @@ class IRPanel:
       * `"diagram"` — pre-rendered SVG leaf (`diagram_inner`)
 
     Non-data leaves carry sizing plus their own config; `scales` /
-    `artists` / `state` / `chrome` are empty for them.
+    `state` are empty for them.
 
-    Panel data appears at three altitudes, on purpose:
-      * `state` — the FULL replayed state dict, and the ONLY one the
-        emit pass reads (rehydration rebuilds the panel from it);
-      * `chrome` and `artists` — curated read-only views for humans and
-        tests. Emit never reads them; `chrome["visibility"]` in
-        particular is re-derived at emit time from `state` + the
-        hide/suppress flags (see `to_svg`).
-    The curation rules live in `_LIFTED_STATE_KEYS` (what `state` drops
-    because it was lifted to real fields) and `_extract_chrome` (which
-    keys the `chrome` view selects).
+    `state` is the single copy of the replayed panel state — the emit
+    pass reads it and nothing else (rehydration rebuilds the panel from
+    it). Two kinds of key are omitted: the lifted keys
+    (`_LIFTED_STATE_KEYS`, projected as real fields), and keys still at
+    their `_default_state()` value under the panel's own theme —
+    `_rehydrate_panel` reseeds those, so what you see is exactly what
+    was decided away from the default. `state["artists"]` entries are
+    post-`_replay` dicts: `color=<column>` already split into per-group
+    entries with resolved hex colors — no palette lookup left.
+    Axis/spine visibility is not stored; it is derived at emit time
+    from `state` + the hide/suppress flags (`_chrome_visibility`).
     """
     pid: int             # stable panel id within this ResolvedIR
     coord: IRCoord
     scales: dict         # {"x": IRScale, "y": IRScale} for data leaves
-    artists: tuple       # curated view of state["artists"]
-    chrome: dict         # curated identity/spine state + "visibility":
-                         # the decided draw-it? flags (see `_chrome_visibility`)
-    state: dict          # the FULL replayed state the emit pass draws from
-                         # (minus "insets"/"coordinate", lifted to fields)
+    state: dict          # replayed state the emit pass draws from, minus
+                         # lifted keys and keys still at their default
     attachments: dict    # {"left","right","top","bottom"} → tuple[IRPanel]
     insets: tuple        # ((rect, IRPanel), ...) — each fully resolved
     data_width: float
@@ -202,8 +191,7 @@ def _to_plain(v):
     """Dataclass IR → plain dict/list for `to_dict()`. Recurses only
     through the IR containers; leaf values pass through untouched for
     `json_safe` to envelope."""
-    if isinstance(v, (ResolvedIR, IRPanel, IRLayout, IRScale, IRCoord,
-                      IRArtist)):
+    if isinstance(v, (ResolvedIR, IRPanel, IRLayout, IRScale, IRCoord)):
         return {k: _to_plain(getattr(v, k)) for k in v.__dataclass_fields__}
     if isinstance(v, dict):
         return {k: _to_plain(x) for k, x in v.items()}
@@ -338,6 +326,39 @@ def _last_call(layout, op_name):
 # through the coord registry at rehydration).
 _LIFTED_STATE_KEYS = ("insets", "coordinate")
 
+_MISSING = object()
+
+
+def _is_default(v, d):
+    """True when state value `v` equals its default `d` — safe against
+    values `==` chokes on (numpy arrays) and conservative on type
+    mismatches (`True` vs `1`): when unsure, keep the key."""
+    if d is _MISSING:
+        return False
+    if v is None or d is None:
+        return v is None and d is None
+    if isinstance(v, bool) or isinstance(d, bool):
+        return v is d
+    if type(v) is not type(d):
+        return False
+    try:
+        return bool(v == d)
+    except Exception:
+        return False
+
+
+def _project_state(state, theme, font):
+    """The sparse `IRPanel.state`: drop lifted keys and keys still at
+    their default. The baseline is `_default_state()` under the panel's
+    own theme/font — the same ambient context `_replay` ran in — so
+    eliding here and reseeding in `_rehydrate_panel` see identical
+    defaults."""
+    with active_theme(theme), active_font(font):
+        base = dict(_default_state())
+    return {k: v for k, v in state.items()
+            if k not in _LIFTED_STATE_KEYS
+            and not _is_default(v, base.get(k, _MISSING))}
+
 
 def _chart_to_ir(chart, panel_opts, states, pids):
     if chart._leaf_kind != "data":
@@ -363,9 +384,7 @@ def _chart_to_ir(chart, panel_opts, states, pids):
     ir_coord = (_coord_to_ir(coord_obj, panel_opts, states, pids)
                 if coord_obj else IRCoord(kind="cartesian"))
 
-    artists = tuple(_artist_to_ir(a) for a in state.get("artists", ()))
-    projected_state = {k: v for k, v in state.items()
-                       if k not in _LIFTED_STATE_KEYS}
+    projected_state = _project_state(state, chart._theme, chart._font)
 
     attachments = {
         "left":   tuple(_chart_to_ir(a, panel_opts, states, pids)
@@ -391,11 +410,6 @@ def _chart_to_ir(chart, panel_opts, states, pids):
             for s in ("left", "right", "top", "bottom")}
     suppress = {s: getattr(layout_opts, f"suppress_{s}_labels", False) if layout_opts else False
                 for s in ("left", "right", "top", "bottom")}
-    chrome = _extract_chrome(state)
-    # The same decided flags the emit pass reads (via
-    # `_resolution._resolve_panel_inputs`) — the projection shows what will be
-    # drawn, not just the raw ingredients.
-    chrome["visibility"] = resolve_axis_chrome(state, layout_opts)
     share = {
         "x": pids.get(id(chart._share_x)) if chart._share_x is not None else None,
         "y": pids.get(id(chart._share_y)) if chart._share_y is not None else None,
@@ -405,8 +419,6 @@ def _chart_to_ir(chart, panel_opts, states, pids):
         pid=pids[id(chart)],
         coord=ir_coord,
         scales=scales,
-        artists=artists,
-        chrome=chrome,
         state=projected_state,
         attachments=attachments,
         insets=insets,
@@ -457,8 +469,6 @@ def _nondata_leaf_to_ir(chart, pids):
         pid=pids[id(chart)],
         coord=IRCoord(kind="cartesian"),
         scales={},
-        artists=(),
-        chrome={},
         state={},
         attachments={"left": (), "right": (), "top": (), "bottom": ()},
         insets=(),
@@ -508,37 +518,6 @@ def _coerce_param(v, panel_opts, states, pids):
     if isinstance(v, (list, tuple)):
         return type(v)(_coerce_param(x, panel_opts, states, pids) for x in v)
     return v
-
-
-def _extract_chrome(state):
-    """Chrome-relevant state fields for a data leaf: the curated
-    identity fields plus per-target spine style overrides (only when
-    set). Spine visibility is NOT copied here — it lives under the
-    "visibility" key the caller adds with the decided per-axis draw
-    flags from `_chrome_visibility.resolve_axis_chrome`, the one authoritative
-    copy."""
-    keys = (
-        "title", "xlabel", "ylabel",
-        "xscale", "yscale",
-        "x_ticks", "y_ticks", "x_labels", "y_labels",
-        "x_reverse", "y_reverse",
-        "xlim", "ylim",
-        "grid", "facecolor",
-        "legend",
-    )
-    spine_vis = {"spine_top", "spine_bottom", "spine_left", "spine_right",
-                 "spine_walls"}
-    chrome = {k: state[k] for k in keys if k in state and state[k] is not None}
-    chrome.update({k: v for k, v in state.items()
-                   if k.startswith("spine_") and k not in spine_vis
-                   and v is not None})
-    return chrome
-
-
-def _artist_to_ir(artist):
-    kind = artist.get("type", "unknown")
-    props = {k: v for k, v in artist.items() if k != "type"}
-    return IRArtist(kind=kind, props=props)
 
 
 # ---------------------------------------------------------------------------
@@ -651,11 +630,14 @@ def _rehydrate_panel(panel: "IRPanel", ctx, *, parent):
     if panel.leaf_kind != "data":
         return node
 
-    # Data leaf: rebuild state + panel opts. State is shallow-copied so
-    # the lifted keys can be reinstated without touching the projection;
-    # they're seeded here because the closed key set (`_PanelState`)
-    # rejects writes of keys absent from the projection.
-    state = _PanelState({**panel.state, "coordinate": None, "insets": []})
+    # Data leaf: rebuild state + panel opts. The projection is sparse —
+    # reseed every omitted key from `_default_state()` under the
+    # panel's own theme/font (the same ambient context `_replay` and
+    # `_project_state` used), then overlay the projected decisions.
+    # The full key set also satisfies `_PanelState`'s closed-set checks.
+    with active_theme(panel.theme), active_font(panel.font):
+        base = _default_state()
+    state = _PanelState({**base, **panel.state})
     if panel.coord.kind != "cartesian":
         state["coordinate"] = _rehydrate_coord(panel.coord, ctx)
     node._last_M_eff = dict(panel.margin)

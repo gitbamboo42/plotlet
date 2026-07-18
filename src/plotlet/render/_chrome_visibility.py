@@ -3,14 +3,12 @@
 `resolve_axis_chrome` combines the replayed chart state with the layout
 pre-pass flags (share-pair side hiding, tick-label suppression) into
 plain booleans. It is the ONE place such combinations live:
-
-- `_resolution._resolve_panel_inputs` calls it and puts the result on the
-  panel inputs (`inp.chrome`), so the margin reservation
-  (`_chrome.chrome_stack_extents` / `label_band_sizes`) and the emit
-  pass (`_chrome.emit_chrome`) read identical decisions;
-- `resolved_ir._chart_to_ir` projects the same result into
-  `IRPanel.chrome["visibility"]`, so the resolved IR shows what will
-  be drawn, not just the raw ingredients.
+`_resolution._derive_panel_inputs` calls it and puts the result on the
+panel inputs (`inp.chrome`), so the margin reservation
+(`_chrome.chrome_stack_extents` / `label_band_sizes`) and the emit
+pass (`_chrome.emit_chrome`) read identical decisions. The resolved IR
+does not store these flags — they are re-derived here at emit time
+from `state` + the layout hide/suppress flags.
 
 Emitters must not re-derive these combinations: when a new "draw X?"
 rule mixes more than one state / layout field, add the decided flag

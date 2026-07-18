@@ -163,8 +163,7 @@ def test_render_half_imports_no_front_half_module():
 # widening the list (see `emit.py`'s docstring).
 EMIT_RESOLUTION_ALLOWED = {
     "_INSIDE_POSITIONS", "_PanelOpts",
-    "_inline_legend_layout", "_prebin_hist", "_resolve_panel_inputs",
-    "_stamp_artist_colors",
+    "_derive_panel_inputs", "_inline_legend_layout",
 }
 
 

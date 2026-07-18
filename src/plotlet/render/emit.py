@@ -9,14 +9,14 @@ attr helpers encode the AI-readable `data-plotlet-*` schema. Resolution
 (`docs/ARCHITECTURE.md`) visible in the module layout.
 
 The `from ._resolution import ...` list below is the contract's edge, enforced
-by `tests/test_import_boundary.py`: every *function* in it is one the
-resolution pass also calls (`_required_margin`, `_resolve_panels`),
-so re-running it here is idempotent — emit re-derives values the
-resolved IR already carries (necessary because the circular coord's
-per-leaf path reaches `_render_inner` with freshly replayed states),
-never new ones. Widening the list means emit is about to make a
-decision of its own — put the decided flag in `_chrome_visibility` /
-resolution instead.
+by `tests/test_import_boundary.py`: types, constants, and shared pure
+derivations (`_derive_panel_inputs`, `_inline_legend_layout`) that the
+margin-reservation pass also walks, so reservation and render agree on
+identical numbers. Every state that reaches emit is already resolved —
+artists stamped, hists pre-binned (`_replay_leaves`) — so emit derives
+placement from decisions, never decisions. Widening the list means emit
+is about to make a decision of its own — put the decided flag in
+`_chrome_visibility` / resolution instead.
 """
 from __future__ import annotations
 
@@ -36,8 +36,7 @@ from ..registry import RenderContext, get_artist, _COORD_SUPPORT
 from . import _chrome
 from ._resolution import (
     _INSIDE_POSITIONS, _PanelOpts,
-    _inline_legend_layout, _prebin_hist, _resolve_panel_inputs,
-    _stamp_artist_colors,
+    _derive_panel_inputs, _inline_legend_layout,
 )
 
 # ---------------------------------------------------------------------------
@@ -326,11 +325,9 @@ def _render_inner(state, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
     at `(0,0)`→`(iw,ih)`, chrome placed relative to `M`. `panel_opts`
     supplies axis descriptors and joined-side flags. `clip_counter` is
     shared across panels so coord-clip ids stay unique in the SVG."""
-    _prebin_hist(state)
-
     x_scale, y_scale, x_is_cat = _build_xy_scales(state, iw, ih, panel_opts)
-    inp = _resolve_panel_inputs(state, x_scale=x_scale, y_scale=y_scale,
-                                 dw=iw, dh=ih, layout_opts=panel_opts)
+    inp = _derive_panel_inputs(state, x_scale=x_scale, y_scale=y_scale,
+                               dw=iw, dh=ih, layout_opts=panel_opts)
     # Label bands + raw chrome stack — both passes share the chrome dict
     # so we only compute it once per render. `label_bands` feeds the
     # inline-legend block; `chrome` feeds frame-label placement and the
@@ -338,16 +335,6 @@ def _render_inner(state, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
     label_bands, chrome = _chrome.label_band_sizes(state, inp, iw, ih)
     _x_sec = state["x_sectors"]
     _y_sec = state["y_sectors"]
-
-    # Color assignment — normally already stamped at resolve time
-    # (`_resolve_panels` calls `_stamp_artist_colors` so the resolved
-    # IR carries final colors); recomputed here because this function
-    # is also reached with freshly replayed states (the circular coord's
-    # per-leaf render). Idempotent — identical values either way. Runs
-    # before the legend harvest below: entries capture `_color` at
-    # harvest time (a `legend={...}` override harvests from a *copy* of
-    # the record, so later in-place stamping wouldn't reach it).
-    _stamp_artist_colors(state)
 
     # In-frame legend geometry is computed up front because a top-position
     # legend sits between the title and the data area — the title's y

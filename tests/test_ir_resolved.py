@@ -3,7 +3,7 @@
   * run without error
   * produce a JSON-safe projection (envelopes only via `_json_layer`)
   * be deterministic (same figure built twice → equal resolved IR)
-  * emit valid IRScale kinds and populated IRArtist kinds
+  * emit valid IRScale kinds and typed artist entries
 
 The resolved IR is the second stage of the render pipeline:
 `render.render_svg` is `resolve(ir).to_svg()`, so the projection
@@ -22,7 +22,6 @@ import pytest
 
 import plotlet as pt
 from plotlet.render.resolved_ir import (
-    IRArtist,
     IRCoord,
     IRLayout,
     IRPanel,
@@ -73,25 +72,10 @@ def test_resolve_structural(label, fn):
                 f"scale.kind {sc.kind!r} not in {_VALID_SCALE_KINDS}"
             if sc.kind == "category":
                 assert sc.cats is not None, "category scale needs cats"
-        for artist in panel.artists:
-            assert isinstance(artist, IRArtist)
-            assert isinstance(artist.kind, str) and artist.kind != "unknown"
-        # Decided chrome visibility rides on every data panel — the
-        # same flags the emit pass reads (see render/_chrome_visibility.py).
-        vis = panel.chrome["visibility"]
-        assert set(vis["spines"]) == {"top", "bottom", "left", "right",
-                                      "walls"}
-        for axis in ("x", "y"):
-            assert set(vis[axis]) == {"side", "hidden", "draw_marks",
-                                      "outward_mark", "draw_labels",
-                                      "draw_axis_label",
-                                      "draw_sector_dividers",
-                                      "draw_sector_labels"}
-            assert all(isinstance(vis[axis][k], bool)
-                       for k in ("hidden", "draw_marks", "outward_mark",
-                                 "draw_labels", "draw_axis_label",
-                                 "draw_sector_dividers",
-                                 "draw_sector_labels"))
+        for artist in panel.state.get("artists", []):
+            assert isinstance(artist, dict)
+            assert isinstance(artist.get("type"), str) \
+                and artist["type"] != "unknown"
 
 
 def _nan_eq(a, b):
@@ -142,7 +126,7 @@ def test_figure_ir_resolve_method():
     # title lives on the leaf
     assert isinstance(via_method.root, IRLayout)
     (panel,) = via_method.root.children
-    assert panel.chrome.get("title") == "t"
+    assert panel.state.get("title") == "t"
 
 
 def test_layout_title_projected():
@@ -158,6 +142,34 @@ def test_layout_title_projected():
     assert pt.to_ir(pair().title("first").title("Figure title")).resolve().root.title \
         == "Figure title"
     assert pt.to_ir(pair()).resolve().root.title is None
+
+
+def test_projection_state_is_sparse():
+    """`IRPanel.state` carries each decision once and nothing else —
+    keys still at their default are omitted (reseeded at rehydration
+    from `_default_state()`), and there are no duplicate curated
+    views: `state` is the single copy."""
+    c = pt.chart({"x": [1.0, 2.0], "y": [3.0, 4.0]}, title="demo")
+    c.scatter(x="x", y="y")
+    (panel,) = pt.to_ir(c).resolve().root.children
+    assert panel.state["title"] == "demo"
+    assert panel.state["artists"]
+    for key in ("subtitle", "xscale", "spine_top", "spine_top_color",
+                "x_ticks", "legend_position", "clip"):
+        assert key not in panel.state
+    assert not hasattr(panel, "artists") and not hasattr(panel, "chrome")
+
+
+def test_themed_panel_round_trips_through_sparse_state():
+    """Default-eliding is theme-aware: a theme rewrites `_FRAME`-backed
+    state defaults (minimal turns spines and tick marks off), so
+    eliding at projection and reseeding at rehydration must both run
+    under the panel's own theme. The SVG emitted from the projection
+    must match the direct render byte for byte."""
+    c = pt.chart({"x": [1.0, 2.0], "y": [3.0, 4.0]}, theme="minimal")
+    c.scatter(x="x", y="y")
+    ir = pt.to_ir(c)
+    assert ir.resolve().to_svg() == ir.to_svg()
 
 
 # ---------------------------------------------------------------------------
