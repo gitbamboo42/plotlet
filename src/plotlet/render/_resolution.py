@@ -34,7 +34,7 @@ from ..scales import (_nice_domain, _fmt_tick, _to_epoch,
                       _coerce_time_lim, _AxisDescriptor)
 from ..sectors import SectoredValue
 from ..draw import measure_text, text_block_height
-from . import _chrome
+from . import _chrome_bands
 from ._chrome_visibility import resolve_axis_chrome
 from ..utils import (hist_bin_edges, hist_bin_counts, hist_transform,
                      collect_categories, group_color)
@@ -1233,7 +1233,7 @@ def _derive_panel_inputs(state, *, x_scale, y_scale, dw, dh, layout_opts):
     """Derive ticks, labels, sizes, rotations, suppress flags and hide
     flags for one panel — a pure function of resolved state, scales,
     and pixel dims; no new decisions. Shared by `_required_margin` (via
-    `_chrome.label_band_sizes`) and `_render_inner` so the reservation
+    `_chrome_bands.label_band_sizes`) and `_render_inner` so the reservation
     and render passes walk identical numbers.
 
     `x_scale` / `y_scale` are caller-built: the reservation pass uses the
@@ -1315,7 +1315,7 @@ def _derive_panel_inputs(state, *, x_scale, y_scale, dw, dh, layout_opts):
 # Pieces:
 #   1. `_enforce_floors(leaf._margin)`         — per-side floor (whitespace),
 #                                                in `_layout_engine.py`.
-#   2. `_chrome.label_band_sizes(...)`          — pure axis band: tick marks,
+#   2. `_chrome_bands.label_band_sizes(...)`          — pure axis band: tick marks,
 #                                                tick labels, ylabel / xlabel
 #                                                / title attached to that side
 #                                                (float).
@@ -1370,7 +1370,7 @@ def _required_margin(state, dw, dh, layout_opts: "_PanelOpts") -> dict:
         y_scale = y_axis.build(dh, 0)
     inp = _derive_panel_inputs(state, x_scale=x_scale, y_scale=y_scale,
                                dw=dw, dh=dh, layout_opts=layout_opts)
-    bands, _ = _chrome.label_band_sizes(state, inp, dw, dh)
+    bands, _ = _chrome_bands.label_band_sizes(state, inp, dw, dh)
     top, right, bottom, left = bands["top"], bands["right"], bands["bottom"], bands["left"]
 
     # Cross-side text overhang: a title / xlabel longer than `dw` is
@@ -1380,7 +1380,7 @@ def _required_margin(state, dw, dh, layout_opts: "_PanelOpts") -> dict:
     # spills past top and bottom equally. Margins grow by the overhang
     # so the rendered text fits inside the canvas. Skip when the label
     # / title is hidden (joined side) since the renderer won't draw it.
-    # Applied here (not in `_chrome.label_band_sizes`) because positioning
+    # Applied here (not in `_chrome_bands.label_band_sizes`) because positioning
     # code in `_render_inner` needs the *axis band* without overhang — a
     # wide title shouldn't displace the ylabel from its natural slot.
     label_size = _FONTSPEC["label_size"]
@@ -1412,7 +1412,7 @@ def _required_margin(state, dw, dh, layout_opts: "_PanelOpts") -> dict:
         bottom = max(bottom, ylabel_overhang)
     # Rightmost x-tick label's rotated AABB extends past x=iw by half its
     # width — a cross-axis spillover from the bottom axis. Measured in
-    # `_chrome.label_band_sizes` and reported separately so an inline right
+    # `_chrome_bands.label_band_sizes` and reported separately so an inline right
     # legend (which positions itself at `iw + bands["right"] + gap`)
     # hugs the data area instead of being shoved out by a fat 45°-
     # rotated tick label. The y-tick mirror (top/bottom) keeps the

@@ -33,7 +33,7 @@ from ..draw import measure_text
 from ..draw import coord, rect, segment, text_path
 from .. import _regions
 from ..registry import RenderContext, get_artist, _COORD_SUPPORT
-from . import _chrome
+from . import _chrome_bands, _chrome_emit
 from ._resolution import (
     _INSIDE_POSITIONS, _PanelOpts,
     _derive_panel_inputs, _inline_legend_layout,
@@ -332,7 +332,7 @@ def _render_inner(state, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
     # so we only compute it once per render. `label_bands` feeds the
     # inline-legend block; `chrome` feeds frame-label placement and the
     # top-legend gap below.
-    label_bands, chrome = _chrome.label_band_sizes(state, inp, iw, ih)
+    label_bands, chrome = _chrome_bands.label_band_sizes(state, inp, iw, ih)
     _x_sec = state["x_sectors"]
     _y_sec = state["y_sectors"]
 
@@ -422,7 +422,7 @@ def _render_inner(state, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
             mw = _GRIDSPEC["minor_width"]; md = _GRIDSPEC["minor_dasharray"]
             if not x_is_cat:
                 xm = state["x_minor"]
-                for t in _chrome._resolve_minor_ticks(
+                for t in _chrome_emit._resolve_minor_ticks(
                         xm if xm not in (None, False) else True,
                         x_scale, inp.x_ticks):
                     x = x_scale(t)
@@ -430,7 +430,7 @@ def _render_inner(state, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
                                          color=gcol, width=mw, dash=md))
             if panel_opts.y_axis.kind != "category":
                 ym = state["y_minor"]
-                for t in _chrome._resolve_minor_ticks(
+                for t in _chrome_emit._resolve_minor_ticks(
                         ym if ym not in (None, False) else True,
                         y_scale, inp.y_ticks):
                     y = y_scale(t)
@@ -534,7 +534,7 @@ def _render_inner(state, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
                 parts.append('</g>')
             parts.append('</g>' if _clip_id else '</svg>')
 
-    parts.extend(_chrome.emit_chrome(
+    parts.extend(_chrome_emit.emit_chrome(
         state=state, inp=inp, iw=iw, ih=ih,
         coord_object=_coord_object, coord_project=_coord_project,
         has_coord_frame=_has_coord_frame, has_x_frame=_has_x_frame,
@@ -551,7 +551,7 @@ def _render_inner(state, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
                          if inner_gap_top is not None else 0)
     bottom_legend_outset = (leg["lh"] + legend_gap
                             if legend_pos == "bottom" else 0)
-    parts.extend(_chrome.emit_frame_labels(
+    parts.extend(_chrome_emit.emit_frame_labels(
         state, inp, iw, ih, chrome, top_legend_outset=top_legend_outset,
         bottom_legend_outset=bottom_legend_outset,
     ))
@@ -576,7 +576,7 @@ def _render_inner(state, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
         if pos in ("right", "left", "top", "bottom"):
             # `top` puts the legend *between* the title (outer edge) and
             # data (inner edge); other sides put it beyond the axis
-            # band. Hidden sides naturally collapse via `_chrome.label_band_sizes`
+            # band. Hidden sides naturally collapse via `_chrome_bands.label_band_sizes`
             # — when a side's title/labels are dropped (joined share-pair
             # or unset), the band shrinks and the legend moves inward.
             if pos == "right":

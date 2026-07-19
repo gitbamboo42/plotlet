@@ -82,93 +82,6 @@ from .._coord_registry import register_coord_codec
 from ..registry import declare_coord_support
 
 
-
-def _circular_x_tick_labels(state, dw):
-    """The x-tick label strings the ring will actually draw.
-
-    Mirrors the render's derivation (``_derive_panel_inputs``) exactly, so
-    the chrome reservation matches what's drawn — not a guess. Two cases the
-    naive estimate got wrong: an autoscaled ring's labels ("0.0" … "1.0")
-    are far wider than a ``max(xlim)`` estimate, and a *continuous-sector*
-    axis draws NO auto tick labels (they're meaningless on a global-offset
-    coord) — so reserving for phantom numeric ticks over-shrinks the ring.
-    """
-    from ._resolution import (_axis_descriptor, _auto_major_ticks,
-                       _resolve_tick_formatter)
-    from .._spec import _FRAME
-    x_axis = _axis_descriptor([state], "x")
-    x_scale = (x_axis.build(0, dw)
-               if (x_axis.kind == "category" or not x_axis.flip)
-               else x_axis.build(dw, 0))
-    x_ticks = (state["x_ticks"] if state["x_ticks"] is not None
-               else _auto_major_ticks(x_scale, max(2, min(8, int(dw // _FRAME["tick_density_x_px"]))),
-                                      state["x_step"], state["x_count"]))
-    x_fmt = _resolve_tick_formatter(state["x_format"], x_scale)
-    x_labels = (state["x_labels"] if state["x_labels"] is not None
-                else [x_fmt(t) for t in x_ticks])
-    # Continuous sectors: auto ticks are suppressed; explicit ticks are
-    # replicated per-sector. Same branch as `_derive_panel_inputs`.
-    x_sec = state.get("x_sectors")
-    if x_sec is not None and x_sec.kind == "continuous":
-        _, x_labels = x_sec.expand_ticks(
-            x_ticks if state["x_ticks"] is not None else [],
-            x_labels if state["x_ticks"] is not None else [])
-    return x_labels
-
-
-def _circular_chrome_pad(state, dw) -> float:
-    """Radial pixels of chrome past the outer arc for the outermost ring.
-
-    Visibility comes from the same `_chrome_visibility.resolve_axis_chrome` the
-    emit pass reads — rings carry no share-pair hiding or label
-    suppression, so the layout flags are all False. Only the radial
-    stacking arithmetic is local: it mirrors the ``draw_x_chrome`` /
-    ``draw_x_sector_chrome`` geometry, which has no linear counterpart.
-    ``dw`` is the t-axis pixel span (the panel width auto ticks resolve
-    against), used to resolve the real tick labels. Used by
-    ``render_layout`` to grow the canvas outward around the data
-    annulus so labels don't get clipped by the viewBox.
-
-    Returns 0 when no chrome is drawn outside the ring.
-    """
-    from .._spec import SPEC, _FRAME, _FONTSPEC
-    from ..draw import cap_height, measure_text
-    from ._chrome_visibility import resolve_axis_chrome
-
-    pol = resolve_axis_chrome(state)["x"]
-
-    tl        = _FRAME["tick_length"]
-    tp        = _FRAME["tick_pad"]
-    tick_size = _FONTSPEC["tick_size"]
-    x_size    = state["x_fontsize"] if state["x_fontsize"] is not None else tick_size
-    x_ticks_v = state.get("x_ticks")   # None=auto, []=suppressed, [...]= explicit
-
-    x_chrome = 0.0
-    labels = (_circular_x_tick_labels(state, dw)
-              if (pol["draw_labels"] and x_ticks_v != []) else [])
-    if labels:
-        x_style  = state.get("x_fontstyle") or "normal"
-        x_weight = state.get("x_fontweight") or "normal"
-        max_w  = max(measure_text(l, x_size, x_style, x_weight) for l in labels)
-        x_chrome = tl + tp + max_w
-    elif pol["draw_marks"] and x_ticks_v != []:
-        # `draw_marks`, not `outward_mark`: circular tick marks always
-        # point radially outward regardless of the tick direction state
-        # (see draw_x_chrome), so the full tick_length is reserved.
-        x_chrome = tl                # marks only, no labels (or none drawn)
-
-    # Sector labels stack outside tick chrome (same rule as linear)
-    x_sec = state.get("x_sectors")
-    if pol["draw_sector_labels"]:
-        sec_size  = x_sec.fontsize if x_sec.fontsize is not None else SPEC["sectors"]["label_size"]
-        sec_cap   = cap_height(sec_size)
-        label_pad = SPEC["sectors"]["label_pad"]
-        base_off  = (x_chrome + label_pad) if x_chrome > 0.0 else tp
-        # Use the flipped-label offset (conservative worst case)
-        return base_off + sec_cap * 1.5
-    return x_chrome
-
-
 class _CircularPlan:
     """Resolved overlay plan for a container `CircularCoordinate` —
     the coord's counterpart of the rect engine's `RenderPlan`. `rings`
@@ -376,10 +289,10 @@ class CircularCoordinate:
         # to dictate, so the rect margin measurement is skipped.
         _, probe_states = _resolve_panels(root, measure_margins=False)
         state = probe_states[id(leaves[0])]
-        pad = _circular_chrome_pad(state, D)
+        pad = _cc.chrome_pad(state, D)
         for _ in range(4):
             W = int(math.ceil(D + 2 * pad))
-            pad2 = _circular_chrome_pad(state, W)
+            pad2 = _cc.chrome_pad(state, W)
             if pad2 == pad:
                 break
             pad = pad2

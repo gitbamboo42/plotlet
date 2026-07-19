@@ -94,7 +94,7 @@ and the `annotation_strip` track for sector labels.
 
 **Supported artists.** The authoritative list is the
 `declare_coord_support("Circular", [...])` block at the bottom of
-[`render/coordinates.py`](../src/plotlet/render/coordinates.py) — most
+[`render/_coord_circular.py`](../src/plotlet/render/_coord_circular.py) — most
 of the standard vocabulary, including the reference and shape primitives,
 `text` / `annotate`, and the sector-oriented `numeric_bar`, `chord_links`,
 `chord_ribbon`, and `annotation_strip`. Everything warps through the standard `draw.*`
@@ -192,7 +192,7 @@ via `pt.register_coord_codec(...)`.
 
 For the full worked example — frame chrome, sector chrome, clip path,
 inner sub-coord, serialization — read
-[`render/coordinates.py`](../src/plotlet/render/coordinates.py).
+[`render/_coord_circular.py`](../src/plotlet/render/_coord_circular.py).
 That file is the authoritative reference for the protocol contract; the
 table above is a navigation aid.
 

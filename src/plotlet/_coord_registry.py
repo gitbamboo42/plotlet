@@ -43,7 +43,7 @@ def resolve_coord(name: str) -> type:
         return _COORD_REGISTRY[name]
     except KeyError:
         pass
-    from .render import coordinates  # noqa: F401 — registers built-ins
+    from .render import _coord_circular  # noqa: F401 — registers built-ins
     try:
         return _COORD_REGISTRY[name]
     except KeyError:

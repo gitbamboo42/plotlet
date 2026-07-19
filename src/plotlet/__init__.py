@@ -41,7 +41,7 @@ def __getattr__(name):
     # the render half loads on first render (or first touch of this
     # name). Enforced by tests/test_import_boundary.py.
     if name == "CircularCoordinate":
-        from .render.coordinates import CircularCoordinate
+        from .render._coord_circular import CircularCoordinate
         return CircularCoordinate
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 

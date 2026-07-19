@@ -18,7 +18,7 @@ The render half's internal seam is pinned alongside: `emit.py`
 the bottom of this file — "emit never re-resolves", made mechanical.
 Two consequences of the laziness are pinned alongside: rendering does
 load the render half, and `{"$coord": ...}` envelopes decode in a cold
-process (built-in coords register on import of `render/coordinates.py`,
+process (built-in coords register on import of `render/_coord_circular.py`,
 which nothing imports eagerly anymore — `resolve_coord` fills the
 registry on first miss).
 """

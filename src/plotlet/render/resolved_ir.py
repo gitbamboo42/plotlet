@@ -684,7 +684,7 @@ def _rebuild_coord_plan(node, ctx, band: int) -> None:
     `band` is `IRLayout.coord_band` — the value the original resolution
     measured, never re-measured here. `render_layout` then emits
     without re-resolving."""
-    from .coordinates import _CircularPlan
+    from ._coord_circular import _CircularPlan
 
     ring_leaves = list(node._iter_leaves())
     inner = getattr(node._coordinate, "inner", None)

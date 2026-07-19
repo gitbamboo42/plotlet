@@ -6,9 +6,10 @@ on a ring), ``draw_x_chrome`` (angular tick marks + labels outside the outer
 ring). ``CircularCoordinate`` itself becomes a thin geometry/parameter
 holder that wires its methods to these helpers.
 
-Lives in its own module so ``coordinates.py`` stays focused on the protocol
-+ small affine implementations. The default Cartesian chrome lives in
-``_chrome.py`` and needs no separate naming.
+Lives in its own module so ``_coord_circular.py`` stays focused on the
+coordinate protocol and the ring layout. The ring's radial reservation
+(``chrome_pad``) lives here too, beside the drawing it must mirror. The default Cartesian chrome lives in
+``_chrome_emit.py`` and needs no separate naming.
 """
 from __future__ import annotations
 
@@ -79,6 +80,95 @@ def clip_path_d(cx, cy, R, ri) -> str:
         f"A {coord(ri)},{coord(ri)} 0 1,0 {coord(cx + ri)},{coord(cy)} "
         f"A {coord(ri)},{coord(ri)} 0 1,0 {coord(cx - ri)},{coord(cy)} Z"
     )
+
+
+# ---------------------------------------------------------------------------
+# Reservation — radial chrome pad, kept beside the drawing it must mirror
+# ---------------------------------------------------------------------------
+
+
+def _x_tick_labels(state, dw):
+    """The x-tick label strings the ring will actually draw.
+
+    Mirrors the render's derivation (``_derive_panel_inputs``) exactly, so
+    the chrome reservation matches what's drawn — not a guess. Two cases the
+    naive estimate got wrong: an autoscaled ring's labels ("0.0" … "1.0")
+    are far wider than a ``max(xlim)`` estimate, and a *continuous-sector*
+    axis draws NO auto tick labels (they're meaningless on a global-offset
+    coord) — so reserving for phantom numeric ticks over-shrinks the ring.
+    """
+    from ._resolution import (_axis_descriptor, _auto_major_ticks,
+                       _resolve_tick_formatter)
+    from .._spec import _FRAME
+    x_axis = _axis_descriptor([state], "x")
+    x_scale = (x_axis.build(0, dw)
+               if (x_axis.kind == "category" or not x_axis.flip)
+               else x_axis.build(dw, 0))
+    x_ticks = (state["x_ticks"] if state["x_ticks"] is not None
+               else _auto_major_ticks(x_scale, max(2, min(8, int(dw // _FRAME["tick_density_x_px"]))),
+                                      state["x_step"], state["x_count"]))
+    x_fmt = _resolve_tick_formatter(state["x_format"], x_scale)
+    x_labels = (state["x_labels"] if state["x_labels"] is not None
+                else [x_fmt(t) for t in x_ticks])
+    # Continuous sectors: auto ticks are suppressed; explicit ticks are
+    # replicated per-sector. Same branch as `_derive_panel_inputs`.
+    x_sec = state.get("x_sectors")
+    if x_sec is not None and x_sec.kind == "continuous":
+        _, x_labels = x_sec.expand_ticks(
+            x_ticks if state["x_ticks"] is not None else [],
+            x_labels if state["x_ticks"] is not None else [])
+    return x_labels
+
+
+def chrome_pad(state, dw) -> float:
+    """Radial pixels of chrome past the outer arc for the outermost ring.
+
+    Visibility comes from the same `_chrome_visibility.resolve_axis_chrome` the
+    emit pass reads — rings carry no share-pair hiding or label
+    suppression, so the layout flags are all False. The tick-chrome
+    extent comes from the same `_chrome_bands.radial_tick_chrome_extent` the
+    ``draw_x_sector_chrome`` hand-off reads; only the sector-label
+    flush rule below is local.
+    ``dw`` is the t-axis pixel span (the panel width auto ticks resolve
+    against), used to resolve the real tick labels. Used by
+    ``render_layout`` to grow the canvas outward around the data
+    annulus so labels don't get clipped by the viewBox.
+
+    Returns 0 when no chrome is drawn outside the ring.
+    """
+    from .._spec import SPEC, _FRAME, _FONTSPEC
+    from ._chrome_bands import radial_tick_chrome_extent
+    from ._chrome_visibility import resolve_axis_chrome
+
+    pol = resolve_axis_chrome(state)["x"]
+
+    tp        = _FRAME["tick_pad"]
+    tick_size = _FONTSPEC["tick_size"]
+    x_size    = state["x_fontsize"] if state["x_fontsize"] is not None else tick_size
+    x_ticks_v = state.get("x_ticks")   # None=auto, []=suppressed, [...]= explicit
+
+    labels = (_x_tick_labels(state, dw)
+              if (pol["draw_labels"] and x_ticks_v != []) else [])
+    if labels:
+        x_style  = state.get("x_fontstyle") or "normal"
+        x_weight = state.get("x_fontweight") or "normal"
+        max_w  = max(measure_text(l, x_size, x_style, x_weight) for l in labels)
+    else:
+        max_w = 0.0
+    x_chrome = radial_tick_chrome_extent(
+        has_labels=bool(labels), max_label_w=max_w,
+        has_marks=pol["draw_marks"] and x_ticks_v != [])
+
+    # Sector labels stack outside tick chrome (same rule as linear)
+    x_sec = state.get("x_sectors")
+    if pol["draw_sector_labels"]:
+        sec_size  = x_sec.fontsize if x_sec.fontsize is not None else SPEC["sectors"]["label_size"]
+        sec_cap   = cap_height(sec_size)
+        label_pad = SPEC["sectors"]["label_pad"]
+        base_off  = (x_chrome + label_pad) if x_chrome > 0.0 else tp
+        # Use the flipped-label offset (conservative worst case)
+        return base_off + sec_cap * 1.5
+    return x_chrome
 
 
 # ---------------------------------------------------------------------------
@@ -246,13 +336,13 @@ def draw_x_sector_chrome(cx, cy, R, ri, start_rad, end_rad, is_full_ring,
 
     if draw_div:
         # Paired radial walls at each internal boundary (and the wrap
-        # boundary when full ring) — same `_sector_walls` helper used
+        # boundary when full ring) — same `sector_walls` helper used
         # by the linear chrome, on cyclic t-space for a closed ring or
         # acyclic for a partial arc. At gap=0 / wrap_gap_deg=0 paired
         # walls coincide and stack; semi-transparent strokes compensate
         # via alpha.
-        from ._chrome import _sector_walls
-        for t in _sector_walls(sector_ts, cyclic=is_full_ring):
+        from ._chrome_bands import sector_walls
+        for t in sector_walls(sector_ts, cyclic=is_full_ring):
             ang = t_to_angle(t, start_rad, end_rad)
             ux, uy = math.cos(ang), -math.sin(ang)
             parts.append(segment(cx + ri * ux, cy + ri * uy,
