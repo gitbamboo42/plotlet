@@ -15,39 +15,34 @@ repo's own copy of this test.)
 """
 from __future__ import annotations
 
+import importlib
 import json
+import pathlib
 
 import pytest
 
 import plotlet as pt
 
+# Modules that consume this file's PLOTS rather than defining their own —
+# importing them here would be a cycle.
+_SKIP = {"test_journal_roundtrip", "test_ir", "test_ir_resolved"}
+
 
 def _collect_plots():
     """Gather (label, factory) pairs from every baseline test module.
 
-    Modules keep a `PLOTS = {name: fn}` registry. Pull them all so the
-    round-trip runs across the same surface as baselines."""
+    Each baseline suite keeps a `PLOTS = {name: fn}` registry. Discover
+    them by scanning the directory so the round-trip runs across the same
+    surface as baselines — no hand-maintained module list to fall out of
+    date when suites are added or split."""
     plots: list[tuple[str, callable]] = []
-
-    def add(source, name, fn):
-        plots.append((f"{source}::{name}", fn))
-
-    import test_chart, test_layout_diagram, test_sectors
-    import test_subplots, test_legend, test_attachments
-    import test_circular_coordinate, test_themes
-    for mod, source in [
-        (test_chart, "chart"),
-        (test_layout_diagram, "layout_diagram"),
-        (test_sectors, "sectors"),
-        (test_subplots, "subplots"),
-        (test_legend, "legend"),
-        (test_attachments, "attachments"),
-        (test_circular_coordinate, "circular"),
-        (test_themes, "themes"),
-    ]:
+    here = pathlib.Path(__file__).parent
+    for py in sorted(here.glob("test_*.py")):
+        if py.stem in _SKIP:
+            continue
+        mod = importlib.import_module(py.stem)
         for name, fn in getattr(mod, "PLOTS", {}).items():
-            add(source, name, fn)
-
+            plots.append((f"{py.stem[5:]}::{name}", fn))
     return plots
 
 

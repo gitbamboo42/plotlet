@@ -11,7 +11,7 @@ from plotlet.utils import palette_color
 def test_cycle_shortcuts():
     assert resolve_color("C0") == TAB10[0]
     assert resolve_color("C9") == TAB10[9]
-    assert resolve_color("C10") == TAB10[0]   # wraps, matplotlib-style
+    assert resolve_color("C10") == TAB10[0]   # C-index wraps around the 10-color cycle
     assert resolve_color("C23") == TAB10[3]
 
 

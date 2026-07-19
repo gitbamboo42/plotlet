@@ -18,8 +18,11 @@ sys.path.insert(0, str(HERE))
 import plotlet as pt
 from plotlet.lint import lint  # noqa: E402
 
-MODULES = ["test_chart", "test_attachments", "test_layout_diagram",
-           "test_themes", "test_legend", "test_subplots"]
+# Every baseline suite exposes a `PLOTS` registry; discover them by scanning
+# rather than hand-listing. Skip the modules that re-export a collected
+# `PLOTS` from test_journal_roundtrip (they would double-count every chart).
+_SKIP = {"test_journal_roundtrip", "test_ir", "test_ir_resolved"}
+MODULES = sorted(p.stem for p in HERE.glob("test_*.py") if p.stem not in _SKIP)
 
 
 def _materialize(c):
@@ -39,7 +42,10 @@ def _diagram_svg(fixture_fn) -> tuple[str, str]:
 def main():
     rows = []
     for mod_name in MODULES:
-        mod = __import__(mod_name)
+        try:
+            mod = __import__(mod_name)
+        except Exception:
+            continue
         for name, fn in getattr(mod, "PLOTS", {}).items():
             try:
                 warnings = lint(fn())
