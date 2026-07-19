@@ -10,8 +10,11 @@ above a split heatmap, etc. Pass `orientation="y"` for a vertical column.
 
 Each cell can carry any combination of fill, text, and border:
 
-- **Fill** (categorical via `palette={...}` or continuous via
-  `cmap=...`). cmap is band-mode only — per-block cmap aggregates
+- **Fill** (categorical via `palette={...}`, continuous via `cmap=...`,
+  or one constant color via `fill=` — the literal-color form, like
+  `bar`'s `fill="C0"`). `palette` falls back to `fill` for values it
+  doesn't list; with no fill source at all, cells draw no rect (text /
+  border only). cmap is band-mode only — per-block cmap aggregates
   would mask within-block variation.
 - **Text** (`text=True` shows the value; `text="other_col"` pulls
   display text from a different column). Position+rotation controlled
@@ -40,6 +43,9 @@ API examples:
     # per-position text labels
     c.annotation_strip(df, position="col", value="col",
                        text=True, side="bottom", rotation=90)
+    # decorative single-color strip with one legend entry
+    c.annotation_strip(df, position="col", value="col",
+                       fill="#8da0cb", label="track")
     # per-block group titles with fill + text + border
     c.annotation_strip(df, position="col", value="group",
                        mode="block", palette={...}, text=True,
@@ -72,25 +78,16 @@ _VALID_SIDES = {"x": {"bottom", "top"}, "y": {"left", "right"}}
 _DEFAULT_SIDE = {"x": "bottom", "y": "right"}
 
 
-def annotation_strip_record(data=None,
-                            # input columns — consumed here at record
-                            position=None, x1=None, x2=None, value=None,
-                            # layout/mode switches — consumed at record
-                            orientation="x", mode="band", text=None,
-                            side=None, vmin=None, vmax=None,
-                            # style — packed into opts for draw/legend
-                            palette=None, cmap=None, norm=None, center=None,
-                            width=None, x_padding=None, y_padding=None,
-                            absent_fill=None, cell_border=None,
-                            fontsize=None, text_color=None, rotation=None,
-                            text_pad=None, name=None, label=None,
-                            legend=None):
-    position_col = position
-    x1_col       = x1
-    x2_col       = x2
-    value_col    = value
-    if data is None or value_col is None:
-        raise TypeError("annotation_strip requires data= and value=.")
+def _resolve_extent_inputs(data, position_col, x1_col, x2_col):
+    """Resolve the position-axis inputs to ``(positions, widths, xs1,
+    xs2)`` — interval mode (x1=/x2=) or point mode (position=).
+
+    Interval mode keeps xs1 / xs2 untouched (preserves SectoredValue
+    tags so the scale projects each edge unambiguously). `positions`
+    carries the float midpoint for text anchoring (interior point — no
+    sector boundary to worry about), `widths` is just a presence signal
+    for the draw branch. Point mode returns ``widths = xs1 = xs2 =
+    None``."""
     interval_mode = x1_col is not None or x2_col is not None
     if interval_mode:
         if position_col is not None:
@@ -109,22 +106,90 @@ def annotation_strip_record(data=None,
                 f"annotation_strip: x1 ({len(xs1)}) and x2 ({len(xs2)}) "
                 f"must be the same length."
             )
-        # Keep xs1 / xs2 untouched (preserves SectoredValue tags so the
-        # scale projects each edge unambiguously). `positions` carries
-        # the float midpoint for text anchoring (interior point — no
-        # sector boundary to worry about), `widths` is just a presence
-        # signal for the draw branch.
         positions = [(float(a) + float(b)) / 2 for a, b in zip(xs1, xs2)]
         widths    = [(float(b) - float(a))     for a, b in zip(xs1, xs2)]
-    else:
-        if position_col is None:
-            raise TypeError(
-                "annotation_strip requires position= (or x1=/x2= for "
-                "variable-width intervals)."
+        return positions, widths, xs1, xs2
+    if position_col is None:
+        raise TypeError(
+            "annotation_strip requires position= (or x1=/x2= for "
+            "variable-width intervals)."
+        )
+    return to_list(data[position_col]), None, None, None
+
+
+def _resolve_text(text_spec, values, data, positions, orient, side):
+    """Resolve the ``text=`` tri-state to ``(text_values, text_side)``.
+
+    None/False → no per-cell text; True → the `value` column as text
+    (NaN/None scrubbed to None); str → a separate column to read from.
+    ``text_side`` defaults by orientation and is validated against it."""
+    if text_spec in (None, False):
+        return None, None
+    if text_spec is True:
+        text_values = [None if v is None or (isinstance(v, float) and v != v)
+                       else str(v) for v in values]
+    elif isinstance(text_spec, str):
+        if text_spec not in data:
+            raise ValueError(
+                f"annotation_strip: text={text_spec!r} is not a column in data."
             )
-        positions = to_list(data[position_col])
-        widths    = None
-    values = to_list(data[value_col])
+        raw = to_list(data[text_spec])
+        if len(raw) != len(positions):
+            raise ValueError(
+                f"annotation_strip: text column {text_spec!r} length "
+                f"({len(raw)}) doesn't match positions ({len(positions)})."
+            )
+        text_values = [None if v is None or v == ""
+                       else str(v) for v in raw]
+    else:
+        raise ValueError(
+            f"annotation_strip: text= must be True, False, None, or a "
+            f"column name; got {type(text_spec).__name__}."
+        )
+    text_side = side or _DEFAULT_SIDE[orient]
+    if text_side not in _VALID_SIDES[orient]:
+        raise ValueError(
+            f"annotation_strip: side={text_side!r} invalid for orientation={orient!r}; "
+            f"expected one of {sorted(_VALID_SIDES[orient])}."
+        )
+    return text_values, text_side
+
+
+def _resolve_cmap_range(values, vmin, vmax, norm):
+    """Resolved ``(vmin, vmax)`` for cmap mode, so the legend gradient
+    and the draw step agree on the range without recomputing. Log norm
+    drops non-positive values; empty data falls back to a unit range."""
+    if norm == "log":
+        flat = [v for v in values if isinstance(v, (int, float)) and v == v and v > 0]
+    else:
+        flat = [v for v in values if isinstance(v, (int, float)) and v == v]
+    if flat:
+        res_vmin = vmin if vmin is not None else min(flat)
+        res_vmax = vmax if vmax is not None else max(flat)
+    else:
+        res_vmin = vmin if vmin is not None else (1.0 if norm == "log" else 0.0)
+        res_vmax = vmax if vmax is not None else (10.0 if norm == "log" else 1.0)
+    return res_vmin, res_vmax
+
+
+def annotation_strip_record(data=None,
+                            # input columns — consumed here at record
+                            position=None, x1=None, x2=None, value=None,
+                            # layout/mode switches — consumed at record
+                            orientation="x", mode="band", text=None,
+                            side=None, vmin=None, vmax=None,
+                            # style — packed into opts for draw/legend
+                            fill=None, palette=None, cmap=None, norm=None,
+                            center=None,
+                            width=None, x_padding=None, y_padding=None,
+                            absent_fill=None, cell_border=None,
+                            fontsize=None, text_color=None, rotation=None,
+                            text_pad=None, name=None, label=None,
+                            legend=None):
+    if data is None or value is None:
+        raise TypeError("annotation_strip requires data= and value=.")
+    positions, widths, xs1, xs2 = _resolve_extent_inputs(data, position, x1, x2)
+    values = to_list(data[value])
     if len(positions) != len(values):
         raise ValueError(
             f"annotation_strip: positions ({len(positions)}) and "
@@ -140,6 +205,13 @@ def annotation_strip_record(data=None,
             "annotation_strip: pass either palette= (categorical mode) "
             "or cmap= (continuous mode), not both."
         )
+    if fill is not None and cmap is not None:
+        raise ValueError(
+            "annotation_strip: fill= is a single constant color; it cannot "
+            "be combined with cmap=."
+        )
+    if fill is not None:
+        fill = resolve_color(fill)
     if palette:
         palette = {k: resolve_color(v) for k, v in palette.items()}
     # mode=: "band" (default) one cell per position; "block" one cell per
@@ -155,54 +227,11 @@ def annotation_strip_record(data=None,
             "(per-block aggregate would mask within-block variation). "
             "Use mode='band' for cmap fills."
         )
-    # text=: None/False → no per-cell text; True → use `value` column as
-    # text; str → name of a separate column to read text from.
-    text_spec = text
-    text_values = None
-    text_side = None
-    if text_spec not in (None, False):
-        if text_spec is True:
-            text_values = [None if v is None or (isinstance(v, float) and v != v)
-                           else str(v) for v in values]
-        elif isinstance(text_spec, str):
-            if text_spec not in data:
-                raise ValueError(
-                    f"annotation_strip: text={text_spec!r} is not a column in data."
-                )
-            raw = to_list(data[text_spec])
-            if len(raw) != len(positions):
-                raise ValueError(
-                    f"annotation_strip: text column {text_spec!r} length "
-                    f"({len(raw)}) doesn't match positions ({len(positions)})."
-                )
-            text_values = [None if v is None or v == ""
-                           else str(v) for v in raw]
-        else:
-            raise ValueError(
-                f"annotation_strip: text= must be True, False, None, or a "
-                f"column name; got {type(text_spec).__name__}."
-            )
-        # side= default depends on orientation — resolve here.
-        text_side = side or _DEFAULT_SIDE[orient]
-        if text_side not in _VALID_SIDES[orient]:
-            raise ValueError(
-                f"annotation_strip: side={text_side!r} invalid for orientation={orient!r}; "
-                f"expected one of {sorted(_VALID_SIDES[orient])}."
-            )
-    # Precompute vmin/vmax for cmap mode so the legend gradient and the
-    # draw step agree on the range without recomputing.
+    text_values, text_side = _resolve_text(text, values, data, positions,
+                                           orient, side)
     res_vmin = res_vmax = None
     if cmap is not None:
-        if norm == "log":
-            flat = [v for v in values if isinstance(v, (int, float)) and v == v and v > 0]
-        else:
-            flat = [v for v in values if isinstance(v, (int, float)) and v == v]
-        if flat:
-            res_vmin = vmin if vmin is not None else min(flat)
-            res_vmax = vmax if vmax is not None else max(flat)
-        else:
-            res_vmin = vmin if vmin is not None else (1.0 if norm == "log" else 0.0)
-            res_vmax = vmax if vmax is not None else (10.0 if norm == "log" else 1.0)
+        res_vmin, res_vmax = _resolve_cmap_range(values, vmin, vmax, norm)
     # In block mode, find boundaries where consecutive values differ.
     # `block_bbox_1d` consumes this list to yield per-block pixel extents.
     run_bounds = None
@@ -226,9 +255,9 @@ def annotation_strip_record(data=None,
         "_mode": mode,
         "_run_bounds": run_bounds,
         "_widths": widths,
-        "_xs1": xs1 if interval_mode else None,
-        "_xs2": xs2 if interval_mode else None,
-        "opts": pack_opts(palette=palette, cmap=cmap, norm=norm,
+        "_xs1": xs1,
+        "_xs2": xs2,
+        "opts": pack_opts(fill=fill, palette=palette, cmap=cmap, norm=norm,
                           center=center, width=width,
                           x_padding=x_padding, y_padding=y_padding,
                           absent_fill=absent_fill, cell_border=cell_border,
@@ -294,33 +323,85 @@ def _ordered_values(values, palette):
     return in_palette + extras
 
 
-def annotation_strip_draw(a, ctx):
+def _warp_center(ctx):
+    """Canvas center for tangent-rotation lookup in circular coord.
+
+    `ctx.warp(iw/2, ih)` only lands at the canvas center for an
+    `r_inner=0` sub-coord (e.g. chord_ribbon's inner disc). On a ring
+    sub-coord (r_inner > 0) it lands on the inner edge of the band at
+    t=0.5. To get the real center, take two points at t=0.25 and t=0.75
+    — always 180° apart regardless of wrap_gap_rad — and average.
+    ``(None, None)`` signals "no circular tangent" (linear / no coord)."""
+    if ctx.warp is None:
+        return None, None
+    a = ctx.warp(0.25 * ctx.iw, ctx.ih)
+    b = ctx.warp(0.75 * ctx.iw, ctx.ih)
+    return (a[0] + b[0]) / 2, (a[1] + b[1]) / 2
+
+
+def _text_anchor(x, y, warp, cx_px, cy_px):
+    """Project a text anchor → ``((x, y), tangent_rot)``.
+
+    Under a circular warp, recover the polar angle at the projected
+    pixel and convert to the tangent rotation, then upright-clamp into
+    [-90, 90] so the bottom-half of the ring reads naturally rather
+    than upside down. Mirrors `draw_x_sector_chrome` in
+    _chrome_circular.py. Linear (warp None) → unchanged, rotation 0."""
+    if warp is None:
+        return (x, y), 0.0
+    tx, ty = warp(x, y)
+    ang = math.atan2(cy_px - ty, tx - cx_px)
+    rot = math.degrees(ang) - 90.0
+    rot = ((rot + 180.0) % 360.0) - 180.0
+    if rot > 90.0:  rot -= 180.0
+    if rot < -90.0: rot += 180.0
+    return (tx, ty), rot
+
+
+def _cell_extent_px(i, pos, *, cat_scale, widths, xs1, xs2, bw):
+    """Pixel ``[c_lo, c_hi]`` for cell `i` on the position axis: per-row
+    interval edges when widths are present (SectoredValue → unambiguous
+    projection), otherwise bandwidth / scalar width around the point."""
+    if widths is not None:
+        a_px = cat_scale(xs1[i])
+        b_px = cat_scale(xs2[i])
+        return min(a_px, b_px), max(a_px, b_px)
+    cp = cat_scale(pos)
+    return cp - bw / 2, cp + bw / 2
+
+
+def _text_style(opts):
+    """``(fontsize, text_color, rotation, cap, desc)`` — shared by the
+    block and band text passes."""
+    fontsize = opts.get("fontsize", 11)
+    return (fontsize, opts.get("text_color", "#222"),
+            float(opts.get("rotation", 0)),
+            cap_height(fontsize), descender(fontsize))
+
+
+def _draw_env(a, ctx):
+    """Per-draw geometry + style environment, derived once and read by
+    the block / band passes below: scales picked by orientation, cmap
+    LUT + norm, orthogonal extents, position-axis cell width, border
+    stroke, and the circular-warp anchors. Plain dict."""
     opts = a["opts"]
-    palette = opts.get("palette") or {}
-    cmap_name = opts.get("cmap")
-    cat_pad = opts.get("x_padding", 0.0)   # padding along the position axis
-    orth_pad = opts.get("y_padding", 0.0)  # padding along the orthogonal axis
-    absent_fill = opts.get("absent_fill")
-    width = opts.get("width")
-    fallback = ctx.color
     orient = a.get("_orient", "x")
     cat_scale  = ctx.y_scale if orient == "y" else ctx.x_scale
     orth_scale = ctx.x_scale if orient == "y" else ctx.y_scale
 
     # cmap-mode setup: precomputed range from record(); norm + LUT here.
     cmap_fn = norm = None
-    if cmap_name is not None:
-        cmap_fn = colormap(cmap_name)
+    if opts.get("cmap") is not None:
+        cmap_fn = colormap(opts.get("cmap"))
         norm = ContinuousNorm(a["_vmin"], a["_vmax"],
                                kind=opts.get("norm", "linear"),
                                center=opts.get("center"))
 
     # Cell extent on the orthogonal axis (which spans [0, 1] by ydomain).
+    orth_pad = opts.get("y_padding", 0.0)
     o0 = orth_scale(0); o1 = orth_scale(1)
     o_lo, o_hi = min(o0, o1), max(o0, o1)
     h_orth = o_hi - o_lo
-    o_inner = o_lo + h_orth * orth_pad
-    h_inner_orth = h_orth * (1 - 2 * orth_pad)
 
     # Cell extent on the position axis: per-row in interval mode,
     # otherwise bandwidth (categorical) or scalar `width=` (numeric).
@@ -330,8 +411,8 @@ def annotation_strip_draw(a, ctx):
         bw_attr = getattr(cat_scale, "bandwidth", None)
         if bw_attr is not None:
             bw = bw_attr
-        elif width is not None:
-            bw = abs(cat_scale(width) - cat_scale(0))
+        elif opts.get("width") is not None:
+            bw = abs(cat_scale(opts.get("width")) - cat_scale(0))
         else:
             raise ValueError(
                 f"annotation_strip on a non-categorical {orient} scale needs "
@@ -339,122 +420,130 @@ def annotation_strip_draw(a, ctx):
                 f"integer positions) or x1=/x2= for variable-width intervals."
             )
 
-    xs1 = a.get("_xs1")
-    xs2 = a.get("_xs2")
-
-    def _cell_extent_px(i, pos):
-        """Pixel [c_lo, c_hi] for cell `i` on the position axis."""
-        if widths is not None:
-            a_px = cat_scale(xs1[i])    # SectoredValue → unambiguous
-            b_px = cat_scale(xs2[i])
-            return min(a_px, b_px), max(a_px, b_px)
-        cp = cat_scale(pos)
-        return cp - bw / 2, cp + bw / 2
-
     border = _resolve_cell_border(opts.get("cell_border"))
-    stroke_kw = ({"stroke": border[0], "stroke_width": border[1]}
-                 if border else {})
-    # Coord-native pass-through: under a non-affine coord (e.g.
-    # CircularCoordinate), rects subdivide-and-project so each band
-    # follows the disc curve; text anchors project manually below so
-    # the glyph sits at the right pixel (glyphs themselves don't warp).
-    rect_kw = {"project": ctx.warp} if ctx.warp is not None else {}
-    # Canvas center for tangent-rotation lookup in circular coord.
-    # `ctx.warp(iw/2, ih)` only lands at the canvas center for an
-    # `r_inner=0` sub-coord (e.g. chord_ribbon's inner disc). On a
-    # ring sub-coord (r_inner > 0) it lands on the inner edge of the
-    # band at t=0.5. To get the real center, take two points at t=0.25
-    # and t=0.75 — always 180° apart regardless of wrap_gap_rad — and
-    # average. None signals "no circular tangent" (linear / no coord).
-    if ctx.warp is not None:
-        _a = ctx.warp(0.25 * ctx.iw, ctx.ih)
-        _b = ctx.warp(0.75 * ctx.iw, ctx.ih)
-        _cx_px = (_a[0] + _b[0]) / 2
-        _cy_px = (_a[1] + _b[1]) / 2
-    else:
-        _cx_px = _cy_px = None
+    cx_px, cy_px = _warp_center(ctx)
+    return {
+        "orient": orient,
+        "cat_scale": cat_scale,
+        "palette": opts.get("palette") or {},
+        "cmap_fn": cmap_fn,
+        "norm": norm,
+        "fill": opts.get("fill"),
+        "cat_pad": opts.get("x_padding", 0.0),   # padding along the position axis
+        "o_lo": o_lo,
+        "o_hi": o_hi,
+        "o_inner": o_lo + h_orth * orth_pad,
+        "h_inner_orth": h_orth * (1 - 2 * orth_pad),
+        "widths": widths,
+        "xs1": a.get("_xs1"),
+        "xs2": a.get("_xs2"),
+        "bw": bw,
+        "border": border,
+        "stroke_kw": ({"stroke": border[0], "stroke_width": border[1]}
+                      if border else {}),
+        # Coord-native pass-through: under a non-affine coord (e.g.
+        # CircularCoordinate), rects subdivide-and-project so each band
+        # follows the disc curve; text anchors project via `_text_anchor`
+        # so the glyph sits at the right pixel (glyphs themselves don't
+        # warp).
+        "rect_kw": {"project": ctx.warp} if ctx.warp is not None else {},
+        "warp": ctx.warp,
+        "cx_px": cx_px,
+        "cy_px": cy_px,
+        "absent_fill": opts.get("absent_fill"),
+    }
 
-    def _text_anchor(x, y):
-        if ctx.warp is None:
-            return (x, y), 0.0
-        tx, ty = ctx.warp(x, y)
-        # Recover the polar angle at the projected pixel and convert to
-        # the tangent rotation, then upright-clamp into [-90, 90] so the
-        # bottom-half of the ring reads naturally rather than upside down.
-        # Mirrors `draw_x_sector_chrome` in _chrome_circular.py.
-        ang = math.atan2(_cy_px - ty, tx - _cx_px)
-        rot = math.degrees(ang) - 90.0
-        rot = ((rot + 180.0) % 360.0) - 180.0
-        if rot > 90.0:  rot -= 180.0
-        if rot < -90.0: rot += 180.0
-        return (tx, ty), rot
 
-    out = []
-    mode = a.get("_mode", "band")
+def _block_pass(a, env):
+    """One rect (palette only — cmap forbidden) + optional centered text
+    per contiguous run. In uniform mode the block's pixel extent runs
+    from `scale(positions[i0]) - bw/2` to `scale(positions[i1-1]) +
+    bw/2`; in interval mode it runs from the first cell's left edge to
+    the last cell's right edge (per-row widths, so no shared `bw`)."""
+    opts = a["opts"]
+    orient, widths = env["orient"], env["widths"]
+    cat_scale, cat_pad = env["cat_scale"], env["cat_pad"]
+    o_lo, o_hi = env["o_lo"], env["o_hi"]
+    o_inner, h_inner_orth = env["o_inner"], env["h_inner_orth"]
+    palette, single_fill = env["palette"], env["fill"]
+    absent_fill, border = env["absent_fill"], env["border"]
+    stroke_kw, rect_kw = env["stroke_kw"], env["rect_kw"]
     text_values = a.get("_text_values")
-
-    if mode == "block":
-        # Per-block iteration: one rect (palette only — cmap forbidden) +
-        # optional centered text per contiguous run. In uniform mode the
-        # block's pixel extent runs from `scale(positions[i0]) - bw/2`
-        # to `scale(positions[i1-1]) + bw/2`; in interval mode it runs
-        # from the first cell's left edge to the last cell's right
-        # edge (per-row widths, so no shared `bw`).
-        run_bounds = a.get("_run_bounds") or []
-        fontsize = opts.get("fontsize", 11)
-        text_color = opts.get("text_color", "#222")
-        rotation = float(opts.get("rotation", 0))
-        cap = cap_height(fontsize)
-        desc = descender(fontsize)
-        omid = (o_lo + o_hi) / 2
-        if widths is None:
-            block_iter = block_bbox_1d(
-                cat_scale, a["positions"], bw, run_bounds)
+    run_bounds = a.get("_run_bounds") or []
+    fontsize, text_color, rotation, cap, desc = _text_style(opts)
+    omid = (o_lo + o_hi) / 2
+    if widths is None:
+        block_iter = block_bbox_1d(cat_scale, a["positions"], env["bw"],
+                                   run_bounds)
+    else:
+        def _interval_blocks():
+            for i0, i1 in _blocks(len(a["positions"]), run_bounds):
+                lo0, hi0 = _cell_extent_px(i0, a["positions"][i0],
+                                           cat_scale=cat_scale, widths=widths,
+                                           xs1=env["xs1"], xs2=env["xs2"],
+                                           bw=env["bw"])
+                lo1, hi1 = _cell_extent_px(i1 - 1, a["positions"][i1 - 1],
+                                           cat_scale=cat_scale, widths=widths,
+                                           xs1=env["xs1"], xs2=env["xs2"],
+                                           bw=env["bw"])
+                yield i0, i1, min(lo0, lo1, hi0, hi1), max(lo0, lo1, hi0, hi1)
+        block_iter = _interval_blocks()
+    out = []
+    for i0, i1, c_lo_raw, c_hi_raw in block_iter:
+        v = a["values"][i0]
+        missing = v is None or v == ""
+        block_w_raw = c_hi_raw - c_lo_raw
+        c_lo = c_lo_raw + block_w_raw * cat_pad
+        c_hi = c_hi_raw - block_w_raw * cat_pad
+        c_w = c_hi - c_lo
+        if orient == "y":
+            x0, y0, w, h = o_inner, c_lo, h_inner_orth, c_w
         else:
-            def _interval_blocks():
-                for i0, i1 in _blocks(len(a["positions"]), run_bounds):
-                    lo0, hi0 = _cell_extent_px(i0,     a["positions"][i0])
-                    lo1, hi1 = _cell_extent_px(i1 - 1, a["positions"][i1 - 1])
-                    yield i0, i1, min(lo0, lo1, hi0, hi1), max(lo0, lo1, hi0, hi1)
-            block_iter = _interval_blocks()
-        for i0, i1, c_lo_raw, c_hi_raw in block_iter:
-            v = a["values"][i0]
-            missing = v is None or v == ""
-            block_w_raw = c_hi_raw - c_lo_raw
-            c_lo = c_lo_raw + block_w_raw * cat_pad
-            c_hi = c_hi_raw - block_w_raw * cat_pad
-            c_w = c_hi - c_lo
+            x0, y0, w, h = c_lo, o_inner, c_w, h_inner_orth
+        if absent_fill is not None:
+            out.append(rect(x0, y0, w, h, fill=absent_fill,
+                            **stroke_kw, **rect_kw))
+        fill = palette.get(v, single_fill) if not missing else None
+        if fill is not None:
+            out.append(rect(x0, y0, w, h, fill=fill,
+                            **stroke_kw, **rect_kw))
+        elif border and not missing and absent_fill is None:
+            # Fill-less block with cell_border= → outline the block.
+            out.append(rect(x0, y0, w, h, **stroke_kw, **rect_kw))
+        if text_values is not None:
+            label = text_values[i0]
+            if label is None or label == "":
+                continue
+            cmid = (c_lo + c_hi) / 2
             if orient == "y":
-                x0, y0, w, h = o_inner, c_lo, h_inner_orth, c_w
+                tx, ty = omid, cmid + (cap - desc) / 2
             else:
-                x0, y0, w, h = c_lo, o_inner, c_w, h_inner_orth
-            if absent_fill is not None:
-                out.append(rect(x0, y0, w, h, fill=absent_fill,
-                                **stroke_kw, **rect_kw))
-            if palette and not missing:
-                fill = palette.get(v, fallback)
-                out.append(rect(x0, y0, w, h, fill=fill,
-                                **stroke_kw, **rect_kw))
-            elif border and not missing and absent_fill is None:
-                # Text-only block with cell_border= → outline the block.
-                out.append(rect(x0, y0, w, h, **stroke_kw, **rect_kw))
-            if text_values is not None:
-                label = text_values[i0]
-                if label is None or label == "":
-                    continue
-                cmid = (c_lo + c_hi) / 2
-                if orient == "y":
-                    tx, ty = omid, cmid + (cap - desc) / 2
-                else:
-                    tx, ty = cmid, omid + (cap - desc) / 2
-                (tx, ty), tangent_rot = _text_anchor(tx, ty)
-                out.append(text_path(label, tx, ty, fontsize,
-                                     anchor="middle", color=text_color,
-                                     rotate=rotation + tangent_rot))
-        return "".join(out)
+                tx, ty = cmid, omid + (cap - desc) / 2
+            (tx, ty), tangent_rot = _text_anchor(tx, ty, env["warp"],
+                                                 env["cx_px"], env["cy_px"])
+            out.append(text_path(label, tx, ty, fontsize,
+                                 anchor="middle", color=text_color,
+                                 rotate=rotation + tangent_rot))
+    return out
 
+
+def _band_cells_pass(a, env):
+    """One cell per position: absent_fill underlay, then cmap or palette
+    fill; missing values (None / "" / NaN in cmap mode) skip the fill."""
+    orient = env["orient"]
+    cat_pad = env["cat_pad"]
+    o_inner, h_inner_orth = env["o_inner"], env["h_inner_orth"]
+    cmap_fn, norm = env["cmap_fn"], env["norm"]
+    palette, single_fill = env["palette"], env["fill"]
+    absent_fill, border = env["absent_fill"], env["border"]
+    stroke_kw, rect_kw = env["stroke_kw"], env["rect_kw"]
+    out = []
     for i, (pos, v) in enumerate(zip(a["positions"], a["values"])):
-        c_lo_raw, c_hi_raw = _cell_extent_px(i, pos)
+        c_lo_raw, c_hi_raw = _cell_extent_px(i, pos,
+                                             cat_scale=env["cat_scale"],
+                                             widths=env["widths"],
+                                             xs1=env["xs1"], xs2=env["xs2"],
+                                             bw=env["bw"])
         cell_w_raw = c_hi_raw - c_lo_raw
         c_inner   = c_lo_raw + cell_w_raw * cat_pad
         c_inner_w = cell_w_raw * (1 - 2 * cat_pad)
@@ -475,60 +564,79 @@ def annotation_strip_draw(a, ctx):
             r, g, b = cmap_fn(norm.to_unit(v))
             fill = f"rgb({r},{g},{b})"
         else:
-            fill = palette.get(v, fallback)
-        out.append(rect(x0, y0, w, h, fill=fill,
-                        **stroke_kw, **rect_kw))
+            fill = palette.get(v, single_fill)
+        if fill is not None:
+            out.append(rect(x0, y0, w, h, fill=fill,
+                            **stroke_kw, **rect_kw))
+        elif border and absent_fill is None:
+            # Fill-less cell with cell_border= → outline it, matching the
+            # block branch's rule.
+            out.append(rect(x0, y0, w, h, **stroke_kw, **rect_kw))
+    return out
 
-    # Optional per-cell text overlay. Centered along the position axis
-    # with side= picking which orthogonal edge to anchor against.
-    # Unrotated text uses cap-height padding from the inner edge;
-    # rotated text switches to an end-anchored placement so the rotated
-    # body sits inside the strip.
-    if text_values is not None:
-        side = a["_side"]
-        fontsize = opts.get("fontsize", 11)
-        text_color = opts.get("text_color", "#222")
-        rotation = float(opts.get("rotation", 0))
-        text_pad = float(opts.get("text_pad", 3))
-        cap = cap_height(fontsize)
-        desc = descender(fontsize)
-        # Interval mode (variable widths) centers text inside each cell
-        # — sector / cytoband / gene tracks read better that way. Uniform
-        # mode pins text to `side=` (default bottom/right for x/y) since
-        # cells are typically too narrow to fit centered text.
-        omid = (o_lo + o_hi) / 2
-        center_text = widths is not None
-        for pos, label in zip(a["positions"], text_values):
-            if label is None or label == "":
-                continue
-            cp = cat_scale(pos)
-            if center_text:
-                if orient == "y":
-                    x, y, anchor = omid, cp + (cap - desc) / 2, "middle"
+
+def _band_text_pass(a, env):
+    """Per-cell text overlay, centered along the position axis with
+    side= picking which orthogonal edge to anchor against. Unrotated
+    text uses cap-height padding from the inner edge; rotated text
+    switches to an end-anchored placement so the rotated body sits
+    inside the strip. Interval mode (variable widths) centers text
+    inside each cell — sector / cytoband / gene tracks read better that
+    way. Uniform mode pins text to `side=` (default bottom/right for
+    x/y) since cells are typically too narrow to fit centered text."""
+    opts = a["opts"]
+    text_values = a.get("_text_values")
+    side = a["_side"]
+    orient = env["orient"]
+    cat_scale = env["cat_scale"]
+    o_lo, o_hi = env["o_lo"], env["o_hi"]
+    fontsize, text_color, rotation, cap, desc = _text_style(opts)
+    text_pad = float(opts.get("text_pad", 3))
+    omid = (o_lo + o_hi) / 2
+    center_text = env["widths"] is not None
+    out = []
+    for pos, label in zip(a["positions"], text_values):
+        if label is None or label == "":
+            continue
+        cp = cat_scale(pos)
+        if center_text:
+            if orient == "y":
+                x, y, anchor = omid, cp + (cap - desc) / 2, "middle"
+            else:
+                x, y, anchor = cp, omid + (cap - desc) / 2, "middle"
+        elif orient == "x":
+            x = cp
+            if side == "bottom":
+                if rotation == 0:
+                    anchor, y = "middle", o_hi - desc - text_pad
                 else:
-                    x, y, anchor = cp, omid + (cap - desc) / 2, "middle"
-            elif orient == "x":
-                x = cp
-                if side == "bottom":
-                    if rotation == 0:
-                        anchor, y = "middle", o_hi - desc - text_pad
-                    else:
-                        anchor, y = "start", o_hi - text_pad
-                else:  # "top"
-                    if rotation == 0:
-                        anchor, y = "middle", o_lo + cap + text_pad
-                    else:
-                        anchor, y = "end", o_lo + text_pad
-            else:  # orient == "y"
-                if side == "right":
-                    anchor, x = "end", o_hi - text_pad
-                else:  # "left"
-                    anchor, x = "start", o_lo + text_pad
-                y = cp + (cap - desc) / 2
-            (x, y), tangent_rot = _text_anchor(x, y)
-            out.append(text_path(label, x, y, fontsize, anchor=anchor,
-                                 color=text_color,
-                                 rotate=rotation + tangent_rot))
+                    anchor, y = "start", o_hi - text_pad
+            else:  # "top"
+                if rotation == 0:
+                    anchor, y = "middle", o_lo + cap + text_pad
+                else:
+                    anchor, y = "end", o_lo + text_pad
+        else:  # orient == "y"
+            if side == "right":
+                anchor, x = "end", o_hi - text_pad
+            else:  # "left"
+                anchor, x = "start", o_lo + text_pad
+            y = cp + (cap - desc) / 2
+        (x, y), tangent_rot = _text_anchor(x, y, env["warp"],
+                                           env["cx_px"], env["cy_px"])
+        out.append(text_path(label, x, y, fontsize, anchor=anchor,
+                             color=text_color,
+                             rotate=rotation + tangent_rot))
+    return out
+
+
+def annotation_strip_draw(a, ctx):
+    env = _draw_env(a, ctx)
+    if a.get("_mode", "band") == "block":
+        return "".join(_block_pass(a, env))
+    out = _band_cells_pass(a, env)
+    if a.get("_text_values") is not None:
+        out += _band_text_pass(a, env)
     return "".join(out)
 
 
@@ -541,17 +649,21 @@ def annotation_strip_legend_entries(a):
     order = _ordered_values(a["values"], palette)
     if not order:
         return []
-    # If no palette was given and there's a single fallback color, surface
-    # one entry with the optional `label=` kwarg (decorative single-color
-    # strip case). Otherwise emit one entry per value.
+    # Single-color strip (fill=, no palette): one entry with the optional
+    # `label=` kwarg. Otherwise one entry per value; values outside the
+    # palette fall back to fill=, and entries with no color at all are
+    # dropped (their cells drew nothing to swatch).
+    fill = opts.get("fill")
     if not palette:
         label = opts.get("label")
-        if not label:
+        if not label or fill is None:
             return []
-        return [{"label": label, "color": a.get("_color")}]
+        return [{"label": label, "color": fill}]
     entries = []
     for v in order:
-        col = palette.get(v, a.get("_color"))
+        col = palette.get(v, fill)
+        if col is None:
+            continue
         entries.append({"label": str(v), "color": col})
     return entries
 
