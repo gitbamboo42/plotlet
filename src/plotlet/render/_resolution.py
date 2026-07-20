@@ -426,10 +426,155 @@ def _default_state() -> _PanelState:
     })
 
 
+def _record_artist(state, spec, args, kw):
+    """One artist call → record dict(s) appended to ``state["artists"]``.
+    Passes fresh copies so a `kw.pop(...)` inside `record()` doesn't
+    corrupt the stored call dict — re-renders walk the same list.
+    `record()` returns a single dict for one-series artists or a list of
+    dicts for long-form expansions (line, scatter split by
+    color/group/linestyle levels)."""
+    call_args = list(args)
+    call_kw = dict(kw)
+    if "coordinate" in call_kw:
+        raise TypeError(
+            "coordinate= is not accepted on artist calls. "
+            "Use c.coordinate(...) once per panel instead."
+        )
+    # First-positional-is-data sugar: `c.line(df, x=, y=)` is the
+    # same as `c.line(data=df, x=, y=)`. Opt-in via
+    # `ArtistSpec.accepts_data_positional=True`. Keeps the long-form
+    # call shape from carrying a `data=` keyword on every site;
+    # multi-positional shapes (e.g. `(xs, ys)`) are rejected by
+    # each record fn so the artist sees only long-form input.
+    if (spec.accepts_data_positional and len(call_args) == 1
+            and "data" not in call_kw):
+        call_kw["data"] = call_args.pop(0)
+    # Sector remap: when continuous sectors are active on x or y
+    # and the data table has the corresponding sector column,
+    # offset values into the global sector coordinate so a single
+    # linear scale spans all sectors. Artists draw unchanged.
+    # Silent passthrough when the data lacks the sector column
+    # (cross-sector annotations like reflines or single-value
+    # artists).
+    if state["x_sectors"] is not None or state["y_sectors"] is not None:
+        call_kw = _sector_remap_data(call_kw, state)
+    result = spec.record(*call_args, **call_kw)
+    if isinstance(result, list):
+        state["artists"].extend(result)
+    else:
+        state["artists"].append(result)
+
+
+def _record_spines(state, kw):
+    """Top-level color/width/linestyle = base style, inherited by
+    any side and by walls unless overridden. Per-target value
+    (top=, walls=, etc.) is a bool (toggles visibility) or a
+    dict ({color, width, linestyle, visible}, visible defaults
+    True). "walls" is the inter-sector wall target."""
+    for k in ("color", "width", "linestyle"):
+        if k in kw: state[f"spine_base_{k}"] = kw[k]
+    for target in ("top", "right", "bottom", "left", "walls"):
+        if target not in kw: continue
+        v = kw[target]
+        if isinstance(v, dict):
+            state[f"spine_{target}"] = bool(v.get("visible", True))
+            for attr in ("color", "width", "linestyle"):
+                if attr in v: state[f"spine_{target}_{attr}"] = v[attr]
+        else:
+            state[f"spine_{target}"] = bool(v)
+
+
+def _record_gridlines(state, args, kw):
+    """c.gridlines() / c.gridlines(False) toggle; c.gridlines("both")
+    or c.gridlines(which="minor") select which tick set draws lines."""
+    v = args[0] if args else True
+    if isinstance(v, str):
+        state["grid"] = True
+        state["grid_which"] = v
+    else:
+        state["grid"] = bool(v)
+    if "which" in kw:
+        state["grid_which"] = kw["which"]
+    if state["grid_which"] not in ("major", "minor", "both"):
+        raise ValueError(
+            f"c.gridlines(which={state['grid_which']!r}) — pass "
+            f"\"major\", \"minor\", or \"both\"."
+        )
+
+
+def _record_legend(state, args, kw):
+    state["legend"] = (args[0] if args else True)
+    if "position" in kw:
+        state["legend_position"] = kw["position"]
+    if "ncols" in kw:
+        state["legend_ncols"] = kw["ncols"]
+    if "reverse" in kw:
+        state["legend_reverse"] = kw["reverse"]
+    if "entries" in kw:
+        state["legend_manual"] = kw["entries"]
+
+
+def _record_aspect(state, args):
+    v = args[0] if args else 1.0
+    if v == "equal":
+        v = 1.0
+    if (isinstance(v, bool) or not isinstance(v, (int, float))
+            or v <= 0):
+        raise ValueError(
+            f"c.aspect({v!r}) — pass \"equal\" or a positive "
+            f"number (pixel length of one y unit per one x unit)."
+        )
+    state["aspect"] = float(v)
+
+
+def _record_coordinate(state, args):
+    state["coordinate"] = args[0]
+    # Coord-supplied `y_ticks` default (Cartesian: no attribute →
+    # skipped). `is None` check respects any user-set value
+    # regardless of call order.
+    _cyt = getattr(args[0], "y_ticks", None)
+    if _cyt is not None and state.get("y_ticks") is None:
+        state["y_ticks"] = _cyt
+
+
+def _record_sectors(state, args, kw):
+    from ..sectors import Sectors
+    col  = kw.get("column")
+    axis = kw.get("axis", "x")
+    # Forward only display kwargs the user explicitly set, so a
+    # pre-built `pt.Sectors(...)` keeps its own settings unless
+    # overridden — silent-drop would be a footgun.
+    extra = {k: kw[k] for k in ("divider", "label", "gap") if k in kw}
+    if axis not in ("x", "y"):
+        raise ValueError(
+            f"c.sectors(axis=): expected 'x' or 'y'; got {axis!r}"
+        )
+    sec = Sectors.coerce(args[0], name_col=col, **extra)
+    # `column=` is the default sector tag for single-position
+    # artists (scatter, line, bar, …). Required even for
+    # multi-position artists (chord_links) — those override per
+    # endpoint via `x1_sector=` / `x2_sector=`, but the typo
+    # guard is worth keeping: silently no-op'd remap is a
+    # footgun. For cross-sector chord_links, pass one of the
+    # endpoint columns as the default.
+    if sec.kind == "continuous" and col is None:
+        raise TypeError(
+            "c.sectors(...): continuous sectors need column= "
+            "(name of the sector tag on each data row)."
+        )
+    # `gap=` is in **pixels** for both kinds. Categorical: routed
+    # to `_CategoryScale.split_gap`. Continuous: routed to the
+    # `_SectoredLinearScale` via `_AxisDescriptor.sector_gap_px`
+    # — both paths absorb the gap at scale-construction time.
+    state[f"{axis}_sectors"] = sec
+    state[f"{axis}_sector_column"] = col
+
+
 def _replay(calls):
     """Walk a Chart's recorded calls into a state dict consumed by the
     renderer. Pure function of `calls` and the artist registry — same input
-    + same registry → same output."""
+    + same registry → same output. One branch per op below; every branch
+    is a one-line state write or a delegate to its `_record_*` handler."""
     state = _default_state()
     # Stable-sort sectors entries to the front. Sectors set the state
     # `_sector_remap_data` reads while processing artist calls; an
@@ -458,41 +603,7 @@ def _replay(calls):
             from_default = False
         spec = get_artist(name)
         if spec is not None:
-            # Pass fresh copies so a `kw.pop(...)` inside `record()` doesn't
-            # corrupt the stored call dict — re-renders walk the same list.
-            # `record()` returns a single dict for one-series artists or a
-            # list of dicts for long-form expansions (line, scatter split
-            # by color/group/linestyle levels).
-            call_args = list(args)
-            call_kw = dict(kw)
-            if "coordinate" in call_kw:
-                raise TypeError(
-                    "coordinate= is not accepted on artist calls. "
-                    "Use c.coordinate(...) once per panel instead."
-                )
-            # First-positional-is-data sugar: `c.line(df, x=, y=)` is the
-            # same as `c.line(data=df, x=, y=)`. Opt-in via
-            # `ArtistSpec.accepts_data_positional=True`. Keeps the long-form
-            # call shape from carrying a `data=` keyword on every site;
-            # multi-positional shapes (e.g. `(xs, ys)`) are rejected by
-            # each record fn so the artist sees only long-form input.
-            if (spec.accepts_data_positional and len(call_args) == 1
-                    and "data" not in call_kw):
-                call_kw["data"] = call_args.pop(0)
-            # Sector remap: when continuous sectors are active on x or y
-            # and the data table has the corresponding sector column,
-            # offset values into the global sector coordinate so a single
-            # linear scale spans all sectors. Artists draw unchanged.
-            # Silent passthrough when the data lacks the sector column
-            # (cross-sector annotations like reflines or single-value
-            # artists).
-            if state["x_sectors"] is not None or state["y_sectors"] is not None:
-                call_kw = _sector_remap_data(call_kw, state)
-            result = spec.record(*call_args, **call_kw)
-            if isinstance(result, list):
-                state["artists"].extend(result)
-            else:
-                state["artists"].append(result)
+            _record_artist(state, spec, args, kw)
         elif name == "title":  state["title"] = args[0]
         elif name == "subtitle": state["subtitle"] = args[0]
         elif name == "caption":  state["caption"] = args[0]
@@ -506,101 +617,14 @@ def _replay(calls):
         elif name == "yticks": _record_ticks(state, "y", args, kw)
         elif name == "x_expand": state["x_expand"] = _normalize_expand(args)
         elif name == "y_expand": state["y_expand"] = _normalize_expand(args)
-        elif name == "spines":
-            # Top-level color/width/linestyle = base style, inherited by
-            # any side and by walls unless overridden. Per-target value
-            # (top=, walls=, etc.) is a bool (toggles visibility) or a
-            # dict ({color, width, linestyle, visible}, visible defaults
-            # True). "walls" is the inter-sector wall target.
-            for k in ("color", "width", "linestyle"):
-                if k in kw: state[f"spine_base_{k}"] = kw[k]
-            for target in ("top", "right", "bottom", "left", "walls"):
-                if target not in kw: continue
-                v = kw[target]
-                if isinstance(v, dict):
-                    state[f"spine_{target}"] = bool(v.get("visible", True))
-                    for attr in ("color", "width", "linestyle"):
-                        if attr in v: state[f"spine_{target}_{attr}"] = v[attr]
-                else:
-                    state[f"spine_{target}"] = bool(v)
-        elif name == "gridlines":
-            # c.gridlines() / c.gridlines(False) toggle; c.gridlines("both")
-            # or c.gridlines(which="minor") select which tick set draws lines.
-            v = args[0] if args else True
-            if isinstance(v, str):
-                state["grid"] = True
-                state["grid_which"] = v
-            else:
-                state["grid"] = bool(v)
-            if "which" in kw:
-                state["grid_which"] = kw["which"]
-            if state["grid_which"] not in ("major", "minor", "both"):
-                raise ValueError(
-                    f"c.gridlines(which={state['grid_which']!r}) — pass "
-                    f"\"major\", \"minor\", or \"both\"."
-                )
-        elif name == "legend":
-            state["legend"] = (args[0] if args else True)
-            if "position" in kw:
-                state["legend_position"] = kw["position"]
-            if "ncols" in kw:
-                state["legend_ncols"] = kw["ncols"]
-            if "reverse" in kw:
-                state["legend_reverse"] = kw["reverse"]
-            if "entries" in kw:
-                state["legend_manual"] = kw["entries"]
+        elif name == "spines":    _record_spines(state, kw)
+        elif name == "gridlines": _record_gridlines(state, args, kw)
+        elif name == "legend":    _record_legend(state, args, kw)
         elif name == "clip":   state["clip"] = bool(args[0]) if args else True
         elif name == "facecolor": state["facecolor"] = args[0] if args else None
-        elif name == "aspect":
-            v = args[0] if args else 1.0
-            if v == "equal":
-                v = 1.0
-            if (isinstance(v, bool) or not isinstance(v, (int, float))
-                    or v <= 0):
-                raise ValueError(
-                    f"c.aspect({v!r}) — pass \"equal\" or a positive "
-                    f"number (pixel length of one y unit per one x unit)."
-                )
-            state["aspect"] = float(v)
-        elif name == "coordinate":
-            state["coordinate"] = args[0]
-            # Coord-supplied `y_ticks` default (Cartesian: no attribute →
-            # skipped). `is None` check respects any user-set value
-            # regardless of call order.
-            _cyt = getattr(args[0], "y_ticks", None)
-            if _cyt is not None and state.get("y_ticks") is None:
-                state["y_ticks"] = _cyt
-        elif name == "sectors":
-            from ..sectors import Sectors
-            col  = kw.get("column")
-            axis = kw.get("axis", "x")
-            # Forward only display kwargs the user explicitly set, so a
-            # pre-built `pt.Sectors(...)` keeps its own settings unless
-            # overridden — silent-drop would be a footgun.
-            extra = {k: kw[k] for k in ("divider", "label", "gap") if k in kw}
-            if axis not in ("x", "y"):
-                raise ValueError(
-                    f"c.sectors(axis=): expected 'x' or 'y'; got {axis!r}"
-                )
-            sec = Sectors.coerce(args[0], name_col=col, **extra)
-            # `column=` is the default sector tag for single-position
-            # artists (scatter, line, bar, …). Required even for
-            # multi-position artists (chord_links) — those override per
-            # endpoint via `x1_sector=` / `x2_sector=`, but the typo
-            # guard is worth keeping: silently no-op'd remap is a
-            # footgun. For cross-sector chord_links, pass one of the
-            # endpoint columns as the default.
-            if sec.kind == "continuous" and col is None:
-                raise TypeError(
-                    "c.sectors(...): continuous sectors need column= "
-                    "(name of the sector tag on each data row)."
-                )
-            # `gap=` is in **pixels** for both kinds. Categorical: routed
-            # to `_CategoryScale.split_gap`. Continuous: routed to the
-            # `_SectoredLinearScale` via `_AxisDescriptor.sector_gap_px`
-            # — both paths absorb the gap at scale-construction time.
-            state[f"{axis}_sectors"] = sec
-            state[f"{axis}_sector_column"] = col
+        elif name == "aspect":     _record_aspect(state, args)
+        elif name == "coordinate": _record_coordinate(state, args)
+        elif name == "sectors":    _record_sectors(state, args, kw)
         elif name in ("theme", "font"):
             # Applied outside replay (`_layout_engine` wraps each leaf's
             # measurement and render in `_node_style(...)` — theme +
