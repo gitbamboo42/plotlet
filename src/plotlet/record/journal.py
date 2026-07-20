@@ -131,7 +131,7 @@ class JournalNode:
 
 
 # ---------------------------------------------------------------------------
-# to_journal — walk a Chart/Layout tree, emit a flat journal
+# to_journal — walk a Chart/Layout tree, build a flat journal
 # ---------------------------------------------------------------------------
 
 
@@ -178,7 +178,7 @@ def to_journal(root) -> Journal:
         from .chart import _Renderable
         from ..sectors import Sectors
         if isinstance(value, _Renderable):
-            _emit_node(value)
+            _append_node(value)
             return {"$node": _nid_of(value)}
         if isinstance(value, Sectors):
             return {"$sectors": _encode(value._to_dict())}
@@ -197,14 +197,14 @@ def to_journal(root) -> Journal:
             return tuple(_encode(v) for v in value)
         return value
 
-    emitted: set[int] = set()
+    appended: set[int] = set()
 
-    def _emit_node(node) -> None:
-        """Emit `node`'s new_* event and all its method events, in
+    def _append_node(node) -> None:
+        """Append `node`'s new_* event and all its method events, in
         dependency order (children/attachments first)."""
-        if id(node) in emitted:
+        if id(node) in appended:
             return
-        emitted.add(id(node))
+        appended.add(id(node))
         nid = _nid_of(node)
 
         # Sub-nodes referenced by `node` need nids and create events
@@ -214,47 +214,47 @@ def to_journal(root) -> Journal:
         if getattr(node, "_is_parent", False):
             for child in node._children:
                 if child is not None:
-                    _emit_node(child)
+                    _append_node(child)
         else:
             for entry in node._calls:
                 if entry[0].startswith("attach_"):
                     for atch in entry[1]:
-                        _emit_node(atch)
+                        _append_node(atch)
             for src in getattr(node, "_legend_sources", ()):
-                _emit_node(src)
+                _append_node(src)
 
         # Coord.inner sub-charts live inside a `coordinate` entry —
         # encode them via _encode which recurses through _to_dict.
-        # `_encode` also emits their new_* events when it walks them.
+        # `_encode` also appends their new_* events when it walks them.
 
         if isinstance(node, FacetGrid):
-            _emit_facet_grid(node, nid)
+            _append_facet_grid(node, nid)
         elif getattr(node, "_is_parent", False):
-            _emit_layout(node, nid)
+            _append_layout(node, nid)
         elif getattr(node, "_leaf_kind", "data") == "data":
-            _emit_chart(node, nid)
+            _append_chart(node, nid)
         else:
-            _emit_leaf(node, nid)
+            _append_leaf(node, nid)
 
         # Method events (frame + artist + state calls). Sub-nodes
-        # referenced in args/kwargs get their new_* emitted lazily via
+        # referenced in args/kwargs get their new_* appended lazily via
         # `_encode` if not already done.
         for entry in node._calls:
-            _emit_call(nid, entry)
+            _append_call(nid, entry)
 
         # Insets — `chart.inset(rect)` returns a fresh Chart stored in
         # `chart._insets` as `(rect, inset_chart)` pairs; NOT recorded
-        # in `_calls`, so we emit synthetic `_inset_add` events after
-        # the host's method events. Insets recurse: emit the inset
+        # in `_calls`, so we append synthetic `_inset_add` events after
+        # the host's method events. Insets recurse: append the inset
         # chart's `new_*` and methods first so it exists by the time
         # the host binds it.
         for rect, inset_chart in getattr(node, "_insets", ()):
-            _emit_node(inset_chart)
+            _append_node(inset_chart)
             journal.append("_inset_add", nid,
                           kwargs={"rect": list(rect),
                                   "inset_nid": _nid_of(inset_chart)})
 
-    def _emit_facet_grid(fg, nid: int) -> None:
+    def _append_facet_grid(fg, nid: int) -> None:
         journal.append("new_facet_grid", nid, kwargs={
             "data": fg._data,
             "by": fg._by,
@@ -266,7 +266,7 @@ def to_journal(root) -> Journal:
             "chart_opts": dict(fg._chart_opts),
         })
 
-    def _emit_chart(chart, nid: int) -> None:
+    def _append_chart(chart, nid: int) -> None:
         aes = {k: v for k, v in chart._aes.items() if v is not None}
         journal.append("new_chart", nid, kwargs={
             "data": chart._data,
@@ -276,7 +276,7 @@ def to_journal(root) -> Journal:
             **aes,
         })
 
-    def _emit_leaf(leaf, nid: int) -> None:
+    def _append_leaf(leaf, nid: int) -> None:
         # Non-data leaves — legend and diagram. Constructor state that
         # isn't journaled via _calls: canvas dims, legend metadata,
         # diagram inner SVG.
@@ -311,7 +311,7 @@ def to_journal(root) -> Journal:
             kwargs["diagram_inner"] = leaf._diagram_inner
         journal.append("new_leaf", nid, kwargs=kwargs)
 
-    def _emit_layout(layout, nid: int) -> None:
+    def _append_layout(layout, nid: int) -> None:
         children_nids = [
             _nid_of(c) if c is not None else None
             for c in layout._children
@@ -323,7 +323,7 @@ def to_journal(root) -> Journal:
             "grid_cols": layout._grid_cols,
         })
 
-    def _emit_call(nid: int, entry) -> None:
+    def _append_call(nid: int, entry) -> None:
         """A `_calls` entry — `(name, args, kwargs)`, always a user
         action. Artist frame defaults are never recorded; `_replay`
         regenerates them from the artist call on every render."""
@@ -332,7 +332,7 @@ def to_journal(root) -> Journal:
                        args=[_encode(a) for a in args],
                        kwargs={k: _encode(v) for k, v in kwargs.items()})
 
-    _emit_node(root)
+    _append_node(root)
     journal.root_nid = nid_map[id(root)]
     return journal
 
