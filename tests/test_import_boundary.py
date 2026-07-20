@@ -14,8 +14,9 @@ no render module; a static import scan proves no render module names a
 front-half module. A regression in either direction is an architecture
 bug, not a style nit — fix the import, don't widen the lists here.
 The render half's internal seam is pinned alongside: `emit.py`
-(transcribe) may import from `_resolution.py` (decide) only the allowlist at
-the bottom of this file — "emit never re-resolves", made mechanical.
+(transcribe) and `_chrome_circular.py` (the circular reservation) may
+import from `_resolution.py` (decide) only their allowlists at the
+bottom of this file — "emit never re-resolves", made mechanical.
 Two consequences of the laziness are pinned alongside: rendering does
 load the render half, and `{"$coord": ...}` envelopes decode in a cold
 process (built-in coords register on import of `render/_coord_circular.py`,
@@ -172,11 +173,10 @@ def _render_source(name: str) -> Path:
     return Path(plotlet.render.__path__[0]) / name
 
 
-def test_emit_imports_from_resolution_only_shared_derivations():
-    """`emit.py` may reach into `_resolution` only through the from-import
-    allowlist above — no `import ..._resolution` module access, which would
-    put all of resolution one attribute lookup away."""
-    path = _render_source("emit.py")
+def _resolution_imports(path: Path):
+    """Scan one render source for reaches into `_resolution`: the set of
+    from-imported names, and the lines that import the module wholesale
+    (which would put all of resolution one attribute lookup away)."""
     tree = ast.parse(path.read_text(), filename=str(path))
     from_resolution, module_access = set(), []
     for node in ast.walk(tree):
@@ -189,6 +189,14 @@ def test_emit_imports_from_resolution_only_shared_derivations():
         elif isinstance(node, ast.Import):
             if any(a.name.split(".")[-1] == "_resolution" for a in node.names):
                 module_access.append(node.lineno)
+    return from_resolution, module_access
+
+
+def test_emit_imports_from_resolution_only_shared_derivations():
+    """`emit.py` may reach into `_resolution` only through the from-import
+    allowlist above."""
+    from_resolution, module_access = _resolution_imports(
+        _render_source("emit.py"))
     assert not module_access, (
         f"emit.py imports the resolution module wholesale at lines "
         f"{module_access} — import the allowed names explicitly"
@@ -199,6 +207,31 @@ def test_emit_imports_from_resolution_only_shared_derivations():
         f"names from _resolution outside the allowlist: {extra}. If emit needs "
         "a new decision, decide it in resolution (`_chrome_visibility`) and "
         "read the decided flag."
+    )
+
+
+# The circular radial reservation (`_chrome_circular.chrome_pad`) reads
+# from `_resolution` only the shared tick/label derivations the Cartesian
+# reservation and render passes also call — reserve-vs-draw skew can't
+# creep back in through a private re-derivation.
+CHROME_CIRCULAR_RESOLUTION_ALLOWED = {
+    "_axis_ticks_labels", "_descriptor_scale",
+}
+
+
+def test_chrome_circular_imports_from_resolution_only_shared_derivations():
+    from_resolution, module_access = _resolution_imports(
+        _render_source("_chrome_circular.py"))
+    assert not module_access, (
+        f"_chrome_circular.py imports the resolution module wholesale at "
+        f"lines {module_access} — import the allowed names explicitly"
+    )
+    extra = sorted(from_resolution - CHROME_CIRCULAR_RESOLUTION_ALLOWED)
+    assert not extra, (
+        "the circular reservation must not re-derive: _chrome_circular.py "
+        f"imports names from _resolution outside the allowlist: {extra}. "
+        "Move the derivation into _resolution and share it with "
+        "`_derive_panel_inputs` instead of widening the list."
     )
 
 

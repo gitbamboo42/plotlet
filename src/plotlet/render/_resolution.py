@@ -1229,6 +1229,45 @@ def _inline_legend_layout(state, env=None):
             "position": pos, "ncols": ncols}
 
 
+def _descriptor_scale(state, axis, span):
+    """Provisional per-panel scale at a fixed pixel span — the
+    reservation-pass scale. Body-first reservation (`_required_margin`)
+    and the circular radial reservation (`_chrome_circular.chrome_pad`)
+    both build scales this way; the render pass uses the
+    layout-coordinated `_build_xy_scales` instead."""
+    ax = _axis_descriptor([state], axis)
+    inverted = (ax.kind != "category"
+                and (ax.flip if axis == "x" else not ax.flip))
+    return ax.build(span, 0) if inverted else ax.build(0, span)
+
+
+def _axis_ticks_labels(state, axis, scale, span):
+    """Resolved tick positions + label strings for one axis: the
+    density rule, auto ticks, formatter, and continuous-sector
+    expansion, in one place. Shared by `_derive_panel_inputs` (both
+    the reservation and render passes) and by the circular radial
+    reservation (`_chrome_circular.chrome_pad`) — every consumer
+    walks identical numbers.
+
+    Continuous sectors: auto ticks are meaningless on a global-offset
+    coord, so the default is none. User-supplied ticks via xticks/yticks
+    are interpreted as per-sector LOCAL positions and replicated at
+    each sector's offset."""
+    n = max(2, min(8, int(span // _FRAME[f"tick_density_{axis}_px"])))
+    ticks = (state[f"{axis}_ticks"] if state[f"{axis}_ticks"] is not None
+             else _auto_major_ticks(scale, n, state[f"{axis}_step"],
+                                    state[f"{axis}_count"]))
+    fmt = _resolve_tick_formatter(state[f"{axis}_format"], scale)
+    labels = (state[f"{axis}_labels"] if state[f"{axis}_labels"] is not None
+              else [fmt(t) for t in ticks])
+    sec = state[f"{axis}_sectors"]
+    if sec is not None and sec.kind == "continuous":
+        ticks, labels = sec.expand_ticks(
+            ticks if state[f"{axis}_ticks"] is not None else [],
+            labels if state[f"{axis}_ticks"] is not None else [])
+    return ticks, labels
+
+
 def _derive_panel_inputs(state, *, x_scale, y_scale, dw, dh, layout_opts):
     """Derive ticks, labels, sizes, rotations, suppress flags and hide
     flags for one panel — a pure function of resolved state, scales,
@@ -1242,32 +1281,8 @@ def _derive_panel_inputs(state, *, x_scale, y_scale, dw, dh, layout_opts):
     rest of the resolution is identical."""
     tick_size = _FONTSPEC["tick_size"]
 
-    # Same tick-density rule on both call sites.
-    x_n = max(2, min(8, int(dw // _FRAME["tick_density_x_px"])))
-    y_n = max(2, min(8, int(dh // _FRAME["tick_density_y_px"])))
-    x_ticks = (state["x_ticks"] if state["x_ticks"] is not None
-               else _auto_major_ticks(x_scale, x_n, state["x_step"], state["x_count"]))
-    y_ticks = (state["y_ticks"] if state["y_ticks"] is not None
-               else _auto_major_ticks(y_scale, y_n, state["y_step"], state["y_count"]))
-    x_fmt = _resolve_tick_formatter(state["x_format"], x_scale)
-    y_fmt = _resolve_tick_formatter(state["y_format"], y_scale)
-    x_labels = (state["x_labels"] if state["x_labels"] is not None
-                else [x_fmt(t) for t in x_ticks])
-    y_labels = (state["y_labels"] if state["y_labels"] is not None
-                else [y_fmt(t) for t in y_ticks])
-
-    # Continuous sectors: auto ticks are meaningless on a global-offset
-    # coord, so the default is none. User-supplied ticks via xticks/yticks
-    # are interpreted as per-sector LOCAL positions and replicated at
-    # each sector's offset.
-    if state["x_sectors"] is not None and state["x_sectors"].kind == "continuous":
-        x_ticks, x_labels = state["x_sectors"].expand_ticks(
-            x_ticks if state["x_ticks"] is not None else [],
-            x_labels if state["x_ticks"] is not None else [])
-    if state["y_sectors"] is not None and state["y_sectors"].kind == "continuous":
-        y_ticks, y_labels = state["y_sectors"].expand_ticks(
-            y_ticks if state["y_ticks"] is not None else [],
-            y_labels if state["y_ticks"] is not None else [])
+    x_ticks, x_labels = _axis_ticks_labels(state, "x", x_scale, dw)
+    y_ticks, y_labels = _axis_ticks_labels(state, "y", y_scale, dh)
 
     # Joined-side hide flags — drop reservations the renderer skips.
     hide_t = layout_opts.hide_top
@@ -1355,19 +1370,9 @@ def _required_margin(state, dw, dh, layout_opts: "_PanelOpts") -> dict:
     The geometry mirrors `_render_inner`'s placement formulas — keep them
     in sync if either changes."""
     # Provisional scales at the fixed data dims — body-first means iw/ih
-    # are decided up front, no iteration needed. Reservation pass uses the
-    # per-panel descriptor (not the layout-coordinated one); render pass
-    # picks the coordinated one via `_build_xy_scales` instead.
-    x_axis = _axis_descriptor([state], "x")
-    y_axis = _axis_descriptor([state], "y")
-    if x_axis.kind == "category" or not x_axis.flip:
-        x_scale = x_axis.build(0, dw)
-    else:
-        x_scale = x_axis.build(dw, 0)
-    if y_axis.kind == "category" or y_axis.flip:
-        y_scale = y_axis.build(0, dh)
-    else:
-        y_scale = y_axis.build(dh, 0)
+    # are decided up front, no iteration needed.
+    x_scale = _descriptor_scale(state, "x", dw)
+    y_scale = _descriptor_scale(state, "y", dh)
     inp = _derive_panel_inputs(state, x_scale=x_scale, y_scale=y_scale,
                                dw=dw, dh=dh, layout_opts=layout_opts)
     bands, _ = _chrome_bands.label_band_sizes(state, inp, dw, dh)

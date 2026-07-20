@@ -90,33 +90,18 @@ def clip_path_d(cx, cy, R, ri) -> str:
 def _x_tick_labels(state, dw):
     """The x-tick label strings the ring will actually draw.
 
-    Mirrors the render's derivation (``_derive_panel_inputs``) exactly, so
-    the chrome reservation matches what's drawn — not a guess. Two cases the
-    naive estimate got wrong: an autoscaled ring's labels ("0.0" … "1.0")
-    are far wider than a ``max(xlim)`` estimate, and a *continuous-sector*
-    axis draws NO auto tick labels (they're meaningless on a global-offset
-    coord) — so reserving for phantom numeric ticks over-shrinks the ring.
+    Reads the same shared derivations both Cartesian chrome passes read
+    (`_axis_ticks_labels` at the reservation-pass `_descriptor_scale`),
+    so the chrome reservation matches what's drawn — not a guess. Two
+    cases a naive estimate got wrong: an autoscaled ring's labels
+    ("0.0" … "1.0") are far wider than a ``max(xlim)`` estimate, and a
+    *continuous-sector* axis draws NO auto tick labels (they're
+    meaningless on a global-offset coord) — so reserving for phantom
+    numeric ticks over-shrinks the ring.
     """
-    from ._resolution import (_axis_descriptor, _auto_major_ticks,
-                       _resolve_tick_formatter)
-    from .._spec import _FRAME
-    x_axis = _axis_descriptor([state], "x")
-    x_scale = (x_axis.build(0, dw)
-               if (x_axis.kind == "category" or not x_axis.flip)
-               else x_axis.build(dw, 0))
-    x_ticks = (state["x_ticks"] if state["x_ticks"] is not None
-               else _auto_major_ticks(x_scale, max(2, min(8, int(dw // _FRAME["tick_density_x_px"]))),
-                                      state["x_step"], state["x_count"]))
-    x_fmt = _resolve_tick_formatter(state["x_format"], x_scale)
-    x_labels = (state["x_labels"] if state["x_labels"] is not None
-                else [x_fmt(t) for t in x_ticks])
-    # Continuous sectors: auto ticks are suppressed; explicit ticks are
-    # replicated per-sector. Same branch as `_derive_panel_inputs`.
-    x_sec = state.get("x_sectors")
-    if x_sec is not None and x_sec.kind == "continuous":
-        _, x_labels = x_sec.expand_ticks(
-            x_ticks if state["x_ticks"] is not None else [],
-            x_labels if state["x_ticks"] is not None else [])
+    from ._resolution import _axis_ticks_labels, _descriptor_scale
+    _, x_labels = _axis_ticks_labels(
+        state, "x", _descriptor_scale(state, "x", dw), dw)
     return x_labels
 
 
