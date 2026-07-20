@@ -222,14 +222,250 @@ def _panel_open(state, panel_opts: _PanelOpts, transform: str,
     return f'<g transform="{transform}"{attrs}>{meta}'
 
 
+# ---------------------------------------------------------------------------
+# panel body — preparation first (shared env, contract check, ctx factory),
+# then one emit function per stage in paint order; `_render_inner` at the
+# bottom is the entry point that strings them together
+# ---------------------------------------------------------------------------
+
+def _panel_env(state, iw, ih, panel_opts: _PanelOpts):
+    """Shared per-panel derivations, computed once and read by the emit
+    stages below. Anything two stages both need lives here — a stage
+    needing a value not in the env must add it explicitly, which keeps
+    cross-stage coupling visible in this one place.
+
+    `label_bands` feeds the inline-legend block; `chrome` feeds
+    frame-label placement and the top-legend gap. The in-frame legend
+    geometry is derived up front because a top-position legend sits
+    between the title and the data area — the title's y offset depends
+    on it. `inner_gap_top` is the data-side gap below the top-position
+    legend — at least `legend_gap`, but expands to clear the top-side
+    x-axis chrome band when `xticks(side="top")`; None when no top
+    legend is in play. The coord hooks are probed once so the grid /
+    clip / layer / chrome stages all read the same flags."""
+    x_scale, y_scale, x_is_cat = _build_xy_scales(state, iw, ih, panel_opts)
+    inp = _derive_panel_inputs(state, x_scale=x_scale, y_scale=y_scale,
+                               dw=iw, dh=ih, layout_opts=panel_opts)
+    label_bands, chrome = _chrome_bands.label_band_sizes(state, inp, iw, ih)
+    leg = _inline_legend_layout(state, env=SimpleNamespace(
+        x_scale=x_scale, y_scale=y_scale, iw=iw, ih=ih))
+    legend_pos = leg["position"] if leg is not None else None
+    inner_gap_top = (max(chrome["top"], _LAYOUTSPEC["legend_gap"])
+                     if legend_pos == "top" else None)
+    coord_object = state.get("coordinate")
+    coord_project = (coord_object({}, iw, ih)
+                     if coord_object is not None else None)
+    return SimpleNamespace(
+        x_scale=x_scale, y_scale=y_scale,
+        x_is_cat=x_is_cat,
+        y_is_cat=(panel_opts.y_axis.kind == "category"),
+        inp=inp, label_bands=label_bands, chrome=chrome,
+        x_sec=state["x_sectors"], y_sec=state["y_sectors"],
+        leg=leg, legend_pos=legend_pos, inner_gap_top=inner_gap_top,
+        coord_object=coord_object, coord_project=coord_project,
+        has_coord_frame=(coord_object is not None
+                         and hasattr(coord_object, "draw_frame")),
+        has_svg_transform=(coord_object is not None
+                           and hasattr(coord_object, "svg_transform")),
+        has_x_frame=(coord_object is not None
+                     and hasattr(coord_object, "draw_x_frame")),
+        has_clip_d=(coord_object is not None
+                    and hasattr(coord_object, "clip_path_d")),
+        has_x_sector_chrome=(coord_object is not None
+                             and hasattr(coord_object, "draw_x_sector_chrome")),
+    )
+
+
+def _validate_coord_contract(state, env):
+    """Raise before emitting anything when the panel's coordinate can't
+    render this panel's content."""
+    # A coordinate that owns the x-axis (draw_x_frame) needs a matching
+    # `draw_x_sector_chrome` to handle x-sectors; otherwise the Cartesian
+    # vertical-divider chrome would land outside the coordinate.
+    if env.has_x_frame and env.x_sec is not None and not env.has_x_sector_chrome:
+        raise NotImplementedError(
+            "c.sectors(axis='x') with a coordinate that owns draw_x_frame "
+            "requires the coordinate to implement draw_x_sector_chrome."
+        )
+    # y-sectors with a coord-owned x-axis (CircularCoordinate's concentric
+    # bands case) is a different design and not yet supported.
+    if env.has_x_frame and env.y_sec is not None:
+        raise NotImplementedError(
+            "c.sectors(axis='y') is not yet supported with a coordinate "
+            "that owns the x-axis (e.g. CircularCoordinate)."
+        )
+    # Per-artist gate: each artist opts in via `declare_coord_support`
+    # under the coord's short name (class name minus `Coordinate` suffix).
+    # Vanilla Cartesian (no coord set) skips this gate entirely; non-affine
+    # coords like CircularCoordinate only accept artists whose draw
+    # forwards `project=ctx.warp`.
+    if env.coord_object is not None:
+        coord_short = type(env.coord_object).__name__.removesuffix("Coordinate")
+        supported = _COORD_SUPPORT.get(coord_short, set())
+        bad = sorted({a["type"] for a in state["artists"]
+                      if a["type"] not in supported})
+        if bad:
+            coord_name = type(env.coord_object).__name__
+            raise NotImplementedError(
+                f"{coord_name} ({coord_short!r}) doesn't support {bad}; "
+                f"these artists aren't declared as renderable under it. "
+                f"Supported under {coord_name}: {sorted(supported)}.\n"
+                f"To add support: call "
+                f"`pt.declare_coord_support({coord_short!r}, [...])` "
+                f"listing the artists, and make sure each forwards "
+                f"`project=ctx.warp` to every `draw.*` helper call in its "
+                f"draw function."
+            )
+
+
+def _artist_ctx(env, iw, ih):
+    """Build the per-artist RenderContext factory — passed to every draw
+    call (and to the legend body for swatch painting). When
+    svg_transform is present the coordinate mapping is handled at the
+    SVG group level; artists draw in Cartesian, so ctx.project stays
+    None. Non-affine coords expose `ctx.warp` (pixel-space convenience
+    closure) that artists pass to `draw.*` helpers; validation upstream
+    guaranteed every artist here is declared as a supporter of this
+    coord, so warp is always populated when the coord is non-affine."""
+    def ctx_for(a):
+        if env.has_svg_transform or env.coord_object is None:
+            proj = None
+            warp = None
+        else:
+            proj = env.coord_object(a, iw, ih)
+            warp = _make_px_warp(proj, iw, ih)
+        return RenderContext(
+            x_scale=env.x_scale, y_scale=env.y_scale, iw=iw, ih=ih,
+            color=a["_color"], defaults=_D, dash=_DASH,
+            project=proj, warp=warp,
+        )
+    return ctx_for
+
+
+def _emit_grid(state, env, iw, ih):
+    """Grid — straight Cartesian lines; suppressed when the coordinate
+    owns the x-axis (e.g. CircularCoordinate) because horizontals /
+    verticals render outside the ring after the warp would naturally
+    apply."""
+    if not state["grid"] or env.has_x_frame:
+        return []
+    x_scale, y_scale = env.x_scale, env.y_scale
+    gcol = _GRIDSPEC["color"]
+    which = state["grid_which"]
+    parts = []
+    # Minor lines first so major lines paint on top where they meet.
+    # grid(which="minor"/"both") is itself the explicit ask, so when
+    # the user hasn't configured minor ticks the auto subdivisions
+    # apply (ggplot behavior) — an explicit minor= list still wins.
+    if which in ("minor", "both"):
+        mw = _GRIDSPEC["minor_width"]; md = _GRIDSPEC["minor_dasharray"]
+        if not env.x_is_cat:
+            xm = state["x_minor"]
+            for t in _chrome_emit._resolve_minor_ticks(
+                    xm if xm not in (None, False) else True,
+                    x_scale, env.inp.x_ticks):
+                x = x_scale(t)
+                parts.append(segment(x, 0, x, ih,
+                                     color=gcol, width=mw, dash=md))
+        if not env.y_is_cat:
+            ym = state["y_minor"]
+            for t in _chrome_emit._resolve_minor_ticks(
+                    ym if ym not in (None, False) else True,
+                    y_scale, env.inp.y_ticks):
+                y = y_scale(t)
+                parts.append(segment(0, y, iw, y,
+                                     color=gcol, width=mw, dash=md))
+    if which in ("major", "both"):
+        gw = _GRIDSPEC["width"]; gd = _GRIDSPEC["dasharray"]
+        if not env.x_is_cat:
+            for t in env.inp.x_ticks:
+                x = x_scale(t)
+                parts.append(segment(x, 0, x, ih,
+                                     color=gcol, width=gw, dash=gd))
+        for t in env.inp.y_ticks:
+            y = y_scale(t)
+            parts.append(segment(0, y, iw, y,
+                                 color=gcol, width=gw, dash=gd))
+    return parts
+
+
+def _emit_artist_layers(state, env, iw, ih, ctx_for, clip_counter):
+    """Three-pass draw: background → data → foreground. Each artist's
+    body is wrapped in <g class="plotlet-artist" ...> so AI consumers
+    can read structural attrs (type, label, color, range, etc.) without
+    parsing geometry."""
+    by_layer = {"background": [], "data": [], "foreground": []}
+    for idx, a in enumerate(state["artists"]):
+        spec = get_artist(a["type"])
+        if spec is None: continue
+        by_layer[spec.layer].append((idx, a))
+    clip_data = state.get("clip", True)
+    parts = []
+
+    # For coordinate frames the clip region is the projected data area,
+    # not the Cartesian rectangle. By default we emit a polygon from the
+    # four corners of the (t, r) unit square (correct for affine coords).
+    # A coordinate can override via `clip_path_d` for non-affine shapes
+    # (e.g. an annulus for CircularCoordinate); we apply clip-rule="evenodd"
+    # so multi-subpath ds (outer + inner ring) describe a hole.
+    _clip_id = None
+    if (env.has_coord_frame or env.has_svg_transform) and clip_data:
+        _clip_id = f"pc{next(clip_counter)}"
+        if env.has_clip_d:
+            d = env.coord_object.clip_path_d(iw, ih)
+            parts.append(f'<defs><clipPath id="{_clip_id}">'
+                         f'<path d="{d}" clip-rule="evenodd"/></clipPath></defs>')
+        else:
+            bl_x, bl_y = env.coord_project(0.0, 0.0)
+            tl_x, tl_y = env.coord_project(0.0, 1.0)
+            br_x, br_y = env.coord_project(1.0, 0.0)
+            tr_x, tr_y = env.coord_project(1.0, 1.0)
+            pts = (f"{coord(bl_x)},{coord(bl_y)} {coord(br_x)},{coord(br_y)} "
+                   f"{coord(tr_x)},{coord(tr_y)} {coord(tl_x)},{coord(tl_y)}")
+            parts.append(f'<defs><clipPath id="{_clip_id}">'
+                         f'<polygon points="{pts}"/></clipPath></defs>')
+
+    for layer in ("background", "data", "foreground"):
+        if not by_layer[layer]:
+            continue
+        # Clip the data layer to the data area so an artist drawing
+        # outside the visible xlim/ylim (zoom insets, explicit xlim that
+        # excludes data) can't paint over tick labels or the parent.
+        # Coordinate frames use a polygon <clipPath>; others use a nested
+        # <svg> with overflow="hidden" (SVG1.1-safe rectangular clip).
+        # Caller can opt out via `c.clip(False)`.
+        if layer == "data" and clip_data:
+            if _clip_id:
+                parts.append(f'<g clip-path="url(#{_clip_id})">')
+            else:
+                parts.append(f'<svg x="0" y="0" width="{iw:.10g}" height="{ih:.10g}" overflow="hidden">')
+            if env.has_svg_transform:
+                xfm = env.coord_object.svg_transform(env.coord_project, iw, ih)
+                parts.append(f'<g transform="{xfm}">')
+
+        # Each body is emitted in user-recording z-order. Under affine
+        # coords the surrounding <g transform="..."> handles the mapping;
+        # under non-affine coords artists projected through ctx.warp during
+        # draw. Either way the body is plain SVG — no renderer-level rewrite.
+        for idx, a in by_layer[layer]:
+            spec = get_artist(a["type"])
+            body = spec.draw(a, ctx_for(a))
+            parts.append(_wrap_artist(a, idx, body))
+
+        if layer == "data" and clip_data:
+            if env.has_svg_transform:
+                parts.append('</g>')
+            parts.append('</g>' if _clip_id else '</svg>')
+    return parts
+
+
 def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal, gradient_h,
                               ncols, pad_x, pad_y, row_h, sw, tick_size,
                               text_color, ctx_for) -> str:
     """Render the inline legend body — the part *inside* the
     `<g transform="translate(lx, ly)">` wrapper. Lives in its own
-    function so the translate ctxmgr in `_render_inner` stays a
-    2-liner instead of forcing 70 lines of indentation. No behavior
-    change vs the previous inline form."""
+    function so the translate ctxmgr in `_emit_inline_legend` stays a
+    2-liner instead of forcing 70 lines of indentation."""
     from ._legend import _render_continuous_entry, _render_discrete_entry
     parts = []
     is_gradient_only = bool(cont) and not disc
@@ -319,309 +555,76 @@ def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal, gradient_h,
     return ''.join(parts)
 
 
-def _render_inner(state, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
-    """Body fragment for one panel — the string appended inside the panel
-    `<g>` opened by `_panel_open`. Coordinates are panel-local: data area
-    at `(0,0)`→`(iw,ih)`, chrome placed relative to `M`. `panel_opts`
-    supplies axis descriptors and joined-side flags. `clip_counter` is
-    shared across panels so coord-clip ids stay unique in the SVG."""
-    x_scale, y_scale, x_is_cat = _build_xy_scales(state, iw, ih, panel_opts)
-    inp = _derive_panel_inputs(state, x_scale=x_scale, y_scale=y_scale,
-                               dw=iw, dh=ih, layout_opts=panel_opts)
-    # Label bands + raw chrome stack — both passes share the chrome dict
-    # so we only compute it once per render. `label_bands` feeds the
-    # inline-legend block; `chrome` feeds frame-label placement and the
-    # top-legend gap below.
-    label_bands, chrome = _chrome_bands.label_band_sizes(state, inp, iw, ih)
-    _x_sec = state["x_sectors"]
-    _y_sec = state["y_sectors"]
+def _emit_inline_legend(env, iw, ih, ctx_for):
+    """Legend placement + body — gather entries from every artist's
+    legend_entries(a) and gradient descriptors from legend_gradient(a).
+    Multi-entry artists (sankey, mosaic, ...) contribute one row per
+    category; continuous artists (imshow, hexbin, ...) contribute a
+    vertical gradient strip with ticks (inline colorbar)."""
+    leg = env.leg
+    lw = leg["lw"]
+    lh = leg["lh"]
+    horizontal = leg["horizontal"]
+    disc = leg["disc"]
+    cont = leg["cont"]
+    row_h = _LEGSPEC["row_height"]
+    pad_x = _LEGSPEC["pad_x"]
+    pad_y = _LEGSPEC["pad_y"]
+    sw    = _LEGSPEC["swatch_width"]
+    pos = env.legend_pos
+    gap = _LAYOUTSPEC["legend_gap"]
+    if pos in ("right", "left", "top", "bottom"):
+        # `top` puts the legend *between* the title (outer edge) and
+        # data (inner edge); other sides put it beyond the axis
+        # band. Hidden sides naturally collapse via `_chrome_bands.label_band_sizes`
+        # — when a side's title/labels are dropped (joined share-pair
+        # or unset), the band shrinks and the legend moves inward.
+        if pos == "right":
+            lx, ly = iw + env.label_bands["right"] + gap, (ih - lh) / 2
+        elif pos == "left":
+            lx, ly = -(env.label_bands["left"] + gap + lw), (ih - lh) / 2
+        elif pos == "top":
+            lx, ly = (iw - lw) / 2, -(env.inner_gap_top + lh)
+        else:  # "bottom"
+            lx, ly = (iw - lw) / 2, ih + env.label_bands["bottom"] + gap
+    else:
+        # Inside-corner / center tokens — overlay the data area.
+        off = _LEGSPEC["border_offset"]
+        right_x = iw - lw - off
+        bottom_y = ih - lh - off
+        mid_x = (iw - lw) / 2
+        mid_y = (ih - lh) / 2
+        lx, ly = {
+            "top-right":    (right_x, off),
+            "top-left":     (off,     off),
+            "bottom-right": (right_x, bottom_y),
+            "bottom-left":  (off,     bottom_y),
+            "center":       (mid_x,   mid_y),
+        }[pos]
+    parts = [f'<g transform="translate({coord(lx)},{coord(ly)})">']
+    # The translate puts the body's panel-local coords onto the
+    # sink so chrome bboxes tagged inside `_render_discrete_entry`
+    # / `_render_continuous_entry` (and the sub-header text_path
+    # in the body) land at outer-SVG positions.
+    with _regions.translate(lx, ly):
+        parts.append(_emit_inline_legend_body(
+            lw, lh, pos, cont, disc, horizontal, leg["gradient_h"],
+            leg["ncols"], pad_x, pad_y, row_h, sw, _FONTSPEC["tick_size"],
+            _FONTSPEC["color"], ctx_for))
+    parts.append('</g>')
+    return parts
 
-    # In-frame legend geometry is computed up front because a top-position
-    # legend sits between the title and the data area — the title's y
-    # offset depends on it. For other positions / inside / no legend, the
-    # title stays at `_PADSPEC["title"]`.
-    leg = _inline_legend_layout(state, env=SimpleNamespace(
-        x_scale=x_scale, y_scale=y_scale, iw=iw, ih=ih))
-    legend_pos = leg["position"] if leg is not None else None
-    legend_gap = _LAYOUTSPEC["legend_gap"]
-    # `inner_gap_top` is the data-side gap below the top-position legend
-    # — at least `legend_gap`, but expands to clear the top-side x-axis
-    # chrome band when `xticks(side="top")`. None when no top legend is
-    # in play.
-    inner_gap_top = (max(chrome["top"], legend_gap)
-                     if legend_pos == "top" else None)
 
-    # Resolve the panel coordinate — always panel-level via c.coordinate(...).
-    # Lifted above the grid block so the grid/spine/x-tick passes below can
-    # check the coordinate's optional hooks (draw_x_frame, clip_path_d)
-    # before emitting anything.
-    _coord_object = state.get("coordinate")
-    _coord_project = _coord_object({}, iw, ih) if _coord_object is not None else None
-
-    _has_coord_frame   = _coord_object is not None and hasattr(_coord_object, "draw_frame")
-    _has_svg_transform   = _coord_object is not None and hasattr(_coord_object, "svg_transform")
-    _has_x_frame         = _coord_object is not None and hasattr(_coord_object, "draw_x_frame")
-    _has_clip_d          = _coord_object is not None and hasattr(_coord_object, "clip_path_d")
-    _has_x_sector_chrome = _coord_object is not None and hasattr(_coord_object, "draw_x_sector_chrome")
-
-    # A coordinate that owns the x-axis (draw_x_frame) needs a matching
-    # `draw_x_sector_chrome` to handle x-sectors; otherwise the Cartesian
-    # vertical-divider chrome would land outside the coordinate.
-    if _has_x_frame and _x_sec is not None and not _has_x_sector_chrome:
-        raise NotImplementedError(
-            "c.sectors(axis='x') with a coordinate that owns draw_x_frame "
-            "requires the coordinate to implement draw_x_sector_chrome."
-        )
-    # y-sectors with a coord-owned x-axis (CircularCoordinate's concentric
-    # bands case) is a different design and not yet supported.
-    if _has_x_frame and _y_sec is not None:
-        raise NotImplementedError(
-            "c.sectors(axis='y') is not yet supported with a coordinate "
-            "that owns the x-axis (e.g. CircularCoordinate)."
-        )
-    # Per-artist gate: each artist opts in via `declare_coord_support`
-    # under the coord's short name (class name minus `Coordinate` suffix).
-    # Vanilla Cartesian (no coord set) skips this gate entirely; non-affine
-    # coords like CircularCoordinate only accept artists whose draw
-    # forwards `project=ctx.warp`.
-    if _coord_object is not None:
-        coord_short = type(_coord_object).__name__.removesuffix("Coordinate")
-        supported = _COORD_SUPPORT.get(coord_short, set())
-        bad = sorted({a["type"] for a in state["artists"]
-                      if a["type"] not in supported})
-        if bad:
-            coord_name = type(_coord_object).__name__
-            raise NotImplementedError(
-                f"{coord_name} ({coord_short!r}) doesn't support {bad}; "
-                f"these artists aren't declared as renderable under it. "
-                f"Supported under {coord_name}: {sorted(supported)}.\n"
-                f"To add support: call "
-                f"`pt.declare_coord_support({coord_short!r}, [...])` "
-                f"listing the artists, and make sure each forwards "
-                f"`project=ctx.warp` to every `draw.*` helper call in its "
-                f"draw function."
-            )
-
-    # ---- emit body fragment ----
-    parts = []
-
-    if state["facecolor"] is not None:
-        parts.append(rect(0, 0, iw, ih, fill=resolve_color(state["facecolor"])))
-
-    # grid — straight Cartesian lines; suppressed when the coordinate owns
-    # the x-axis (e.g. CircularCoordinate) because horizontals/verticals
-    # render outside the ring after the warp would naturally apply.
-    if state["grid"] and not _has_x_frame:
-        gcol = _GRIDSPEC["color"]
-        which = state["grid_which"]
-        # Minor lines first so major lines paint on top where they meet.
-        # grid(which="minor"/"both") is itself the explicit ask, so when
-        # the user hasn't configured minor ticks the auto subdivisions
-        # apply (ggplot behavior) — an explicit minor= list still wins.
-        if which in ("minor", "both"):
-            mw = _GRIDSPEC["minor_width"]; md = _GRIDSPEC["minor_dasharray"]
-            if not x_is_cat:
-                xm = state["x_minor"]
-                for t in _chrome_emit._resolve_minor_ticks(
-                        xm if xm not in (None, False) else True,
-                        x_scale, inp.x_ticks):
-                    x = x_scale(t)
-                    parts.append(segment(x, 0, x, ih,
-                                         color=gcol, width=mw, dash=md))
-            if panel_opts.y_axis.kind != "category":
-                ym = state["y_minor"]
-                for t in _chrome_emit._resolve_minor_ticks(
-                        ym if ym not in (None, False) else True,
-                        y_scale, inp.y_ticks):
-                    y = y_scale(t)
-                    parts.append(segment(0, y, iw, y,
-                                         color=gcol, width=mw, dash=md))
-        if which in ("major", "both"):
-            gw = _GRIDSPEC["width"]; gd = _GRIDSPEC["dasharray"]
-            if not x_is_cat:
-                for t in inp.x_ticks:
-                    x = x_scale(t)
-                    parts.append(segment(x, 0, x, ih,
-                                         color=gcol, width=gw, dash=gd))
-            for t in inp.y_ticks:
-                y = y_scale(t)
-                parts.append(segment(0, y, iw, y,
-                                     color=gcol, width=gw, dash=gd))
-
-    # build the render context once — passed to every draw call.
-    # When svg_transform is present the coordinate mapping is handled at the
-    # SVG group level; artists draw in Cartesian, so ctx.project stays None.
-    # Non-affine coords expose `ctx.warp` (pixel-space convenience closure)
-    # that artists pass to `draw.*` helpers; validation upstream guaranteed
-    # every artist here is declared as a supporter of this coord, so we
-    # always populate `warp` when the coord is non-affine.
-    def _ctx_for(a):
-        if _has_svg_transform or _coord_object is None:
-            proj = None
-            warp = None
-        else:
-            proj = _coord_object(a, iw, ih)
-            warp = _make_px_warp(proj, iw, ih)
-        return RenderContext(
-            x_scale=x_scale, y_scale=y_scale, iw=iw, ih=ih,
-            color=a["_color"], defaults=_D, dash=_DASH,
-            project=proj, warp=warp,
-        )
-
-    # three-pass draw: background → data → foreground.
-    # Each artist's body is wrapped in <g class="plotlet-artist" ...> so
-    # AI consumers can read structural attrs (type, label, color, range,
-    # etc.) without parsing geometry.
-    by_layer = {"background": [], "data": [], "foreground": []}
-    for idx, a in enumerate(state["artists"]):
-        spec = get_artist(a["type"])
-        if spec is None: continue
-        by_layer[spec.layer].append((idx, a))
-    clip_data = state.get("clip", True)
-
-    # For coordinate frames the clip region is the projected data area,
-    # not the Cartesian rectangle. By default we emit a polygon from the
-    # four corners of the (t, r) unit square (correct for affine coords).
-    # A coordinate can override via `clip_path_d` for non-affine shapes
-    # (e.g. an annulus for CircularCoordinate); we apply clip-rule="evenodd"
-    # so multi-subpath ds (outer + inner ring) describe a hole.
-    _clip_id = None
-    if (_has_coord_frame or _has_svg_transform) and clip_data:
-        _clip_id = f"pc{next(clip_counter)}"
-        if _has_clip_d:
-            d = _coord_object.clip_path_d(iw, ih)
-            parts.append(f'<defs><clipPath id="{_clip_id}">'
-                         f'<path d="{d}" clip-rule="evenodd"/></clipPath></defs>')
-        else:
-            bl_x, bl_y = _coord_project(0.0, 0.0)
-            tl_x, tl_y = _coord_project(0.0, 1.0)
-            br_x, br_y = _coord_project(1.0, 0.0)
-            tr_x, tr_y = _coord_project(1.0, 1.0)
-            pts = (f"{coord(bl_x)},{coord(bl_y)} {coord(br_x)},{coord(br_y)} "
-                   f"{coord(tr_x)},{coord(tr_y)} {coord(tl_x)},{coord(tl_y)}")
-            parts.append(f'<defs><clipPath id="{_clip_id}">'
-                         f'<polygon points="{pts}"/></clipPath></defs>')
-
-    for layer in ("background", "data", "foreground"):
-        if not by_layer[layer]:
-            continue
-        # Clip the data layer to the data area so an artist drawing
-        # outside the visible xlim/ylim (zoom insets, explicit xlim that
-        # excludes data) can't paint over tick labels or the parent.
-        # Coordinate frames use a polygon <clipPath>; others use a nested
-        # <svg> with overflow="hidden" (SVG1.1-safe rectangular clip).
-        # Caller can opt out via `c.clip(False)`.
-        if layer == "data" and clip_data:
-            if _clip_id:
-                parts.append(f'<g clip-path="url(#{_clip_id})">')
-            else:
-                parts.append(f'<svg x="0" y="0" width="{iw:.10g}" height="{ih:.10g}" overflow="hidden">')
-            if _has_svg_transform:
-                xfm = _coord_object.svg_transform(_coord_project, iw, ih)
-                parts.append(f'<g transform="{xfm}">')
-
-        # Each body is emitted in user-recording z-order. Under affine
-        # coords the surrounding <g transform="..."> handles the mapping;
-        # under non-affine coords artists projected through ctx.warp during
-        # draw. Either way the body is plain SVG — no renderer-level rewrite.
-        for idx, a in by_layer[layer]:
-            spec = get_artist(a["type"])
-            body = spec.draw(a, _ctx_for(a))
-            parts.append(_wrap_artist(a, idx, body))
-
-        if layer == "data" and clip_data:
-            if _has_svg_transform:
-                parts.append('</g>')
-            parts.append('</g>' if _clip_id else '</svg>')
-
-    parts.extend(_chrome_emit.emit_chrome(
-        state=state, inp=inp, iw=iw, ih=ih,
-        coord_object=_coord_object, coord_project=_coord_project,
-        has_coord_frame=_has_coord_frame, has_x_frame=_has_x_frame,
-        has_x_sector_chrome=_has_x_sector_chrome,
-        x_sec=_x_sec, y_sec=_y_sec,
-    ))
-
-    # Tick font + text color — used by the inline-legend block below
-    # (colorbar tick labels, swatch labels). label_bands and chrome are
-    # reused from the up-front label_band_sizes call.
-    tick_size = _FONTSPEC["tick_size"]
-    text_color = _FONTSPEC["color"]
-    top_legend_outset = (leg["lh"] + legend_gap
-                         if inner_gap_top is not None else 0)
-    bottom_legend_outset = (leg["lh"] + legend_gap
-                            if legend_pos == "bottom" else 0)
-    parts.extend(_chrome_emit.emit_frame_labels(
-        state, inp, iw, ih, chrome, top_legend_outset=top_legend_outset,
-        bottom_legend_outset=bottom_legend_outset,
-    ))
-
-    # legend — gather entries from every artist's legend_entries(a) and
-    # gradient descriptors from legend_gradient(a). Multi-entry artists
-    # (sankey, mosaic, ...) contribute one row per category; continuous
-    # artists (imshow, hexbin, ...) contribute a vertical gradient strip
-    # with ticks (inline colorbar).
-    if leg is not None:
-        lw = leg["lw"]
-        lh = leg["lh"]
-        horizontal = leg["horizontal"]
-        disc = leg["disc"]
-        cont = leg["cont"]
-        row_h = _LEGSPEC["row_height"]
-        pad_x = _LEGSPEC["pad_x"]
-        pad_y = _LEGSPEC["pad_y"]
-        sw    = _LEGSPEC["swatch_width"]
-        pos = legend_pos
-        gap = legend_gap
-        if pos in ("right", "left", "top", "bottom"):
-            # `top` puts the legend *between* the title (outer edge) and
-            # data (inner edge); other sides put it beyond the axis
-            # band. Hidden sides naturally collapse via `_chrome_bands.label_band_sizes`
-            # — when a side's title/labels are dropped (joined share-pair
-            # or unset), the band shrinks and the legend moves inward.
-            if pos == "right":
-                lx, ly = iw + label_bands["right"] + gap, (ih - lh) / 2
-            elif pos == "left":
-                lx, ly = -(label_bands["left"] + gap + lw), (ih - lh) / 2
-            elif pos == "top":
-                lx, ly = (iw - lw) / 2, -(inner_gap_top + lh)
-            else:  # "bottom"
-                lx, ly = (iw - lw) / 2, ih + label_bands["bottom"] + gap
-        else:
-            # Inside-corner / center tokens — overlay the data area.
-            off = _LEGSPEC["border_offset"]
-            right_x = iw - lw - off
-            bottom_y = ih - lh - off
-            mid_x = (iw - lw) / 2
-            mid_y = (ih - lh) / 2
-            lx, ly = {
-                "top-right":    (right_x, off),
-                "top-left":     (off,     off),
-                "bottom-right": (right_x, bottom_y),
-                "bottom-left":  (off,     bottom_y),
-                "center":       (mid_x,   mid_y),
-            }[pos]
-        transform = f'translate({coord(lx)},{coord(ly)})'
-        parts.append(f'<g transform="{transform}">')
-        # The translate puts the body's panel-local coords onto the
-        # sink so chrome bboxes tagged inside `_render_discrete_entry`
-        # / `_render_continuous_entry` (and the sub-header text_path
-        # in the body) land at outer-SVG positions.
-        with _regions.translate(lx, ly):
-            parts.append(_emit_inline_legend_body(
-                lw, lh, pos, cont, disc, horizontal, leg["gradient_h"],
-                leg["ncols"], pad_x, pad_y, row_h, sw, tick_size,
-                text_color, _ctx_for))
-        parts.append('</g>')
-
-    # Inset axes — render each as its own SVG fragment positioned by
-    # axes-fraction within this leaf's data area. Drawn last so they
-    # sit on top of the data layer (and on top of the legend). Wrapped
-    # in a data-area clip so the inset's canvas can't paint over the
-    # parent's title/labels if its own margins overhang.
+def _emit_insets(state, iw, ih):
+    """Inset axes — render each as its own SVG fragment positioned by
+    axes-fraction within this leaf's data area. Drawn last so they
+    sit on top of the data layer (and on top of the legend). Wrapped
+    in a data-area clip so the inset's canvas can't paint over the
+    parent's title/labels if its own margins overhang."""
     insets = state.get("insets") or []
-    if insets:
-        parts.append(f'<svg x="0" y="0" width="{iw:.10g}" height="{ih:.10g}" overflow="hidden">')
+    if not insets:
+        return []
+    parts = [f'<svg x="0" y="0" width="{iw:.10g}" height="{ih:.10g}" overflow="hidden">']
     for inset_rect, inset_chart in insets:
         x_frac, y_frac, w_frac, h_frac = inset_rect
         # Emit the inset from its cached resolution. Every inset reaching
@@ -656,7 +659,55 @@ def _render_inner(state, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
                       + rect(bg_x, bg_y, bg_w, bg_h,
                              fill=SPEC["figure"]["background"])
                       + f'{inset_svg}</g>')
-    if insets:
-        parts.append('</svg>')
+    parts.append('</svg>')
+    return parts
+
+
+def _render_inner(state, iw, ih, M, panel_opts: _PanelOpts, *, clip_counter):
+    """Body fragment for one panel — the string appended inside the panel
+    `<g>` opened by `_panel_open`. Coordinates are panel-local: data area
+    at `(0,0)`→`(iw,ih)`, chrome placed relative to `M`. `panel_opts`
+    supplies axis descriptors and joined-side flags. `clip_counter` is
+    shared across panels so coord-clip ids stay unique in the SVG.
+
+    One stage per line below; the concatenation order is the SVG paint
+    order (facecolor → grid → artist layers → chrome → frame labels →
+    legend → insets). Stages share derivations only through the env."""
+    env = _panel_env(state, iw, ih, panel_opts)
+    _validate_coord_contract(state, env)
+
+    parts = []
+
+    if state["facecolor"] is not None:
+        parts.append(rect(0, 0, iw, ih, fill=resolve_color(state["facecolor"])))
+
+    parts += _emit_grid(state, env, iw, ih)
+
+    ctx_for = _artist_ctx(env, iw, ih)
+    parts += _emit_artist_layers(state, env, iw, ih, ctx_for, clip_counter)
+
+    parts += _chrome_emit.emit_chrome(
+        state=state, inp=env.inp, iw=iw, ih=ih,
+        coord_object=env.coord_object, coord_project=env.coord_project,
+        has_coord_frame=env.has_coord_frame, has_x_frame=env.has_x_frame,
+        has_x_sector_chrome=env.has_x_sector_chrome,
+        x_sec=env.x_sec, y_sec=env.y_sec,
+    )
+
+    legend_gap = _LAYOUTSPEC["legend_gap"]
+    top_legend_outset = (env.leg["lh"] + legend_gap
+                         if env.inner_gap_top is not None else 0)
+    bottom_legend_outset = (env.leg["lh"] + legend_gap
+                            if env.legend_pos == "bottom" else 0)
+    parts += _chrome_emit.emit_frame_labels(
+        state, env.inp, iw, ih, env.chrome,
+        top_legend_outset=top_legend_outset,
+        bottom_legend_outset=bottom_legend_outset,
+    )
+
+    if env.leg is not None:
+        parts += _emit_inline_legend(env, iw, ih, ctx_for)
+
+    parts += _emit_insets(state, iw, ih)
 
     return "".join(parts)
