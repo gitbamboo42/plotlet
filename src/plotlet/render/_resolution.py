@@ -1140,6 +1140,21 @@ def _inline_legend_layout(state, env=None):
     `pt.legend()` leaf harvests without a panel and passes no env."""
     if not state["legend"]:
         return None
+    disc, cont = _legend_sources(state, env)
+    if not disc and not cont:
+        return None
+    pos, gradient_h, horizontal, ncols = _legend_position(state, disc, cont)
+    lw, lh = _legend_block_size(disc, cont, gradient_h, horizontal, ncols)
+    return {"disc": disc, "cont": cont, "lw": lw, "lh": lh,
+            "horizontal": horizontal, "gradient_h": gradient_h,
+            "position": pos, "ncols": ncols}
+
+
+def _legend_sources(state, env):
+    """Harvest a leaf's legend sources: `disc` (artist, entry) pairs
+    from `spec.legend_entries`, `cont` (artist, descriptor) pairs from
+    `spec.legend_gradient`, manual `entries=` rows appended last, and
+    `reverse=` applied per section."""
     from ._legend import _legend_source_artist, _manual_entry
     disc = []
     cont = []
@@ -1167,9 +1182,12 @@ def _inline_legend_layout(state, env=None):
         disc.reverse()
         manual.reverse()
     disc.extend(manual)
-    if not disc and not cont:
-        return None
+    return disc, cont
 
+
+def _legend_position(state, disc, cont):
+    """Resolve the requested position into `(pos, gradient_h,
+    horizontal, ncols)`."""
     requested = state.get("legend_position", "right")
     if cont and disc and requested in ("top", "bottom"):
         raise ValueError(
@@ -1192,7 +1210,40 @@ def _inline_legend_layout(state, env=None):
     # ncol overrides the horizontal direction's one-row default).
     ncols = state.get("legend_ncols", 1)
     horizontal = pos in ("top", "bottom") and ncols == 1 and not cont
+    return pos, gradient_h, horizontal, ncols
 
+
+def _disc_grid_size(disc, ncols):
+    """Width/height of the discrete rows spread over `ncols` columns
+    (per-column widest entry, `legend.column_gap` apart), including
+    sub-group headers — mirror of the paint geometry in
+    `_emit_inline_legend_body`."""
+    from ._legend import _entry_columns, _partition_by_group
+    row_h = _LEGSPEC["row_height"]
+    sw    = _LEGSPEC["swatch_width"]
+    tick_size = _FONTSPEC["tick_size"]
+    label_size = _FONTSPEC["label_size"]
+    sub_header_h = label_size + _LEGSPEC["header_pad"]
+    sub_groups = _partition_by_group(disc, lambda ae: ae[1].get("group"))
+    disc_w = 0.0
+    disc_h = 0.0
+    for name, items in sub_groups:
+        if name:
+            disc_w = max(disc_w, measure_text(str(name), label_size))
+            disc_h += sub_header_h
+        cols = _entry_columns(items, ncols)
+        block_w = sum(
+            max(sw + _LEGSPEC["swatch_label_gap"] + measure_text(e["label"], tick_size) for _, e in col)
+            for col in cols
+        ) + (len(cols) - 1) * _LEGSPEC["column_gap"]
+        disc_w = max(disc_w, block_w)
+        disc_h += len(cols[0]) * row_h
+    disc_h += max(0, len(sub_groups) - 1) * _LEGSPEC["section_gap"]
+    return disc_w, disc_h
+
+
+def _legend_block_size(disc, cont, gradient_h, horizontal, ncols):
+    """Block width/height `(lw, lh)` for the resolved legend layout."""
     row_h = _LEGSPEC["row_height"]
     pad_x = _LEGSPEC["pad_x"]
     pad_y = _LEGSPEC["pad_y"]
@@ -1204,53 +1255,31 @@ def _inline_legend_layout(state, env=None):
         # case, no background rect and no padding — the strip borders
         # itself and sits flush against the data area (modulo legend_gap).
         from ._legend import _inline_gradient_block_size_h
-        lw, lh = _inline_gradient_block_size_h([d for _, d in cont])
-    elif horizontal:
+        return _inline_gradient_block_size_h([d for _, d in cont])
+    if horizontal:
         # Discrete-only horizontal row. Entries arranged left-to-right.
         entry_ws = [sw + _LEGSPEC["swatch_label_gap"] + measure_text(e["label"], tick_size) for _, e in disc]
         spacer = 2 * pad_x
         lw = 2 * pad_x + sum(entry_ws) + (len(disc) - 1) * spacer
         lh = row_h + 2 * pad_y
-    elif cont and not disc:
+        return lw, lh
+    if cont and not disc:
         # Gradient-only block: no background rect, no padding around the
         # block — the strip carries its own border. Sits flush against
         # the data area's outer edge (modulo legend_gap).
         from ._legend import _inline_gradient_block_size
-        lw, lh = _inline_gradient_block_size([d for _, d in cont])
-    else:
-        # Vertical mixed (cont + disc) or discrete-only. Stack continuous
-        # strips on top, discrete rows below, with section_gap between.
-        # Background rect wraps everything → outer padding. Each
-        # sub-group's rows spread over `ncols` columns (per-column widest
-        # entry, `legend.column_gap` apart) — mirror of the paint
-        # geometry in `_emit_inline_legend_body`.
-        from ._legend import (_entry_columns, _inline_gradient_block_size,
-                              _partition_by_group)
-        label_size = _FONTSPEC["label_size"]
-        sub_header_h = label_size + _LEGSPEC["header_pad"]
-        sub_groups = _partition_by_group(disc, lambda ae: ae[1].get("group"))
-        disc_w = 0.0
-        disc_h = 0.0
-        for name, items in sub_groups:
-            if name:
-                disc_w = max(disc_w, measure_text(str(name), label_size))
-                disc_h += sub_header_h
-            cols = _entry_columns(items, ncols)
-            block_w = sum(
-                max(sw + _LEGSPEC["swatch_label_gap"] + measure_text(e["label"], tick_size) for _, e in col)
-                for col in cols
-            ) + (len(cols) - 1) * _LEGSPEC["column_gap"]
-            disc_w = max(disc_w, block_w)
-            disc_h += len(cols[0]) * row_h
-        disc_h += max(0, len(sub_groups) - 1) * _LEGSPEC["section_gap"]
-        cont_w, cont_h = _inline_gradient_block_size([d for _, d in cont])
-        lw = max(disc_w, cont_w) + 2 * pad_x
-        lh = cont_h + disc_h + 2 * pad_y
-        if cont and disc:
-            lh += _LEGSPEC["section_gap"]
-    return {"disc": disc, "cont": cont, "lw": lw, "lh": lh,
-            "horizontal": horizontal, "gradient_h": gradient_h,
-            "position": pos, "ncols": ncols}
+        return _inline_gradient_block_size([d for _, d in cont])
+    # Vertical mixed (cont + disc) or discrete-only. Stack continuous
+    # strips on top, discrete rows below, with section_gap between.
+    # Background rect wraps everything → outer padding.
+    from ._legend import _inline_gradient_block_size
+    disc_w, disc_h = _disc_grid_size(disc, ncols)
+    cont_w, cont_h = _inline_gradient_block_size([d for _, d in cont])
+    lw = max(disc_w, cont_w) + 2 * pad_x
+    lh = cont_h + disc_h + 2 * pad_y
+    if cont and disc:
+        lh += _LEGSPEC["section_gap"]
+    return lw, lh
 
 
 def _descriptor_scale(state, axis, span):
