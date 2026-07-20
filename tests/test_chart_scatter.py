@@ -101,12 +101,33 @@ def chart_scatter_long_color():
     return c
 
 
+def chart_scatter_alpha_col():
+    # alpha= names a column — points fan out per (color, alpha) level
+    # and alpha levels map onto the default opacity ramp.
+    rng = random.Random(19)
+    rows = []
+    for period in ("early", "late"):
+        for g, (mx, my) in (("a", (0, 0)), ("b", (2, 1.5))):
+            for _ in range(30):
+                rows.append({"x": rng.gauss(mx, 0.7),
+                             "y": rng.gauss(my, 0.7),
+                             "group": g, "period": period})
+    data = {k: [r[k] for r in rows] for k in rows[0]}
+    c = pt.chart(data_width=300, data_height=240,
+                 title="scatter (alpha column)", xlabel="x", ylabel="y",
+                 legend=True)
+    c.scatter(data=data, x="x", y="y", color="group", alpha="period")
+    c.legend()
+    return c
+
+
 PLOTS = {
     "scatter_color": chart_scatter_color,
     "clip_data_area": chart_clip_data_area,
     "scatter_size": chart_scatter_size,
     "scatter_size_style_color": chart_scatter_size_style_color,
     "scatter_long_color": chart_scatter_long_color,
+    "scatter_alpha_col": chart_scatter_alpha_col,
 }
 
 

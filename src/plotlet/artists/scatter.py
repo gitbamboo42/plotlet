@@ -103,6 +103,45 @@ def _compute_style_array(values):
     return [mapping[v] for v in vals]
 
 
+def _size_legend_info(data, size, sizes):
+    """Size-aesthetic info for the legend (column name + source value
+    range + pixel range). Stashed on the first returned record so a
+    single size guide renders even when color also splits the data into
+    multiple records."""
+    if size is None:
+        return None
+    src_vals = [v for v in to_list(data[size])
+                if isinstance(v, (int, float)) and v == v]
+    if not src_vals:
+        return None
+    return {
+        "col_name": str(size),
+        "source_min": min(src_vals),
+        "source_max": max(src_vals),
+        "sizes_range": tuple(sizes),
+    }
+
+
+def _fanout_opts(opts, ck, ak, *, color_kind, color_value, color_levels,
+                 alpha_kind, alpha_value, alpha_levels, palette, alphas,
+                 labeled):
+    """Color / one-time legend label / alpha assignment for one
+    (color, group, alpha) fan-out record."""
+    if color_kind == "column":
+        idx = color_levels.index(ck)
+        opts["color"] = palette_color(palette, ck, idx) or TAB10[idx % 10]
+        if ck not in labeled:
+            opts["label"] = str(ck)
+            labeled.add(ck)
+    elif color_value is not None:
+        opts["color"] = color_value
+    if alpha_kind == "column":
+        opts["alpha"] = _alpha_for_level(alpha_levels.index(ak),
+                                          len(alpha_levels), alphas)
+    elif alpha_value is not None:
+        opts["alpha"] = alpha_value
+
+
 def _expand_with_aesthetics(data, x_col, y_col, color, group, alpha,
                              palette, size, style, sizes, alphas, base_opts):
     """Long-form scatter with `size=`/`style=` per-point arrays. Splits by
@@ -114,22 +153,7 @@ def _expand_with_aesthetics(data, x_col, y_col, color, group, alpha,
     n = len(xs_all)
     s_arr  = _compute_size_array(data[size], sizes) if size is not None else None
     mk_arr = _compute_style_array(data[style])      if style is not None else None
-
-    # Capture size-aesthetic info for the legend (column name + source
-    # value range + pixel range). Stashed on the first returned record
-    # so a single size guide renders even when color also splits the
-    # data into multiple records.
-    size_legend = None
-    if size is not None:
-        src_vals = [v for v in to_list(data[size])
-                    if isinstance(v, (int, float)) and v == v]
-        if src_vals:
-            size_legend = {
-                "col_name": str(size),
-                "source_min": min(src_vals),
-                "source_max": max(src_vals),
-                "sizes_range": tuple(sizes),
-            }
+    size_legend = _size_legend_info(data, size, sizes)
 
     def slice_for(idxs):
         out = dict(base_opts)
@@ -169,19 +193,12 @@ def _expand_with_aesthetics(data, x_col, y_col, color, group, alpha,
         ys_g = [ys_all[j] for j in idxs]
         opts = slice_for(idxs)
         opts.pop("label", None)
-        if color_kind == "column":
-            idx = color_levels.index(ck)
-            opts["color"] = palette_color(palette, ck, idx) or TAB10[idx % 10]
-            if ck not in labeled:
-                opts["label"] = str(ck)
-                labeled.add(ck)
-        elif color_value is not None:
-            opts["color"] = color_value
-        if alpha_kind == "column":
-            opts["alpha"] = _alpha_for_level(alpha_levels.index(ak),
-                                              len(alpha_levels), alphas)
-        elif alpha_value is not None:
-            opts["alpha"] = alpha_value
+        _fanout_opts(opts, ck, ak,
+                     color_kind=color_kind, color_value=color_value,
+                     color_levels=color_levels,
+                     alpha_kind=alpha_kind, alpha_value=alpha_value,
+                     alpha_levels=alpha_levels,
+                     palette=palette, alphas=alphas, labeled=labeled)
         records.append({"type": "scatter", "xs": xs_g, "ys": ys_g, "opts": opts})
     if size_legend is not None and records:
         records[0]["_size_legend"] = size_legend

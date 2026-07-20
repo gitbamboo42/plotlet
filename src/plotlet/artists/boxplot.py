@@ -107,6 +107,64 @@ def _boxplot_ydomain(a):
     return a["cats"] if _boxplot_horizontal(a) else _boxplot_values(a)
 
 
+def _box_stats(vs, whis, show_fliers):
+    """Quartiles, whisker reach, and outliers for one box. Whiskers
+    stop at the extreme inliers within `whis * IQR` of the quartiles;
+    an all-outlier box collapses its whiskers onto Q1/Q3."""
+    q1 = quantile(vs, 0.25)
+    q2 = quantile(vs, 0.50)
+    q3 = quantile(vs, 0.75)
+    iqr = q3 - q1
+    lo_fence = q1 - whis * iqr
+    hi_fence = q3 + whis * iqr
+    inliers = [v for v in vs if lo_fence <= v <= hi_fence]
+    outliers = [v for v in vs if v < lo_fence or v > hi_fence] if show_fliers else []
+    whisker_lo = min(inliers) if inliers else q1
+    whisker_hi = max(inliers) if inliers else q3
+    return q1, q2, q3, iqr, whisker_lo, whisker_hi, outliers
+
+
+def _notch_points(n_samples, q1, q2, q3, iqr, vp_q1, vp_q2, vp_q3,
+                  cp_lo, cp_hi, box_w, val_scale, horizontal):
+    """Notched-box polygon points + the shortened median segment.
+    95 % CI of the median ≈ 1.57 * IQR / sqrt(n). Cap at the IQR halves
+    so the indent never crosses Q1 or Q3."""
+    ci = 1.57 * iqr / math.sqrt(n_samples) if n_samples > 0 else 0
+    ci = min(ci, (q2 - q1), (q3 - q2))
+    vp_ci_lo = val_scale(q2 - ci)
+    vp_ci_hi = val_scale(q2 + ci)
+    inset = box_w * 0.2
+    cp_lo_in = cp_lo + inset
+    cp_hi_in = cp_hi - inset
+    pts = [
+        (cp_lo,    vp_q1),
+        (cp_hi,    vp_q1),
+        (cp_hi,    vp_ci_lo),
+        (cp_hi_in, vp_q2),
+        (cp_hi,    vp_ci_hi),
+        (cp_hi,    vp_q3),
+        (cp_lo,    vp_q3),
+        (cp_lo,    vp_ci_hi),
+        (cp_lo_in, vp_q2),
+        (cp_lo,    vp_ci_lo),
+    ]
+    if horizontal:
+        pts = [(y, x) for x, y in pts]
+        median = (vp_q2, cp_lo_in, vp_q2, cp_hi_in)
+    else:
+        median = (cp_lo_in, vp_q2, cp_hi_in, vp_q2)
+    return pts, median
+
+
+def _plain_box_geom(vp_q1, vp_q2, vp_q3, cp_lo, cp_hi, box_w, horizontal):
+    """Rect origin/size + full-width median segment for a plain box."""
+    if horizontal:
+        return ((min(vp_q1, vp_q3), cp_lo), (abs(vp_q3 - vp_q1), box_w),
+                (vp_q2, cp_lo, vp_q2, cp_hi))
+    return ((cp_lo, min(vp_q1, vp_q3)), (box_w, abs(vp_q3 - vp_q1)),
+            (cp_lo, vp_q2, cp_hi, vp_q2))
+
+
 def _boxplot_draw(a, ctx):
     cats, groups, vals = a["cats"], a["groups"], a["vals"]
     n_groups = len(groups)
@@ -145,16 +203,8 @@ def _boxplot_draw(a, ctx):
                                         band_frac=bw_frac, gap=gap)
             cp_lo = cp - box_w / 2
             cp_hi = cp + box_w / 2
-            q1 = quantile(vs, 0.25)
-            q2 = quantile(vs, 0.50)
-            q3 = quantile(vs, 0.75)
-            iqr = q3 - q1
-            lo_fence = q1 - whis * iqr
-            hi_fence = q3 + whis * iqr
-            inliers = [v for v in vs if lo_fence <= v <= hi_fence]
-            outliers = [v for v in vs if v < lo_fence or v > hi_fence] if show_fliers else []
-            whisker_lo = min(inliers) if inliers else q1
-            whisker_hi = max(inliers) if inliers else q3
+            q1, q2, q3, iqr, whisker_lo, whisker_hi, outliers = \
+                _box_stats(vs, whis, show_fliers)
             vp_q1 = val_scale(q1)
             vp_q2 = val_scale(q2)
             vp_q3 = val_scale(q3)
@@ -162,46 +212,16 @@ def _boxplot_draw(a, ctx):
             vp_hi = val_scale(whisker_hi)
 
             if notch:
-                # 95 % CI of the median ≈ 1.57 * IQR / sqrt(n). Cap at the
-                # IQR halves so the indent never crosses Q1 or Q3.
-                n_samples = len(vs)
-                ci = 1.57 * iqr / math.sqrt(n_samples) if n_samples > 0 else 0
-                ci = min(ci, (q2 - q1), (q3 - q2))
-                vp_ci_lo = val_scale(q2 - ci)
-                vp_ci_hi = val_scale(q2 + ci)
-                inset = box_w * 0.2
-                cp_lo_in = cp_lo + inset
-                cp_hi_in = cp_hi - inset
-                pts = [
-                    (cp_lo,    vp_q1),
-                    (cp_hi,    vp_q1),
-                    (cp_hi,    vp_ci_lo),
-                    (cp_hi_in, vp_q2),
-                    (cp_hi,    vp_ci_hi),
-                    (cp_hi,    vp_q3),
-                    (cp_lo,    vp_q3),
-                    (cp_lo,    vp_ci_hi),
-                    (cp_lo_in, vp_q2),
-                    (cp_lo,    vp_ci_lo),
-                ]
-                if horizontal:
-                    pts = [(y, x) for x, y in pts]
+                pts, median = _notch_points(len(vs), q1, q2, q3, iqr,
+                                            vp_q1, vp_q2, vp_q3,
+                                            cp_lo, cp_hi, box_w,
+                                            val_scale, horizontal)
                 out.append(polygon(pts, fill=fill, stroke=line, stroke_width=lw,
                                    fill_alpha=fill_alpha if do_fill else 1.0,
                                    project=ctx.warp))
-                if horizontal:
-                    median = (vp_q2, cp_lo_in, vp_q2, cp_hi_in)
-                else:
-                    median = (cp_lo_in, vp_q2, cp_hi_in, vp_q2)
             else:
-                if horizontal:
-                    rect_xy = (min(vp_q1, vp_q3), cp_lo)
-                    rect_wh = (abs(vp_q3 - vp_q1), box_w)
-                    median = (vp_q2, cp_lo, vp_q2, cp_hi)
-                else:
-                    rect_xy = (cp_lo, min(vp_q1, vp_q3))
-                    rect_wh = (box_w, abs(vp_q3 - vp_q1))
-                    median = (cp_lo, vp_q2, cp_hi, vp_q2)
+                rect_xy, rect_wh, median = _plain_box_geom(
+                    vp_q1, vp_q2, vp_q3, cp_lo, cp_hi, box_w, horizontal)
                 out.append(rect(rect_xy[0], rect_xy[1], rect_wh[0], rect_wh[1],
                                 fill=fill, stroke=line, stroke_width=lw,
                                 fill_alpha=fill_alpha if do_fill else 1.0,

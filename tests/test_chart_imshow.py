@@ -105,6 +105,18 @@ def chart_imshow_annot_custom():
     return c
 
 
+def chart_imshow_annot_auto():
+    # annot=True labels each cell with its own value; annot_color="auto"
+    # flips black/white by cell luminance. The NaN cell renders black
+    # and gets no label.
+    data = [[0.5, 2.0, 4.5],
+            [6.0, float("nan"), 8.0],
+            [9.5, 7.5, 1.0]]
+    c = pt.chart(title="imshow (annot=True, auto color)")
+    c.imshow(data, cmap="viridis", annot=True, fmt=".1f")
+    return c
+
+
 PLOTS = {
     "imshow_rect": chart_imshow_rect,
     "imshow_png": chart_imshow_png,
@@ -114,6 +126,7 @@ PLOTS = {
     "imshow_user_cmap": chart_imshow_user_cmap,
     "imshow_log": chart_imshow_log_norm,
     "imshow_annot_custom": chart_imshow_annot_custom,
+    "imshow_annot_auto": chart_imshow_annot_auto,
 }
 
 

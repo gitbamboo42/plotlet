@@ -265,6 +265,35 @@ def _heatmap_record(data=None, x=None, sector=None, values=None, border=False,
         {"data": data, "x": x, "sector": sector, "values": values, "y": y})
     nrows  = len(matrix)                        # tracks
     ncols  = len(matrix[0]) if matrix else 0    # positions
+    _validate_matrix_shape(matrix, xs, ncols)
+    opts = pack_opts(cmap=cmap, norm=norm, center=center,
+                     absent_fill=absent_fill, annot=annot, fmt=fmt,
+                     annot_color=annot_color, annot_fontsize=annot_fontsize,
+                     linewidth=linewidth, linecolor=linecolor,
+                     label=label, legend=legend)
+    x_continuous, xs, matrix, opts = _resolve_x_positions(xs, matrix, opts)
+    cols = [str(x) for x in xs]
+    x_edges = _cell_edges(xs) if x_continuous else None
+
+    base: dict = {"_x_continuous": x_continuous, "_x_edges": x_edges}
+    if palette is not None:
+        if not isinstance(palette, dict):
+            raise TypeError(
+                "heatmap: palette= must be a dict mapping cell value → "
+                f"color; got {type(palette).__name__}. (A chart-level "
+                "palette list does not apply to heatmap.)"
+            )
+        return {"type": "heatmap", "_matrix": matrix, "_cols": cols, "_rows": rows,
+                "_nrows": nrows, "_ncols": ncols, "_is_categorical": True,
+                "_palette": palette, "opts": opts, **base}
+
+    vmin, vmax = _value_range(matrix, norm, vmin, vmax)
+    return {"type": "heatmap", "_matrix": matrix, "_cols": cols, "_rows": rows,
+            "_nrows": nrows, "_ncols": ncols, "_vmin": vmin, "_vmax": vmax,
+            "opts": opts, **base}
+
+
+def _validate_matrix_shape(matrix, xs, ncols):
     for row in matrix:
         if len(row) != ncols:
             raise ValueError(
@@ -276,13 +305,13 @@ def _heatmap_record(data=None, x=None, sector=None, values=None, border=False,
             f"heatmap: x column has {len(xs)} rows but the value columns "
             f"have {ncols}."
         )
-    opts = pack_opts(cmap=cmap, norm=norm, center=center,
-                     absent_fill=absent_fill, annot=annot, fmt=fmt,
-                     annot_color=annot_color, annot_fontsize=annot_fontsize,
-                     linewidth=linewidth, linecolor=linecolor,
-                     label=label, legend=legend)
-    # Numeric x column → continuous positioning (edges from cell centers);
-    # string x → categorical band labels. y (tracks) is always categorical.
+
+
+def _resolve_x_positions(xs, matrix, opts):
+    """Numeric x column → continuous positioning (edges from cell
+    centers); string x → categorical band labels. y (tracks) is always
+    categorical. Returns ``(x_continuous, xs, matrix, opts)`` with the
+    continuous case sorted by position."""
     x_continuous = all_numeric(xs)
     if x_continuous:
         # The midpoint edge rule silently emits overlapping / zero-width /
@@ -300,35 +329,25 @@ def _heatmap_record(data=None, x=None, sector=None, values=None, border=False,
         raise ValueError(
             "heatmap: x column mixes numbers and missing values (None)."
         )
-    cols = [str(x) for x in xs]
-    x_edges = _cell_edges(xs) if x_continuous else None
+    return x_continuous, xs, matrix, opts
 
-    base: dict = {"_x_continuous": x_continuous, "_x_edges": x_edges}
-    if palette is not None:
-        if not isinstance(palette, dict):
-            raise TypeError(
-                "heatmap: palette= must be a dict mapping cell value → "
-                f"color; got {type(palette).__name__}. (A chart-level "
-                "palette list does not apply to heatmap.)"
-            )
-        return {"type": "heatmap", "_matrix": matrix, "_cols": cols, "_rows": rows,
-                "_nrows": nrows, "_ncols": ncols, "_is_categorical": True,
-                "_palette": palette, "opts": opts, **base}
 
+def _value_range(matrix, norm, vmin, vmax):
+    """Fill unset vmin/vmax from the finite cell values (positive only
+    under norm="log"), with fixed fallbacks for an all-empty matrix."""
     norm_kind = norm if norm is not None else "linear"
-    if vmin is None or vmax is None:
-        if norm_kind == "log":
-            flat = [v for row in matrix for v in row if v is not None and v == v and v > 0]
-        else:
-            flat = [v for row in matrix for v in row if v is not None and v == v]
-        if flat:
-            if vmin is None: vmin = min(flat)
-            if vmax is None: vmax = max(flat)
-        else:
-            vmin, vmax = (1.0, 10.0) if norm_kind == "log" else (0.0, 1.0)
-    return {"type": "heatmap", "_matrix": matrix, "_cols": cols, "_rows": rows,
-            "_nrows": nrows, "_ncols": ncols, "_vmin": vmin, "_vmax": vmax,
-            "opts": opts, **base}
+    if vmin is not None and vmax is not None:
+        return vmin, vmax
+    if norm_kind == "log":
+        flat = [v for row in matrix for v in row if v is not None and v == v and v > 0]
+    else:
+        flat = [v for row in matrix for v in row if v is not None and v == v]
+    if flat:
+        if vmin is None: vmin = min(flat)
+        if vmax is None: vmax = max(flat)
+    else:
+        vmin, vmax = (1.0, 10.0) if norm_kind == "log" else (0.0, 1.0)
+    return vmin, vmax
 
 
 def _heatmap_xdomain(a):

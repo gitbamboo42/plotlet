@@ -61,72 +61,92 @@ def _artist_imshow(a, xs_, ys_, col):
 
     use_rects = nrows * ncols <= _D["imshow_max_rects"]
     cw = pw / ncols; ch = ph / nrows
-    out = []
-
     if use_rects:
-        for r, row in enumerate(rows_in_render_order):
-            y = sy_t + r * ch
-            for c in range(ncols):
-                v = row[c]
-                if v != v:
-                    fill = "rgb(0,0,0)"
-                else:
-                    i = int(norm.to_unit(v) * 255 + 0.5) * 3
-                    fill = f"rgb({lut[i]},{lut[i+1]},{lut[i+2]})"
-                x = sx_l + c * cw
-                out.append(rect(x, y, cw, ch, fill=fill))
+        out = _rects_pass(rows_in_render_order, norm, lut,
+                          sx_l, sy_t, cw, ch, ncols)
     else:
-        buf = bytearray()
-        for row in rows_in_render_order:
-            for c in range(ncols):
-                v = row[c]
-                if v != v:
-                    buf.append(0); buf.append(0); buf.append(0)
-                else:
-                    i = int(norm.to_unit(v) * 255 + 0.5) * 3
-                    buf.append(lut[i]); buf.append(lut[i+1]); buf.append(lut[i+2])
-        out.append(image_png(sx_l, sy_t, pw, ph, buf, ncols, nrows))
+        out = _png_pass(rows_in_render_order, norm, lut,
+                        sx_l, sy_t, pw, ph, ncols, nrows)
 
     annot = opts.get("annot", False)
     if annot is not False and annot is not None:
-        # annot=True → label cells with their numeric value; annot=2D-array →
-        # use the supplied labels (numbers formatted via `fmt`, strings used
-        # verbatim). Text color: `"auto"` picks black/white via the cell's
-        # rendered-color luminance so labels stay readable across the cmap.
-        label_source = data if annot is True else to_list_2d(annot)
-        if len(label_source) != nrows or (label_source and len(label_source[0]) != ncols):
-            raise ValueError(
-                f"imshow: annot array shape ({len(label_source)}x"
-                f"{len(label_source[0]) if label_source else 0}) "
-                f"doesn't match data ({nrows}x{ncols})"
-            )
-        labels_in_render_order = [label_source[i] for i in row_indices]
-        fmt = opts.get("fmt", ".2g")
-        color_opt = opts.get("annot_color", "auto")
-        fontsize = opts.get("annot_fontsize", _D["annot_fontsize"])
-        for r, label_row in enumerate(labels_in_render_order):
-            cy = sy_t + (r + 0.5) * ch
-            data_row = rows_in_render_order[r]
-            for c in range(ncols):
-                label = label_row[c]
-                if label is None or (isinstance(label, float) and label != label):
-                    continue
-                txt = format(label, fmt) if isinstance(label, (int, float)) \
-                      else str(label)
-                if color_opt == "auto":
-                    v = data_row[c]
-                    if v != v:
-                        txt_col = "#ffffff"
-                    else:
-                        i = int(norm.to_unit(v) * 255 + 0.5) * 3
-                        txt_col = auto_label_color(lut[i], lut[i+1], lut[i+2])
-                else:
-                    txt_col = color_opt
-                cx = sx_l + (c + 0.5) * cw
-                out.append(text_path(txt, cx, cy + fontsize / 3,
-                                     fontsize, anchor="middle", color=txt_col))
-
+        out += _annot_pass(a, rows_in_render_order, row_indices, norm, lut,
+                           sx_l, sy_t, cw, ch)
     return "".join(out)
+
+
+def _cell_rgb(v, norm, lut):
+    """Cell value → (r, g, b) through the norm + colormap LUT — the one
+    lookup rule the rect, PNG, and annot passes all read. NaN → None
+    (rendered black; labeled white under annot_color="auto")."""
+    if v != v:
+        return None
+    i = int(norm.to_unit(v) * 255 + 0.5) * 3
+    return lut[i], lut[i + 1], lut[i + 2]
+
+
+def _rects_pass(rows, norm, lut, sx_l, sy_t, cw, ch, ncols):
+    """One <rect> per cell — sharp at any zoom."""
+    out = []
+    for r, row in enumerate(rows):
+        y = sy_t + r * ch
+        for c in range(ncols):
+            rgb = _cell_rgb(row[c], norm, lut)
+            fill = ("rgb(0,0,0)" if rgb is None
+                    else f"rgb({rgb[0]},{rgb[1]},{rgb[2]})")
+            out.append(rect(sx_l + c * cw, y, cw, ch, fill=fill))
+    return out
+
+
+def _png_pass(rows, norm, lut, sx_l, sy_t, pw, ph, ncols, nrows):
+    """Whole image as one base64 PNG — bounded SVG size for big arrays."""
+    buf = bytearray()
+    for row in rows:
+        for c in range(ncols):
+            rgb = _cell_rgb(row[c], norm, lut)
+            buf.extend((0, 0, 0) if rgb is None else rgb)
+    return [image_png(sx_l, sy_t, pw, ph, buf, ncols, nrows)]
+
+
+def _annot_pass(a, rows_in_render_order, row_indices, norm, lut,
+                sx_l, sy_t, cw, ch):
+    """annot=True → label cells with their numeric value; annot=2D-array →
+    use the supplied labels (numbers formatted via `fmt`, strings used
+    verbatim). Text color: `"auto"` picks black/white via the cell's
+    rendered-color luminance so labels stay readable across the cmap."""
+    nrows = a["_nrows"]; ncols = a["_ncols"]
+    opts = a["opts"]
+    annot = opts.get("annot", False)
+    label_source = a["_data"] if annot is True else to_list_2d(annot)
+    if len(label_source) != nrows or (label_source and len(label_source[0]) != ncols):
+        raise ValueError(
+            f"imshow: annot array shape ({len(label_source)}x"
+            f"{len(label_source[0]) if label_source else 0}) "
+            f"doesn't match data ({nrows}x{ncols})"
+        )
+    labels_in_render_order = [label_source[i] for i in row_indices]
+    fmt = opts.get("fmt", ".2g")
+    color_opt = opts.get("annot_color", "auto")
+    fontsize = opts.get("annot_fontsize", _D["annot_fontsize"])
+    out = []
+    for r, label_row in enumerate(labels_in_render_order):
+        cy = sy_t + (r + 0.5) * ch
+        data_row = rows_in_render_order[r]
+        for c in range(ncols):
+            label = label_row[c]
+            if label is None or (isinstance(label, float) and label != label):
+                continue
+            txt = format(label, fmt) if isinstance(label, (int, float)) \
+                  else str(label)
+            if color_opt == "auto":
+                rgb = _cell_rgb(data_row[c], norm, lut)
+                txt_col = "#ffffff" if rgb is None else auto_label_color(*rgb)
+            else:
+                txt_col = color_opt
+            cx = sx_l + (c + 0.5) * cw
+            out.append(text_path(txt, cx, cy + fontsize / 3,
+                                 fontsize, anchor="middle", color=txt_col))
+    return out
 
 
 def _imshow_data_attrs(a):

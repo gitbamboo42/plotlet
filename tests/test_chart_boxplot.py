@@ -55,9 +55,43 @@ def chart_aes_inheritance():
     return c
 
 
+def chart_boxplot_notch_h():
+    # Horizontal + notch=True (median-CI indent, box points swapped to
+    # (value, cat) space) + showmeans markers.
+    rng = random.Random(7)
+    rows = []
+    for site, mu in (("north", 4.0), ("center", 6.0), ("south", 5.0)):
+        for _ in range(40):
+            rows.append({"site": site, "ph": rng.gauss(mu, 1.1)})
+    data = {k: [r[k] for r in rows] for k in rows[0]}
+    c = pt.chart(data_width=320, data_height=200,
+                 title="boxplot horizontal + notch + means", xlabel="pH")
+    c.boxplot(data=data, x="site", y="ph", orientation="h",
+              notch=True, showmeans=True)
+    return c
+
+
+def chart_boxplot_unfilled():
+    # fill=False draws line-only boxes; showfliers=False drops the
+    # outlier dots; whis=1.0 tightens the whisker fences.
+    rng = random.Random(8)
+    rows = []
+    for batch, mu in (("b1", 10.0), ("b2", 12.5), ("b3", 11.0)):
+        for _ in range(35):
+            rows.append({"batch": batch, "amount": rng.gauss(mu, 1.4)})
+    data = {k: [r[k] for r in rows] for k in rows[0]}
+    c = pt.chart(data_width=300, data_height=200,
+                 title="boxplot unfilled, no fliers", ylabel="amount")
+    c.boxplot(data=data, x="batch", y="amount", fill=False,
+              showfliers=False, whis=1.0, color="#336699")
+    return c
+
+
 PLOTS = {
     "boxplot": chart_boxplot,
     "aes_inheritance": chart_aes_inheritance,
+    "boxplot_notch_h": chart_boxplot_notch_h,
+    "boxplot_unfilled": chart_boxplot_unfilled,
 }
 
 
