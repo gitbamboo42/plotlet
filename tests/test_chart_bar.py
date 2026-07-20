@@ -163,6 +163,43 @@ def chart_bar_mean_ci():
     return c
 
 
+def chart_bar_bottom():
+    # Nonzero baseline: bars rise from bottom=2 (the value domain
+    # includes the baseline), and a single-series label= drives the
+    # one-entry legend paint path.
+    df = {"month": ["Jan", "Feb", "Mar", "Apr"], "temp": [3.2, 4.1, 7.8, 12.6]}
+    c = pt.chart(data_width=300, data_height=200,
+                 title="bar bottom=2 baseline", ylabel="°C", legend=True)
+    c.bar(data=df, x="month", y="temp", fill="C1", bottom=2, label="2016")
+    c.legend()
+    return c
+
+
+def chart_bar_fill_eq_x():
+    # fill= names the x column itself — redundant grouping: each bar at
+    # full slot width in its own color, one legend entry per category
+    # (seaborn's classic per-category coloring).
+    df = {"tool": ["hammer", "saw", "drill"], "uses": [14, 9, 17]}
+    c = pt.chart(data_width=300, data_height=200,
+                 title="bar fill=x (per-category colors)", ylabel="uses",
+                 legend=True)
+    c.bar(data=df, x="tool", y="uses", fill="tool", position="dodge")
+    c.legend()
+    return c
+
+
+def chart_bar_h_stack():
+    # Horizontal stacked: categories on the y band axis, values stack
+    # along x from 0.
+    df = _bar_quarterly_df()
+    c = pt.chart(data_width=300, data_height=200,
+                 title="bar horizontal stack", xlabel="$M", legend=True)
+    c.bar(data=df, x="quarter", y="value", fill="series", position="stack",
+          orientation="h")
+    c.legend()
+    return c
+
+
 PLOTS = {
     "bar": chart_bar,
     "bar_stack": chart_bar_stack,
@@ -176,6 +213,9 @@ PLOTS = {
     "bar_errorbar_aligned": chart_bar_errorbar_aligned,
     "bar_count": chart_bar_count,
     "bar_mean_ci": chart_bar_mean_ci,
+    "bar_bottom": chart_bar_bottom,
+    "bar_fill_eq_x": chart_bar_fill_eq_x,
+    "bar_h_stack": chart_bar_h_stack,
 }
 
 
