@@ -135,6 +135,39 @@ def _resolve_minor_ticks(user_minor, scale, major_ticks):
     return list(user_minor)
 
 
+def _mark_endpoints(direction, edge, outward, length):
+    """Tick-mark endpoint pair along the spine's normal — the one
+    in/out/inout rule for major and minor marks on every side. "in"
+    goes inside the data area, "out" outside, "inout" spans both sides
+    at full length each. `edge` is the spine's pixel position on that
+    normal; `outward` is the sign pointing away from the data area
+    (+1 for bottom/right, -1 for top/left)."""
+    if direction == "in":
+        return edge, edge - outward * length
+    if direction == "out":
+        return edge, edge + outward * length
+    return edge + outward * length, edge - outward * length
+
+
+def _minor_tick_marks(axis, scale, minors, direction, edge, outward,
+                      col, sw):
+    """Minor tick marks — shorter than majors (frame.minor_tick_ratio),
+    no labels; endpoints from the same `_mark_endpoints` rule as the
+    majors, so minors fan inside/outside the same way."""
+    minor_len = _FRAME["tick_length"] * _FRAME["minor_tick_ratio"]
+    p1, p2 = _mark_endpoints(direction, edge, outward, minor_len)
+    parts = []
+    for t in minors:
+        p = scale(t)
+        if not math.isfinite(p):
+            continue
+        if axis == "x":
+            parts.append(segment(p, p1, p, p2, color=col, width=sw))
+        else:
+            parts.append(segment(p1, p, p2, p, color=col, width=sw))
+    return parts
+
+
 
 def _spine_segments(side, iw, ih, x_ranges, y_ranges):
     """Yield ``(x1, y1, x2, y2)`` per spine segment for ``side``.
@@ -276,26 +309,14 @@ def _emit_x_axis(state, inp, iw, ih, *, coord_object, coord_project,
         ))
         return parts
 
-    # Tick-mark endpoints relative to the spine. "in" goes inside the data
-    # area, "out" goes outside, "inout" spans both sides at full length each.
-    x_dir = state["x_direction"]
-    bot_in, bot_out = ih - _FRAME["tick_length"], ih + _FRAME["tick_length"]  # bottom spine offsets
-    top_in, top_out = _FRAME["tick_length"], -_FRAME["tick_length"]           # top spine offsets
-    if x_dir == "in":      x_bot_endpoints, x_top_endpoints = (ih, bot_in),  (0, top_in)
-    elif x_dir == "out":   x_bot_endpoints, x_top_endpoints = (ih, bot_out), (0, top_out)
-    else:                  x_bot_endpoints, x_top_endpoints = (bot_out, bot_in), (top_out, top_in)
-
     # x-ticks + labels — always Cartesian. Whole block flips wholesale
     # by `x_side`: spine attachment, tick-mark endpoints, label anchor.
+    x_dir = state["x_direction"]
     x_side = x_pol["side"]
     if x_side == "bottom":
-        x_endpoints = x_bot_endpoints
-        y_band_edge_sign = 1   # band grows downward from y=ih
-        x_band_y0 = ih
+        x_edge, x_outward = ih, 1   # band grows downward from y=ih
     else:
-        x_endpoints = x_top_endpoints
-        y_band_edge_sign = -1  # band grows upward from y=0
-        x_band_y0 = 0
+        x_edge, x_outward = 0, -1   # band grows upward from y=0
     # No visible outward mark (inward, disabled, or dropped on a
     # joined share-pair side) → labels sit flush at tick_pad past
     # the spine line.
@@ -303,7 +324,7 @@ def _emit_x_axis(state, inp, iw, ih, *, coord_object, coord_project,
         mark=_outward_mark_extent(x_pol, x_ticks))["label_off"]
     # Mark endpoints + stroke, resolved once for majors and minors alike;
     # the label-only path (draw_marks off) never reads them.
-    y1, y2 = x_endpoints
+    y1, y2 = _mark_endpoints(x_dir, x_edge, x_outward, _FRAME["tick_length"])
     col, sw = _side_stroke(state, x_side)
 
     for t, lbl in zip(x_ticks, x_labels):
@@ -333,25 +354,12 @@ def _emit_x_axis(state, inp, iw, ih, *, coord_object, coord_project,
                                      decoration=x_decor,
                                      tag="tick-x"))
 
-    # Minor ticks — shorter than majors (frame.minor_tick_ratio), no
-    # labels. Emit only when the user opted in via xticks(minor=True) or
-    # xticks(minor=[...]).
+    # Minor ticks — emit only when the user opted in via
+    # xticks(minor=True) or xticks(minor=[...]).
     x_minor = _resolve_minor_ticks(state["x_minor"], x_scale, x_ticks)
     if x_minor and x_pol["draw_marks"]:
-        minor_len = _FRAME["tick_length"] * _FRAME["minor_tick_ratio"]
-        for t in x_minor:
-            x = x_scale(t)
-            if not math.isfinite(x):
-                continue
-            # Endpoint pair on the active spine, signed by side: minor
-            # tick lengths fan inside/outside the same way as majors.
-            if x_dir == "in":
-                y1, y2 = x_band_y0, x_band_y0 - y_band_edge_sign * minor_len
-            elif x_dir == "out":
-                y1, y2 = x_band_y0, x_band_y0 + y_band_edge_sign * minor_len
-            else:
-                y1, y2 = x_band_y0 + y_band_edge_sign * minor_len, x_band_y0 - y_band_edge_sign * minor_len
-            parts.append(segment(x, y1, x, y2, color=col, width=sw))
+        parts += _minor_tick_marks("x", x_scale, x_minor, x_dir,
+                                   x_edge, x_outward, col, sw)
     return parts
 
 
@@ -572,33 +580,21 @@ def _emit_y_axis(state, inp, iw, ih, *, coord_object, coord_project,
         ))
         return parts
 
-    # Tick-mark endpoints relative to the spine — same in/out/inout rule
-    # as the x-axis table in `_emit_x_axis`.
-    y_dir = state["y_direction"]
-    left_in, left_out  = _FRAME["tick_length"], -_FRAME["tick_length"]        # left spine offsets (x = 0)
-    right_in, right_out = iw - _FRAME["tick_length"], iw + _FRAME["tick_length"]
-    if y_dir == "in":      y_left_endpoints, y_right_endpoints = (0, left_in),  (iw, right_in)
-    elif y_dir == "out":   y_left_endpoints, y_right_endpoints = (0, left_out), (iw, right_out)
-    else:                  y_left_endpoints, y_right_endpoints = (left_out, left_in), (right_out, right_in)
-
     # y-ticks + labels — Cartesian. Like the x block, flip wholesale
     # by `y_side`: spine attachment, tick-mark endpoints, label anchor.
+    y_dir = state["y_direction"]
     y_side = y_pol["side"]
     y_label_dx = _axis_band_stack(
         mark=_outward_mark_extent(y_pol, y_ticks))["label_off"]
     if y_side == "left":
-        y_endpoints = y_left_endpoints
-        x_band_edge_sign = -1  # band grows leftward from x=0
-        y_band_x0 = 0
+        y_edge, y_outward = 0, -1   # band grows leftward from x=0
         y_label_x = -y_label_dx
     else:
-        y_endpoints = y_right_endpoints
-        x_band_edge_sign = 1   # band grows rightward from x=iw
-        y_band_x0 = iw
+        y_edge, y_outward = iw, 1   # band grows rightward from x=iw
         y_label_x = iw + y_label_dx
     # Mark endpoints + stroke, resolved once for majors and minors alike;
     # the label-only path (draw_marks off) never reads them.
-    x1, x2 = y_endpoints
+    x1, x2 = _mark_endpoints(y_dir, y_edge, y_outward, _FRAME["tick_length"])
     col, sw = _side_stroke(state, y_side)
 
     for t, lbl in zip(y_ticks, y_labels):
@@ -616,18 +612,8 @@ def _emit_y_axis(state, inp, iw, ih, *, coord_object, coord_project,
 
     y_minor = _resolve_minor_ticks(state["y_minor"], y_scale, y_ticks)
     if y_minor and y_pol["draw_marks"]:
-        minor_len = _FRAME["tick_length"] * _FRAME["minor_tick_ratio"]
-        for t in y_minor:
-            y = y_scale(t)
-            if not math.isfinite(y):
-                continue
-            if y_dir == "in":
-                x1, x2 = y_band_x0, y_band_x0 - x_band_edge_sign * minor_len
-            elif y_dir == "out":
-                x1, x2 = y_band_x0, y_band_x0 + x_band_edge_sign * minor_len
-            else:
-                x1, x2 = y_band_x0 + x_band_edge_sign * minor_len, y_band_x0 - x_band_edge_sign * minor_len
-            parts.append(segment(x1, y, x2, y, color=col, width=sw))
+        parts += _minor_tick_marks("y", y_scale, y_minor, y_dir,
+                                   y_edge, y_outward, col, sw)
     return parts
 
 
