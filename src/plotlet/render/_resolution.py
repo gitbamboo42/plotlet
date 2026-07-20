@@ -118,7 +118,7 @@ def _record_scale(state, axis, args, kw, *, from_default=False):
 # and what their labels say — as opposed to styling them (rotation=,
 # fontsize=, marks=, ...). `labels` is content too unless passed as the
 # bool form (`labels=False`), which only toggles label visibility.
-# `CircularCoordinate.resolve_layout` checks this set to tell
+# The circular layout resolve (`_layout_circular`) checks this set to tell
 # content-deciding calls from style-only ones; keep it in sync with the
 # kwarg handling in `_record_ticks` below.
 TICK_CONTENT_KW = frozenset({"ticks", "step", "count", "format", "minor"})
