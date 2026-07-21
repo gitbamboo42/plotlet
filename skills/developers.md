@@ -56,12 +56,12 @@ live in [README.md](README.md) and [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md).
 
 For layout/chrome questions (title, panel, spines, ticks, legend bboxes, overlap, clipping) use `c.regions()` — returns structured `{"kind","bbox","name","meta"}` dicts.
 
-When debugging a bug that spans the pipeline, maintain a `debug.md` at the
-repo root as you go: dump the figure's state at each layer (recorded
-journal, lowered `FigureIR`, what the render half does with it) and state
-your diagnosis — which layer is at fault and why — so the human author can
-follow the reasoning, not just the conclusion. `debug.md` is gitignored;
-never commit it.
+When debugging a bug that spans the pipeline, maintain a `work-notes/debug.md`
+as you go: dump the figure's state at each layer (recorded journal, lowered
+`FigureIR`, what the render half does with it) and state your diagnosis —
+which layer is at fault and why — so the human author can follow the
+reasoning, not just the conclusion. `work-notes/` is gitignored, so never
+commit it.
 
 ## Style
 
