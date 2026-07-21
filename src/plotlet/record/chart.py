@@ -559,7 +559,6 @@ class Chart(_Renderable):
                             f"{self._leaf_kind} leaves don't take artists — "
                             f"draw {name}() on a pt.chart() and compose the two."
                         )
-                    # aes containers arrive positionally; fold them into
                     # Column mappings arrive as `mapping=aes(...)` (or a
                     # positional aes(...), ggplot-style); fold them into
                     # the reserved "mapping" entry of the recorded
