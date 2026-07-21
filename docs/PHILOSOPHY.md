@@ -76,13 +76,17 @@ artists can't resolve pixel positions or palettes at record time — see
 
 ## Why this shape
 
+The hard part of a plot is debugging it — making sure the output is
+correct, and stays correct as the code changes. plotlet is shaped
+around that.
+
 Four claims:
 
 1. **Reproducibility.** Text rendered as paths, deterministic replay — same
    script, byte-identical output, any machine. Baseline-image tests work;
    "looks fine on my laptop" stops being a bug class.
 
-2. **Composition is the hard part.** Annotated heatmaps and faceted
+2. **Composition is where the work is.** Annotated heatmaps and faceted
    layouts aren't single plots; they're coordinated panels with shared
    scales, attached tracks, and shared axis partitions. `pt.grid`,
    `share_x`/`share_y`, `c.sectors(...)` (layout-level fan-out),
