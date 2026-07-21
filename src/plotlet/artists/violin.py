@@ -1,8 +1,8 @@
 """Mirrored KDE outline per category with a mini-boxplot inside.
 
 Long-form only:
-  c.violin(data=df, x="cat", y="value")
-  c.violin(data=df, x="cat", y="value", fill="group", palette={...})
+  c.add_violin(data=df, x="cat", y="value")
+  c.add_violin(data=df, x="cat", y="value", fill="group", palette={...})
 
 Long-form with `fill="col"` dodges sub-violins side-by-side within each cat
 and emits one legend entry per group level.

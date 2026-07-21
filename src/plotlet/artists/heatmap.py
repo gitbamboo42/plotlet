@@ -1,7 +1,7 @@
 """Heatmap artist — tidy/long input, continuous or categorical x.
 
 Input is a **tidy table** (dict-of-columns or DataFrame), like `scatter`:
-``c.heatmap(data=df, x="x", values=["a", "b"])``. Each table **row**
+``c.add_heatmap(data=df, x="x", values=["a", "b"])``. Each table **row**
 becomes one heatmap **column** (its x-position from the `x` column); each
 **value column** becomes one heatmap **row** (a track). `values=`
 picks/orders the tracks; by default every column except `x`/`sector` is a
@@ -21,7 +21,7 @@ panel-level ``c.sectors(Sectors(...), axis="x", column=...)``. The
 framework's sector remap tags each column's x into its sector, and cell
 edges are grouped per sector so gaps fall between sector groups.
 
-`c.imshow(matrix, ...)` stays separate — a pure image blitter (uniform
+`c.add_imshow(matrix, ...)` stays separate — a pure image blitter (uniform
 pixels, no per-cell styling, no warp, no labels) for real image /
 dense-array data. Reach for heatmap when you need labels, missing-value
 handling, borders, or a non-affine coordinate; imshow when you just want
@@ -126,7 +126,7 @@ def _columns_of(data):
 
 _HEATMAP_USAGE = (
     "heatmap requires tidy input: "
-    "c.heatmap(data=df, x='col'[, sector='group', values=[...]]). "
+    "c.add_heatmap(data=df, x='col'[, sector='group', values=[...]]). "
     "A bare matrix must be reshaped into a table first."
 )
 

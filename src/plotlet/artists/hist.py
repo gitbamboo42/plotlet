@@ -1,8 +1,8 @@
 """Histogram — binned counts of a 1-D distribution.
 
-  c.hist(data=df, x="col")                          # long-form
-  c.hist(data=df, x="col", fill="group")            # overlaid by group
-  c.hist(data=df, x="col", fill="group", position="stack")
+  c.add_hist(data=df, x="col")                          # long-form
+  c.add_hist(data=df, x="col", fill="group")            # overlaid by group
+  c.add_hist(data=df, x="col", fill="group", position="stack")
 
 Multi-group calls share bin edges so the bars are comparable and the
 positions line up.

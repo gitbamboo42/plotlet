@@ -4,8 +4,8 @@ No per-render RNG — jitter offsets are derived from a splitmix64 hash of each
 point's indices so the SVG is byte-identical across runs.
 
 Long-form only:
-  c.strip(data=df, x="cat", y="value")
-  c.strip(data=df, x="cat", y="value", fill="group", palette={...})
+  c.add_strip(data=df, x="cat", y="value")
+  c.add_strip(data=df, x="cat", y="value", fill="group", palette={...})
 
 Long-form with `fill="col"` dodges sub-strips side-by-side within each cat and
 emits one legend entry per group level.

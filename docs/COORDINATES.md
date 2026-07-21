@@ -109,7 +109,7 @@ matters under a non-Cartesian coord:
 
 | Kwarg | Artist | Effect |
 |---|---|---|
-| `arc=False` | `c.line(...)` | Connect points with literal Cartesian chords instead of subdividing each edge along the arc. Endpoints still project to their correct angle/ring. No-op under Cartesian. |
+| `arc=False` | `c.add_line(...)` | Connect points with literal Cartesian chords instead of subdividing each edge along the arc. Endpoints still project to their correct angle/ring. No-op under Cartesian. |
 
 The kwarg falls through `**kwargs` into the artist's opts — Cartesian
 users never see it.

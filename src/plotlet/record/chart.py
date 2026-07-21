@@ -534,7 +534,13 @@ class Chart(_Renderable):
         # interfere with _calls / _data_width / etc.
         if name.startswith("_"):
             raise AttributeError(name)
-        spec = get_artist(name)
+        # Artists are called as `add_<op>` (`c.add_scatter(...)`); the
+        # journal records the canonical op name (`"scatter"`), so the
+        # spelling of the method never reaches the journal or the render
+        # half. Frame methods (title, xlim, …) stay bare — `add_title`
+        # does not resolve, and neither does a bare artist name.
+        op = name.removeprefix("add_")
+        spec = get_artist(op) if name.startswith("add_") else None
         if name in _FRAME_METHODS or spec is not None:
             def recorder(*args, **kwargs):
                 if spec is not None:
@@ -569,7 +575,7 @@ class Chart(_Renderable):
                     # Normalize any user-passed `data=` (chart._data is
                     # already normalized in __init__; idempotent no-op
                     # for that path). Positional args get the same
-                    # treatment — `c.heatmap(df, ...)` passes df
+                    # treatment — `c.add_heatmap(df, ...)` passes df
                     # positionally, and the artist expects a normalized
                     # value regardless of position.
                     if "data" in kwargs:
@@ -578,7 +584,8 @@ class Chart(_Renderable):
                 # Only the user action is recorded — an artist's
                 # frame_defaults regenerate inside `_replay` on every
                 # render (see `_expand_frame_defaults` in render/_resolution.py).
-                self._calls.append((name, list(args), dict(kwargs)))
+                # `op`, not `name`: the journal carries canonical op names.
+                self._calls.append((op, list(args), dict(kwargs)))
                 return self
             # Surface the artist's module docstring on the recorder so
             # `c.line?` / `help(c.line)` / `c.line.__doc__` reach it —
@@ -594,29 +601,33 @@ class Chart(_Renderable):
                 recorder.__name__ = name
             return recorder
         # An installed-but-not-imported extension from the plotlet-extensions
-        # package registers its artist only on import; hint at that. When that
+        # package registers its artist only on import; hint at that. `op`
+        # (the `add_`-stripped name) is the extension module name —
+        # `c.add_sankey()` hints `import plotlet.extensions.sankey`. When the
         # package isn't installed the `plotlet.extensions` namespace doesn't
         # exist, so find_spec on a submodule raises ModuleNotFoundError rather
         # than returning None — treat that as "no such extension".
         try:
             ext_installed = (
-                importlib.util.find_spec(f"plotlet.extensions.{name}") is not None
+                importlib.util.find_spec(f"plotlet.extensions.{op}") is not None
             )
         except ModuleNotFoundError:
             ext_installed = False
-        if ext_installed:
+        if ext_installed and get_artist(op) is None:
             raise AttributeError(
                 f"Chart has no method {name!r}. "
-                f"Did you forget `import plotlet.extensions.{name}`? "
+                f"Did you forget `import plotlet.extensions.{op}`? "
                 f"Extensions register their artist on import."
             )
         raise AttributeError(
             f"Chart has no method {name!r}. "
-            f"Registered artists: {all_artist_names()}"
+            f"Artists are called as add_<name>: "
+            f"{['add_' + n for n in all_artist_names()]}"
         )
 
     def __dir__(self):
-        return sorted(set(super().__dir__()) | _FRAME_METHODS | set(all_artist_names()))
+        return sorted(set(super().__dir__()) | _FRAME_METHODS
+                      | {"add_" + n for n in all_artist_names()})
 
     # ---------- tabular mark methods ----------
 

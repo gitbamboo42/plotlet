@@ -24,7 +24,7 @@ def sectors_single_scatter():
                  data_width=480, data_height=180,
                  ylim=(0.0, 1.0))
     c.sectors(PHASES, column="phase")
-    c.scatter(
+    c.add_scatter(
         data={
             "phase": ["warmup", "warmup", "training", "training",
                       "cooldown", "cooldown"],
@@ -39,7 +39,7 @@ def sectors_single_scatter():
 def sectors_multi_track_share_x():
     t1 = pt.chart(data_width=480, data_height=80,
                   ylabel="scatter", ylim=(0.0, 1.0))
-    t1.scatter(
+    t1.add_scatter(
         data={
             "phase": ["warmup", "warmup", "training", "training", "cooldown"],
             "t":     [40, 90, 100, 400, 80],
@@ -50,7 +50,7 @@ def sectors_multi_track_share_x():
 
     t2 = pt.chart(data_width=480, data_height=80,
                   ylabel="line", ylim=(0.0, 1.0))
-    t2.line(
+    t2.add_line(
         data={
             "phase": ["warmup", "warmup", "training", "training",
                       "cooldown", "cooldown"],
@@ -61,7 +61,7 @@ def sectors_multi_track_share_x():
     )
     # Cross-sector reference line — no sector column on its data, so
     # the sector remap must silently pass through.
-    t2.axhline(0.5, color="#888888", linestyle="--")
+    t2.add_axhline(0.5, color="#888888", linestyle="--")
 
     return (pt.grid([[t1], [t2]])
               .share_x("col")
@@ -77,7 +77,7 @@ def sectors_from_sectors_value():
                  data_width=380, data_height=140,
                  ylim=(0.0, 1.0))
     c.sectors(sec, column="grp")
-    c.line(
+    c.add_line(
         data={
             "grp": ["a", "a", "b", "b", "c", "c"],
             "x":   [0, 9, 0, 19, 0, 4],
@@ -100,7 +100,7 @@ def sectors_categorical_x():
          "groupC": ["c6", "c7", "c8", "c9"]},
         axis="x", divider=False,
     )
-    c.bar(
+    c.add_bar(
         data={"cat": ["c1","c2","c3","c4","c5","c6","c7","c8","c9"],
               "v":   [3,    5,    2,    8,    6,    4,    7,    5,    3]},
         x="cat", y="v",
@@ -116,7 +116,7 @@ def sectors_continuous_x():
     c = pt.chart(title="continuous x-sectors with ticks",
                  data_width=440, data_height=180, ylabel="value")
     c.sectors({"A": 100, "B": 60, "C": 80}, column="region", gap=12)
-    c.scatter(
+    c.add_scatter(
         data={"region": ["A",  "A",  "B",  "B",  "C",  "C"],
               "pos":    [30,   80,   20,   50,   10,   60],
               "v":      [3,    5,    8,    6,    4,    7]},
@@ -133,7 +133,7 @@ def sectors_continuous_y():
                  xlabel="value")
     c.sectors({"low": 10, "mid": 20, "high": 15},
               column="band", axis="y")
-    c.scatter(
+    c.add_scatter(
         data={"band": ["low","low","mid","mid","mid","high","high"],
               "val":  [2,    7,    5,    12,   18,   3,     10],
               "v":    [0.2,  0.5,  0.3,  0.7,  0.4,  0.6,   0.8]},
@@ -158,7 +158,7 @@ def sectors_categorical_y_heatmap():
     df = {"col": ["c1", "c2", "c3", "c4"]}
     for name, values in zip(rows, matrix):
         df[name] = values
-    c.heatmap(data=df, x="col", values=rows)
+    c.add_heatmap(data=df, x="col", values=rows)
     return c
 
 
@@ -173,7 +173,7 @@ def test_sector_labels_follow_axis_side():
     def make(tick_side):
         c = pt.chart({"cat": ["a", "b", "c", "d"], "v": [1, 2, 3, 4]},
                      data_width=280, data_height=160)
-        c.bar(x="cat", y="v")
+        c.add_bar(x="cat", y="v")
         c.sectors({"g1": ["a", "b"], "g2": ["c", "d"]}, axis="x")
         c.xticks(side=tick_side)
         c.yticks(side="right" if tick_side == "top" else "left")
@@ -255,7 +255,7 @@ def test_sectors_typo_in_data_raises_clearly():
     import pytest as _pytest
     c = pt.chart(data_width=200, data_height=80)
     c.sectors({"warmup": 100, "training": 500}, column="phase")
-    c.scatter(
+    c.add_scatter(
         data={"phase": ["warmup", "tarining", "warmup"],  # ← typo
               "t":     [10, 20, 30],
               "v":     [0.5, 0.5, 0.5]},
@@ -275,7 +275,7 @@ def test_sectors_after_artist_still_remaps():
     recording order; this test pins that behavior."""
     from plotlet.render._resolution import _replay
     c = pt.chart(data_width=200, data_height=80, ylim=(0, 1))
-    c.scatter(
+    c.add_scatter(
         data={"grp": ["g1", "g2"], "x": [25, 25], "y": [0.5, 0.5]},
         x="x", y="y",
     )
@@ -300,9 +300,9 @@ def test_layout_sectors_cascade_no_leaf_mutation():
     a Layout-level sectors call composes cleanly with re-renders /
     fit() / regions() without leaking entries between calls."""
     t1 = pt.chart(data_width=200, data_height=60)
-    t1.line(data={"phase": ["warmup"], "t": [50], "v": [0.5]}, x="t", y="v")
+    t1.add_line(data={"phase": ["warmup"], "t": [50], "v": [0.5]}, x="t", y="v")
     t2 = pt.chart(data_width=200, data_height=60)
-    t2.line(data={"phase": ["training"], "t": [50], "v": [0.5]}, x="t", y="v")
+    t2.add_line(data={"phase": ["training"], "t": [50], "v": [0.5]}, x="t", y="v")
     snapshot_t1 = list(t1._calls)
     snapshot_t2 = list(t2._calls)
     layout = (t1 / t2).sectors(PHASES, column="phase")
@@ -322,14 +322,14 @@ def test_sectors_passthrough_when_column_absent():
     silently pass through — they're an intentional shape."""
     c = pt.chart(data_width=200, data_height=80, ylim=(0, 1))
     c.sectors({"warmup": 100, "training": 500}, column="phase")
-    c.scatter(
+    c.add_scatter(
         data={"phase": ["warmup", "training"],
               "t":     [50, 300],
               "v":     [0.4, 0.7]},
         x="t", y="v",
     )
     # No 'phase' column on axhline data → no remap, no error.
-    c.axhline(0.5, color="#888888")
+    c.add_axhline(0.5, color="#888888")
     c.to_svg()  # smoke
 
 
@@ -363,7 +363,7 @@ def test_sectors_rejects_duplicates_and_nonpositive():
 def test_sectors_requires_column_kwarg():
     c = pt.chart(data_width=200, data_height=80)
     c.sectors({"a": 1, "b": 2}, column="grp")  # ok
-    c.line(data={"grp": ["a", "b"], "x": [0, 0], "y": [1, 2]},
+    c.add_line(data={"grp": ["a", "b"], "x": [0, 0], "y": [1, 2]},
            x="x", y="y", group="grp")
     c.to_svg()  # smoke
 

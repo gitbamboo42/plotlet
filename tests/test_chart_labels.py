@@ -21,7 +21,7 @@ def chart_long_title():
     c = pt.chart(data_width=180, data_height=140,
                  title="A very wide title that exceeds the data region width",
                  xlabel="x", ylabel="y")
-    c.line(data={"x": [1, 2, 3, 4, 5], "y": [1, 2, 4, 8, 16]}, x="x", y="y")
+    c.add_line(data={"x": [1, 2, 3, 4, 5], "y": [1, 2, 4, 8, 16]}, x="x", y="y")
     return c
 
 
@@ -35,7 +35,7 @@ def chart_long_ylabel():
                  title="long ylabel + title",
                  ylabel="Signal intensity (log10 normalized units per sample)",
                  xlabel="time")
-    c.line(data={"x": [0, 1, 2, 3], "y": [3.2, 4.1, 4.9, 5.5]}, x="x", y="y")
+    c.add_line(data={"x": [0, 1, 2, 3], "y": [3.2, 4.1, 4.9, 5.5]}, x="x", y="y")
     return c
 
 
@@ -45,7 +45,7 @@ def chart_subtitle_caption():
     c = pt.chart(data_width=340, data_height=170,
                  title="Fuel efficiency", subtitle="highway, 1999-2008",
                  caption="Source: EPA", xlabel="displ", ylabel="hwy")
-    c.scatter(data={"x": [1.8, 2.0, 2.8, 3.1, 4.2, 5.3],
+    c.add_scatter(data={"x": [1.8, 2.0, 2.8, 3.1, 4.2, 5.3],
                     "y": [29, 31, 26, 27, 23, 20]}, x="x", y="y")
     return c
 
@@ -59,7 +59,7 @@ def chart_multiline_labels():
     c = pt.chart(df, title="two-line title:\nsecond line",
                  xlabel="time\n(seconds)", ylabel="amplitude\n(unitless)",
                  gridlines=True)
-    c.line(x="t", y="sin")
+    c.add_line(x="t", y="sin")
     return c
 
 
@@ -93,7 +93,7 @@ def test_multiline_label_geometry():
     def cell(title, xlabel, ylabel):
         c = pt.chart(title=title, xlabel=xlabel, ylabel=ylabel,
                      data_width=200, data_height=140)
-        c.line(data={"x": [0, 1, 2], "y": [1, 0, 2]}, x="x", y="y")
+        c.add_line(data={"x": [0, 1, 2], "y": [1, 0, 2]}, x="x", y="y")
         return c
 
     W0, H0 = natural_size(pt.to_ir(cell("t", "x", "y")))

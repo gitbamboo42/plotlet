@@ -83,8 +83,8 @@ def _legend_position_chart(position):
     c = pt.chart(title=f"legend {position}",
                  xlabel="t", ylabel="value", gridlines=True,
                  data_width=300, data_height=180)
-    c.line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y", label="sin(t)")
-    c.line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y", label="cos(t)", linestyle="--")
+    c.add_line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y", label="sin(t)")
+    c.add_line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y", label="cos(t)", linestyle="--")
     c.legend(position=position)
     return c
 
@@ -135,7 +135,7 @@ def _big_continuous_heatmap(with_y_sectors):
     if with_y_sectors:
         c.sectors({"A": tracks[:10], "B": tracks[10:]}, axis="y",
                   divider=False, label=False)
-    c.heatmap(data=data, x="x", values=tracks, cmap="viridis")
+    c.add_heatmap(data=data, x="x", values=tracks, cmap="viridis")
     return c.to_svg()
 
 

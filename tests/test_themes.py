@@ -26,8 +26,8 @@ def _demo(theme: str) -> pt.Chart:
     xs = _xs()
     c = pt.chart(theme=theme, title=f"theme: {theme}",
                  xlabel="t", ylabel="value", legend=True)
-    c.line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y", label="sin(t)")
-    c.line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y", label="cos(t)", linestyle="--")
+    c.add_line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y", label="sin(t)")
+    c.add_line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y", label="cos(t)", linestyle="--")
     return c
 
 
@@ -42,9 +42,9 @@ def theme_mixed_layout():
     `active_theme()` scoping works in the layout renderer."""
     xs = _xs()
     left = pt.chart(theme="minimal", title="minimal", xlabel="t", ylabel="sin")
-    left.line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y")
+    left.add_line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y")
     right = pt.chart(theme="dark", title="dark", xlabel="t", ylabel="cos")
-    right.line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y")
+    right.add_line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y")
     return left | right
 
 
@@ -57,9 +57,9 @@ def theme_dark_scatter():
     ys = [rng.gauss(0, 1) for _ in range(80)]
     c = pt.chart(theme="dark", title="dark scatter",
                  xlabel="x", ylabel="y")
-    c.scatter(data={"x": xs, "y": ys}, x="x", y="y")
-    c.axhline(0)  # picks up refline_color from theme
-    c.axvline(0)
+    c.add_scatter(data={"x": xs, "y": ys}, x="x", y="y")
+    c.add_axhline(0)  # picks up refline_color from theme
+    c.add_axvline(0)
     return c
 
 
@@ -67,8 +67,8 @@ def theme_classic_after_dark():
     """Re-rendering a classic chart after a dark one should not bleed
     state. Sanity check for the swap-and-restore mechanism."""
     df = {"x": [1, 2, 3], "y": [1, 2, 3]}
-    pt.chart(theme="dark").line(data=df, x="x", y="y").to_svg()
-    return pt.chart(title="back to classic").line(data=df, x="x", y="y")
+    pt.chart(theme="dark").add_line(data=df, x="x", y="y").to_svg()
+    return pt.chart(title="back to classic").add_line(data=df, x="x", y="y")
 
 
 PLOTS = {

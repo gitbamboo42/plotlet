@@ -17,21 +17,21 @@ from plotlet.render import validate
 
 def _chart_ir():
     c = pt.chart({"x": [1, 2, 3], "y": [1, 4, 9]}, title="t")
-    c.scatter(x="x", y="y")
+    c.add_scatter(x="x", y="y")
     return pt.to_ir(c)
 
 
 def _layout_ir():
     a = pt.chart({"x": [1, 2], "y": [3, 4]})
-    a.scatter(x="x", y="y")
+    a.add_scatter(x="x", y="y")
     b = pt.chart({"x": [1, 2], "y": [4, 3]})
-    b.line(x="x", y="y")
+    b.add_line(x="x", y="y")
     return pt.to_ir(a | b)
 
 
 def _legend_ir():
     c = pt.chart({"x": [1, 2], "y": [3, 4], "g": ["a", "b"]})
-    c.scatter(x="x", y="y", color="g")
+    c.add_scatter(x="x", y="y", color="g")
     return pt.to_ir(c | pt.legend(c))
 
 
@@ -39,7 +39,7 @@ def _grid_ir():
     cells = []
     for i in range(4):
         c = pt.chart({"x": [1, 2], "y": [3, 4]})
-        c.scatter(x="x", y="y")
+        c.add_scatter(x="x", y="y")
         cells.append(c)
     return pt.to_ir(pt.grid([cells[:2], cells[2:]]))
 
@@ -195,7 +195,7 @@ def test_unknown_coord():
 
 def _circular_ir():
     c = pt.chart({"x": [1, 2, 3], "y": [1, 4, 9]})
-    c.scatter(x="x", y="y")
+    c.add_scatter(x="x", y="y")
     lay = pt.grid([[c]])
     lay.coordinate(pt.CircularCoordinate(r_inner=0.3))
     return pt.to_ir(lay)
@@ -266,9 +266,9 @@ def test_legend_sources_must_be_leaves():
     # the legend in dependency order, so pointing legend_sources at it
     # exercises the kind check, not the earlier-reference check.
     a = pt.chart({"x": [1, 2], "y": [3, 4]})
-    a.scatter(x="x", y="y")
+    a.add_scatter(x="x", y="y")
     b = pt.chart({"x": [1, 2], "y": [4, 3]})
-    b.line(x="x", y="y")
+    b.add_line(x="x", y="y")
     inner = (a | b).share_y()
     ir = pt.to_ir(inner | pt.legend(a))
     inner_nid = next(n.nid for n in ir.nodes
@@ -281,7 +281,7 @@ def _legend_kind_target_ir():
     """`pt.legend() | chart` — the legend leaf lands *before* the chart
     in the node table."""
     c = pt.chart({"x": [1, 2], "y": [3, 4]})
-    c.scatter(x="x", y="y")
+    c.add_scatter(x="x", y="y")
     return pt.to_ir(pt.legend() | c)
 
 
@@ -290,7 +290,7 @@ def test_leaf_root_rejected():
     (the shape `journal_to_ir`'s root wrap exists to prevent) fails.
     Rebuilt here by unwrapping a lowered figure."""
     c = pt.chart({"x": [1.0, 2.0], "y": [3.0, 4.0]}, xlim=(0, 10))
-    c.scatter(x="x", y="y")
+    c.add_scatter(x="x", y="y")
     ir = pt.to_ir(c)
 
     wrapper = next(n for n in ir.nodes if n.nid == ir.root_nid)

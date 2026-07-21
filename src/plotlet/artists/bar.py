@@ -1,13 +1,13 @@
 """Bar chart — long-form only.
 
-  c.bar(data=df, x="cat", y="val")                                  # single
-  c.bar(data=df, x="cat", y="val", fill="C0")                       # constant color
-  c.bar(data=df, x="cat", y="val", fill="series", position="stack") # grouped
-  c.bar(data=df, x="cat", y="val", fill="series", position="dodge")
-  c.bar(data=df, x="cat", y="val", fill="series", position="fill")  # 100% stack
-  c.bar(data=df, x="cat", y="mean", fill="series", yerr="sd")       # mean±err
-  c.bar(data=df, x="cat", stat="count")                             # countplot
-  c.bar(data=df, x="cat", y="raw", stat="mean")                     # mean±CI
+  c.add_bar(data=df, x="cat", y="val")                                  # single
+  c.add_bar(data=df, x="cat", y="val", fill="C0")                       # constant color
+  c.add_bar(data=df, x="cat", y="val", fill="series", position="stack") # grouped
+  c.add_bar(data=df, x="cat", y="val", fill="series", position="dodge")
+  c.add_bar(data=df, x="cat", y="val", fill="series", position="fill")  # 100% stack
+  c.add_bar(data=df, x="cat", y="mean", fill="series", yerr="sd")       # mean±err
+  c.add_bar(data=df, x="cat", stat="count")                             # countplot
+  c.add_bar(data=df, x="cat", y="raw", stat="mean")                     # mean±CI
 
 `position` defaults to `"stack"` whenever `fill=` is a column with more
 than one unique value — except with `yerr=`/`xerr=` or `stat="mean"`,
@@ -336,7 +336,7 @@ def _draw_env(a, ctx):
             f"chart's {axis}-axis resolved to a numeric scale (an "
             f"explicit {axis}lim= does that) — there are no bands to "
             f"size the bars. For bars at numeric positions, use "
-            f"c.numeric_bar(...).")
+            f"c.add_numeric_bar(...).")
     series = a["series"]
     multi = len(series) > 1
     if multi and a["_position"] == "fill":

@@ -2,13 +2,13 @@
 
 Fits y ~ x by closed-form OLS, draws the fit line, and shades a confidence
 band using the exact Student-t critical value at n - 2 degrees of freedom.
-The scatter is not drawn here — overlay your own `c.scatter(xs, ys)`.
+The scatter is not drawn here — overlay your own `c.add_scatter(xs, ys)`.
 
-  c.regression(data=df, x="col_x", y="col_y")           # long-form
-  c.regression(data=df, x=..., y=..., color="group")    # one fit per group
-  c.regression(data=df, x=..., y=..., order=2)          # polynomial
-  c.regression(data=df, x=..., y=..., robust=True)      # Huber IRLS
-  c.regression(data=df, x=..., y=..., lowess=True)      # LOWESS smoother
+  c.add_regression(data=df, x="col_x", y="col_y")           # long-form
+  c.add_regression(data=df, x=..., y=..., color="group")    # one fit per group
+  c.add_regression(data=df, x=..., y=..., order=2)          # polynomial
+  c.add_regression(data=df, x=..., y=..., robust=True)      # Huber IRLS
+  c.add_regression(data=df, x=..., y=..., lowess=True)      # LOWESS smoother
 
 Styling kwargs:
   color=         line color (literal) or column name → one fit per level

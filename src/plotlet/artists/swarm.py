@@ -1,8 +1,8 @@
 """Bee-swarm plot: categorical scatter with greedy non-overlapping point placement.
 
 Long-form only:
-  c.swarm(data=df, x="cat", y="value")
-  c.swarm(data=df, x="cat", y="value", fill="group", palette={...})
+  c.add_swarm(data=df, x="cat", y="value")
+  c.add_swarm(data=df, x="cat", y="value", fill="group", palette={...})
 
 Long-form with `fill="col"` dodges sub-swarms side-by-side within each cat
 and emits one legend entry per group level.

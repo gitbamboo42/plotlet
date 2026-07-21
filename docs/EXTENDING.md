@@ -2,7 +2,7 @@
 
 Adding a custom plot type is a 3-step recipe: write three small functions,
 bundle them into an `ArtistSpec`, hand it to `add_artist(...)`. After that,
-`c.<your_name>(...)` Just Works on any `Chart` — autoscaling, gridlines,
+`c.add_<your_name>(...)` Just Works on any `Chart` — autoscaling, gridlines,
 color cycling, and the legend integrate for free. No edits to plotlet internals,
 no monkey-patching. Custom artists live in your project or in the separate
 [`plotlet-extensions`](https://github.com/gitbamboo42/plotlet-extensions)
@@ -19,12 +19,12 @@ from plotlet.draw import segment, circle
 
 
 # 1. record(...) -> dict
-#    Turn c.<name>(...) into the artist dict stored in Chart._calls.
+#    Turn c.add_<name>(...) into the artist dict stored in Chart._calls.
 #    Pure data — no scales yet. Write an EXPLICIT signature: the
 #    parameter list IS your artist's kwarg vocabulary, so Python itself
-#    rejects a typo like `c.lollipop(..., widht=2)` at render, and
+#    rejects a typo like `c.add_lollipop(..., widht=2)` at render, and
 #    `c.lollipop?` shows the real parameters. `data=` first lets a caller
-#    pass the table positionally (`c.lollipop(df, x=, y=)`). Style kwargs
+#    pass the table positionally (`c.add_lollipop(df, x=, y=)`). Style kwargs
 #    the record doesn't consume go into `opts` via `pack_opts` (which
 #    drops the None defaults, so the draw side's `.get(k, default)` still
 #    falls through to your defaults).
@@ -67,7 +67,7 @@ pt.add_artist(pt.ArtistSpec(
 ))
 
 c = pt.chart()
-c.lollipop({"x": [1, 2, 3, 4, 5], "y": [3, 7, 2, 9, 4]},
+c.add_lollipop({"x": [1, 2, 3, 4, 5], "y": [3, 7, 2, 9, 4]},
            x="x", y="y", label="A")
 c.title("Lollipop chart").gridlines(True).legend(True).save_svg("out.svg")
 ```
@@ -80,7 +80,7 @@ is a working reference; skim a couple before writing your own.
 
 ## When your functions run
 
-None of them run when the user calls `c.lollipop(...)` — that only
+None of them run when the user calls `c.add_lollipop(...)` — that only
 appends the raw call to the journal. Everything executes inside
 `to_svg()`, split across the two render passes
 ([ARCHITECTURE.md](ARCHITECTURE.md)):
@@ -136,7 +136,7 @@ behavior. What each opt-in is *for*:
 
 | Field | When you need it |
 |---|---|
-| `accepts_data_positional` | Default `True` — enables the `c.<artist>(df, x=, y=)` sugar that hoists a single positional arg into `kw["data"]`. Set `False` for matrix-input or single-primary-input artists (`heatmap`, `imshow`, `axhline`, `annotate`) so their `args[0]` doesn't get swallowed. Multi-positional artists (rect, polygon, …) are unaffected either way because the sugar only triggers on `len(args) == 1`. |
+| `accepts_data_positional` | Default `True` — enables the `c.add_<artist>(df, x=, y=)` sugar that hoists a single positional arg into `kw["data"]`. Set `False` for matrix-input or single-primary-input artists (`heatmap`, `imshow`, `axhline`, `annotate`) so their `args[0]` doesn't get swallowed. Multi-positional artists (rect, polygon, …) are unaffected either way because the sugar only triggers on `len(args) == 1`. |
 | `xdomain` / `ydomain` | Your artist's data should drive axis limits. Return `None` for decorative artists (axhline, axvline). |
 | `xdomain_log` / `ydomain_log` | Domain contribution under a **log** scale when it must differ from the plain hook — e.g. a CI band whose non-positive bounds would poison a log domain. `None` (default) → the plain hook serves every scale kind. |
 | `layer` | `"background"` for fills (drawn first), `"foreground"` for reference lines (drawn last). Default `"data"`. |
@@ -148,7 +148,7 @@ behavior. What each opt-in is *for*:
 | `tight_domain` | When `True`, the artist's `xdomain` / `ydomain` are used as-is — no `expand` padding added. For artists whose extents are exact (image bounds, raster cell edges). |
 | `force_zero_x` / `force_zero_y` | Anchor that axis to zero: if the artist contributes to autoscaling and data lo > 0, push lo down to 0 (and suppress that side's expand). Built-in `bar` and `hist` set `force_zero_y=True`. May be a callable `(a) -> bool` so e.g. a bar with `orientation='h'` forces zero on x instead. |
 | `axis_order` | Contribute a canonical order for a categorical axis. Returns `{"x": [...]}` / `{"y": [...]}`. Use when ordering is load-bearing (dendrogram leaves). User's explicit `xscale("category", order=...)` still wins. |
-| `frame_defaults` | Return a list of `(call_name, args, kwargs)` recorded *before* your artist. Use for strong defaults (e.g. dendrogram hides all spines). User calls *after* `c.<your_artist>()` still win. |
+| `frame_defaults` | Return a list of `(call_name, args, kwargs)` recorded *before* your artist. Use for strong defaults (e.g. dendrogram hides all spines). User calls *after* `c.add_<your_artist>()` still win. |
 | `crosses_sectors` | Set `True` for artists whose geometry spans sector boundaries (chord_links, chord_ribbon). Suppresses the inter-sector divider walls while the artist is active — walls cutting through a cross-sector curve read as a layering bug. Sector labels still render. |
 
 Coord support lives with the coord — see the "Coordinate classes" section.
@@ -222,7 +222,7 @@ and `pt.linkage_split`.
 
 A new tree variant is then ~3 callbacks (record / draw / axis_order),
 each a thin wrapper around these helpers — the clustering and layout
-are not your concern. The visible API stays uniform: `c.<artist>(data,
+are not your concern. The visible API stays uniform: `c.add_<artist>(data,
 labels=, orientation=, clusters=, parent=, ...)`.
 
 ---

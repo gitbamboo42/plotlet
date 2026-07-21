@@ -19,12 +19,12 @@ def chart_reflines():
     df = {"t": xs, "v": [math.sin(x) for x in xs]}
     c = pt.chart(df, title="reference lines",
                  xlabel="t", ylabel="v", legend=True, gridlines=True)
-    c.axhspan(-0.5, 0.5, color="C2")
-    c.axvspan(2.0, 3.5)
-    c.line(x="t", y="v", label="sin(t)")
-    c.axhline(0)
-    c.axhline(0.8, color="red", linestyle="--", label="upper")
-    c.axvline(math.pi, color="gray", linestyle=":")
+    c.add_axhspan(-0.5, 0.5, color="C2")
+    c.add_axvspan(2.0, 3.5)
+    c.add_line(x="t", y="v", label="sin(t)")
+    c.add_axhline(0)
+    c.add_axhline(0.8, color="red", linestyle="--", label="upper")
+    c.add_axvline(math.pi, color="gray", linestyle=":")
     return c
 
 
@@ -37,9 +37,9 @@ def chart_axline():
     c = pt.chart(data_width=260, data_height=220,
                  title="observed vs predicted",
                  xlabel="observed", ylabel="predicted", legend=True)
-    c.scatter(data={"o": obs, "p": pred}, x="o", y="p", size=2.5, alpha=0.7)
-    c.axline((0, 0), slope=1, linestyle="--", label="y = x")
-    c.axline((0, 8), (8, 4), color="C3", label="two-point")
+    c.add_scatter(data={"o": obs, "p": pred}, x="o", y="p", size=2.5, alpha=0.7)
+    c.add_axline((0, 0), slope=1, linestyle="--", label="y = x")
+    c.add_axline((0, 8), (8, 4), color="C3", label="two-point")
     return c
 
 
@@ -47,8 +47,8 @@ def chart_hlines_vlines():
     # Bounded segment artists in data coordinates. Unlike axhline/axvline
     # they participate in autoscaling and use the color cycle.
     c = pt.chart(title="hlines / vlines", xlabel="x", ylabel="y", legend=True)
-    c.hlines([1, 2, 3], 0, 5, label="thresholds", linestyle="--")
-    c.vlines([1.5, 3.5], 0.5, 3.5, label="markers", color="C3")
+    c.add_hlines([1, 2, 3], 0, 5, label="thresholds", linestyle="--")
+    c.add_vlines([1.5, 3.5], 0.5, 3.5, label="markers", color="C3")
     return c
 
 

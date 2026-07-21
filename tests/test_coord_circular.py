@@ -62,7 +62,7 @@ _DIST = [0.5 + 0.16 * _RNG.gauss(0, 1) for _ in range(150)]
 def ring_scatter():
     c = pt.chart(title="scatter — ring")
     c.coordinate(pt.CircularCoordinate())
-    c.scatter(data={"x": _SCATTER_T, "y": _SCATTER_V}, x="x", y="y",
+    c.add_scatter(data={"x": _SCATTER_T, "y": _SCATTER_V}, x="x", y="y",
               color="#534AB7", size=3, alpha=0.55)
     return c
 
@@ -70,7 +70,7 @@ def ring_scatter():
 def ring_line():
     c = pt.chart(title="line — ring")
     c.coordinate(pt.CircularCoordinate())
-    c.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
+    c.add_line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
            color="#1D9E75", linewidth=1.5)
     return c
 
@@ -82,7 +82,7 @@ def ring_line_chords():
     # direct visual pair: same sample points, arc on vs off.
     c = pt.chart(title="line — chords (arc=False)")
     c.coordinate(pt.CircularCoordinate())
-    c.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
+    c.add_line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
            color="#1D9E75", linewidth=1.5, arc=False)
     return c
 
@@ -90,9 +90,9 @@ def ring_line_chords():
 def ring_line_band():
     c = pt.chart(title="line + band — ring")
     c.coordinate(pt.CircularCoordinate())
-    c.fill_between(data={"x": _LINE_TS, "lo": _BAND_LO, "hi": _BAND_HI},
+    c.add_fill_between(data={"x": _LINE_TS, "lo": _BAND_LO, "hi": _BAND_HI},
                    x="x", y1="lo", y2="hi", fill="#1D9E75", alpha=0.25)
-    c.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
+    c.add_line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
            color="#1D9E75", linewidth=1.5)
     return c
 
@@ -100,7 +100,7 @@ def ring_line_band():
 def ring_numeric_bar():
     c = pt.chart(title="numeric_bar — ring")
     c.coordinate(pt.CircularCoordinate())
-    c.numeric_bar(data={"x": _BAR_T, "y": _BAR_V}, x="x", y="y",
+    c.add_numeric_bar(data={"x": _BAR_T, "y": _BAR_V}, x="x", y="y",
                   width=0.025, color="#D9534F", alpha=0.85)
     return c
 
@@ -112,7 +112,7 @@ def ring_bar():
     cats = [f"c{i}" for i in range(_N_BAR)]
     c = pt.chart(title="bar — ring")
     c.coordinate(pt.CircularCoordinate())
-    c.bar(data={"cat": cats, "val": _BAR_V}, x="cat", y="val",
+    c.add_bar(data={"cat": cats, "val": _BAR_V}, x="cat", y="val",
           fill="#D9534F", alpha=0.85)
     return c
 
@@ -123,7 +123,7 @@ def ring_errorbar():
     yerr = [0.05 + 0.02 * abs(math.cos(3 * t)) for t in _BAR_T]
     c = pt.chart(title="errorbar — ring")
     c.coordinate(pt.CircularCoordinate())
-    c.errorbar(data={"x": _BAR_T, "y": _BAR_V, "e": yerr},
+    c.add_errorbar(data={"x": _BAR_T, "y": _BAR_V, "e": yerr},
                x="x", y="y", yerr="e", color="#534AB7", size=3)
     return c
 
@@ -133,14 +133,14 @@ def ring_errorbar():
 def ring_strip():
     c = pt.chart(title="strip — ring")
     c.coordinate(pt.CircularCoordinate())
-    c.strip(data=_CAT_DATA, x="cat", y="val", fill="cat", palette="Set2")
+    c.add_strip(data=_CAT_DATA, x="cat", y="val", fill="cat", palette="Set2")
     return c
 
 
 def ring_swarm():
     c = pt.chart(title="swarm — ring")
     c.coordinate(pt.CircularCoordinate())
-    c.swarm(data=_CAT_DATA, x="cat", y="val", fill="cat", palette="Set2")
+    c.add_swarm(data=_CAT_DATA, x="cat", y="val", fill="cat", palette="Set2")
     return c
 
 
@@ -148,7 +148,7 @@ def ring_boxplot():
     # Box → annular wedge, whiskers radial, median arc, fliers repositioned.
     c = pt.chart(title="boxplot — ring")
     c.coordinate(pt.CircularCoordinate())
-    c.boxplot(data=_CAT_DATA, x="cat", y="val", fill="cat", palette="Set2")
+    c.add_boxplot(data=_CAT_DATA, x="cat", y="val", fill="cat", palette="Set2")
     return c
 
 
@@ -156,14 +156,14 @@ def ring_violin():
     # KDE lobe warps into a mirrored annular blob (polygon project path).
     c = pt.chart(title="violin — ring")
     c.coordinate(pt.CircularCoordinate())
-    c.violin(data=_CAT_DATA, x="cat", y="val", fill="cat", palette="Set2")
+    c.add_violin(data=_CAT_DATA, x="cat", y="val", fill="cat", palette="Set2")
     return c
 
 
 def ring_pointplot():
     c = pt.chart(title="pointplot — ring")
     c.coordinate(pt.CircularCoordinate())
-    c.pointplot(data=_CAT_DATA, x="cat", y="val", color="#1D9E75")
+    c.add_pointplot(data=_CAT_DATA, x="cat", y="val", color="#1D9E75")
     return c
 
 
@@ -171,7 +171,7 @@ def ring_qq():
     # Theoretical quantiles run negative→positive on x, sample values on y.
     c = pt.chart(title="qq — ring")
     c.coordinate(pt.CircularCoordinate())
-    c.qq(data={"s": _DIST}, sample="s", dist="normal",
+    c.add_qq(data={"s": _DIST}, sample="s", dist="normal",
          color="#534AB7", size=2.5)
     return c
 
@@ -179,21 +179,21 @@ def ring_qq():
 def ring_rug():
     c = pt.chart(title="rug — ring")
     c.coordinate(pt.CircularCoordinate())
-    c.rug(data={"x": _DIST}, x="x", color="#444444")
+    c.add_rug(data={"x": _DIST}, x="x", color="#444444")
     return c
 
 
 def ring_ecdf():
     c = pt.chart(title="ecdf — ring")
     c.coordinate(pt.CircularCoordinate())
-    c.ecdf(data={"x": _DIST}, x="x", color="#534AB7")
+    c.add_ecdf(data={"x": _DIST}, x="x", color="#534AB7")
     return c
 
 
 def ring_freqpoly():
     c = pt.chart(title="freqpoly — ring")
     c.coordinate(pt.CircularCoordinate())
-    c.freqpoly(data={"x": _DIST}, x="x", bins=20, color="#1D9E75")
+    c.add_freqpoly(data={"x": _DIST}, x="x", bins=20, color="#1D9E75")
     return c
 
 
@@ -201,7 +201,7 @@ def ring_density_1d():
     # Filled density closes to the baseline ring via a warped polygon.
     c = pt.chart(title="density_1d — ring")
     c.coordinate(pt.CircularCoordinate())
-    c.density_1d(data={"x": _DIST}, x="x", fill=True, color="#534AB7")
+    c.add_density_1d(data={"x": _DIST}, x="x", fill=True, color="#534AB7")
     return c
 
 
@@ -211,8 +211,8 @@ def ring_regression():
     # The CI band extends past the fit line — autoscale for breathing room.
     c = pt.chart(title="regression — ring")
     c.coordinate(pt.CircularCoordinate())
-    c.scatter(data={"x": xs, "y": ys}, x="x", y="y", size=2, alpha=0.5)
-    c.regression(data={"x": xs, "y": ys}, x="x", y="y", color="#D9534F")
+    c.add_scatter(data={"x": xs, "y": ys}, x="x", y="y", size=2, alpha=0.5)
+    c.add_regression(data={"x": xs, "y": ys}, x="x", y="y", color="#D9534F")
     return c
 
 
@@ -236,7 +236,7 @@ def ring_dendrogram():
     # arc, the legs become radial spokes.
     labels, matrix = _tree_data()
     c = pt.chart(title="dendrogram — ring", xlim=(0, 1))
-    c.dendrogram(data=matrix, labels=labels, method="ward",
+    c.add_dendrogram(data=matrix, labels=labels, method="ward",
                  orientation="bottom", color="#3B3B4F")
     c.coordinate(pt.CircularCoordinate(r_inner=0.10, wrap_gap_deg=4))
     return c
@@ -259,10 +259,10 @@ def ring_dendrogram_heatmap():
         data[f"f{j}"] = [row_by_label[l][j] for l in leaf_order]
 
     tree_ring = pt.chart(xlim=(0, 1))
-    tree_ring.dendrogram(data=matrix, labels=labels, method="ward",
+    tree_ring.add_dendrogram(data=matrix, labels=labels, method="ward",
                          orientation="bottom", color="#3B3B4F")
     hm_ring = pt.chart(xlim=(0, 1), ylim=(0, 1))
-    hm_ring.heatmap(data=data, x="leaf",
+    hm_ring.add_heatmap(data=data, x="leaf",
                     values=[f"f{j}" for j in range(len(matrix[0]))],
                     cmap="RdBu_r", center=0)
     pile = (hm_ring / tree_ring).coordinate(
@@ -286,7 +286,7 @@ def ring_dendrogram_palette():
         by_group.setdefault(g, []).append(lbl)
     c = pt.chart(title="dendrogram palette — ring", xlim=(0, 1))
     c.sectors(by_group, axis="x", divider=False, label=False)
-    c.dendrogram(data=matrix, labels=labels, clusters=groups, method="ward",
+    c.add_dendrogram(data=matrix, labels=labels, clusters=groups, method="ward",
                  palette=palette, parent=True, orientation="bottom")
     c.coordinate(pt.CircularCoordinate(r_inner=0.10, wrap_gap_deg=4))
     return c
@@ -328,10 +328,10 @@ def ring_x_sectors():
         xs = [x for x, s in zip(pts_x, pts_sec) if s == sname]
         ys = [y for y, s in zip(pts_y, pts_sec) if s == sname]
         ss = [sname] * len(xs)
-        c.line(data={"x": xs, "y": ys, "sec": ss},
+        c.add_line(data={"x": xs, "y": ys, "sec": ss},
                x="x", y="y", color="#1D9E75", linewidth=1.2)
     # Scatter has no connections — single call is fine.
-    c.scatter(data={"x": pts_x, "y": pts_y, "sec": pts_sec},
+    c.add_scatter(data={"x": pts_x, "y": pts_y, "sec": pts_sec},
               x="x", y="y", color="#534AB7", size=2.5, alpha=0.7)
     return c
 
@@ -346,7 +346,7 @@ def ring_cat_sectors():
     c.coordinate(pt.CircularCoordinate())
     c.sectors({"G1": ["a", "b", "c"], "G2": ["d", "e"], "G3": ["f", "g", "h"]},
               axis="x")
-    c.bar(data={"cat": cats, "val": vals}, x="cat", y="val",
+    c.add_bar(data={"cat": cats, "val": vals}, x="cat", y="val",
           fill="cat", palette="Set2")
     return c
 
@@ -357,7 +357,7 @@ def ring_inner_outer():
     c = pt.chart(title="ring — r_inner=0.55", xlim=(0, 1), ylim=(0, 1))
     c.coordinate(pt.CircularCoordinate(r_inner=0.55))
     c.xticks([0.0, 0.5])
-    c.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
+    c.add_line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
            color="#534AB7", linewidth=1.5)
     return c
 
@@ -369,14 +369,14 @@ def ring_references():
     c = pt.chart(title="references — ring", xlim=(0, 1), ylim=(0, 1))
     c.coordinate(pt.CircularCoordinate())
     c.xticks([0.0, 0.25, 0.5, 0.75])
-    c.axhspan(0.65, 0.85, color="#9CC3D5", alpha=0.4)   # outer ring band
-    c.axvspan(0.10, 0.30, color="#F2C57C", alpha=0.4)   # angular wedge
-    c.axhline(0.50, color="#444", linewidth=1)          # mid ring
-    c.axvline(0.50, color="#888", linestyle="--",
+    c.add_axhspan(0.65, 0.85, color="#9CC3D5", alpha=0.4)   # outer ring band
+    c.add_axvspan(0.10, 0.30, color="#F2C57C", alpha=0.4)   # angular wedge
+    c.add_axhline(0.50, color="#444", linewidth=1)          # mid ring
+    c.add_axvline(0.50, color="#888", linestyle="--",
               linewidth=0.8)                            # half-turn spoke
-    c.hlines([0.25, 0.75], [0.05, 0.55], [0.45, 0.95],
+    c.add_hlines([0.25, 0.75], [0.05, 0.55], [0.45, 0.95],
              color="#1D9E75", linewidth=1.2)
-    c.vlines([0.20, 0.80], [0.10, 0.10], [0.60, 0.60],
+    c.add_vlines([0.20, 0.80], [0.10, 0.10], [0.60, 0.60],
              color="#D9534F", linewidth=1.2)
     return c
 
@@ -387,13 +387,13 @@ def ring_shapes():
     c = pt.chart(title="shapes — ring", xlim=(0, 1), ylim=(0, 1))
     c.coordinate(pt.CircularCoordinate())
     c.xticks([0.0, 0.25, 0.5, 0.75])
-    c.rect(0.10, 0.20, 0.25, 0.40, fill="#A0C4E2", alpha=0.5)
+    c.add_rect(0.10, 0.20, 0.25, 0.40, fill="#A0C4E2", alpha=0.5)
     poly_x = [0.55, 0.75, 0.85, 0.70, 0.55]
     poly_y = [0.30, 0.30, 0.55, 0.70, 0.55]
-    c.polygon(poly_x, poly_y, fill="#F2C57C", alpha=0.6)
+    c.add_polygon(poly_x, poly_y, fill="#F2C57C", alpha=0.6)
     line_x = [0.05, 0.20, 0.40, 0.60, 0.80, 0.95]
     line_y = [0.90, 0.70, 0.85, 0.65, 0.80, 0.60]
-    c.polyline(line_x, line_y, color="#534AB7", linewidth=1.5)
+    c.add_polyline(line_x, line_y, color="#534AB7", linewidth=1.5)
     return c
 
 
@@ -406,11 +406,11 @@ def ring_text_annotate():
     names = ["a", "b", "c", "d", "e"]
     c = pt.chart(title="text + annotate — ring", xlim=(0, 1), ylim=(0, 1))
     c.coordinate(pt.CircularCoordinate())
-    c.scatter(data={"x": pts_t, "y": pts_v}, x="x", y="y",
+    c.add_scatter(data={"x": pts_t, "y": pts_v}, x="x", y="y",
               color="#534AB7", size=3)
-    c.text(data={"x": pts_t, "y": pts_v, "name": names},
+    c.add_text(data={"x": pts_t, "y": pts_v, "name": names},
            x="x", y="y", label="name", fontsize=8, ha="center", dy=-6)
-    c.annotate("peak", xy=(0.40, 0.85), xytext=(0.55, 0.15),
+    c.add_annotate("peak", xy=(0.40, 0.85), xytext=(0.55, 0.15),
                fontsize=8, ha="center", bbox=True)
     return c
 
@@ -425,7 +425,7 @@ def ring_heatmap():
         df[name] = [math.sin(0.4 * i + row) for i in range(24)]
     c = pt.chart(title="heatmap — ring")
     c.coordinate(pt.CircularCoordinate(r_inner=0.35))
-    c.heatmap(data=df, x="pos", values=tracks, cmap="viridis")
+    c.add_heatmap(data=df, x="pos", values=tracks, cmap="viridis")
     return c
 
 
@@ -453,10 +453,10 @@ def ring_heatmap_sectors():
             sy.append(0.5 + 0.4 * math.sin(6 * math.pi * p / slen))
 
     sc = pt.chart(xlim=(0, 1), ylim=(0, 1))
-    sc.scatter(data={"x": sx, "y": sy, "grp": sg}, x="x", y="y",
+    sc.add_scatter(data={"x": sx, "y": sy, "grp": sg}, x="x", y="y",
                color="#534AB7", size=2.5, alpha=0.8)
     hm = pt.chart(xlim=(0, 1), ylim=(0, 1))
-    hm.heatmap(data={"grp": grp, "x": xh, "t1": t1, "t2": t2},
+    hm.add_heatmap(data={"grp": grp, "x": xh, "t1": t1, "t2": t2},
                x="x", sector="grp", values=["t1", "t2"], cmap="viridis")
 
     pile = (sc / hm).coordinate(
@@ -476,7 +476,7 @@ def ring_partial_arc():
     c.coordinate(pt.CircularCoordinate(start_deg=90, end_deg=360))
     c.xticks([0.0, 0.25, 0.5, 0.75, 1.0])
     c.yticks([0.0, 0.5, 1.0])
-    c.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
+    c.add_line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
            color="#1D9E75", linewidth=1.5)
     return c
 
@@ -488,7 +488,7 @@ def ring_partial_arc_right_side():
     c.coordinate(pt.CircularCoordinate(start_deg=90, end_deg=360))
     c.xticks([0.0, 0.5, 1.0])
     c.yticks([0.0, 0.5, 1.0], side="right")
-    c.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
+    c.add_line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
            color="#534AB7", linewidth=1.5)
     return c
 
@@ -516,7 +516,7 @@ def ring_partial_arc_sectors():
         xs = [x for x, s in zip(pts_x, pts_sec) if s == sname]
         ys = [y for y, s in zip(pts_y, pts_sec) if s == sname]
         ss = [sname] * len(xs)
-        c.line(data={"x": xs, "y": ys, "sec": ss},
+        c.add_line(data={"x": xs, "y": ys, "sec": ss},
                x="x", y="y", color="#D9534F", linewidth=1.2)
     return c
 
@@ -526,10 +526,10 @@ def ring_pile_titled():
     # renders as one band above the ring canvas ("a ring's title lives
     # on the layout"); per-leaf titles stay suppressed in piles.
     outer = pt.chart(xlim=(0, 1), ylim=(0, 1))
-    outer.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
+    outer.add_line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
                color="#1D9E75", linewidth=1.5)
     inner = pt.chart(xlim=(0, 1), ylim=(0, 1))
-    inner.scatter(data={"x": _SCATTER_T, "y": _SCATTER_V}, x="x", y="y",
+    inner.add_scatter(data={"x": _SCATTER_T, "y": _SCATTER_V}, x="x", y="y",
                   color="#534AB7", size=2.5, alpha=0.6)
     pile = (outer / inner).coordinate(pt.CircularCoordinate(r_inner=0.35))
     pile.heights([2.5, 1])   # thin scatter ring nests inside the line ring
@@ -543,10 +543,10 @@ def ring_inner_step_ticks():
     # against `resolve_layout`'s style-only classification, which would
     # otherwise wipe the inner ring's requested ticks.
     outer = pt.chart(xlim=(0, 1), ylim=(0, 1))
-    outer.line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
+    outer.add_line(data={"x": _LINE_TS, "y": _LINE_V}, x="x", y="y",
                color="#1D9E75", linewidth=1.5)
     inner = pt.chart(xlim=(0, 1), ylim=(0, 1))
-    inner.scatter(data={"x": _SCATTER_T, "y": _SCATTER_V}, x="x", y="y",
+    inner.add_scatter(data={"x": _SCATTER_T, "y": _SCATTER_V}, x="x", y="y",
                   color="#534AB7", size=2.5, alpha=0.6)
     inner.xticks(step=0.25)
     return (outer / inner).coordinate(pt.CircularCoordinate())
@@ -561,12 +561,12 @@ def ring_inner_chords():
                      gap=6)
     ring = pt.chart(title="ring + inner chords",
                     xlim=(0, 240), ylim=(0, 6))
-    ring.scatter(data={"pos": [20, 55, 90, 30, 60, 20, 45],
+    ring.add_scatter(data={"pos": [20, 55, 90, 30, 60, 20, 45],
                        "val": [2, 4, 5, 3, 5, 2, 4],
                        "sec": ["A", "A", "A", "B", "B", "C", "C"]},
                  x="pos", y="val", color="#534AB7", size=3)
     arcs = pt.chart(xlim=(0, 240))
-    arcs.chord_links(
+    arcs.add_chord_links(
         data={"s1": ["A", "A", "B"], "x1": [30.0, 70.0, 40.0],
               "s2": ["B", "C", "C"], "x2": [40.0, 30.0, 50.0]},
         x1="x1", x2="x2", x1_sector="s1", x2_sector="s2")
@@ -592,7 +592,7 @@ def ring_chord_ribbon():
     }
     arcs = pt.chart(df, xlim=XL, data_width=400, data_height=400)
     arcs.sectors(sectors, column="src", label=False)
-    arcs.chord_ribbon(x1_start="x1a", x1_end="x1b",
+    arcs.add_chord_ribbon(x1_start="x1a", x1_end="x1b",
                       x2_start="x2a", x2_end="x2b",
                       x1_sector="src", x2_sector="dst",
                       color="src", alpha=0.6)
@@ -618,14 +618,14 @@ def test_inner_disc_renders_from_bare_chart_root():
 
     def ring():
         c = pt.chart(xlim=(0, 200), ylim=(0, 6))
-        c.scatter(data={"pos": [25, 75, 25, 75], "val": [3, 6, 4, 5],
+        c.add_scatter(data={"pos": [25, 75, 25, 75], "val": [3, 6, 4, 5],
                         "sec": ["A", "A", "B", "B"]},
                   x="pos", y="val", color="#534AB7")
         return c
 
     def arcs():
         a = pt.chart(xlim=(0, 200))
-        a.chord_links(data={"s1": ["A"], "x1": [50.0],
+        a.add_chord_links(data={"s1": ["A"], "x1": [50.0],
                             "s2": ["B"], "x2": [50.0]},
                       x1="x1", x2="x2", x1_sector="s1", x2_sector="s2")
         return a
@@ -650,7 +650,7 @@ def test_circular_with_y_sectors_raises():
     c = pt.chart(xlim=(0, 1), ylim=(0, 1))
     c.coordinate(pt.CircularCoordinate())
     c.sectors({"A": ["x"], "B": ["y"]}, axis="y")
-    c.line(data={"x": [0, 0.5, 1.0], "y": [0, 0.5, 1.0]}, x="x", y="y")
+    c.add_line(data={"x": [0, 0.5, 1.0], "y": [0, 0.5, 1.0]}, x="x", y="y")
     with pytest.raises(NotImplementedError, match="sectors"):
         c.to_svg()
 
@@ -676,17 +676,17 @@ def chart_circular_overlay():
     bar_ys = [0.2 + 0.6 * abs(math.cos(math.pi * x)) for x in bar_xs]
 
     outer = pt.chart(xlim=(0, 1), ylim=(0, 1))
-    outer.line(data={"x": ts, "y": sine}, x="x", y="y",
+    outer.add_line(data={"x": ts, "y": sine}, x="x", y="y",
                color="C0", linewidth=1.5)
 
     middle = pt.chart(xlim=(0, 1), ylim=(0, 1))
-    middle.fill_between(data={"x": ts, "lo": [v - 0.1 for v in sine],
+    middle.add_fill_between(data={"x": ts, "lo": [v - 0.1 for v in sine],
                               "hi": [v + 0.1 for v in sine]},
                         x="x", y1="lo", y2="hi",
                         fill="C2", alpha=0.3)
 
     inner = pt.chart(xlim=(0, 1), ylim=(0, 1))
-    inner.scatter(data={"x": ts, "y": sine}, x="x", y="y",
+    inner.add_scatter(data={"x": ts, "y": sine}, x="x", y="y",
                   color="C3", size=2.5, alpha=0.7)
 
     return (outer / middle / inner).coordinate(

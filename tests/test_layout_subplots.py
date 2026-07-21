@@ -37,27 +37,27 @@ def _xs():
 def _sin(data_width=220, data_height=320):
     xs = _xs()
     c = pt.chart(title="sin", data_width=data_width, data_height=data_height)
-    c.line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y")
+    c.add_line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y")
     return c
 
 
 def _cos(data_width=220, data_height=320):
     xs = _xs()
     c = pt.chart(title="cos", data_width=data_width, data_height=data_height)
-    c.line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y")
+    c.add_line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y")
     return c
 
 
 def _bar(label="bar", data_width=220, data_height=320):
     c = pt.chart({"x": ["a", "b", "c"], "y": [3, 1, 2]},
                  title=label, data_width=data_width, data_height=data_height)
-    c.bar(x="x", y="y")
+    c.add_bar(x="x", y="y")
     return c
 
 
 def _hist(data_width=220, data_height=320):
     c = pt.chart(title="hist", data_width=data_width, data_height=data_height)
-    c.hist(data={"x": [0.1, 0.4, 0.5, 0.55, 0.7, 0.8, 0.9, 1.1, 1.3]}, x="x", bins=6)
+    c.add_hist(data={"x": [0.1, 0.4, 0.5, 0.55, 0.7, 0.8, 0.9, 1.1, 1.3]}, x="x", bins=6)
     return c
 
 
@@ -88,10 +88,10 @@ def two_by_two():
 
 def grid_with_spacers():
     # 3-col 2-row irregular grid with None corners.
-    top  = pt.chart({"x":["a","b","c"], "y":[3,1,2]}, title="top",   data_width=120, data_height=24);  top.bar(x="x", y="y")
-    left = pt.chart(title="left",  data_width=120, data_height=220); left.line(data={"x": [1,2,3], "y": [3,1,2]}, x="x", y="y")
-    main = pt.chart(title="main",  data_width=120, data_height=220); main.line(data={"x": [1,2,3], "y": [1,4,9]}, x="x", y="y")
-    right= pt.chart(title="right", data_width=120, data_height=220); right.line(data={"x": [1,2,3], "y": [2,2,1]}, x="x", y="y")
+    top  = pt.chart({"x":["a","b","c"], "y":[3,1,2]}, title="top",   data_width=120, data_height=24);  top.add_bar(x="x", y="y")
+    left = pt.chart(title="left",  data_width=120, data_height=220); left.add_line(data={"x": [1,2,3], "y": [3,1,2]}, x="x", y="y")
+    main = pt.chart(title="main",  data_width=120, data_height=220); main.add_line(data={"x": [1,2,3], "y": [1,4,9]}, x="x", y="y")
+    right= pt.chart(title="right", data_width=120, data_height=220); right.add_line(data={"x": [1,2,3], "y": [2,2,1]}, x="x", y="y")
     return pt.grid([
         [None, top,  None ],
         [left, main, right],
@@ -107,14 +107,14 @@ def measure_driven_alignment():
     # cell `a` (column 0) so the data regions stay vertically aligned
     # across rows. Cells in column 1 (`b`, `d`) keep their default
     # narrower left margin since neither has a long label requirement.
-    a = pt.chart(title="a", data_width=180, data_height=140); a.line(data={"x": [1,2,3], "y": [1,2,3]}, x="x", y="y")
-    b = pt.chart(title="b", data_width=180, data_height=140); b.line(data={"x": [1,2,3], "y": [3,2,1]}, x="x", y="y")
+    a = pt.chart(title="a", data_width=180, data_height=140); a.add_line(data={"x": [1,2,3], "y": [1,2,3]}, x="x", y="y")
+    b = pt.chart(title="b", data_width=180, data_height=140); b.add_line(data={"x": [1,2,3], "y": [3,2,1]}, x="x", y="y")
     c = pt.chart(data_width=180, data_height=140, ylabel="categories")
-    c.scatter(data={"x": [1,2,3,4,5],
+    c.add_scatter(data={"x": [1,2,3,4,5],
                     "y": ["measurement_alpha", "measurement_beta", "measurement_gamma",
                           "measurement_delta", "measurement_epsilon"]},
               x="x", y="y")
-    d = pt.chart(data_width=180, data_height=140); d.line(data={"x": [1,2,3], "y": [1,2,3]}, x="x", y="y")
+    d = pt.chart(data_width=180, data_height=140); d.add_line(data={"x": [1,2,3], "y": [1,2,3]}, x="x", y="y")
     return pt.grid([[a, b], [c, d]])
 
 
@@ -125,39 +125,39 @@ def body_first_unequal_columns():
     # composition just sums them. With 0.2.0 there's no widths=/heights=
     # parameter on pt.grid: per-leaf data_width IS the way to express
     # "make this column twice as wide as that one."
-    a = pt.chart(title="a", data_width=80,  data_height=300); a.line(data={"x": [1,2,3], "y": [1,4,9]}, x="x", y="y")
-    b = pt.chart(title="b", data_width=160, data_height=300); b.line(data={"x": [1,2,3], "y": [3,1,2]}, x="x", y="y")
-    c = pt.chart(title="c", data_width=160, data_height=300); c.line(data={"x": [1,2,3], "y": [5,2,4]}, x="x", y="y")
+    a = pt.chart(title="a", data_width=80,  data_height=300); a.add_line(data={"x": [1,2,3], "y": [1,4,9]}, x="x", y="y")
+    b = pt.chart(title="b", data_width=160, data_height=300); b.add_line(data={"x": [1,2,3], "y": [3,1,2]}, x="x", y="y")
+    c = pt.chart(title="c", data_width=160, data_height=300); c.add_line(data={"x": [1,2,3], "y": [5,2,4]}, x="x", y="y")
     return pt.grid([[a, b, c]])
 
 
 def share_y_collapses_gap():
     # share_y → joined, gap 0.
-    hm   = pt.chart(title="hm",   data_width=220); hm.line(data={"x": [1,2,3], "y": [1,4,9]}, x="x", y="y")
-    tree = pt.chart(title="tree", data_width=220); tree.line(data={"x": [1,2,3], "y": [3,1,2]}, x="x", y="y")
+    hm   = pt.chart(title="hm",   data_width=220); hm.add_line(data={"x": [1,2,3], "y": [1,4,9]}, x="x", y="y")
+    tree = pt.chart(title="tree", data_width=220); tree.add_line(data={"x": [1,2,3], "y": [3,1,2]}, x="x", y="y")
     return (tree | hm).share_y()
 
 
 def share_x_collapses_gap_vertical():
     # share_x → joined, gap 0.
-    main = pt.chart(title="main", data_height=120); main.line(data={"x": [1, 2, 3], "y": [1, 4, 9]}, x="x", y="y")
-    top  = pt.chart(title="top",  data_height=120); top.line(data={"x": [1, 2, 3], "y": [3, 1, 2]}, x="x", y="y")
+    main = pt.chart(title="main", data_height=120); main.add_line(data={"x": [1, 2, 3], "y": [1, 4, 9]}, x="x", y="y")
+    top  = pt.chart(title="top",  data_height=120); top.add_line(data={"x": [1, 2, 3], "y": [3, 1, 2]}, x="x", y="y")
     return (top / main).share_x()
 
 
 def share_x_three_panels():
     # Three vertically-stacked panels all share x via parent-level .share_x().
-    main = pt.chart(title="main", data_height=60); main.line(data={"x": [0, 5, 10], "y": [0, 1, 0]}, x="x", y="y")
-    mid  = pt.chart(title="mid",  data_height=60); mid.line(data={"x": [0, 5, 10], "y": [10, 0, 10]}, x="x", y="y")
-    top  = pt.chart(title="top",  data_height=60); top.line(data={"x": [0, 5, 10], "y": [5, 5, 5]}, x="x", y="y")
+    main = pt.chart(title="main", data_height=60); main.add_line(data={"x": [0, 5, 10], "y": [0, 1, 0]}, x="x", y="y")
+    mid  = pt.chart(title="mid",  data_height=60); mid.add_line(data={"x": [0, 5, 10], "y": [10, 0, 10]}, x="x", y="y")
+    top  = pt.chart(title="top",  data_height=60); top.add_line(data={"x": [0, 5, 10], "y": [5, 5, 5]}, x="x", y="y")
     return (top / mid / main).share_x()
 
 
 def share_y_chain():
     # Three side-by-side panels all share y via parent-level .share_y().
-    a = pt.chart(title="a", data_width=130); a.line(data={"x": [1,2,3], "y": [0, 100, 0]}, x="x", y="y")
-    b = pt.chart(title="b", data_width=130); b.line(data={"x": [1,2,3], "y": [10, 50, 90]}, x="x", y="y")
-    c = pt.chart(title="c", data_width=130); c.line(data={"x": [1,2,3], "y": [20, 40, 60]}, x="x", y="y")
+    a = pt.chart(title="a", data_width=130); a.add_line(data={"x": [1,2,3], "y": [0, 100, 0]}, x="x", y="y")
+    b = pt.chart(title="b", data_width=130); b.add_line(data={"x": [1,2,3], "y": [10, 50, 90]}, x="x", y="y")
+    c = pt.chart(title="c", data_width=130); c.add_line(data={"x": [1,2,3], "y": [20, 40, 60]}, x="x", y="y")
     return (a | b | c).share_y()
 
 
@@ -165,17 +165,17 @@ def width_hint_narrow_side():
     # Narrow side panel sharing y with main. Stand-in for
     # `hm | pt.colorbar(hm)` — body-first per-leaf widths express the
     # main:side ratio directly.
-    main = pt.chart(title="main", data_width=440); main.line(data={"x": [1,2,3], "y": [1,4,9]}, x="x", y="y")
+    main = pt.chart(title="main", data_width=440); main.add_line(data={"x": [1,2,3], "y": [1,4,9]}, x="x", y="y")
     side = pt.chart(title="side", data_width=24)
-    side.line(data={"x": [1, 1, 1], "y": [1, 4, 9]}, x="x", y="y")
+    side.add_line(data={"x": [1, 1, 1], "y": [1, 4, 9]}, x="x", y="y")
     return (main | side).share_y()
 
 
 def height_hint_short_top():
     # Short top track over a main panel.
     top  = pt.chart({"x":["a","b","c"], "y":[1,2,3]}, title="top",  data_height=24)
-    top.bar(x="x", y="y")
-    main = pt.chart({"x":["a","b","c"], "y":[3,1,2]}, title="main", data_height=240); main.bar(x="x", y="y")
+    top.add_bar(x="x", y="y")
+    main = pt.chart({"x":["a","b","c"], "y":[3,1,2]}, title="main", data_height=240); main.add_bar(x="x", y="y")
     return (top / main).share_x()
 
 
@@ -190,12 +190,12 @@ def share_x_mismatched_groups():
     top.xscale("category",
                groups={"a": 1, "b": 1, "c": 1, "d": 2, "e": 2, "f": 2},
                split_gap=14)
-    top.bar(data={"cat": cats, "val": [3, 5, 2, 6, 4, 7]}, x="cat", y="val")
+    top.add_bar(data={"cat": cats, "val": [3, 5, 2, 6, 4, 7]}, x="cat", y="val")
     main = pt.chart(title="ignored: a|bcdef, gap 30", data_height=100)
     main.xscale("category",
                 groups={"a": 1, "b": 2, "c": 2, "d": 2, "e": 2, "f": 2},
                 split_gap=30)
-    main.bar(data={"cat": cats, "val": [2, 4, 6, 1, 3, 5]}, x="cat", y="val")
+    main.add_bar(data={"cat": cats, "val": [2, 4, 6, 1, 3, 5]}, x="cat", y="val")
     return (top / main).share_x()
 
 
@@ -218,11 +218,11 @@ def complex_grid_shares():
     # `share_x="col"` → top↔main share x (column 1); `share_y="row"` →
     # tree↔main share y (row 1).
     main = pt.chart(title="main", data_width=400, data_height=240)
-    main.line(data={"x": [1,2,3,4,5], "y": [2,4,1,5,3]}, x="x", y="y")
+    main.add_line(data={"x": [1,2,3,4,5], "y": [2,4,1,5,3]}, x="x", y="y")
     top  = pt.chart(title="top",  data_width=400, data_height=24)
-    top.line(data={"x": [1,2,3,4,5], "y": [1,1,3,1,1]}, x="x", y="y")
+    top.add_line(data={"x": [1,2,3,4,5], "y": [1,1,3,1,1]}, x="x", y="y")
     tree = pt.chart(title="tree", data_width=60,  data_height=240)
-    tree.line(data={"x": [0,1,2], "y": [2,3,4]}, x="x", y="y")
+    tree.add_line(data={"x": [0,1,2], "y": [2,3,4]}, x="x", y="y")
     return pt.grid([
         [None, top ],
         [tree, main],
@@ -239,7 +239,7 @@ def share_x_scatter_heatmap():
     import math
     cols = [float(c) for c in range(12)]
     sc = pt.chart(title="signal", data_height=110)
-    sc.scatter(data={"x": cols,
+    sc.add_scatter(data={"x": cols,
                      "y": [math.sin(0.6 * c) + 0.2 * c for c in cols]},
                x="x", y="y")
     sc.xlim(-0.5, 11.5)
@@ -248,7 +248,7 @@ def share_x_scatter_heatmap():
     for row, name in enumerate(tracks):
         df[name] = [math.sin(0.5 * c + row) for c in cols]
     hm = pt.chart(title="tracks", data_height=90)
-    hm.heatmap(data=df, x="x", values=tracks, cmap="viridis")
+    hm.add_heatmap(data=df, x="x", values=tracks, cmap="viridis")
     hm.xlim(-0.5, 11.5)
     return (sc / hm).share_x(True)
 
@@ -295,9 +295,9 @@ def share_x_col_v_of_h():
         a = pt.chart(title=f"{name}-c1", data_width=160, data_height=70)
         b = pt.chart(title=f"{name}-c2", data_width=110, data_height=70)
         c = pt.chart(title=f"{name}-c3", data_width= 70, data_height=70)
-        a.line(data={"x": [0, 1, 2, 3, 4], "y": [0, 1, 2, 1, 0]}, x="x", y="y")
-        b.line(data={"x": [0, 1, 2, 3], "y": [2, 1, 3, 1]}, x="x", y="y")
-        c.line(data={"x": [0, 1, 2], "y": [1, 2, 1]}, x="x", y="y")
+        a.add_line(data={"x": [0, 1, 2, 3, 4], "y": [0, 1, 2, 1, 0]}, x="x", y="y")
+        b.add_line(data={"x": [0, 1, 2, 3], "y": [2, 1, 3, 1]}, x="x", y="y")
+        c.add_line(data={"x": [0, 1, 2], "y": [1, 2, 1]}, x="x", y="y")
         return (a | b | c).share_y().gap(0)
     return (row("r1") / row("r2") / row("r3")).share_x("col")
 
@@ -313,10 +313,10 @@ def chart_inset_zoom():
     c = pt.chart(data_width=440, data_height=240,
                  title="long-tail distribution",
                  xlabel="category", ylabel="count")
-    c.bar(data=df, x="category", y="count")
+    c.add_bar(data=df, x="category", y="count")
     inset = c.inset(rect=(0.4, 0.45, 0.55, 0.45),
                     ylim=(0, 100))
-    inset.bar(data=df_tail, x="category", y="count")
+    inset.add_bar(data=df_tail, x="category", y="count")
     return c
 
 
@@ -352,8 +352,8 @@ def _run_invariants():
     failures = []
 
     # 1. show-on-child raises with a useful message
-    a = pt.chart(); a.line(data={"x": [1,2,3], "y": [1,2,3]}, x="x", y="y")
-    b = pt.chart(); b.line(data={"x": [1,2,3], "y": [3,2,1]}, x="x", y="y")
+    a = pt.chart(); a.add_line(data={"x": [1,2,3], "y": [1,2,3]}, x="x", y="y")
+    b = pt.chart(); b.add_line(data={"x": [1,2,3], "y": [3,2,1]}, x="x", y="y")
     parent = a | b
     try:
         a.to_svg()
@@ -363,9 +363,9 @@ def _run_invariants():
             failures.append(f"unexpected message: {e}")
 
     # 2. single-parent invariant
-    c = pt.chart(); c.line(data={"x": [1,2,3], "y": [1,2,3]}, x="x", y="y")
-    d = pt.chart(); d.line(data={"x": [1,2,3], "y": [3,2,1]}, x="x", y="y")
-    e = pt.chart(); e.line(data={"x": [1,2,3], "y": [2,2,2]}, x="x", y="y")
+    c = pt.chart(); c.add_line(data={"x": [1,2,3], "y": [1,2,3]}, x="x", y="y")
+    d = pt.chart(); d.add_line(data={"x": [1,2,3], "y": [3,2,1]}, x="x", y="y")
+    e = pt.chart(); e.add_line(data={"x": [1,2,3], "y": [2,2,2]}, x="x", y="y")
     cd = c | d
     try:
         c | e
@@ -376,18 +376,18 @@ def _run_invariants():
     # 3. flattening: `a | b | c` records as `(a|b) | c` (the AST Python
     # parses), preserving append-only journal semantics; the engine's
     # flat 3-cell view comes from `_effective_children()` at render time.
-    p = pt.chart(); p.line(data={"x": [1], "y": [1]}, x="x", y="y")
-    q = pt.chart(); q.line(data={"x": [1], "y": [1]}, x="x", y="y")
-    r = pt.chart(); r.line(data={"x": [1], "y": [1]}, x="x", y="y")
+    p = pt.chart(); p.add_line(data={"x": [1], "y": [1]}, x="x", y="y")
+    q = pt.chart(); q.add_line(data={"x": [1], "y": [1]}, x="x", y="y")
+    r = pt.chart(); r.add_line(data={"x": [1], "y": [1]}, x="x", y="y")
     row = p | q | r
     flat = row._effective_children()
     if flat != [p, q, r]:
         failures.append(f"flatten: expected [p, q, r] effective children, got {flat}")
 
     # 4. cross-direction nests, doesn't flatten
-    s = pt.chart(); s.line(data={"x": [1], "y": [1]}, x="x", y="y")
-    t = pt.chart(); t.line(data={"x": [1], "y": [1]}, x="x", y="y")
-    u = pt.chart(); u.line(data={"x": [1], "y": [1]}, x="x", y="y")
+    s = pt.chart(); s.add_line(data={"x": [1], "y": [1]}, x="x", y="y")
+    t = pt.chart(); t.add_line(data={"x": [1], "y": [1]}, x="x", y="y")
+    u = pt.chart(); u.add_line(data={"x": [1], "y": [1]}, x="x", y="y")
     pair = s | t
     col = pair / u
     if col._layout_kind != "v" or len(col._children) != 2:
@@ -397,7 +397,7 @@ def _run_invariants():
         )
 
     # 5. pt.grid validates row shape
-    a1 = pt.chart(); a1.line(data={"x": [1], "y": [1]}, x="x", y="y")
+    a1 = pt.chart(); a1.add_line(data={"x": [1], "y": [1]}, x="x", y="y")
     try:
         pt.grid([[a1, None], [a1]])
         failures.append("expected ValueError on ragged grid")
@@ -412,8 +412,8 @@ def _run_invariants():
     # render. Drive `_topo_order` with hand-built leaves to confirm
     # the cycle guard still raises.
     from plotlet.render._layout_engine import _topo_order
-    f1 = pt.chart(); f1.line(data={"x": [1,2], "y": [1,2]}, x="x", y="y")
-    f2 = pt.chart(); f2.line(data={"x": [1,2], "y": [2,1]}, x="x", y="y")
+    f1 = pt.chart(); f1.add_line(data={"x": [1,2], "y": [1,2]}, x="x", y="y")
+    f2 = pt.chart(); f2.add_line(data={"x": [1,2], "y": [2,1]}, x="x", y="y")
     f1._share_y = f2
     f2._share_y = f1
     try:
@@ -426,7 +426,7 @@ def _run_invariants():
     # 7. parent-level share() doesn't exist on a leaf — Chart has no such
     # method; the parent flavor lives on Layout. AttributeError is the
     # expected outcome (post Phase 3 leaf/parent type split).
-    leaf = pt.chart(); leaf.line(data={"x": [1,2], "y": [1,2]}, x="x", y="y")
+    leaf = pt.chart(); leaf.add_line(data={"x": [1,2], "y": [1,2]}, x="x", y="y")
     try:
         leaf.share_x()
         failures.append("expected AttributeError calling share_x() on a leaf")
@@ -434,7 +434,7 @@ def _run_invariants():
         pass
 
     # 7b. parent-level gap() doesn't exist on a leaf, same as share().
-    leaf = pt.chart(); leaf.line(data={"x": [1,2], "y": [1,2]}, x="x", y="y")
+    leaf = pt.chart(); leaf.add_line(data={"x": [1,2], "y": [1,2]}, x="x", y="y")
     try:
         leaf.gap(0)
         failures.append("expected AttributeError calling gap() on a leaf")
@@ -443,8 +443,8 @@ def _run_invariants():
 
     # 8. share scale plumbing — leaves in same share class get the same
     # descriptor, and the y range is the UNION of all leaves' data.
-    src = pt.chart(); src.line(data={"x": [0, 10], "y": [0, 100]}, x="x", y="y")
-    shr = pt.chart(); shr.line(data={"x": [0, 10], "y": [-5, 5]}, x="x", y="y")
+    src = pt.chart(); src.add_line(data={"x": [0, 10], "y": [0, 100]}, x="x", y="y")
+    shr = pt.chart(); shr.add_line(data={"x": [0, 10], "y": [-5, 5]}, x="x", y="y")
     parent = (src | shr).share_y()
     from plotlet.render._layout_engine import _resolve_panels
     from plotlet.render import hydrate, materialize
@@ -468,11 +468,11 @@ def _run_invariants():
     # 9. Cross-layout share_x("col") on v-of-h with ragged rows raises
     # with a useful message — every sub-row must have the same number
     # of cells for the column mapping to be unambiguous.
-    a1 = pt.chart(); a1.line(data={"x": [1], "y": [1]}, x="x", y="y")
-    a2 = pt.chart(); a2.line(data={"x": [1], "y": [1]}, x="x", y="y")
-    a3 = pt.chart(); a3.line(data={"x": [1], "y": [1]}, x="x", y="y")
-    b1 = pt.chart(); b1.line(data={"x": [1], "y": [1]}, x="x", y="y")
-    b2 = pt.chart(); b2.line(data={"x": [1], "y": [1]}, x="x", y="y")
+    a1 = pt.chart(); a1.add_line(data={"x": [1], "y": [1]}, x="x", y="y")
+    a2 = pt.chart(); a2.add_line(data={"x": [1], "y": [1]}, x="x", y="y")
+    a3 = pt.chart(); a3.add_line(data={"x": [1], "y": [1]}, x="x", y="y")
+    b1 = pt.chart(); b1.add_line(data={"x": [1], "y": [1]}, x="x", y="y")
+    b2 = pt.chart(); b2.add_line(data={"x": [1], "y": [1]}, x="x", y="y")
     r_long  = a1 | a2 | a3
     r_short = b1 | b2
     try:
@@ -485,9 +485,9 @@ def _run_invariants():
 
     # 10. Cross-layout share_x("col") errors when a child isn't an h-layout
     # (e.g., a bare chart sneaking into the vertical stack).
-    p1 = pt.chart(); p1.line(data={"x": [1], "y": [1]}, x="x", y="y")
-    p2 = pt.chart(); p2.line(data={"x": [1], "y": [1]}, x="x", y="y")
-    q = pt.chart(); q.line(data={"x": [1], "y": [1]}, x="x", y="y")
+    p1 = pt.chart(); p1.add_line(data={"x": [1], "y": [1]}, x="x", y="y")
+    p2 = pt.chart(); p2.add_line(data={"x": [1], "y": [1]}, x="x", y="y")
+    q = pt.chart(); q.add_line(data={"x": [1], "y": [1]}, x="x", y="y")
     r_ok = p1 | p2
     try:
         (r_ok / q).share_x("col")
@@ -535,16 +535,16 @@ def test_data_total_size_reflects_share_scaling():
     from plotlet.render import data_total_size
 
     a = pt.chart(data_width=200, data_height=100)
-    a.scatter(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
+    a.add_scatter(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
     b = pt.chart(data_width=100, data_height=200)
-    b.scatter(data={"x": [1, 2, 3], "y": [3, 2, 1]}, x="x", y="y")
+    b.add_scatter(data={"x": [1, 2, 3], "y": [3, 2, 1]}, x="x", y="y")
 
     assert data_total_size(pt.to_ir(a | b)) == (300.0, 200.0)   # unshared control
 
     a2 = pt.chart(data_width=200, data_height=100)
-    a2.scatter(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
+    a2.add_scatter(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
     b2 = pt.chart(data_width=100, data_height=200)
-    b2.scatter(data={"x": [1, 2, 3], "y": [3, 2, 1]}, x="x", y="y")
+    b2.add_scatter(data={"x": [1, 2, 3], "y": [3, 2, 1]}, x="x", y="y")
 
     assert data_total_size(pt.to_ir((a2 | b2).share_y())) == (250.0, 100.0)
 
@@ -559,7 +559,7 @@ def test_layout_title_band():
 
     def cell(t):
         c = pt.chart(title=t, data_width=160, data_height=110)
-        c.scatter(data={"x": [1, 2, 3], "y": [3, 1, 2]}, x="x", y="y")
+        c.add_scatter(data={"x": [1, 2, 3], "y": [3, 1, 2]}, x="x", y="y")
         return c
 
     band = _PADSPEC["title"] + _FONTSPEC["title_size"]
@@ -590,9 +590,9 @@ def test_fit_scales_insets():
     # declared fraction of the shrunken panel.
     c = pt.chart({"x": [1, 2, 3], "y": [1, 4, 9]},
                  data_width=400, data_height=300)
-    c.line(x="x", y="y")
+    c.add_line(x="x", y="y")
     ins = c.inset((0.6, 0.6, 0.35, 0.35))
-    ins.line(data={"x": [1, 2], "y": [2, 1]}, x="x", y="y")
+    ins.add_line(data={"x": [1, 2], "y": [2, 1]}, x="x", y="y")
 
     fitted = c.fit(canvas_width=250)
     host_ratio = fitted._data_width / c._data_width

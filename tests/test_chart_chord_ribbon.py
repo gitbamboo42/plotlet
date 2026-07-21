@@ -18,7 +18,7 @@ def chart_chord_ribbon_flat():
     # on the right — the flat unroll of a circular chord ribbon.
     c = pt.chart(data_width=400, data_height=170, title="ribbons",
                  xlabel="position")
-    c.chord_ribbon(data={"a0": [0.0, 2.0], "a1": [1.5, 3.5],
+    c.add_chord_ribbon(data={"a0": [0.0, 2.0], "a1": [1.5, 3.5],
                          "b0": [6.0, 8.0], "b1": [7.5, 9.5]},
                    x1_start="a0", x1_end="a1", x2_start="b0", x2_end="b1",
                    color="#4C72B0", alpha=0.6)
@@ -31,7 +31,7 @@ def chart_chord_ribbon_color():
     # edge_width) outlining each ribbon.
     c = pt.chart(data_width=400, data_height=185, title="ribbons by group",
                  xlabel="position", legend=True)
-    c.chord_ribbon(data={"a0": [0.0, 1.0, 2.0], "a1": [0.8, 1.8, 2.8],
+    c.add_chord_ribbon(data={"a0": [0.0, 1.0, 2.0], "a1": [0.8, 1.8, 2.8],
                          "b0": [5.0, 6.5, 8.0], "b1": [5.8, 7.3, 8.8],
                          "grp": ["p", "q", "p"]},
                    x1_start="a0", x1_end="a1", x2_start="b0", x2_end="b1",

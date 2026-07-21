@@ -39,7 +39,7 @@ def chart_dendrogram_split():
     data_t = [[matrix[r][c] for r in range(nrows_hm)] for c in range(ncols_hm)]
 
     tree = pt.chart(data_height=60)
-    tree.dendrogram(data_t, labels=col_labels, orientation="top",
+    tree.add_dendrogram(data_t, labels=col_labels, orientation="top",
                     clusters=col_groups, method="ward")
 
     hm = pt.chart(title="dendrogram-driven split heatmap",
@@ -47,7 +47,7 @@ def chart_dendrogram_split():
     hm.sectors(_by_label(col_labels, col_groups), axis="x",
                divider=False, label=False)
     row_labels = [f"r{i+1}" for i in range(nrows_hm)]
-    hm.heatmap(data=_tidy_heatmap(matrix, col_labels, row_labels, xname="col"),
+    hm.add_heatmap(data=_tidy_heatmap(matrix, col_labels, row_labels, xname="col"),
                x="col", values=row_labels,
                cmap="viridis", legend={"label": "value"})
     hm.attach_above(tree)
@@ -72,7 +72,7 @@ def chart_dendrogram_split_parent():
     host, `yticks(labels=False)` on the tree so they don't draw twice) —
     the only baseline covering `side=` interacting with attachments."""
     import random
-    import _curved_tree  # noqa: F401 — registers c.curved_tree (test fixture)
+    import _curved_tree  # noqa: F401 — registers c.add_curved_tree (test fixture)
     rng = random.Random(7)
     nrows_hm, ncols_hm = 9, 12
     col_labels = [f"c{i+1}" for i in range(ncols_hm)]
@@ -91,11 +91,11 @@ def chart_dendrogram_split_parent():
     data_left = matrix
 
     top_c = pt.chart(data_height=90)
-    top_c.curved_tree(data_top, labels=col_labels, orientation="top",
+    top_c.add_curved_tree(data_top, labels=col_labels, orientation="top",
                       clusters=col_groups, method="ward", parent=True)
 
     left_d = pt.chart(data_width=100)
-    left_d.dendrogram(data_left, labels=row_labels, orientation="left",
+    left_d.add_dendrogram(data_left, labels=row_labels, orientation="left",
                       clusters=row_groups, method="ward", parent=True)
     left_d.yticks(labels=False)
 
@@ -106,7 +106,7 @@ def chart_dendrogram_split_parent():
                divider=False, label=False)
     hm.sectors(_by_label(row_labels, row_groups), axis="y",
                divider=False, label=False)
-    hm.heatmap(data=_tidy_heatmap(matrix, col_labels, row_labels, xname="col"),
+    hm.add_heatmap(data=_tidy_heatmap(matrix, col_labels, row_labels, xname="col"),
                x="col", values=row_labels,
                cmap="viridis", legend={"label": "value"})
     hm.attach_above(top_c)
@@ -117,13 +117,13 @@ def chart_dendrogram_split_parent():
 
 def chart_dendrogram_top():
     c = pt.chart(title="dendrogram (orientation=top)", data_height=180)
-    c.dendrogram(_dendro_sample(), method="ward")
+    c.add_dendrogram(_dendro_sample(), method="ward")
     return c
 
 
 def chart_dendrogram_left():
     c = pt.chart(title="dendrogram (orientation=left)", data_width=240)
-    c.dendrogram(_dendro_sample(), method="ward", orientation="left")
+    c.add_dendrogram(_dendro_sample(), method="ward", orientation="left")
     return c
 
 
@@ -132,7 +132,7 @@ def chart_dendrogram_styled():
     # restored to a height axis. Also exercises color / linewidth kwargs.
     c = pt.chart(title="dendrogram with restored height axis",
                  ylabel="height", data_height=180)
-    c.dendrogram(_dendro_sample(), method="average",
+    c.add_dendrogram(_dendro_sample(), method="average",
                  color="C3", linewidth=1.4)
     c.spines(left=True)
     c.yticks(None)
@@ -142,7 +142,7 @@ def chart_dendrogram_styled():
 def chart_dendrogram_labeled():
     labels = ["sample_" + ch for ch in "ABCDEFGH"]
     c = pt.chart(title="dendrogram with labels", data_height=200)
-    c.dendrogram(_dendro_sample(), method="ward", labels=labels)
+    c.add_dendrogram(_dendro_sample(), method="ward", labels=labels)
     c.xticks(rotation=90)
     return c
 
@@ -165,7 +165,7 @@ def chart_dendrogram_palette():
         matrix.append([v + rng.gauss(0, 0.5) for v in base[grp]])
     c = pt.chart(title="dendrogram — per-group color", data_height=200)
     c.sectors(_by_label(items, groups), axis="x", divider=False, label=False)
-    c.dendrogram(matrix, labels=items, clusters=groups, method="ward",
+    c.add_dendrogram(matrix, labels=items, clusters=groups, method="ward",
                  palette=palette, parent=True, linewidth=1.3)
     c.xticks(rotation=90)
     return c

@@ -17,7 +17,7 @@ def chart_imshow_rect():
     data = [[math.sin(r * 0.4) * math.cos(c * 0.3) for c in range(20)]
             for r in range(15)]
     c = pt.chart(title="imshow (rect path)", xlabel="col", ylabel="row")
-    c.imshow(data, cmap="viridis")
+    c.add_imshow(data, cmap="viridis")
     c.legend()
     return c
 
@@ -26,7 +26,7 @@ def chart_imshow_png():
     data = [[math.sin(r * 0.07) + math.cos(c * 0.05) for c in range(160)]
             for r in range(120)]
     c = pt.chart(title="imshow (PNG path, magma)", xlabel="col", ylabel="row")
-    c.imshow(data, cmap="magma")
+    c.add_imshow(data, cmap="magma")
     c.legend()
     return c
 
@@ -35,7 +35,7 @@ def chart_imshow_diverging():
     data = [[(r - 7) * (c - 7) for c in range(15)] for r in range(15)]
     c = pt.chart(title="imshow (bwr, extent, vmin/vmax)",
                  xlabel="x", ylabel="y")
-    c.imshow(data, cmap="bwr", extent=(-1.5, 1.5, -1.5, 1.5),
+    c.add_imshow(data, cmap="bwr", extent=(-1.5, 1.5, -1.5, 1.5),
              vmin=-49, vmax=49)
     c.legend()
     return c
@@ -48,7 +48,7 @@ def chart_imshow_origin_upper():
     # Asymmetric ramp makes the flip vs. the default ("lower") obvious.
     data = [[r + 0.4 * c for c in range(20)] for r in range(15)]
     c = pt.chart(title="imshow origin='upper'", xlabel="x", ylabel="y")
-    c.imshow(data, cmap="viridis", origin="upper",
+    c.add_imshow(data, cmap="viridis", origin="upper",
              extent=(0, 20, 0, 15))
     c.legend()
     return c
@@ -61,7 +61,7 @@ def chart_imshow_diverging_center():
     # exercises the inline-colorbar left-side tick rendering.
     data = [[(r - 4) * 0.5 + (c - 4) * 0.7 for c in range(12)] for r in range(10)]
     c = pt.chart(title="imshow center=0", xlabel="x", ylabel="y")
-    c.imshow(data, cmap="RdBu_r", center=0, vmin=-2, vmax=8,
+    c.add_imshow(data, cmap="RdBu_r", center=0, vmin=-2, vmax=8,
              legend={"label": "value"})
     c.legend(True, position="left")
     return c
@@ -74,7 +74,7 @@ def chart_imshow_user_cmap():
     pt.register_colormap("bwr2_demo", ["#2166ac", "#f7f7f7", "#b2182b"])
     data = [[(r - 4) * 0.5 + (c - 4) * 0.7 for c in range(12)] for r in range(10)]
     c = pt.chart(title="user colormap (bwr2_demo)", xlabel="x", ylabel="y")
-    c.imshow(data, cmap="bwr2_demo", center=0, legend={"label": "value"})
+    c.add_imshow(data, cmap="bwr2_demo", center=0, legend={"label": "value"})
     c.legend()
     return c
 
@@ -85,7 +85,7 @@ def chart_imshow_log_norm():
     # Legend ticks are powers of 10.
     data = [[10 ** (0.05 * r + 0.05 * c) for c in range(20)] for r in range(15)]
     c = pt.chart(title="imshow norm='log'", xlabel="x", ylabel="y")
-    c.imshow(data, cmap="magma", norm="log",
+    c.add_imshow(data, cmap="magma", norm="log",
              legend={"label": "intensity"})
     c.legend(True)
     return c
@@ -99,7 +99,7 @@ def chart_imshow_annot_custom():
              [1.0, 2.5, 3.75, 4.125],
              ["x", "y", "z", "w"]]
     c = pt.chart(title="imshow (custom annot, fixed color)")
-    c.imshow(data, cmap="viridis", origin="upper",
+    c.add_imshow(data, cmap="viridis", origin="upper",
              annot=annot, fmt=".1f", annot_color="#222222", annot_fontsize=12)
     c.legend()
     return c
@@ -113,7 +113,7 @@ def chart_imshow_annot_auto():
             [6.0, float("nan"), 8.0],
             [9.5, 7.5, 1.0]]
     c = pt.chart(title="imshow (annot=True, auto color)")
-    c.imshow(data, cmap="viridis", annot=True, fmt=".1f")
+    c.add_imshow(data, cmap="viridis", annot=True, fmt=".1f")
     return c
 
 

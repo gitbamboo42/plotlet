@@ -20,7 +20,7 @@ def chart_hexbin():
     ys = [x + rng.gauss(0, 1) for x in xs]
     c = pt.chart(data_width=300, data_height=260,
                  title="hexbin", xlabel="x", ylabel="y")
-    c.hexbin(data={"x": xs, "y": ys}, x="x", y="y", gridsize=22)
+    c.add_hexbin(data={"x": xs, "y": ys}, x="x", y="y", gridsize=22)
     return c | pt.legend(c)
 
 
@@ -40,7 +40,7 @@ def test_hexbin_colorbar_matches_drawn_counts():
     # (n / (gridsize²/4)) — for clustered data the real max is far
     # higher, so the legend silently labeled the wrong range.
     c = pt.chart({"x": [1.0] * 100, "y": [2.0] * 100}, legend=True)
-    c.hexbin(x="x", y="y")   # every point lands in one cell: true max 100
+    c.add_hexbin(x="x", y="y")   # every point lands in one cell: true max 100
     labels = [r["meta"].get("text") for r in c.regions()
               if r["kind"] == "text" and r["name"] == "legend-text"]
     assert labels == ["0", "50", "100"]

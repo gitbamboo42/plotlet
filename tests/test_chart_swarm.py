@@ -28,7 +28,7 @@ def chart_swarm():
                  title="swarm fill", xlabel="group", ylabel="value",
                  legend=True)
     c.xscale("category", order=["A", "B", "C", "D"])
-    c.swarm(data=data, x="group", y="value", fill="series",
+    c.add_swarm(data=data, x="group", y="value", fill="series",
             palette={"a": "#3F97C5", "b": "#F99917"})
     c.legend()
     return c
@@ -49,7 +49,7 @@ def test_swarm_drops_nan():
     # collision placement of every neighboring point.
     nan = float("nan")
     c = pt.chart({"cat": ["a", "a", "a", "b"], "v": [1.0, nan, 2.0, nan]})
-    c.swarm(x="cat", y="v")
+    c.add_swarm(x="cat", y="v")
     svg = c.to_svg()
     assert "nan" not in svg
     assert svg.count("<circle") == 2

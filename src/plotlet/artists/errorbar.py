@@ -1,12 +1,12 @@
 """Points with vertical (and/or horizontal) error bars and optional caps.
 
 Long-form table input:
-  c.errorbar(data=df, x="cat", y="mean", yerr="sd")            # offset (sym)
-  c.errorbar(data=df, x="cat", y="mean", yerr=0.5)             # scalar offset
-  c.errorbar(data=df, x="cat", y="mean", yerr=("lo", "hi"))     # offset (asym)
-  c.errorbar(data=df, x="cat", y="mean", ymin="lo", ymax="hi")  # absolute bounds
-  c.errorbar(data=df, x="t", y="mean", xerr="terr", yerr="sd")  # both axes
-  c.errorbar(data=df, x="cat", y="mean", yerr="sd", color="series")  # grouped
+  c.add_errorbar(data=df, x="cat", y="mean", yerr="sd")            # offset (sym)
+  c.add_errorbar(data=df, x="cat", y="mean", yerr=0.5)             # scalar offset
+  c.add_errorbar(data=df, x="cat", y="mean", yerr=("lo", "hi"))     # offset (asym)
+  c.add_errorbar(data=df, x="cat", y="mean", ymin="lo", ymax="hi")  # absolute bounds
+  c.add_errorbar(data=df, x="t", y="mean", xerr="terr", yerr="sd")  # both axes
+  c.add_errorbar(data=df, x="cat", y="mean", yerr="sd", color="series")  # grouped
 
 `yerr=` / `xerr=` accept a column name, a scalar, or a `(lower, upper)`
 tuple of column names or scalars for asymmetric bars. `ymin=`/`ymax=`
@@ -17,7 +17,7 @@ mutually exclusive with the matching `*err=`.
 per level (palette= maps levels to colors), and on a categorical axis
 the series dodge within each band. `width=0.8` / `gap=0.1` are the same
 band fractions as bar's, so a dodged errorbar lands on the same slot
-centers as `c.bar(..., position="dodge")` with matching values.
+centers as `c.add_bar(..., position="dodge")` with matching values.
 """
 import math
 

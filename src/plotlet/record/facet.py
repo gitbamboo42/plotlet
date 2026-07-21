@@ -8,7 +8,7 @@ with `share_x` / `share_y` on by default — adjacent panels read as one
 continuous coordinate system.
 
     g = pt.facet(df, by="species", col_wrap=3)
-    g.scatter(x="bill_length", y="bill_depth")
+    g.add_scatter(x="bill_length", y="bill_depth")
     g.show()
 
 Two-factor form — `row=` / `col=` (the seaborn names; ggplot's
@@ -18,7 +18,7 @@ no data become blank cells. Panel titles default to `"{row} | {col}"`
 (the lone level when only one factor is given).
 
     g = pt.facet(df, row="sex", col="species")
-    g.scatter(x="bill_length", y="bill_depth")
+    g.add_scatter(x="bill_length", y="bill_depth")
 
 Why a recorder (not "build one Chart per group inline"): the user's
 column-name args (`x="bill_length"`) need to be re-resolved against each

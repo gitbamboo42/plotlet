@@ -10,7 +10,7 @@ Combine fragments with `"".join(...)` and return the result from your
 or vice versa); leave them `None` and `alpha=` applies to the whole element.
 
 For chart-recording counterparts in data coordinates, use `Chart` methods
-directly — `c.scatter(xs, ys)`, `c.text(x, y, s)`, etc.
+directly — `c.add_scatter(xs, ys)`, `c.add_text(x, y, s)`, etc.
 """
 from __future__ import annotations
 

@@ -25,7 +25,7 @@ cookbook.
 
 API mirrors ``chord_links`` for the sector tags and color resolution:
 
-    c.chord_ribbon(x1_start="x1a", x1_end="x1b",
+    c.add_chord_ribbon(x1_start="x1a", x1_end="x1b",
                    x2_start="x2a", x2_end="x2b",
                    x1_sector="src", x2_sector="dst",
                    color="src", palette={...},

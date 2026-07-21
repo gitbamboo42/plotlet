@@ -35,23 +35,23 @@ Three input shapes for the position axis:
 API examples:
 
     # categorical color bar
-    c.annotation_strip(df, position="col", value="col",
+    c.add_annotation_strip(df, position="col", value="col",
                        palette={...}, name="Group")
     # continuous score bar (band mode only)
-    c.annotation_strip(df, position="col", value="col",
+    c.add_annotation_strip(df, position="col", value="col",
                        cmap="viridis", name="Score")
     # per-position text labels
-    c.annotation_strip(df, position="col", value="col",
+    c.add_annotation_strip(df, position="col", value="col",
                        text=True, side="bottom", rotation=90)
     # decorative single-color strip with one legend entry
-    c.annotation_strip(df, position="col", value="col",
+    c.add_annotation_strip(df, position="col", value="col",
                        fill="#8da0cb", label="track")
     # per-block group titles with fill + text + border
-    c.annotation_strip(df, position="col", value="group",
+    c.add_annotation_strip(df, position="col", value="group",
                        mode="block", palette={...}, text=True,
                        cell_border="#000", text_color="white")
     # variable-width interval strip (cytobands, sector bars, gene tracks)
-    c.annotation_strip(df, x1="start", x2="end", value="stain",
+    c.add_annotation_strip(df, x1="start", x2="end", value="stain",
                        palette={...}, text=True)
 
 `None` / `""` (or NaN in cmap mode) means missing data — drawn as

@@ -16,7 +16,7 @@ def strip_cmap_band():
     # gradient legend. Covers the record-side vmin/vmax range, the
     # cmap+norm draw path, and legend_gradient.
     c = pt.chart(data_height=14)
-    c.annotation_strip({"col": [f"c{i+1}" for i in range(6)],
+    c.add_annotation_strip({"col": [f"c{i+1}" for i in range(6)],
                         "v": [0.1, 2.5, float("nan"), 1.2, 3.0, 0.7]},
                        position="col", value="v", cmap="viridis",
                        absent_fill="#eee", name="Score")
@@ -28,7 +28,7 @@ def strip_interval_text():
     # per-cell text, and the interval frame-defaults branch (spines stay
     # on, position ticks dropped).
     c = pt.chart(title="interval strip", data_height=20)
-    c.annotation_strip({"start": [0, 30, 50, 90], "end": [30, 50, 90, 120],
+    c.add_annotation_strip({"start": [0, 30, 50, 90], "end": [30, 50, 90, 120],
                         "stain": ["gneg", "gpos", "gneg", "acen"]},
                        x1="start", x2="end", value="stain",
                        palette={"gneg": "#eee", "gpos": "#666", "acen": "#c33"},
@@ -40,7 +40,7 @@ def strip_orient_y_left():
     # Vertical column strip: orientation="y" transposition and the
     # side="left" text anchor.
     c = pt.chart(data_width=18)
-    c.annotation_strip({"row": ["r1", "r2", "r3", "r4"],
+    c.add_annotation_strip({"row": ["r1", "r2", "r3", "r4"],
                         "g": ["A", "A", "B", "B"]},
                        position="row", value="g", orientation="y",
                        palette={"A": "#1f77b4", "B": "#ff7f0e"},
@@ -52,7 +52,7 @@ def strip_numeric_width_rot():
     # Numeric uniform positions with scalar width= (time-series regime
     # tags) and rotated bottom-side text (the "start"-anchor branch).
     c = pt.chart(data_height=26)
-    c.annotation_strip({"pos": [0, 1, 2, 3, 4, 5],
+    c.add_annotation_strip({"pos": [0, 1, 2, 3, 4, 5],
                         "tag": ["u", "u", "d", "d", "u", "d"]},
                        position="pos", value="tag", width=1.0,
                        palette={"u": "#8dd3c7", "d": "#fb8072"},
@@ -64,7 +64,7 @@ def strip_fill_label():
     # Decorative single-color strip: fill= constant + one legend entry
     # via label= (no palette, no cmap).
     c = pt.chart(data_height=14)
-    c.annotation_strip({"col": ["a", "b", "c", "d"],
+    c.add_annotation_strip({"col": ["a", "b", "c", "d"],
                         "v": ["k", "k", "k", "k"]},
                        position="col", value="v",
                        fill="#8da0cb", label="track")
@@ -76,7 +76,7 @@ def strip_ring_interval():
     # projection and the tangent-rotated text anchors.
     c = pt.chart(title="ideogram — ring")
     c.coordinate(pt.CircularCoordinate())
-    c.annotation_strip({"start": [0, 30, 50, 90], "end": [30, 50, 90, 120],
+    c.add_annotation_strip({"start": [0, 30, 50, 90], "end": [30, 50, 90, 120],
                         "stain": ["gneg", "gpos", "gneg", "acen"]},
                        x1="start", x2="end", value="stain",
                        palette={"gneg": "#eee", "gpos": "#666", "acen": "#c33"},
@@ -102,10 +102,10 @@ def chart_heatmap_split_attached():
 
     bar = pt.chart({"col": col_labels, "sum": col_sums},
                    data_height=40, ylabel="sum")
-    bar.bar(x="col", y="sum", fill="#555")
+    bar.add_bar(x="col", y="sum", fill="#555")
 
     strip = pt.chart(data_height=14)
-    strip.annotation_strip({"col": col_labels, "group": col_groups},
+    strip.add_annotation_strip({"col": col_labels, "group": col_groups},
                            position="col", value="group",
                            palette=palette, name="group")
 
@@ -115,7 +115,7 @@ def chart_heatmap_split_attached():
                divider=False, label=False)
     hm.sectors(_by_label(row_labels, row_groups), axis="y",
                divider=False, label=False)
-    hm.heatmap(data=_tidy_heatmap(matrix, col_labels, row_labels, xname="col"),
+    hm.add_heatmap(data=_tidy_heatmap(matrix, col_labels, row_labels, xname="col"),
                x="col", values=row_labels,
                legend={"label": "value"})
     # First arg sits closest to the host; order outward is strip, bar.
@@ -135,14 +135,14 @@ def chart_heatmap_block_titles():
     col_groups = ["alpha"] * 3 + ["beta"] * 4 + ["gamma"] * 2
 
     titles = pt.chart(data_height=18)
-    titles.annotation_strip({"col": col_labels, "group": col_groups},
+    titles.add_annotation_strip({"col": col_labels, "group": col_groups},
                             position="col", value="group",
                             mode="block", text=True)
 
     hm = pt.chart(data_width=360, data_height=180)
     hm.sectors(_by_label(col_labels, col_groups), axis="x",
                divider=False, label=False)
-    hm.heatmap(data=_tidy_heatmap(matrix, col_labels, row_labels, xname="col"),
+    hm.add_heatmap(data=_tidy_heatmap(matrix, col_labels, row_labels, xname="col"),
                x="col", values=row_labels,
                legend={"label": "value"})
     hm.attach_above(titles)
@@ -161,7 +161,7 @@ def chart_heatmap_block_filled():
     palette = {"alpha": pt.TAB10[0], "beta": pt.TAB10[1], "gamma": pt.TAB10[2]}
 
     block = pt.chart(data_height=22)
-    block.annotation_strip({"col": col_labels, "group": col_groups},
+    block.add_annotation_strip({"col": col_labels, "group": col_groups},
                            position="col", value="group",
                            mode="block", palette=palette, text=True,
                            text_color="white", cell_border="#222")
@@ -169,7 +169,7 @@ def chart_heatmap_block_filled():
     hm = pt.chart(data_width=360, data_height=180)
     hm.sectors(_by_label(col_labels, col_groups), axis="x",
                divider=False, label=False)
-    hm.heatmap(data=_tidy_heatmap(matrix, col_labels, row_labels, xname="col"),
+    hm.add_heatmap(data=_tidy_heatmap(matrix, col_labels, row_labels, xname="col"),
                x="col", values=row_labels,
                legend={"label": "value"})
     hm.attach_above(block)

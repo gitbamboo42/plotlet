@@ -76,7 +76,7 @@ def chart_split_rect():
     ))
     c = pt.chart(data_width=480, data_height=280,
                  title="draw.split_rect — symmetric / arc / rotate / weights")
-    c.split_rect_demo()
+    c.add_split_rect_demo()
     c.xticks(marks=False)
     c.yticks(marks=False)
     return c
@@ -143,7 +143,7 @@ def chart_split_pie():
     ))
     c = pt.chart(data_width=480, data_height=280,
                  title="draw.split_pie — n / rotate / weights / gap")
-    c.split_pie_demo()
+    c.add_split_pie_demo()
     c.xticks(marks=False)
     c.yticks(marks=False)
     return c
@@ -156,11 +156,11 @@ def chart_rect():
     # covered.
     c = pt.chart(title="rect (broadcast + outline)",
                  xlabel="x", ylabel="y", legend=True)
-    c.rect([0, 2, 4, 6], 0, [1.5, 1.5, 1.5, 1.5], 2, fill="C0",
+    c.add_rect([0, 2, 4, 6], 0, [1.5, 1.5, 1.5, 1.5], 2, fill="C0",
            alpha=0.6, label="intervals")
-    c.rect(0.5, 2.5, 7, 1, fill="C1", alpha=0.3,
+    c.add_rect(0.5, 2.5, 7, 1, fill="C1", alpha=0.3,
            color="C3", linewidth=1.5, label="overlay")
-    c.rect(3, 0.2, 1, 1.6, fill="none", color="black",
+    c.add_rect(3, 0.2, 1, 1.6, fill="none", color="black",
            linewidth=2, label="outline")
     return c
 
@@ -170,8 +170,8 @@ def chart_polygon():
     # and an outlined diamond (fill="none"). Polygon auto-closes — the
     # last vertex doesn't need to repeat the first.
     c = pt.chart(title="polygon", xlabel="x", ylabel="y", legend=True)
-    c.polygon([0, 2, 1], [0, 0, 2], alpha=0.5, label="triangle")
-    c.polygon([3, 4, 3, 2], [1, 2, 3, 2], fill="none", linewidth=2,
+    c.add_polygon([0, 2, 1], [0, 0, 2], alpha=0.5, label="triangle")
+    c.add_polygon([3, 4, 3, 2], [1, 2, 3, 2], fill="none", linewidth=2,
               label="diamond")
     return c
 

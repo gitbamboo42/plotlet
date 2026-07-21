@@ -10,12 +10,12 @@ public cluster API trips the baseline from two angles. If real demand
 for a curved dendrogram ever surfaces, it graduates to the
 plotlet-extensions package.
 
-Same data contract and cluster-aware behavior as `c.dendrogram(...)`,
+Same data contract and cluster-aware behavior as `c.add_dendrogram(...)`,
 but each merge renders as a cubic Bezier between its two children
 instead of the orthogonal upside-down-U — a visual restyle, no
 algorithmic difference. API mirrors `dendrogram`:
 
-    c.curved_tree(data, labels=..., orientation="top",
+    c.add_curved_tree(data, labels=..., orientation="top",
                   clusters=groups, method="ward")
 """
 import math
@@ -223,7 +223,7 @@ def demo():
         col_clusters.setdefault(g, []).append(c)
 
     tree = pt.chart(data_height=60)
-    tree.curved_tree(data_t, labels=col_labels,
+    tree.add_curved_tree(data_t, labels=col_labels,
                      clusters=col_groups, method="ward")
 
     hm = pt.chart(title="curved-tree-driven split heatmap",
@@ -233,7 +233,7 @@ def demo():
     hm_df = {"col": col_labels}
     for i, name in enumerate(row_labels):
         hm_df[name] = matrix[i]
-    hm.heatmap(data=hm_df, x="col", values=row_labels,
+    hm.add_heatmap(data=hm_df, x="col", values=row_labels,
                cmap="viridis", legend={"label": "value"})
     hm.attach_above(tree)
     return pt.grid([[hm, pt.legend()]]).gap(0)

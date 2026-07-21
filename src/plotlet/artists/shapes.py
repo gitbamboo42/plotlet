@@ -5,7 +5,7 @@ a single closed contour from parallel `xs` / `ys` vertices. `polyline` is
 the open-path counterpart to `polygon` — same `(xs, ys)` shape, stroke-only,
 never closes. Use it for diagonal reference segments and decorative
 multi-point paths in data coords (the gap between `hlines`/`vlines` and
-the data-shaped `c.line(data=...)`).
+the data-shaped `c.add_line(data=...)`).
 """
 import math
 

@@ -17,7 +17,7 @@ from _chart_helpers import _peaks_grid
 def chart_contour():
     c = pt.chart(data_width=300, data_height=300,
                  title="contour", xlabel="x", ylabel="y")
-    c.contour(_peaks_grid(), extent=(-3, 3, -3, 3), cmap="viridis",
+    c.add_contour(_peaks_grid(), extent=(-3, 3, -3, 3), cmap="viridis",
               levels=[0.05, 0.1, 0.2, 0.4, 0.6, 0.8])
     c.legend()
     return c
@@ -26,7 +26,7 @@ def chart_contour():
 def chart_contour_filled():
     c = pt.chart(data_width=300, data_height=300,
                  title="filled contour", xlabel="x", ylabel="y")
-    c.contour(_peaks_grid(), extent=(-3, 3, -3, 3), cmap="viridis",
+    c.add_contour(_peaks_grid(), extent=(-3, 3, -3, 3), cmap="viridis",
               levels=[0.05, 0.1, 0.2, 0.4, 0.6, 0.8], fill=True)
     c.legend()
     return c
@@ -60,7 +60,7 @@ def test_contour_fill_replaces_lines():
     import re
     grid = [[0, 0, 0], [0, 1, 0], [0, 0, 0]]
     c = pt.chart()
-    c.contour(grid, levels=[0.5], fill=True, cmap="viridis")
+    c.add_contour(grid, levels=[0.5], fill=True, cmap="viridis")
     svg = c.to_svg()
     body = re.search(
         r'<g[^>]*data-plotlet-type="contour"[^>]*>(.*?)</g>', svg, re.S
@@ -78,7 +78,7 @@ def test_contour_nan_cells_masked():
     grid = [[0, 0, 0], [0, 1, nan], [0, 0, 0]]
     for fill in (True, False):
         c = pt.chart()
-        c.contour(grid, levels=[0.5], fill=fill, cmap="viridis")
+        c.add_contour(grid, levels=[0.5], fill=fill, cmap="viridis")
         svg = c.to_svg()
         assert "nan" not in svg
         assert 'data-plotlet-type="contour"' in svg

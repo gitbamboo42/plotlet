@@ -1,15 +1,15 @@
 """Scatter — single-series xy.
 
-  c.scatter(data=df, x="col_x", y="col_y")                # long-form
-  c.scatter(data=df, x="col_x", y="col_y", color="red")   # literal color
-  c.scatter(data=df, ..., color="group")                  # categorical → palette
-  c.scatter(data=df, ..., color="weight")                 # numeric col → cmap
-  c.scatter(data=df, ..., color="g", group="subject")     # invisible finer split
-  c.scatter(data=df, ..., alpha="cohort",                 # opacity per level
+  c.add_scatter(data=df, x="col_x", y="col_y")                # long-form
+  c.add_scatter(data=df, x="col_x", y="col_y", color="red")   # literal color
+  c.add_scatter(data=df, ..., color="group")                  # categorical → palette
+  c.add_scatter(data=df, ..., color="weight")                 # numeric col → cmap
+  c.add_scatter(data=df, ..., color="g", group="subject")     # invisible finer split
+  c.add_scatter(data=df, ..., alpha="cohort",                 # opacity per level
             alphas=(0.3, 1.0))
-  c.scatter(data=df, ..., size=3)                         # fixed marker radius (px)
-  c.scatter(data=df, ..., size="mass", sizes=(2, 7))      # graded per-point radius
-  c.scatter(data=df, ..., style="group")                  # per-level marker glyph
+  c.add_scatter(data=df, ..., size=3)                         # fixed marker radius (px)
+  c.add_scatter(data=df, ..., size="mass", sizes=(2, 7))      # graded per-point radius
+  c.add_scatter(data=df, ..., style="group")                  # per-level marker glyph
 
 `color=` dispatches on the value:
   * not-a-column string → literal color

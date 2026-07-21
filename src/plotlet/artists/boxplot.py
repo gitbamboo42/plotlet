@@ -1,8 +1,8 @@
 """Tukey-style box-and-whisker: Q1-Q3 box, median line, 1.5*IQR whiskers, outlier dots.
 
 Long-form only:
-  c.boxplot(data=df, x="cat", y="value")
-  c.boxplot(data=df, x="cat", y="value", fill="group", palette={...})
+  c.add_boxplot(data=df, x="cat", y="value")
+  c.add_boxplot(data=df, x="cat", y="value", fill="group", palette={...})
 
 Long-form with `fill="col"` dodges sub-boxes side-by-side within each cat and
 emits one legend entry per group level. A literal `fill="#hex"` paints every

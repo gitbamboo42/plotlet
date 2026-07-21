@@ -10,8 +10,8 @@ Categories are placed at integer y; densities are scaled to a fraction of
 the row spacing.
 
 API (long-form only):
-  c.ridge(data=df, x="label", y="value")
-  c.ridge(data=df, x="label", y="value", color="cohort")  # overlaid
+  c.add_ridge(data=df, x="label", y="value")
+  c.add_ridge(data=df, x="label", y="value", color="cohort")  # overlaid
                                                           # sub-densities
                                                           # per row
 

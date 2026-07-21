@@ -17,7 +17,7 @@ from _chart_helpers import _bar_quarterly_df
 def chart_bar():
     df = {"category": ["A", "B", "C", "D", "E"], "count": [4, 7, 2, 9, 5]}
     c = pt.chart(df, title="bar from table", ylabel="count")
-    c.bar(x="category", y="count", fill="C0")
+    c.add_bar(x="category", y="count", fill="C0")
     return c
 
 
@@ -25,7 +25,7 @@ def chart_bar_stack():
     df = _bar_quarterly_df()
     c = pt.chart(data_width=300, data_height=200,
                  title="bar stack", ylabel="$M", legend=True)
-    c.bar(data=df, x="quarter", y="value", fill="series", position="stack")
+    c.add_bar(data=df, x="quarter", y="value", fill="series", position="stack")
     c.legend()
     return c
 
@@ -34,7 +34,7 @@ def chart_bar_dodge():
     df = _bar_quarterly_df()
     c = pt.chart(data_width=320, data_height=200,
                  title="bar dodge", ylabel="$M", legend=True)
-    c.bar(data=df, x="quarter", y="value", fill="series", position="dodge")
+    c.add_bar(data=df, x="quarter", y="value", fill="series", position="dodge")
     c.legend()
     return c
 
@@ -43,7 +43,7 @@ def chart_named_palette():
     df = _bar_quarterly_df()
     c = pt.chart(data_width=320, data_height=200,
                  title='named palette ("Set2")', ylabel="$M", legend=True)
-    c.bar(data=df, x="quarter", y="value", fill="series", position="dodge",
+    c.add_bar(data=df, x="quarter", y="value", fill="series", position="dodge",
           palette="Set2")
     c.legend()
     return c
@@ -53,7 +53,7 @@ def chart_bar_fill():
     df = _bar_quarterly_df()
     c = pt.chart(data_width=300, data_height=200,
                  title="bar fill (100%)", ylabel="share", legend=True)
-    c.bar(data=df, x="quarter", y="value", fill="series", position="fill")
+    c.add_bar(data=df, x="quarter", y="value", fill="series", position="fill")
     c.legend()
     return c
 
@@ -71,7 +71,7 @@ def chart_bar_long_fill():
     c = pt.chart(df, data_width=320, data_height=200,
                  title="bar long-form (fill=col, outlined)",
                  ylabel="$M", legend=True)
-    c.bar(x="quarter", y="value", fill="series", color="black",
+    c.add_bar(x="quarter", y="value", fill="series", color="black",
           position="dodge")
     c.legend()
     return c
@@ -84,7 +84,7 @@ def chart_bar_yerr():
           "lo": [0.5, 1.1, 0.4, 0.9], "hi": [0.8, 0.6, 1.2, 0.5]}
     c = pt.chart(data_width=300, data_height=200,
                  title="bar ± yerr (asymmetric)", ylabel="mean")
-    c.bar(data=df, x="cat", y="mean", fill="C0", yerr=("lo", "hi"))
+    c.add_bar(data=df, x="cat", y="mean", fill="C0", yerr=("lo", "hi"))
     return c
 
 
@@ -95,7 +95,7 @@ def chart_bar_dodge_yerr():
     df["sd"] = [round(0.4 + 0.08 * v, 2) for v in df["value"]]
     c = pt.chart(data_width=320, data_height=200,
                  title="bar dodge ± yerr", ylabel="$M", legend=True)
-    c.bar(data=df, x="quarter", y="value", fill="series", yerr="sd")
+    c.add_bar(data=df, x="quarter", y="value", fill="series", yerr="sd")
     c.legend()
     return c
 
@@ -107,7 +107,7 @@ def chart_bar_h_xerr():
           "err": [0.5, 1.1, 0.4]}
     c = pt.chart(data_width=300, data_height=180,
                  title="bar horizontal ± xerr", xlabel="mean")
-    c.bar(data=df, x="cat", y="mean", orientation="h", xerr="err",
+    c.add_bar(data=df, x="cat", y="mean", orientation="h", xerr="err",
           ecolor="gray", capsize=3)
     return c
 
@@ -120,9 +120,9 @@ def chart_bar_errorbar_aligned():
     df["sd"] = [round(0.4 + 0.08 * v, 2) for v in df["value"]]
     c = pt.chart(data_width=320, data_height=200,
                  title="bar + errorbar share dodge slots", ylabel="$M")
-    c.bar(data=df, x="quarter", y="value", fill="series", position="dodge",
+    c.add_bar(data=df, x="quarter", y="value", fill="series", position="dodge",
           alpha=0.45)
-    c.errorbar(data=df, x="quarter", y="value", yerr="sd", color="series",
+    c.add_errorbar(data=df, x="quarter", y="value", yerr="sd", color="series",
                marker=None)
     return c
 
@@ -140,7 +140,7 @@ def chart_bar_count():
     df = {"outcome": rows_o, "arm": rows_a}
     c = pt.chart(data_width=300, data_height=220,
                  title="bar stat='count'", ylabel="rows", legend=True)
-    c.bar(data=df, x="outcome", stat="count", fill="arm")
+    c.add_bar(data=df, x="outcome", stat="count", fill="arm")
     c.legend()
     return c
 
@@ -158,7 +158,7 @@ def chart_bar_mean_ci():
     c = pt.chart(data_width=300, data_height=220,
                  title="bar stat='mean' ± 95 % CI",
                  xlabel="dose", ylabel="response", legend=True)
-    c.bar(data=df, x="dose", y="resp", stat="mean", fill="arm")
+    c.add_bar(data=df, x="dose", y="resp", stat="mean", fill="arm")
     c.legend()
     return c
 
@@ -170,7 +170,7 @@ def chart_bar_bottom():
     df = {"month": ["Jan", "Feb", "Mar", "Apr"], "temp": [3.2, 4.1, 7.8, 12.6]}
     c = pt.chart(data_width=300, data_height=200,
                  title="bar bottom=2 baseline", ylabel="°C", legend=True)
-    c.bar(data=df, x="month", y="temp", fill="C1", bottom=2, label="2016")
+    c.add_bar(data=df, x="month", y="temp", fill="C1", bottom=2, label="2016")
     c.legend()
     return c
 
@@ -183,7 +183,7 @@ def chart_bar_fill_eq_x():
     c = pt.chart(data_width=300, data_height=200,
                  title="bar fill=x (per-category colors)", ylabel="uses",
                  legend=True)
-    c.bar(data=df, x="tool", y="uses", fill="tool", position="dodge")
+    c.add_bar(data=df, x="tool", y="uses", fill="tool", position="dodge")
     c.legend()
     return c
 
@@ -194,7 +194,7 @@ def chart_bar_h_stack():
     df = _bar_quarterly_df()
     c = pt.chart(data_width=300, data_height=200,
                  title="bar horizontal stack", xlabel="$M", legend=True)
-    c.bar(data=df, x="quarter", y="value", fill="series", position="stack",
+    c.add_bar(data=df, x="quarter", y="value", fill="series", position="stack",
           orientation="h")
     c.legend()
     return c
@@ -228,7 +228,7 @@ def test_bar_err_rejects_stack():
     df = _bar_quarterly_df()
     df["sd"] = [0.5] * len(df["value"])
     c = pt.chart()
-    c.bar(data=df, x="quarter", y="value", fill="series", yerr="sd",
+    c.add_bar(data=df, x="quarter", y="value", fill="series", yerr="sd",
           position="stack")
     with pytest.raises(ValueError, match="position='dodge'"):
         c.to_svg()
@@ -237,7 +237,7 @@ def test_bar_err_rejects_stack():
 def test_bar_err_rejects_duplicate_rows():
     df = {"cat": ["a", "a"], "v": [1, 2], "sd": [0.1, 0.2]}
     c = pt.chart()
-    c.bar(data=df, x="cat", y="v", yerr="sd")
+    c.add_bar(data=df, x="cat", y="v", yerr="sd")
     with pytest.raises(ValueError, match="one row per"):
         c.to_svg()
 
@@ -245,11 +245,11 @@ def test_bar_err_rejects_duplicate_rows():
 def test_bar_err_matches_orientation():
     df = {"cat": ["a", "b"], "v": [1, 2], "sd": [0.1, 0.2]}
     c = pt.chart()
-    c.bar(data=df, x="cat", y="v", xerr="sd")
+    c.add_bar(data=df, x="cat", y="v", xerr="sd")
     with pytest.raises(TypeError, match="yerr"):
         c.to_svg()
     c = pt.chart()
-    c.bar(data=df, x="cat", y="v", orientation="h", yerr="sd")
+    c.add_bar(data=df, x="cat", y="v", orientation="h", yerr="sd")
     with pytest.raises(TypeError, match="xerr"):
         c.to_svg()
 
@@ -257,7 +257,7 @@ def test_bar_err_matches_orientation():
 def test_bar_stat_count_heights():
     df = {"cat": ["a", "a", "b", "a"]}
     c = pt.chart(df)
-    c.bar(x="cat", stat="count")
+    c.add_bar(x="cat", stat="count")
     svg = c.to_svg()
     assert 'data-plotlet-y-max="3"' in svg
     assert 'data-plotlet-y-min="1"' in svg
@@ -271,7 +271,7 @@ def test_bar_stat_mean_ci_extends_domain():
 
     def ylim_hi(**kw):
         c = pt.chart(df)
-        c.bar(x="cat", y="v", stat="mean", **kw)
+        c.add_bar(x="cat", y="v", stat="mean", **kw)
         m = re.search(r'data-plotlet-ylim="([^"]*)"', c.to_svg())
         return float(m.group(1).split(",")[1])
 
@@ -285,7 +285,7 @@ def test_bar_stat_validation():
 
     def bar(**kw):
         c = pt.chart(df)
-        c.bar(x="cat", **kw)
+        c.add_bar(x="cat", **kw)
         c.to_svg()
 
     with pytest.raises(TypeError, match="drop y="):
@@ -302,7 +302,7 @@ def test_bar_stat_validation():
     df2 = {"cat": ["a", "a", "b", "b"], "g": ["x", "y", "x", "y"],
            "v": [1, 2, 3, 4]}
     c = pt.chart(df2)
-    c.bar(x="cat", y="v", stat="mean", fill="g", position="stack")
+    c.add_bar(x="cat", y="v", stat="mean", fill="g", position="stack")
     with pytest.raises(ValueError, match="stacked means"):
         c.to_svg()
 

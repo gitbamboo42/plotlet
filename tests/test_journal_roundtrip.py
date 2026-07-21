@@ -98,7 +98,7 @@ def test_json_roundtrip_dates_in_dataframe():
         "v": [1.5, 2.5, 2.0],
     })
     c = pt.chart(df, x="day", y="v")
-    c.line()
+    c.add_line()
     svg_original = c.to_svg()
 
     text = json.dumps(pt.to_json(c))
@@ -113,7 +113,7 @@ def test_json_roundtrip_integer_dataframe():
     pd = pytest.importorskip("pandas")
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     c = pt.chart(df, x="a", y="b")
-    c.line()
+    c.add_line()
     svg_original = c.to_svg()
 
     journal_df = c._data

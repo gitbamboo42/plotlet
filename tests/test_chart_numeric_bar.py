@@ -19,7 +19,7 @@ def chart_numeric_bar_uneven():
     # width on each side; y always includes 0 (force_zero_y).
     c = pt.chart(data_width=360, data_height=180, title="numeric_bar",
                  xlabel="pos", ylabel="score")
-    c.numeric_bar(data={"x": [0.5, 1.2, 3.0, 3.4, 6.0, 8.5],
+    c.add_numeric_bar(data={"x": [0.5, 1.2, 3.0, 3.4, 6.0, 8.5],
                         "y": [3, 7, 4, 9, 2, 6]},
                   x="x", y="y", width=0.4, color="#4C72B0")
     return c
@@ -29,7 +29,7 @@ def chart_numeric_bar_labeled():
     # label= drives a single legend swatch; alpha applied to the fill.
     c = pt.chart(data_width=340, data_height=180, title="numeric_bar labeled",
                  xlabel="pos", ylabel="score", legend=True)
-    c.numeric_bar(data={"x": [1.0, 2.0, 3.0, 4.0, 5.0],
+    c.add_numeric_bar(data={"x": [1.0, 2.0, 3.0, 4.0, 5.0],
                         "y": [5, 8, 3, 6, 4]},
                   x="x", y="y", width=0.7, color="#DD8452", alpha=0.85,
                   label="signal")

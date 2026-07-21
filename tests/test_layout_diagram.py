@@ -25,7 +25,7 @@ def _xs():
 def diag_single():
     c = pt.chart(title="single", data_width=400, data_height=240,
                  xlabel="x", ylabel="sin x")
-    c.line(data={"x": _xs(), "y": [math.sin(t) for t in _xs()]}, x="x", y="y")
+    c.add_line(data={"x": _xs(), "y": [math.sin(t) for t in _xs()]}, x="x", y="y")
     return pt.layout_diagram(c)
 
 
@@ -34,10 +34,10 @@ def diag_two_plot():
     xs = _xs()
     sin = [math.sin(t) for t in xs]
     cos = [math.cos(t) for t in xs]
-    a = pt.chart(title="a", data_width=290, data_height=140); a.line(data={"x": xs, "y": sin}, x="x", y="y")
-    b = pt.chart(title="b", data_width=290, data_height=140); b.line(data={"x": xs, "y": cos}, x="x", y="y")
+    a = pt.chart(title="a", data_width=290, data_height=140); a.add_line(data={"x": xs, "y": sin}, x="x", y="y")
+    b = pt.chart(title="b", data_width=290, data_height=140); b.add_line(data={"x": xs, "y": cos}, x="x", y="y")
     c = pt.chart(title="c", data_width=600, data_height=140)
-    c.line(data={"x": xs, "y": [s + co for s, co in zip(sin, cos)]}, x="x", y="y")
+    c.add_line(data={"x": xs, "y": [s + co for s, co in zip(sin, cos)]}, x="x", y="y")
     return pt.layout_diagram((a | b) / c)
 
 
@@ -46,10 +46,10 @@ def diag_share_pair():
     xs = _xs()
     sin = [math.sin(t) for t in xs]
     cos = [math.cos(t) for t in xs]
-    a = pt.chart(title="a", data_width=290, data_height=140); a.line(data={"x": xs, "y": sin}, x="x", y="y")
+    a = pt.chart(title="a", data_width=290, data_height=140); a.add_line(data={"x": xs, "y": sin}, x="x", y="y")
     c = pt.chart(title="c", data_width=290, data_height=140)
-    c.line(data={"x": xs, "y": [s + co for s, co in zip(sin, cos)]}, x="x", y="y")
-    b = pt.chart(title="b", data_width=290, data_height=280); b.line(data={"x": xs, "y": cos}, x="x", y="y")
+    c.add_line(data={"x": xs, "y": [s + co for s, co in zip(sin, cos)]}, x="x", y="y")
+    b = pt.chart(title="b", data_width=290, data_height=280); b.add_line(data={"x": xs, "y": cos}, x="x", y="y")
     return pt.layout_diagram((a / c).share_x() | b)
 
 
@@ -57,11 +57,11 @@ def diag_multi_share_grid():
     # 2x2 grid with main↔top (column-shared x) and main↔tree (row-shared y).
     # Verifies share_x="col" and share_y="row" produce the expected joins.
     main = pt.chart(title="main", data_width=440, data_height=260)
-    main.line(data={"x": [1, 2, 3, 4, 5], "y": [2, 4, 1, 5, 3]}, x="x", y="y")
+    main.add_line(data={"x": [1, 2, 3, 4, 5], "y": [2, 4, 1, 5, 3]}, x="x", y="y")
     top  = pt.chart(title="top",  data_width=440, data_height=80)
-    top.line(data={"x": [1, 2, 3, 4, 5], "y": [1, 1, 3, 1, 1]}, x="x", y="y")
+    top.add_line(data={"x": [1, 2, 3, 4, 5], "y": [1, 1, 3, 1, 1]}, x="x", y="y")
     tree = pt.chart(title="tree", data_width=120, data_height=260)
-    tree.line(data={"x": [0, 1, 2], "y": [2, 3, 4]}, x="x", y="y")
+    tree.add_line(data={"x": [0, 1, 2], "y": [2, 3, 4]}, x="x", y="y")
     return pt.layout_diagram(pt.grid([
         [None, top ],
         [tree, main],
@@ -75,7 +75,7 @@ def diag_composed_with_source():
     # SVG carries data-plotlet-kind="diagram" so consumers can identify it.
     c = pt.chart(title="src", data_width=300, data_height=180,
                  xlabel="x", ylabel="y")
-    c.line(data={"x": [0, 1, 2, 3, 4], "y": [0, 1, 0, 1, 0]}, x="x", y="y")
+    c.add_line(data={"x": [0, 1, 2, 3, 4], "y": [0, 1, 0, 1, 0]}, x="x", y="y")
     return c | pt.layout_diagram(c)
 
 

@@ -62,16 +62,16 @@ def _composed_fig():
     and an inset."""
     data = {"x": [1, 2, 3, 4, 5], "y": [2.0, 3.5, 3.1, 4.8, 4.2]}
     a = pt.chart(data_width=200, data_height=140, title="a")
-    a.scatter(data=data, x="x", y="y", label="pts")
+    a.add_scatter(data=data, x="x", y="y", label="pts")
     inset = a.inset(rect=(0.55, 0.55, 0.4, 0.4))
-    inset.line(data=data, x="x", y="y")
+    inset.add_line(data=data, x="x", y="y")
 
     top = pt.chart(data_width=200, data_height=40)
-    top.bar(data=data, x="x", y="y")
+    top.add_bar(data=data, x="x", y="y")
     a.attach_above(top)
 
     b = pt.chart(data_width=200, data_height=140, title="b")
-    b.line(data=data, x="x", y="y", label="trend")
+    b.add_line(data=data, x="x", y="y", label="trend")
 
     return a | b | pt.legend(a, b, names={a: "Panel A"})
 
@@ -146,7 +146,7 @@ def test_facet_lowers_to_core_kinds():
     df = {"x": [1, 2, 3, 4, 5, 6], "y": [2, 1, 3, 2, 4, 3],
           "g": ["a", "a", "b", "b", "c", "c"]}
     g = pt.facet(df, by="g", col_wrap=2)
-    g.scatter(x="x", y="y")
+    g.add_scatter(x="x", y="y")
     svg_direct = g.to_svg()
 
     journal = pt.to_journal(g)
@@ -181,7 +181,7 @@ def test_sectored_root_wraps_in_layout():
     stay on the leaf."""
     c = pt.chart({"x": [1.0, 2.0], "y": [3.0, 4.0]},
                  title="panel title", xlim=(0, 10))
-    c.scatter(x="x", y="y")
+    c.add_scatter(x="x", y="y")
     c.sectors(pt.Sectors(names=("A",), lengths=(10.0,), gap=2))
 
     root, leaf = _root_and_leaf(pt.to_ir(c))
@@ -198,7 +198,7 @@ def test_circular_root_hoists_title_coordinate_sectors():
     band, the strategy, and the inner-disc sector inheritance)."""
     c = pt.chart({"x": [1.0, 2.0], "y": [3.0, 4.0]},
                  title="ring", xlim=(0, 10), ylim=(0, 5))
-    c.scatter(x="x", y="y")
+    c.add_scatter(x="x", y="y")
     c.coordinate(pt.CircularCoordinate(r_inner=0.4))
     c.sectors(pt.Sectors(names=("A",), lengths=(10.0,), gap=2))
 
@@ -213,7 +213,7 @@ def test_plain_root_wraps_with_no_hoist():
     """Every root wraps — a plain chart becomes a 1×1 layout with an
     empty op list; panel state (the title) stays on the leaf."""
     c = pt.chart({"x": [1.0], "y": [2.0]}, title="t")
-    c.scatter(x="x", y="y")
+    c.add_scatter(x="x", y="y")
     root, leaf = _root_and_leaf(pt.to_ir(c))
     assert root.kind == "layout" and root.init["layout_kind"] == "h"
     assert _op_names(root) == []
@@ -229,7 +229,7 @@ def test_lone_chart_equals_its_grid_form():
     def chart(theme=None):
         c = pt.chart({"x": [1.0, 2.0, 3.0], "y": [4.0, 5.0, 6.0]},
                      title="t", xlabel="x")
-        c.scatter(x="x", y="y")
+        c.add_scatter(x="x", y="y")
         if theme:
             c.theme(theme)
         return c
@@ -243,10 +243,10 @@ def test_sectored_layout_child_does_not_wrap():
     sectors — in-layout charts already have a layout home for
     composition state, and grid cells are charts by API contract."""
     a = pt.chart({"x": [1.0, 2.0], "y": [3.0, 4.0]}, xlim=(0, 10))
-    a.scatter(x="x", y="y")
+    a.add_scatter(x="x", y="y")
     a.sectors(pt.Sectors(names=("A",), lengths=(10.0,), gap=2))
     b = pt.chart({"x": [1.0], "y": [2.0]})
-    b.scatter(x="x", y="y")
+    b.add_scatter(x="x", y="y")
 
     ir = pt.to_ir(pt.grid([[a, b]]))
     root = next(n for n in ir.nodes if n.nid == ir.root_nid)

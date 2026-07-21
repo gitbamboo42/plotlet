@@ -20,8 +20,8 @@ def chart_regression():
     c = pt.chart(data_width=300, data_height=220,
                  title="linear regression", xlabel="x", ylabel="y",
                  legend=True)
-    c.scatter(data={"x": xs, "y": ys}, x="x", y="y", label="data")
-    c.regression(data={"x": xs, "y": ys}, x="x", y="y", label="fit ± 95 % CI")
+    c.add_scatter(data={"x": xs, "y": ys}, x="x", y="y", label="data")
+    c.add_regression(data={"x": xs, "y": ys}, x="x", y="y", label="fit ± 95 % CI")
     c.legend()
     return c
 
@@ -43,8 +43,8 @@ def chart_regression_color():
                  data_width=320, data_height=240,
                  title="per-color regression",
                  xlabel="x", ylabel="y", legend=True)
-    c.scatter(size=2, alpha=0.5)
-    c.regression()
+    c.add_scatter(size=2, alpha=0.5)
+    c.add_regression()
     c.legend()
     return c
 
@@ -56,9 +56,9 @@ def chart_regression_order2():
     c = pt.chart(data_width=300, data_height=220,
                  title="polynomial regression (order=2)",
                  xlabel="x", ylabel="y", legend=True)
-    c.scatter(data={"x": xs, "y": ys}, x="x", y="y", size=2, alpha=0.6,
+    c.add_scatter(data={"x": xs, "y": ys}, x="x", y="y", size=2, alpha=0.6,
               label="data")
-    c.regression(data={"x": xs, "y": ys}, x="x", y="y", order=2,
+    c.add_regression(data={"x": xs, "y": ys}, x="x", y="y", order=2,
                  label="quadratic fit")
     c.legend()
     return c
@@ -77,10 +77,10 @@ def chart_regression_lowess():
     c = pt.chart(data_width=300, data_height=220,
                  title="LOWESS smoother",
                  xlabel="x", ylabel="y", legend=True)
-    c.scatter(data=df, x="x", y="y", size=1.5, alpha=0.5, color="#555555")
-    c.regression(data=df, x="x", y="y", lowess=True, frac=0.3,
+    c.add_scatter(data=df, x="x", y="y", size=1.5, alpha=0.5, color="#555555")
+    c.add_regression(data=df, x="x", y="y", lowess=True, frac=0.3,
                  label="lowess (frac=0.3)")
-    c.regression(data=df, x="x", y="y", lowess=True, frac=0.7, color="C1",
+    c.add_regression(data=df, x="x", y="y", lowess=True, frac=0.7, color="C1",
                  label="lowess (frac=0.7)")
     return c
 
@@ -96,9 +96,9 @@ def chart_regression_robust():
     c = pt.chart(data_width=300, data_height=220,
                  title="robust (Huber) vs OLS",
                  xlabel="x", ylabel="y", legend=True)
-    c.scatter(data=df, x="x", y="y", size=2.5, alpha=0.6, color="#555555")
-    c.regression(data=df, x="x", y="y", color="C1", label="OLS")
-    c.regression(data=df, x="x", y="y", robust=True, n_boot=100,
+    c.add_scatter(data=df, x="x", y="y", size=2.5, alpha=0.6, color="#555555")
+    c.add_regression(data=df, x="x", y="y", color="C1", label="OLS")
+    c.add_regression(data=df, x="x", y="y", robust=True, n_boot=100,
                  color="C0", label="Huber")
     c.legend()
     return c
@@ -150,6 +150,6 @@ def test_regression_order_validation():
     df = {"x": [1, 2, 3], "y": [1, 2, 3]}
     for bad in (0, 1.5, "2"):
         c = pt.chart(df)
-        c.regression(x="x", y="y", order=bad)
+        c.add_regression(x="x", y="y", order=bad)
         with pytest.raises(ValueError, match="order="):
             c.to_svg()

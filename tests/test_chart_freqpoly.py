@@ -20,8 +20,8 @@ def chart_freqpoly():
     c = pt.chart(data_width=300, data_height=200,
                  title="frequency polygon", xlabel="value", ylabel="count",
                  legend=True)
-    c.freqpoly(data={"x": a}, x="x", bins=25, label="control")
-    c.freqpoly(data={"x": b}, x="x", bins=25, label="treatment")
+    c.add_freqpoly(data={"x": a}, x="x", bins=25, label="control")
+    c.add_freqpoly(data={"x": b}, x="x", bins=25, label="treatment")
     c.legend()
     return c
 

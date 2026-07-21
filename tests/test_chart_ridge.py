@@ -24,7 +24,7 @@ def chart_ridge():
     df = {"month": rows_label, "value": rows_value}
     c = pt.chart(data_width=320, data_height=260,
                  title="ridge", xlabel="value")
-    c.ridge(data=df, x="month", y="value", overlap=1.6)
+    c.add_ridge(data=df, x="month", y="value", overlap=1.6)
     c.yticks([])
     return c
 
@@ -41,7 +41,7 @@ def chart_ridge_color():
     df = {"month": rows_m, "temp": rows_v, "period": rows_g}
     c = pt.chart(data_width=320, data_height=260,
                  title="grouped ridge", xlabel="temperature", legend=True)
-    c.ridge(data=df, x="month", y="temp", color="period", overlap=1.6)
+    c.add_ridge(data=df, x="month", y="temp", color="period", overlap=1.6)
     c.yticks([])
     c.legend()
     return c
@@ -63,6 +63,6 @@ def test_ridge_color_series():
     df = {"m": ["Jan"] * 8, "v": [1, 2, 3, 4, 11, 12, 13, 14],
           "g": ["day"] * 4 + ["night"] * 4}
     c = pt.chart(df)
-    c.ridge(x="m", y="v", color="g")
+    c.add_ridge(x="m", y="v", color="g")
     fills = set(re.findall(r'<path[^>]*fill="(#[0-9a-f]+)"', c.to_svg()))
     assert {"#1f77b4", "#ff7f0e"} <= fills

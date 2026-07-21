@@ -4,7 +4,7 @@ Pre-computed grid input — the companion to `kde_2d` (which estimates a
 grid from data). The classic 2-D analytic-function viewer — useful for
 posterior surfaces, energy landscapes, and 2-D KDE visualisations.
 
-API: c.contour(grid, levels=[...], extent=(x0, x1, y0, y1))
+API: c.add_contour(grid, levels=[...], extent=(x0, x1, y0, y1))
 
 `grid` is a 2-D nested list with shape (nrows, ncols). `levels` defaults
 to 5 evenly-spaced values between grid min/max.

@@ -54,7 +54,7 @@ _SWATCH_AES = ("alpha", "size", "marker", "markersize", "linewidth", "linestyle"
 def _legend_source_artist(a: dict) -> dict:
     """The record to harvest an artist's legend entries from: a shallow
     copy with `legend={...}` aesthetic overrides merged into opts, or the
-    record itself when there are none. `c.scatter(..., alpha=0.2,
+    record itself when there are none. `c.add_scatter(..., alpha=0.2,
     legend={"alpha": 1})` plots translucent points but paints an opaque
     legend key."""
     legend_opts = (a.get("opts") or {}).get("legend") or {}

@@ -1,19 +1,19 @@
 """Line / step — connected xy points, single-series per record.
 
-  c.line(data=df, x="col_x", y="col_y")                # long-form
-  c.line(data=df, x="col_x", y="col_y", color="g")     # one line per color level
-  c.line(data=df, x="col_x", y="col_y",                # invisible split — one
+  c.add_line(data=df, x="col_x", y="col_y")                # long-form
+  c.add_line(data=df, x="col_x", y="col_y", color="g")     # one line per color level
+  c.add_line(data=df, x="col_x", y="col_y",                # invisible split — one
           color="cohort", group="subject")              #   line per subject,
                                                         #   colors only by cohort
-  c.line(data=df, ..., linestyle="--")                 # literal dash
-  c.line(data=df, ..., linestyle="cohort")             # dash cycle per level
-  c.line(data=df, ..., alpha="cohort", alphas=(.3, 1)) # opacity per level
-  c.line(data=df, ..., arc=False)                      # straight chords under
+  c.add_line(data=df, ..., linestyle="--")                 # literal dash
+  c.add_line(data=df, ..., linestyle="cohort")             # dash cycle per level
+  c.add_line(data=df, ..., alpha="cohort", alphas=(.3, 1)) # opacity per level
+  c.add_line(data=df, ..., arc=False)                      # straight chords under
                                                         #   CircularCoordinate
                                                         #   (no-op in Cartesian)
-  c.step(data=df, x="col_x", y="col_y", where="post")  # step variant; where=
+  c.add_step(data=df, x="col_x", y="col_y", where="post")  # step variant; where=
                                                         #   "pre" | "post" | "mid"
-  c.line(data=df, x="dose", y="resp",                  # aggregate replicate
+  c.add_line(data=df, x="dose", y="resp",                  # aggregate replicate
           estimator="mean")                             #   rows per x with a
                                                         #   CI band (seaborn
                                                         #   lineplot)

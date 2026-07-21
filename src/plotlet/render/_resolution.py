@@ -440,8 +440,8 @@ def _record_artist(state, spec, args, kw):
             "coordinate= is not accepted on artist calls. "
             "Use c.coordinate(...) once per panel instead."
         )
-    # First-positional-is-data sugar: `c.line(df, x=, y=)` is the
-    # same as `c.line(data=df, x=, y=)`. Opt-in via
+    # First-positional-is-data sugar: `c.add_line(df, x=, y=)` is the
+    # same as `c.add_line(data=df, x=, y=)`. Opt-in via
     # `ArtistSpec.accepts_data_positional=True`. Keeps the long-form
     # call shape from carrying a `data=` keyword on every site;
     # multi-positional shapes (e.g. `(xs, ys)`) are rejected by

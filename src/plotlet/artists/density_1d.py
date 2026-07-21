@@ -4,8 +4,8 @@ Where `hist` answers "how many in each bin?", `density_1d` answers
 "what's the smoothed distribution shape?" — bin-free, scaled so the
 area integrates to 1 so you can overlay multiple groups fairly.
 
-  c.density_1d(data=df, x="col")                      # long-form
-  c.density_1d(data=df, x="col", color="group")       # one curve per group
+  c.add_density_1d(data=df, x="col")                      # long-form
+  c.add_density_1d(data=df, x="col", color="group")       # one curve per group
 
 Aesthetics:
   color=         line color (literal) or column name → grouped curves

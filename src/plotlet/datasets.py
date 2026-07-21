@@ -25,7 +25,7 @@ Example:
     import plotlet as pt
     penguins = pt.load_dataset("penguins")
     c = pt.chart(penguins, x="bill_length_mm", y="bill_depth_mm", color="species")
-    c.scatter()
+    c.add_scatter()
 """
 from __future__ import annotations
 

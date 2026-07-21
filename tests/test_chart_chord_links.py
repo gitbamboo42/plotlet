@@ -19,7 +19,7 @@ def chart_chord_links_arcs():
     # yticks([]) for the clean arc-diagram frame.
     c = pt.chart(data_width=380, data_height=160, title="arc diagram",
                  xlabel="position")
-    c.chord_links(data={"a": [1, 2, 1, 5, 3], "b": [4, 6, 8, 7, 9]},
+    c.add_chord_links(data={"a": [1, 2, 1, 5, 3], "b": [4, 6, 8, 7, 9]},
                   x1="a", x2="b", color="#4C72B0", width=1.5)
     c.yticks([])
     return c
@@ -30,7 +30,7 @@ def chart_chord_links_color():
     # per-level legend entries.
     c = pt.chart(data_width=380, data_height=175, title="arcs by group",
                  xlabel="position", legend=True)
-    c.chord_links(data={"a": [0, 1, 2, 3, 4],
+    c.add_chord_links(data={"a": [0, 1, 2, 3, 4],
                         "b": [5, 6, 7, 8, 9],
                         "grp": ["x", "y", "x", "y", "x"]},
                   x1="a", x2="b", color="grp",
@@ -46,7 +46,7 @@ def chart_chord_links_height():
     # default; width + alpha also exercised.
     c = pt.chart(data_width=380, data_height=130, title="flattened arcs",
                  xlabel="position")
-    c.chord_links(data={"a": [1, 2, 3, 4], "b": [8, 7, 9, 6]},
+    c.add_chord_links(data={"a": [1, 2, 3, 4], "b": [8, 7, 9, 6]},
                   x1="a", x2="b", color="#55A868",
                   height=30, width=2.5, alpha=0.7)
     c.yticks([])

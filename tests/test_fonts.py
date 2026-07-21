@@ -81,7 +81,7 @@ def test_unknown_font_is_loud():
     with pytest.raises(ValueError, match="unknown font"):
         _resolve_font("Comic Sans")
     with pytest.raises(ValueError, match="unknown font"):
-        pt.chart(_df(), x="x", y="y", font="Comic Sans").line().to_svg()
+        pt.chart(_df(), x="x", y="y", font="Comic Sans").add_line().to_svg()
 
 
 def test_names_are_case_insensitive():
@@ -135,8 +135,8 @@ def test_bold_measures_wider():
 
 def test_bold_ticks_change_output():
     df = {"x": ["alpha", "beta"], "y": [1, 2]}
-    plain = pt.chart(df, x="x", y="y").bar()
-    bold = pt.chart(df, x="x", y="y").bar()
+    plain = pt.chart(df, x="x", y="y").add_bar()
+    bold = pt.chart(df, x="x", y="y").add_bar()
     bold.xticks(fontweight="bold")
     assert plain.to_svg() != bold.to_svg()
 
@@ -146,44 +146,44 @@ def test_bold_ticks_change_output():
 # ---------------------------------------------------------------------------
 
 def test_font_kwarg_equals_method():
-    a = pt.chart(_df(), x="x", y="y", font="Arimo").line().to_svg()
+    a = pt.chart(_df(), x="x", y="y", font="Arimo").add_line().to_svg()
     c = pt.chart(_df(), x="x", y="y")
     c.font("Arimo")
-    assert c.line().to_svg() == a
+    assert c.add_line().to_svg() == a
 
 
 def test_alias_renders_same_glyphs():
     # "Helvetica" maps to the Arimo file: identical output except the
     # root font-family attr, which carries the user's name verbatim.
     strip = lambda s: re.sub(r'font-family="[^"]*"', "", s)
-    a = pt.chart(_df(), x="x", y="y", font="Arimo").line().to_svg()
-    h = pt.chart(_df(), x="x", y="y", font="Helvetica").line().to_svg()
+    a = pt.chart(_df(), x="x", y="y", font="Arimo").add_line().to_svg()
+    h = pt.chart(_df(), x="x", y="y", font="Helvetica").add_line().to_svg()
     assert strip(a) == strip(h)
     assert 'font-family="Helvetica"' in h
 
 
 def test_font_changes_output_and_is_deterministic():
-    base = pt.chart(_df(), x="x", y="y", title="T").line().to_svg()
-    ar1 = pt.chart(_df(), x="x", y="y", title="T", font="Arimo").line().to_svg()
-    ar2 = pt.chart(_df(), x="x", y="y", title="T", font="Arimo").line().to_svg()
+    base = pt.chart(_df(), x="x", y="y", title="T").add_line().to_svg()
+    ar1 = pt.chart(_df(), x="x", y="y", title="T", font="Arimo").add_line().to_svg()
+    ar2 = pt.chart(_df(), x="x", y="y", title="T", font="Arimo").add_line().to_svg()
     assert ar1 != base
     assert ar1 == ar2
 
 
 def test_no_spec_leak_across_renders():
     before = _FONTSPEC["family"]
-    pt.chart(_df(), x="x", y="y", font="Arimo").line().to_svg()
+    pt.chart(_df(), x="x", y="y", font="Arimo").add_line().to_svg()
     assert _FONTSPEC["family"] == before
     # A font chart rendered earlier must not restyle a later default chart.
-    d1 = pt.chart(_df(), x="x", y="y").line().to_svg()
-    pt.chart(_df(), x="x", y="y", font="Arimo").line().to_svg()
-    d2 = pt.chart(_df(), x="x", y="y").line().to_svg()
+    d1 = pt.chart(_df(), x="x", y="y").add_line().to_svg()
+    pt.chart(_df(), x="x", y="y", font="Arimo").add_line().to_svg()
+    d2 = pt.chart(_df(), x="x", y="y").add_line().to_svg()
     assert d1 == d2
 
 
 def test_path_selector_never_leaks_into_svg():
     bold = str(_FONT_DIR / "Arimo-Bold.ttf")
-    svg = pt.chart(_df(), x="x", y="y", font=bold).line().to_svg()
+    svg = pt.chart(_df(), x="x", y="y", font=bold).add_line().to_svg()
     assert ".ttf" not in svg
     assert "fonts/" not in svg
     assert 'font-family="Arimo"' in svg    # name table stands in
@@ -239,8 +239,8 @@ def _demo(font: str | None, title: str, theme: str | None = None) -> pt.Chart:
     if theme:
         kw["theme"] = theme
     c = pt.chart(title=title, xlabel="t", ylabel="value", legend=True, **kw)
-    c.line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y", label="sin(t)")
-    c.line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y", label="cos(t)", linestyle="--")
+    c.add_line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y", label="sin(t)")
+    c.add_line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y", label="cos(t)", linestyle="--")
     return c
 
 
@@ -269,7 +269,7 @@ def _variant_demo(font: str | None, title: str) -> pt.Chart:
     kw = {"font": font} if font else {}
     c = pt.chart(data_width=320, data_height=200, title=title,
                  ylabel="rate", **kw)
-    c.bar(data=df, x="label", y="rate", fill="#5599aa")
+    c.add_bar(data=df, x="label", y="rate", fill="#5599aa")
     c.xticks(fontweight="bold")
     c.yticks(fontstyle="italic", fontweight="bold")
     return c
@@ -289,9 +289,9 @@ def font_mixed_layout():
     on its own face."""
     xs = [i * 0.1 for i in range(64)]
     left = pt.chart(title="DejaVu Sans", xlabel="t", ylabel="sin")
-    left.line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y")
+    left.add_line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y")
     right = pt.chart(title="Arimo", xlabel="t", ylabel="cos", font="Arimo")
-    right.line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y")
+    right.add_line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y")
     return left | right
 
 

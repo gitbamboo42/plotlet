@@ -5,9 +5,9 @@ standard normal; pass a `scipy.stats` distribution (or another sample)
 for an arbitrary reference.
 
 API:
-  c.qq(data=df, sample="col")                    # vs N(0, 1)
-  c.qq(data=df, sample="col", dist=other)        # two-sample / scipy RV
-  c.qq(data=df, sample="col", color="group")     # one series per level
+  c.add_qq(data=df, sample="col")                    # vs N(0, 1)
+  c.add_qq(data=df, sample="col", dist=other)        # two-sample / scipy RV
+  c.add_qq(data=df, sample="col", color="group")     # one series per level
 
 The dashed reference line passes through the 0.25/0.75 quantile pair —
 robust to outliers in the tails. Ungrouped it stays neutral gray; with

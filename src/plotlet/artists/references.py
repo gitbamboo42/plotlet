@@ -4,8 +4,8 @@
 the full frame regardless of the data scale. `axline` is the arbitrary-
 direction sibling (matplotlib `axline` / ggplot `geom_abline`):
 
-  c.axline((0, 0), (1, 1))          # infinite line through two points
-  c.axline((0, 0), slope=1)         # point + slope (linear scales only)
+  c.add_axline((0, 0), (1, 1))          # infinite line through two points
+  c.add_axline((0, 0), slope=1)         # point + slope (linear scales only)
 
 `hlines` / `vlines` are the bounded, data-coordinate counterparts that
 participate in autoscaling and use the color cycle so a labeled call acts
@@ -82,7 +82,7 @@ def _artist_axline(a, ctx):
         if not (isinstance(xs_, _LinearScale) and isinstance(ys_, _LinearScale)):
             raise ValueError(
                 "axline: slope= is only meaningful on linear x and y scales. "
-                "Pass a second point instead: c.axline((x1, y1), (x2, y2))."
+                "Pass a second point instead: c.add_axline((x1, y1), (x2, y2))."
             )
         x2, y2 = a["x1"] + 1.0, a["y1"] + a["slope"]
     else:

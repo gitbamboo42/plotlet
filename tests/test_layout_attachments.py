@@ -36,18 +36,18 @@ def attach_four_sides_chained():
     hm_df = {"col": cols}
     for name, values in zip(rows, matrix):
         hm_df[name] = values
-    host.heatmap(data=hm_df, x="col", values=rows)
+    host.add_heatmap(data=hm_df, x="col", values=rows)
 
     def row_line(values):
         c = pt.chart(data_width=44)
         c.yscale("category", order=rows, padding=0)
-        c.line(data={"x": values, "y": rows}, x="x", y="y")
+        c.add_line(data={"x": values, "y": rows}, x="x", y="y")
         return c
 
     def col_line(values):
         c = pt.chart(data_height=34)
         c.xscale("category", order=cols, padding=0)
-        c.line(data={"x": cols, "y": values}, x="x", y="y")
+        c.add_line(data={"x": cols, "y": values}, x="x", y="y")
         return c
 
     host.attach_left(row_line([2, 4, 1, 3]), row_line([3, 1, 4, 2]))
@@ -61,10 +61,10 @@ def attach_with_peer_legend():
     # Attachment composed with a layout-level legend as a peer — the
     # host-with-attachments is a single block from the outside.
     host = pt.chart(data_width=180, data_height=120)
-    host.line(data={"x": [1, 2, 3, 4, 5], "y": [2, 4, 1, 3, 5]}, x="x", y="y", label="series A")
-    host.line(data={"x": [1, 2, 3, 4, 5], "y": [1, 2, 3, 4, 5]}, x="x", y="y", label="series B")
+    host.add_line(data={"x": [1, 2, 3, 4, 5], "y": [2, 4, 1, 3, 5]}, x="x", y="y", label="series A")
+    host.add_line(data={"x": [1, 2, 3, 4, 5], "y": [1, 2, 3, 4, 5]}, x="x", y="y", label="series B")
     top_track = pt.chart(data_height=28)
-    top_track.line(data={"x": [1, 2, 3, 4, 5], "y": [0.2, 0.7, 0.4, 0.6, 0.3]}, x="x", y="y")
+    top_track.add_line(data={"x": [1, 2, 3, 4, 5], "y": [0.2, 0.7, 0.4, 0.6, 0.3]}, x="x", y="y")
     host.attach_above(top_track)
     return host | pt.legend()
 
@@ -99,9 +99,9 @@ def _run_invariants() -> int:
     from plotlet.render import hydrate
     from plotlet.render._layout_engine import _build_plan
     host = pt.chart(data_width=200, data_height=150)
-    host.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
+    host.add_line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
     left = pt.chart(data_width=40, data_height=999)
-    left.annotate("L", xy=(0.5, 1.0))
+    left.add_annotate("L", xy=(0.5, 1.0))
     host.attach_left(left)
     root = hydrate(pt.to_ir(host))
     _build_plan(root)
@@ -116,8 +116,8 @@ def _run_invariants() -> int:
 
     top = pt.chart(data_width=999, data_height=40)
     host2 = pt.chart(data_width=200, data_height=150)
-    host2.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
-    top.line(data={"x": [0, 1, 2], "y": [1, 2, 1]}, x="x", y="y")
+    host2.add_line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
+    top.add_line(data={"x": [0, 1, 2], "y": [1, 2, 1]}, x="x", y="y")
     host2.attach_above(top)
     root2 = hydrate(pt.to_ir(host2))
     _build_plan(root2)
@@ -127,8 +127,8 @@ def _run_invariants() -> int:
            "above attachment width locks to host; height preserved")
 
     # Validation: double-attach the same chart, attach already-parented chart.
-    h3 = pt.chart(); h3.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
-    label = pt.chart(); label.annotate("x", xy=(0.5, 1.0))
+    h3 = pt.chart(); h3.add_line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
+    label = pt.chart(); label.add_annotate("x", xy=(0.5, 1.0))
     h3.attach_left(label)
     try:
         h3.attach_left(label)
@@ -136,8 +136,8 @@ def _run_invariants() -> int:
     except ValueError:
         _check(True, "re-attaching same chart raises")
 
-    a = pt.chart(); a.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
-    b = pt.chart(); b.line(data={"x": [1, 2, 3], "y": [3, 2, 1]}, x="x", y="y")
+    a = pt.chart(); a.add_line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
+    b = pt.chart(); b.add_line(data={"x": [1, 2, 3], "y": [3, 2, 1]}, x="x", y="y")
     _ = a | b
     c = pt.chart()
     try:
@@ -150,9 +150,9 @@ def _run_invariants() -> int:
     # `attach_left` call time (validation); the field write is done by
     # `materialize()` on the hydrated tree, so we hydrate and run it
     # explicitly here.
-    h4 = pt.chart(); h4.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
-    other = pt.chart(); other.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
-    side = pt.chart(); side.annotate("s", xy=(0.5, 1.0))
+    h4 = pt.chart(); h4.add_line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
+    other = pt.chart(); other.add_line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
+    side = pt.chart(); side.add_annotate("s", xy=(0.5, 1.0))
     side._share_y = other
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -166,8 +166,8 @@ def _run_invariants() -> int:
            "existing share warns and host overrides")
 
     # Peer composition still works: host's _parent stays None until composed.
-    h5 = pt.chart(); h5.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
-    side2 = pt.chart(); side2.annotate("s", xy=(0.5, 1.0))
+    h5 = pt.chart(); h5.add_line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
+    side2 = pt.chart(); side2.add_annotate("s", xy=(0.5, 1.0))
     h5.attach_left(side2)
     _check(h5._parent is None, "host's _parent stays None until composed as peer")
     fig = h5 | pt.legend()
@@ -178,9 +178,9 @@ def _run_invariants() -> int:
     # canvas is offset so its data area starts at the same y as the
     # host's data area.
     h6 = pt.chart(data_width=200, data_height=150, title="TITLE")
-    h6.line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
+    h6.add_line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
     left2 = pt.chart(data_width=40)
-    left2.annotate("L", xy=(0.5, 2.0))
+    left2.add_annotate("L", xy=(0.5, 2.0))
     h6.attach_left(left2)
     root6 = hydrate(pt.to_ir(h6))
     materialize(root6)
@@ -205,9 +205,9 @@ def _run_invariants() -> int:
     h7 = pt.chart(data_width=240, data_height=100)
     h7.sectors({"chr1": 100, "chr2": 200}, axis="x", column="chr",
                divider=True, label=True)
-    h7.line(data={"chr": ["chr1"], "x": [50], "y": [1]}, x="x", y="y")
+    h7.add_line(data={"chr": ["chr1"], "x": [50], "y": [1]}, x="x", y="y")
     top7 = pt.chart(data_height=30)
-    top7.line(data={"chr": ["chr2"], "x": [10], "y": [1]}, x="x", y="y")
+    top7.add_line(data={"chr": ["chr2"], "x": [10], "y": [1]}, x="x", y="y")
     h7.attach_above(top7)
     root7 = hydrate(pt.to_ir(h7))
     materialize(root7)
@@ -234,10 +234,10 @@ def _run_invariants() -> int:
     h8_df = {"col": cols7}
     for name, values in zip(rows7, h8_mat):
         h8_df[name] = values
-    h8.heatmap(data=h8_df, x="col", values=rows7)
+    h8.add_heatmap(data=h8_df, x="col", values=rows7)
     left8 = pt.chart(data_width=20)
     left8.yscale("category", order=rows7, padding=0)
-    left8.line(data={"x": [1, 2, 1, 2], "y": rows7}, x="x", y="y")
+    left8.add_line(data={"x": [1, 2, 1, 2], "y": rows7}, x="x", y="y")
     h8.attach_left(left8)
     root8 = hydrate(pt.to_ir(h8))
     materialize(root8)
@@ -250,11 +250,11 @@ def _run_invariants() -> int:
     # Explicit attachment-side sectors call wins over inheritance.
     h9 = pt.chart(data_width=240, data_height=100)
     h9.sectors({"chr1": 100}, axis="x", column="chr", divider=True, label=True)
-    h9.line(data={"chr": ["chr1"], "x": [50], "y": [1]}, x="x", y="y")
+    h9.add_line(data={"chr": ["chr1"], "x": [50], "y": [1]}, x="x", y="y")
     top9 = pt.chart(data_height=30)
     top9.sectors({"chr1": 100}, axis="x", column="chr",
                  divider=True, label=True)
-    top9.line(data={"chr": ["chr1"], "x": [50], "y": [1]}, x="x", y="y")
+    top9.add_line(data={"chr": ["chr1"], "x": [50], "y": [1]}, x="x", y="y")
     h9.attach_above(top9)
     root9 = hydrate(pt.to_ir(h9))
     materialize(root9)
@@ -309,9 +309,9 @@ def test_attachments_invariants():
 def test_attach_above_promotes_subtitle():
     def build(**chart_kw):
         host = pt.chart({"x": [1, 2, 3], "y": [1, 2, 3]}, **chart_kw)
-        host.scatter(x="x", y="y")
+        host.add_scatter(x="x", y="y")
         top = pt.chart(data_height=30)
-        top.line(data={"x": [1, 2, 3], "y": [1, 2, 1]}, x="x", y="y")
+        top.add_line(data={"x": [1, 2, 3], "y": [1, 2, 1]}, x="x", y="y")
         host.attach_above(top)
         return host.regions()
 

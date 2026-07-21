@@ -7,7 +7,7 @@ visual cousin of hexbin for smaller, smoother samples.
 Differs from the cookbook contour recipe, which expects a pre-computed 2-D
 scalar grid. Here the grid is estimated from data.
 
-API: c.kde_2d(data=df, x='col', y='col')
+API: c.add_kde_2d(data=df, x='col', y='col')
 
 Aesthetics:
   color=             literal contour color OR column name → one density

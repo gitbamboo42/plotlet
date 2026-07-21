@@ -2,14 +2,14 @@
 
     import plotlet as pt
     c = pt.chart(df, title="...", xlabel="x", ylabel="y", legend=True, gridlines=True)
-    c.line(x="time", y="value", color="series")
+    c.add_line(x="time", y="value", color="series")
     c                         # auto-renders in Jupyter
 
 Chart methods chain for incremental composition:
 
     df = {"x": [1, 2, 3], "y": [1, 4, 9]}
     c = pt.chart()
-    c.line(df, x="x", y="y", label="squares")
+    c.add_line(df, x="x", y="y", label="squares")
     c.title("Hello").legend().gridlines(True)
     c
 """

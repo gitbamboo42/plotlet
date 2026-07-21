@@ -39,7 +39,7 @@ def test_power10():
 
 def test_power10_in_svg():
     c = pt.chart()
-    c.line(data={"x": [1, 10, 100, 1000], "y": [1, 2, 3, 4]}, x="x", y="y")
+    c.add_line(data={"x": [1, 10, 100, 1000], "y": [1, 2, 3, 4]}, x="x", y="y")
     c.xscale("log")
     c.xticks(format="power10")
     assert ".notdef" not in c.to_svg()

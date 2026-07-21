@@ -83,7 +83,7 @@ class ArtistSpec:
     layer: str = "data"  # "background" | "data" | "foreground"
     uses_color_cycle: bool = True
     default_color: str | None = None  # used when uses_color_cycle is False
-    # Sugar for `c.<artist>(df, x="col", y="col")` → `c.<artist>(data=df, ...)`.
+    # Sugar for `c.add_<artist>(df, x="col", y="col")` → `c.add_<artist>(data=df, ...)`.
     # Disable on positional-only artists (matrix or single primary input) so
     # the lone positional arg isn't hoisted into `kw["data"]`.
     accepts_data_positional: bool = True
@@ -186,7 +186,7 @@ def add_artist(spec: ArtistSpec) -> None:
     The record function's signature IS the artist's kwarg vocabulary:
     `_replay` calls it as `record(*args, **kwargs)`, so Python itself
     rejects unknown names at replay (`TypeError: unexpected keyword
-    argument 'widht'`), and `c.<artist>?` shows the real parameter list.
+    argument 'widht'`), and `c.add_<artist>?` shows the real parameter list.
     Registration stamps `__kwarg_names__` (read by the chart-level aes
     injection in `Chart.__getattr__`) from that signature.
 

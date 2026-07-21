@@ -241,7 +241,7 @@ def test_palette_color_dict_and_list_still_work():
 def test_named_palette_flows_to_svg():
     df = {"x": [1, 2, 1, 2], "y": [1, 2, 3, 4], "grp": ["a", "a", "b", "b"]}
     c = pt.chart()
-    c.line(data=df, x="x", y="y", color="grp", palette="Set2")
+    c.add_line(data=df, x="x", y="y", color="grp", palette="Set2")
     svg = c.to_svg()
     assert palette("Set2")[0] in svg
     assert palette("Set2")[1] in svg

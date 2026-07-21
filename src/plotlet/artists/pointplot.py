@@ -7,8 +7,8 @@ CI options:
   ci=None    -> no CI, just points and connectors.
 
 API (long-form only):
-  c.pointplot(data=df, x="cat", y="value")
-  c.pointplot(data=df, x="cat", y="value", color="group")   # one series per level
+  c.add_pointplot(data=df, x="cat", y="value")
+  c.add_pointplot(data=df, x="cat", y="value", color="group")   # one series per level
 
 Aesthetics:
   color=             literal color OR column name → one series per level

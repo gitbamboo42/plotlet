@@ -28,7 +28,7 @@ def chart_violin():
                  title="violin fill", xlabel="group", ylabel="value",
                  legend=True)
     c.xscale("category", order=["ctrl", "+drug", "low", "high"])
-    c.violin(data=data, x="grp", y="value", fill="trt",
+    c.add_violin(data=data, x="grp", y="value", fill="trt",
              palette={"A": "#3F97C5", "B": "#F99917"}, inner="box")
     c.legend()
     return c

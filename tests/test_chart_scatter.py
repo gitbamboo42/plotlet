@@ -23,7 +23,7 @@ def chart_scatter_color():
     }
     c = pt.chart(df, title="scatter color",
                  xlabel="x", ylabel="y", legend=True, gridlines=True)
-    c.scatter(x="x", y="y", color="group", size=3, alpha=0.6)
+    c.add_scatter(x="x", y="y", color="group", size=3, alpha=0.6)
     return c
 
 
@@ -45,7 +45,7 @@ def chart_clip_data_area():
                  title="clip=False",
                  xlabel="x", ylabel="y",
                  xlim=(0, 10), ylim=(0, 10))
-    c.scatter(data={"x": xs, "y": ys}, x="x", y="y", size=sizes, color="C0", alpha=0.6)
+    c.add_scatter(data={"x": xs, "y": ys}, x="x", y="y", size=sizes, color="C0", alpha=0.6)
     return c
 
 
@@ -59,7 +59,7 @@ def chart_scatter_size():
     }
     c = pt.chart(df, data_width=400, data_height=200,
                  title="bubble", xlabel="x", ylabel="y")
-    c.scatter(x="x", y="y", size="mass", sizes=(2, 8))
+    c.add_scatter(x="x", y="y", size="mass", sizes=(2, 8))
     c.legend()
     return c
 
@@ -78,7 +78,7 @@ def chart_scatter_size_style_color():
     c = pt.chart(df, data_width=400, data_height=240,
                  title="color + size + style", xlabel="x", ylabel="y",
                  legend=True)
-    c.scatter(x="x", y="y", color="group", size="mass", style="group")
+    c.add_scatter(x="x", y="y", color="group", size="mass", style="group")
     return c
 
 
@@ -96,7 +96,7 @@ def chart_scatter_long_color():
     c = pt.chart(data_width=300, data_height=240,
                  title="scatter (long-form, color)",
                  xlabel="x", ylabel="y", legend=True)
-    c.scatter(data=df, x="x", y="y", color="group")
+    c.add_scatter(data=df, x="x", y="y", color="group")
     c.legend()
     return c
 
@@ -116,7 +116,7 @@ def chart_scatter_alpha_col():
     c = pt.chart(data_width=300, data_height=240,
                  title="scatter (alpha column)", xlabel="x", ylabel="y",
                  legend=True)
-    c.scatter(data=data, x="x", y="y", color="group", alpha="period")
+    c.add_scatter(data=data, x="x", y="y", color="group", alpha="period")
     c.legend()
     return c
 

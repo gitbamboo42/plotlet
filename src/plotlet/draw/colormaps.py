@@ -101,7 +101,7 @@ def register_colormap(name: str, colors, stops=None) -> None:
     colormap's — pair with `center=` on the artist:
 
         pt.register_colormap("bwr2", ["#2166ac", "white", "#b2182b"])
-        c.heatmap(..., cmap="bwr2", center=0)
+        c.add_heatmap(..., cmap="bwr2", center=0)
 
     Re-registering a user name overwrites it; built-in names can't be
     shadowed. Registration is per-process (same contract as
