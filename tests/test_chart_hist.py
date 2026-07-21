@@ -10,6 +10,7 @@ import math
 import random
 
 import plotlet as pt
+from plotlet import aes
 import pytest
 
 
@@ -18,7 +19,7 @@ def chart_hist():
     df = {"value": [rng.gauss(0, 1) for _ in range(2000)]}
     c = pt.chart(df, title="histogram from table",
                  xlabel="value", ylabel="count")
-    c.add_hist(x="value", bins=30, fill="C2")
+    c.add_hist(aes(x="value"), bins=30, fill="C2")
     return c
 
 
@@ -31,7 +32,7 @@ def chart_hist_stack():
     }
     c = pt.chart(df, title="hist stacked", xlabel="value", ylabel="count",
                  legend=True)
-    c.add_hist(x="value", fill="group", bins=24, position="stack")
+    c.add_hist(aes(x="value", fill="group"), bins=24, position="stack")
     return c
 
 
@@ -44,7 +45,7 @@ def chart_hist_dodge():
     }
     c = pt.chart(df, title="hist dodged", xlabel="value", ylabel="count",
                  legend=True)
-    c.add_hist(x="value", fill="group", bins=12, position="dodge")
+    c.add_hist(aes(x="value", fill="group"), bins=12, position="dodge")
     return c
 
 
@@ -53,7 +54,7 @@ def chart_hist_binwidth_cumulative():
     df = {"v": [rng.gauss(0, 1) for _ in range(500)]}
     c = pt.chart(df, title="hist binwidth= + cumulative CDF",
                  xlabel="v", ylabel="cdf")
-    c.add_hist(x="v", binwidth=0.25, binrange=(-3, 3),
+    c.add_hist(aes(x="v"), binwidth=0.25, binrange=(-3, 3),
            cumulative=True, density=True, fill="C0")
     return c
 
@@ -96,7 +97,7 @@ def test_hist_stack_extends_count_domain():
 
     def ylim_hi(position):
         c = pt.chart(df)
-        c.add_hist(x="v", fill="g", bins=[0, 1], position=position)
+        c.add_hist(aes(x="v", fill="g"), bins=[0, 1], position=position)
         import re
         m = re.search(r'data-plotlet-ylim="([^"]*)"', c.to_svg())
         return float(m.group(1).split(",")[1])
@@ -108,14 +109,15 @@ def test_hist_stack_extends_count_domain():
 def test_hist_weights_column():
     df = {"v": [0.5, 0.5, 1.5], "w": [2.0, 3.0, 5.0]}
     c = pt.chart(df)
-    c.add_hist(x="v", bins=[0, 1, 2], weights="w")
+    c.add_hist(aes(x="v", weights="w"), bins=[0, 1, 2])
     assert 'data-plotlet-count-max="5"' in c.to_svg()
 
 
 def test_hist_rejects_bad_binning_combos():
     def render(**kw):
-        c = pt.chart({"v": [1, 2, 3]})
-        c.add_hist(x="v", **kw)
+        df = {"v": [1, 2, 3]}
+        c = pt.chart(df)
+        c.add_hist(aes(x="v"), **kw)
         c.to_svg()
 
     with pytest.raises(TypeError, match="bins= or binwidth="):

@@ -4,12 +4,14 @@ methods (save_png / repr_mimebundle) are exercised here."""
 import pytest
 
 import plotlet as pt
+from plotlet import aes
 from _chart_helpers import _png_dims
 
 
 def _chart():
-    c = pt.chart({"x": [1, 2, 3], "y": [1, 4, 9]}, title="io")
-    c.add_line(x="x", y="y")
+    df = {"x": [1, 2, 3], "y": [1, 4, 9]}
+    c = pt.chart(df, title="io")
+    c.add_line(aes(x="x", y="y"))
     return c
 
 
@@ -33,7 +35,7 @@ def test_save_svg_clean_strips_metadata(tmp_path):
 def test_facetgrid_save_svg_clean(tmp_path):
     data = {"x": [1, 2, 3, 4], "y": [1, 2, 3, 4], "g": ["a", "a", "b", "b"]}
     grid = pt.facet(data, by="g")
-    grid.add_line(x="x", y="y")
+    grid.add_line(aes(x="x", y="y"))
     out = tmp_path / "grid.svg"
     grid.save_svg(out, clean=True)
     assert "data-plotlet-" not in out.read_text()
@@ -65,7 +67,8 @@ def test_save_pdf(tmp_path):
 
 def test_repr_mimebundle_png():
     c = pt.chart(title="t")
-    c.add_line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
+    df = {"x": [1, 2, 3], "y": [1, 2, 3]}
+    c.add_line(data=df, mapping=aes(x="x", y="y"))
     data, meta = c._repr_mimebundle_()
     png = data["image/png"]
     w, h = meta["image/png"]["width"], meta["image/png"]["height"]
@@ -82,7 +85,8 @@ def test_repr_mimebundle_png():
 
 def test_save_png_scale(tmp_path):
     c = pt.chart(title="t")
-    c.add_line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
+    df = {"x": [1, 2, 3], "y": [1, 2, 3]}
+    c.add_line(data=df, mapping=aes(x="x", y="y"))
     from plotlet.record.chart import _svg_size
     w, h = _svg_size(c.to_svg())
     c.save_png(tmp_path / "one.png")
@@ -112,18 +116,21 @@ def test_png_paints_figure_background():
         return tuple(raw[1:5])
 
     c = pt.chart(title="t")
-    c.add_line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
+    df = {"x": [1, 2, 3], "y": [1, 2, 3]}
+    c.add_line(data=df, mapping=aes(x="x", y="y"))
     from plotlet.record.chart import _svg_to_png
     assert corner_rgba(_svg_to_png(c.to_svg())) == (255, 255, 255, 255)
 
     d = pt.chart(theme="dark", title="t")
-    d.add_line(data={"x": [1, 2, 3], "y": [1, 2, 3]}, x="x", y="y")
+    df2 = {"x": [1, 2, 3], "y": [1, 2, 3]}
+    d.add_line(data=df2, mapping=aes(x="x", y="y"))
     assert corner_rgba(_svg_to_png(d.to_svg())) == (31, 31, 31, 255)
 
 
 def test_show_rejects_unknown_format():
     c = pt.chart(title="t")
-    c.add_line(data={"x": [1, 2], "y": [1, 2]}, x="x", y="y")
+    df = {"x": [1, 2], "y": [1, 2]}
+    c.add_line(data=df, mapping=aes(x="x", y="y"))
     with pytest.raises(ValueError, match="png.*svg"):
         c.show(format="jpeg")
 
@@ -135,8 +142,9 @@ def test_category_metadata_survives_cdata_breakout():
     import json
     import xml.etree.ElementTree as ET
     label = ']]><script>alert(1)</script>'
-    c = pt.chart({"cat": ["a", label], "v": [1, 2]})
-    c.add_bar(x="cat", y="v")
+    df = {"cat": ["a", label], "v": [1, 2]}
+    c = pt.chart(df)
+    c.add_bar(aes(x="cat", y="v"))
     svg = c.to_svg()
     root = ET.fromstring(svg)
     assert not [el for el in root.iter() if el.tag.endswith("script")]
@@ -156,8 +164,9 @@ def test_clean_strips_metadata_containing_close_tag():
     # A label containing a literal `</metadata>` sits legally inside CDATA;
     # clean=True must strip to the block's real terminator, not the label.
     label = "</metadata>x"
-    c = pt.chart({"cat": [label, "b"], "v": [1, 2]})
-    c.add_bar(x="cat", y="v")
+    df = {"cat": [label, "b"], "v": [1, 2]}
+    c = pt.chart(df)
+    c.add_bar(aes(x="cat", y="v"))
     cleaned = c.to_svg(clean=True)
     assert "metadata" not in cleaned and "CDATA" not in cleaned
 

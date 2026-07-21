@@ -10,6 +10,7 @@ import math
 import random
 
 import plotlet as pt
+from plotlet import aes
 import pytest
 
 
@@ -30,7 +31,7 @@ def chart_boxplot():
                  title="boxplot fill", xlabel="group", ylabel="score",
                  legend=True)
     c.xscale("category", order=["ctrl", "low", "mid", "high"])
-    c.add_boxplot(data=data, x="group", y="score", fill="trt",
+    c.add_boxplot(data=data, mapping=aes(x="group", y="score", fill="trt"),
               palette={"A": "#3F97C5", "B": "#F99917"})
     c.legend()
     return c
@@ -47,7 +48,7 @@ def chart_aes_inheritance():
         for _ in range(40):
             rows.append({"group": g, "value": rng.gauss(mu, 0.6)})
     df = pd.DataFrame(rows)
-    c = pt.chart(df, x="group", y="value",
+    c = pt.chart(df, aes(x="group", y="value"),
                  data_width=320, data_height=240,
                  title="aes inheritance (boxplot + strip)")
     c.add_boxplot()
@@ -66,7 +67,7 @@ def chart_boxplot_notch_h():
     data = {k: [r[k] for r in rows] for k in rows[0]}
     c = pt.chart(data_width=320, data_height=200,
                  title="boxplot horizontal + notch + means", xlabel="pH")
-    c.add_boxplot(data=data, x="site", y="ph", orientation="h",
+    c.add_boxplot(data=data, mapping=aes(x="site", y="ph"), orientation="h",
               notch=True, showmeans=True)
     return c
 
@@ -82,7 +83,7 @@ def chart_boxplot_unfilled():
     data = {k: [r[k] for r in rows] for k in rows[0]}
     c = pt.chart(data_width=300, data_height=200,
                  title="boxplot unfilled, no fliers", ylabel="amount")
-    c.add_boxplot(data=data, x="batch", y="amount", fill=False,
+    c.add_boxplot(data=data, mapping=aes(x="batch", y="amount"), fill=False,
               showfliers=False, whis=1.0, color="#336699")
     return c
 

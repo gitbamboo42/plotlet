@@ -10,6 +10,7 @@ import math
 import random
 
 import plotlet as pt
+from plotlet import aes
 import pytest
 
 
@@ -30,10 +31,10 @@ def chart_pointplot():
                  title="pointplot", xlabel="timepoint", ylabel="score",
                  legend=True)
     c.xscale("category", order=cats)
-    c.add_pointplot(data={"t": ctrl_t, "score": ctrl_score},
-                x="t", y="score", label="control")
-    c.add_pointplot(data={"t": drug_t, "score": drug_score},
-                x="t", y="score", label="drug")
+    df = {"t": ctrl_t, "score": ctrl_score}
+    c.add_pointplot(data=df, mapping=aes(x="t", y="score"), label="control")
+    df2 = {"t": drug_t, "score": drug_score}
+    c.add_pointplot(data=df2, mapping=aes(x="t", y="score"), label="drug")
     c.legend()
     return c
 
@@ -53,7 +54,7 @@ def chart_pointplot_color():
                  title="pointplot color=", xlabel="timepoint",
                  ylabel="score", legend=True)
     c.xscale("category", order=cats)
-    c.add_pointplot(data=df, x="t", y="score", color="arm")
+    c.add_pointplot(data=df, mapping=aes(x="t", y="score", color="arm"))
     c.legend()
     return c
 
@@ -72,8 +73,9 @@ def test_chart_pointplot_baseline(name, fn, baseline_compare):
 def test_pointplot_rejects_unknown_ci():
     # pointplot used to fall through to the bootstrap branch on any
     # unknown ci=; it now shares bar/line's validation
-    c = pt.chart({"t": ["a", "a"], "v": [1, 2]})
-    c.add_pointplot(x="t", y="v", ci="x")
+    df = {"t": ["a", "a"], "v": [1, 2]}
+    c = pt.chart(df)
+    c.add_pointplot(aes(x="t", y="v"), ci="x")
     with pytest.raises(ValueError, match="ci='x'"):
         c.to_svg()
 
@@ -82,6 +84,6 @@ def test_pointplot_color_series():
     import re
     df = {"t": ["a", "a", "b", "b"], "v": [1, 2, 3, 4], "g": ["x", "y", "x", "y"]}
     c = pt.chart(df)
-    c.add_pointplot(x="t", y="v", color="g", ci=None)
+    c.add_pointplot(aes(x="t", y="v", color="g"), ci=None)
     fills = set(re.findall(r'<circle[^>]*fill="(#[0-9a-f]+)"', c.to_svg()))
     assert {"#1f77b4", "#ff7f0e"} <= fills

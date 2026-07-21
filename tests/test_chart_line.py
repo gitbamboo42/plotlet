@@ -10,6 +10,7 @@ import math
 import random
 
 import plotlet as pt
+from plotlet import aes
 import pytest
 from _chart_helpers import _xs
 
@@ -23,8 +24,8 @@ def chart_table():
     }
     c = pt.chart(df, title="chart from table",
                  xlabel="t", ylabel="value", legend=True, gridlines=True)
-    c.add_line(x="t", y="sin", label="sin(t)")
-    c.add_line(x="t", y="cos", label="cos(t)", linestyle="--")
+    c.add_line(aes(x="t", y="sin"), label="sin(t)")
+    c.add_line(aes(x="t", y="cos"), label="cos(t)", linestyle="--")
     return c
 
 
@@ -38,7 +39,7 @@ def chart_color():
     }
     c = pt.chart(df, title="color split",
                  xlabel="t", ylabel="v", legend=True, gridlines=True)
-    c.add_line(x="t", y="v", color="series")
+    c.add_line(aes(x="t", y="v", color="series"))
     return c
 
 
@@ -49,8 +50,8 @@ def chart_plot_alpha():
           "w": [math.cos(x) for x in xs]}
     c = pt.chart(df, title="plot alpha", xlabel="t", ylabel="value",
                  legend=True)
-    c.add_line(x="t", y="v", alpha=0.3, label="alpha=0.3")
-    c.add_line(x="t", y="w", alpha=1.0, label="alpha=1")
+    c.add_line(aes(x="t", y="v"), alpha=0.3, label="alpha=0.3")
+    c.add_line(aes(x="t", y="w"), alpha=1.0, label="alpha=1")
     return c
 
 
@@ -63,10 +64,14 @@ def chart_curve_steps():
     ys = [1, 3, 2, 5, 4, 6]
     c = pt.chart(title="curve= modes", xlabel="x", ylabel="y",
                  legend=True, gridlines=True)
-    c.add_line(data={"x": xs, "y": ys}, x="x", y="y", curve="linear", marker="o", label="linear")
-    c.add_line(data={"x": xs, "y": [v + 2 for v in ys]}, x="x", y="y", curve="step-after", marker="o", label="step-after")
-    c.add_line(data={"x": xs, "y": [v + 4 for v in ys]}, x="x", y="y", curve="step-before", marker="o", label="step-before")
-    c.add_line(data={"x": xs, "y": [v + 6 for v in ys]}, x="x", y="y", curve="step-mid", marker="o", label="step-mid")
+    df = {"x": xs, "y": ys}
+    c.add_line(data=df, mapping=aes(x="x", y="y"), curve="linear", marker="o", label="linear")
+    df2 = {"x": xs, "y": [v + 2 for v in ys]}
+    c.add_line(data=df2, mapping=aes(x="x", y="y"), curve="step-after", marker="o", label="step-after")
+    df3 = {"x": xs, "y": [v + 4 for v in ys]}
+    c.add_line(data=df3, mapping=aes(x="x", y="y"), curve="step-before", marker="o", label="step-before")
+    df4 = {"x": xs, "y": [v + 6 for v in ys]}
+    c.add_line(data=df4, mapping=aes(x="x", y="y"), curve="step-mid", marker="o", label="step-mid")
     return c
 
 
@@ -85,11 +90,11 @@ def chart_line_group():
                 rows.append({"t": t, "value": base + slope * t + rng.gauss(0, 0.2),
                              "subject": f"{cohort}_{subj}", "cohort": cohort})
     df = pd.DataFrame(rows)
-    c = pt.chart(df, x="t", y="value",
+    c = pt.chart(df, aes(x="t", y="value"),
                  data_width=320, data_height=200,
                  title="trajectories: color by cohort, group by subject",
                  xlabel="t", ylabel="value", legend=True)
-    c.add_line(color="cohort", group="subject", alpha=0.7)
+    c.add_line(aes(color="cohort", group="subject"), alpha=0.7)
     c.legend()
     return c
 
@@ -107,11 +112,11 @@ def chart_line_linetype():
             rows.append({"t": t, "v": mu * t + rng.gauss(0, 0.2),
                          "cohort": cohort})
     df = pd.DataFrame(rows)
-    c = pt.chart(df, x="t", y="v",
+    c = pt.chart(df, aes(x="t", y="v"),
                  data_width=320, data_height=200,
                  title="redundant color + linestyle",
                  xlabel="t", ylabel="v", legend=True)
-    c.add_line(color="cohort", linestyle="cohort", linewidth=1.6)
+    c.add_line(aes(color="cohort", linestyle="cohort"), linewidth=1.6)
     c.legend()
     return c
 
@@ -129,11 +134,11 @@ def chart_line_alpha():
             rows.append({"t": t, "v": mu * t + rng.gauss(0, 0.2),
                          "cohort": cohort})
     df = pd.DataFrame(rows)
-    c = pt.chart(df, x="t", y="v",
+    c = pt.chart(df, aes(x="t", y="v"),
                  data_width=320, data_height=200,
                  title="color + alpha by cohort",
                  xlabel="t", ylabel="v", legend=True)
-    c.add_line(color="cohort", alpha="cohort", linewidth=1.8)
+    c.add_line(aes(color="cohort", alpha="cohort"), linewidth=1.8)
     c.legend()
     return c
 
@@ -149,11 +154,11 @@ def chart_line_estimator():
                 rows_t.append(t); rows_g.append(g)
                 rows_v.append(slope * t + rng.gauss(0, 1.0))
     df = {"t": rows_t, "v": rows_v, "g": rows_g}
-    c = pt.chart(df, x="t", y="v",
+    c = pt.chart(df, aes(x="t", y="v"),
                  data_width=320, data_height=200,
                  title="line estimator='mean' ± 95 % CI",
                  xlabel="t", ylabel="v", legend=True)
-    c.add_line(color="g", estimator="mean")
+    c.add_line(aes(color="g"), estimator="mean")
     c.legend()
     return c
 
@@ -178,7 +183,7 @@ def test_chart_line_baseline(name, fn, baseline_compare):
 def test_line_estimator_aggregates():
     df = {"x": [0, 0, 1, 1], "y": [1.0, 3.0, 2.0, 6.0]}
     c = pt.chart(df)
-    c.add_line(x="x", y="y", estimator="mean", ci=None)
+    c.add_line(aes(x="x", y="y"), estimator="mean", ci=None)
     svg = c.to_svg()
     assert 'data-plotlet-n="2"' in svg
     assert 'data-plotlet-estimator="mean"' in svg
@@ -191,7 +196,7 @@ def test_line_ci_band_extends_domain():
 
     def ylim_hi(**kw):
         c = pt.chart(df)
-        c.add_line(x="x", y="y", estimator="mean", **kw)
+        c.add_line(aes(x="x", y="y"), estimator="mean", **kw)
         m = re.search(r'data-plotlet-ylim="([^"]*)"', c.to_svg())
         return float(m.group(1).split(",")[1])
 
@@ -204,7 +209,7 @@ def test_line_ci_band_clips_on_log_scale():
     # all-positive data whose t CI lower bound goes negative
     df = {"x": [0, 0, 0, 1, 1, 1], "y": [1.0, 10.0, 100.0, 2.0, 20.0, 200.0]}
     c = pt.chart(df)
-    c.add_line(x="x", y="y", estimator="mean")
+    c.add_line(aes(x="x", y="y"), estimator="mean")
     c.yscale("log")
     svg = c.to_svg()                       # must not raise, no NaN paths
     assert "nan" not in svg
@@ -222,7 +227,7 @@ def test_line_estimator_validation():
 
     def line(fn="add_line", **kw):
         c = pt.chart(df)
-        getattr(c, fn)(x="x", y="y", **kw)
+        getattr(c, fn)(aes(x="x", y="y"), **kw)
         c.to_svg()
 
     with pytest.raises(TypeError, match="apply with estimator"):

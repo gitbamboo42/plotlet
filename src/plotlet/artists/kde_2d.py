@@ -7,12 +7,12 @@ visual cousin of hexbin for smaller, smoother samples.
 Differs from the cookbook contour recipe, which expects a pre-computed 2-D
 scalar grid. Here the grid is estimated from data.
 
-API: c.add_kde_2d(data=df, x='col', y='col')
+API: c.add_kde_2d(aes(x='col', y='col'))
 
 Aesthetics:
-  color=             literal contour color OR column name → one density
-                     per level, single-colored (seaborn kdeplot hue)
-  palette=           maps levels → colors when `color=` is a column
+  color=             bare → literal contour color; aes(color="col") → one
+                     density per level, single-colored (seaborn kdeplot hue)
+  palette=           maps levels → colors when color is mapped in aes
 
 Styling kwargs:
   n_grid=60          KDE evaluation grid resolution (n × n)
@@ -21,7 +21,7 @@ Styling kwargs:
   fill=False         True fills the level regions (seaborn kdeplot fill=True)
                      instead of stroking iso-lines
   cmap=None          colormap name for coloring contours by level
-                     (mutually exclusive with column-driven color=)
+                     (mutually exclusive with aes-mapped color)
   alpha=None         fill opacity (fill=True only); defaults to 1 with cmap,
                      0.25 for a single-color fill so levels stack visibly
   linewidth=1.2      contour stroke width

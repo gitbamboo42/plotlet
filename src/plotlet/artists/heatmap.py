@@ -1,7 +1,7 @@
 """Heatmap artist — tidy/long input, continuous or categorical x.
 
 Input is a **tidy table** (dict-of-columns or DataFrame), like `scatter`:
-``c.add_heatmap(data=df, x="x", values=["a", "b"])``. Each table **row**
+``c.add_heatmap(aes(x="x"), values=["a", "b"])``. Each table **row**
 becomes one heatmap **column** (its x-position from the `x` column); each
 **value column** becomes one heatmap **row** (a track). `values=`
 picks/orders the tracks; by default every column except `x`/`sector` is a
@@ -16,7 +16,7 @@ Every cell feature is dtype-independent: NaN/None → `absent_fill`, cell
 borders, annotations, discrete `palette=`, and circular warp via
 `project=ctx.warp`.
 
-Sectors: pass `sector=` (a column of per-column group tags) with a
+Sectors: map `aes(sector=...)` (a column of per-column group tags) with a
 panel-level ``c.sectors(Sectors(...), axis="x", column=...)``. The
 framework's sector remap tags each column's x into its sector, and cell
 edges are grouped per sector so gaps fall between sector groups.

@@ -21,6 +21,7 @@ import math
 import pytest
 
 import plotlet as pt
+from plotlet import aes
 from plotlet.render.resolved_ir import (
     IRCoord,
     IRLayout,
@@ -120,7 +121,7 @@ def test_figure_ir_resolve_method():
     """`FigureIR.resolve()` — the method form on a hand-built IR."""
     data = {"x": [1, 2, 3], "y": [2.0, 3.1, 4.5]}
     c = pt.chart(data_width=200, data_height=140, title="t")
-    c.add_scatter(data=data, x="x", y="y")
+    c.add_scatter(data=data, mapping=aes(x="x", y="y"))
     via_method = pt.to_ir(c).resolve()
     # a lone chart resolves through its 1×1 layout wrapper; the panel
     # title lives on the leaf
@@ -133,10 +134,12 @@ def test_layout_title_projected():
     """A layout's figure-title band is visible in the resolved IR —
     `IRLayout.title`, last call wins, `None` when untitled."""
     def pair():
-        a = pt.chart({"x": [1.0, 2.0], "y": [3.0, 4.0]})
-        a.add_scatter(x="x", y="y")
-        b = pt.chart({"x": [1.0, 2.0], "y": [4.0, 3.0]})
-        b.add_line(x="x", y="y")
+        df = {"x": [1.0, 2.0], "y": [3.0, 4.0]}
+        a = pt.chart(df)
+        a.add_scatter(aes(x="x", y="y"))
+        df2 = {"x": [1.0, 2.0], "y": [4.0, 3.0]}
+        b = pt.chart(df2)
+        b.add_line(aes(x="x", y="y"))
         return a | b
 
     assert pt.to_ir(pair().title("first").title("Figure title")).resolve().root.title \
@@ -149,8 +152,9 @@ def test_projection_state_is_sparse():
     keys still at their default are omitted (reseeded at rehydration
     from `_default_state()`), and there are no duplicate curated
     views: `state` is the single copy."""
-    c = pt.chart({"x": [1.0, 2.0], "y": [3.0, 4.0]}, title="demo")
-    c.add_scatter(x="x", y="y")
+    df = {"x": [1.0, 2.0], "y": [3.0, 4.0]}
+    c = pt.chart(df, title="demo")
+    c.add_scatter(aes(x="x", y="y"))
     (panel,) = pt.to_ir(c).resolve().root.children
     assert panel.state["title"] == "demo"
     assert panel.state["artists"]
@@ -166,8 +170,9 @@ def test_themed_panel_round_trips_through_sparse_state():
     eliding at projection and reseeding at rehydration must both run
     under the panel's own theme. The SVG emitted from the projection
     must match the direct render byte for byte."""
-    c = pt.chart({"x": [1.0, 2.0], "y": [3.0, 4.0]}, theme="minimal")
-    c.add_scatter(x="x", y="y")
+    df = {"x": [1.0, 2.0], "y": [3.0, 4.0]}
+    c = pt.chart(df, theme="minimal")
+    c.add_scatter(aes(x="x", y="y"))
     ir = pt.to_ir(c)
     assert ir.resolve().to_svg() == ir.to_svg()
 
@@ -178,23 +183,27 @@ def test_themed_panel_round_trips_through_sparse_state():
 
 
 def _rect_chart():
-    c = pt.chart({"x": [1.0, 2.0, 3.0], "y": [2.0, 3.1, 4.5],
-                  "g": ["a", "b", "a"]}, title="pin")
-    c.add_scatter(x="x", y="y", color="g")
+    df = {"x": [1.0, 2.0, 3.0], "y": [2.0, 3.1, 4.5],
+          "g": ["a", "b", "a"]}
+    c = pt.chart(df, title="pin")
+    c.add_scatter(aes(x="x", y="y", color="g"))
     return c
 
 
 def _rect_layout():
-    a = pt.chart({"x": [1.0, 2.0], "y": [3.0, 4.0]})
-    a.add_scatter(x="x", y="y")
-    b = pt.chart({"x": [1.0, 2.0], "y": [4.0, 3.0]})
-    b.add_line(x="x", y="y")
+    df = {"x": [1.0, 2.0], "y": [3.0, 4.0]}
+    a = pt.chart(df)
+    a.add_scatter(aes(x="x", y="y"))
+    df2 = {"x": [1.0, 2.0], "y": [4.0, 3.0]}
+    b = pt.chart(df2)
+    b.add_line(aes(x="x", y="y"))
     return (a | b).title("pinned pair")
 
 
 def _circular():
-    c = pt.chart({"x": [1, 2, 3], "y": [1.0, 4.0, 9.0]})
-    c.add_scatter(x="x", y="y")
+    df = {"x": [1, 2, 3], "y": [1.0, 4.0, 9.0]}
+    c = pt.chart(df)
+    c.add_scatter(aes(x="x", y="y"))
     lay = pt.grid([[c]])
     lay.coordinate(pt.CircularCoordinate(r_inner=0.3))
     return lay
@@ -260,9 +269,11 @@ def test_resolved_ir_stable_under_render():
     keys (`_color`, hist `_bin_groups`) are stamped at resolve time, so
     a rendered ResolvedIR stays field-equal to a freshly built one."""
     def build():
-        c = pt.chart({"v": [1.0, 1.5, 2.0, 2.2, 3.0], "g": ["a"] * 3 + ["b"] * 2})
-        c.add_hist(x="v", fill="g")
-        c.add_scatter(data={"x": [1.0, 2.0], "y": [1.0, 2.0]}, x="x", y="y")
+        df = {"v": [1.0, 1.5, 2.0, 2.2, 3.0], "g": ["a"] * 3 + ["b"] * 2}
+        c = pt.chart(df)
+        c.add_hist(aes(x="v", fill="g"))
+        df2 = {"x": [1.0, 2.0], "y": [1.0, 2.0]}
+        c.add_scatter(data=df2, mapping=aes(x="x", y="y"))
         return pt.to_ir(c)
 
     rendered = pt.to_ir(build()).resolve()

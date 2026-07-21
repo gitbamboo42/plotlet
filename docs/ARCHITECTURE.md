@@ -78,8 +78,9 @@ defaults. `data_width`, `data_height` (px or unit strings; unread under
 a container coord, which sizes from its own geometry — e.g.
 `CircularCoordinate.data_diameter`), `margin` (dict with
 `left/right/top/bottom`), plus recorder-only state the render half
-ignores: `data` and chart-level aes (`x`, `y`, `color`, `palette`, ...)
-— those are already baked into the ops at record time.
+ignores: `data`, the chart-level `aes(...)` mapping, and literal
+defaults (`color`, `palette`, ...) — those are already baked into the
+ops at record time.
 
 **`legend`** — standalone legend leaf. Required: `canvas_width`,
 `canvas_height` (the canvas is the dimensional primitive; data dims are
@@ -100,9 +101,9 @@ for grid holes). Grids additionally require integer `grid_rows` /
 ### Ops are normalized calls
 
 An op is one recorded method call, **post**-normalization: chart-level
-aes and data injection already applied, `data=` normalized to the
-canonical table form — and **pre**-`spec.record`: the artist's `record()`
-runs at replay, not before. Artist `frame_defaults` are never present;
+`aes(...)` and data injection already applied, `data=` normalized to
+the canonical table form — and **pre**-`spec.record`: the artist's
+`record()` runs at replay, not before. Artist `frame_defaults` are never present;
 they regenerate inside `_replay` on every render.
 
 Op names are interpreted per kind:

@@ -14,16 +14,16 @@ Same call works in two coordinate setups:
   the disc boundary (``r = 1`` of the sub-coord = ``r_inner`` of the rings)
   and curve through the canvas center.
 
-Color follows the standard ``color="col"`` (categorical → palette) or
-``color="#hex"`` (literal) convention.
+Color follows the standard convention: ``aes(color="col")`` maps a
+column (categorical → palette); a bare ``color="#hex"`` is a literal.
 
 Sector handling:
 
 - **Intra-sector** links (both endpoints in the same sector): pass the
   sector tag once on the layout via ``c.sectors(spec, column="chrom")``;
   ``x1`` and ``x2`` both pick it up.
-- **Cross-sector** links: pass per-endpoint sector tags
-  ``x1_sector="src_chrom", x2_sector="dst_chrom"`` on the call. The
+- **Cross-sector** links: map per-endpoint sector-tag columns
+  ``aes(x1_sector="src_chrom", x2_sector="dst_chrom")`` on the call. The
   layout-level ``column=`` is then optional. ``x1_sector`` /
   ``x2_sector`` are consumed by the sector remap and never reach the
   artist.

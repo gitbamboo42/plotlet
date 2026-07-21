@@ -10,6 +10,7 @@ import math
 import random
 
 import plotlet as pt
+from plotlet import aes
 import pytest
 from _chart_helpers import _by_label, _dendro_sample, _tidy_heatmap
 
@@ -47,8 +48,7 @@ def chart_dendrogram_split():
     hm.sectors(_by_label(col_labels, col_groups), axis="x",
                divider=False, label=False)
     row_labels = [f"r{i+1}" for i in range(nrows_hm)]
-    hm.add_heatmap(data=_tidy_heatmap(matrix, col_labels, row_labels, xname="col"),
-               x="col", values=row_labels,
+    hm.add_heatmap(data=_tidy_heatmap(matrix, col_labels, row_labels, xname="col"), mapping=aes(x="col"), values=row_labels,
                cmap="viridis", legend={"label": "value"})
     hm.attach_above(tree)
     return pt.grid([[hm, pt.legend()]]).gap(0)
@@ -106,8 +106,7 @@ def chart_dendrogram_split_parent():
                divider=False, label=False)
     hm.sectors(_by_label(row_labels, row_groups), axis="y",
                divider=False, label=False)
-    hm.add_heatmap(data=_tidy_heatmap(matrix, col_labels, row_labels, xname="col"),
-               x="col", values=row_labels,
+    hm.add_heatmap(data=_tidy_heatmap(matrix, col_labels, row_labels, xname="col"), mapping=aes(x="col"), values=row_labels,
                cmap="viridis", legend={"label": "value"})
     hm.attach_above(top_c)
     hm.attach_left(left_d)

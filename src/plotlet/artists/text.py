@@ -1,8 +1,8 @@
 """Text-rendering artists — `text` for data-anchored labels, `annotate`
 for a label connected to a point by an arrow.
 
-  c.add_text(data=df, x="x", y="y", label="name")    # long-form (column names)
-  c.add_annotate("peak", xy=(3, 14.7))               # one-off label
+  c.add_text(aes(x="x", y="y", label="name"))    # columns via aes
+  c.add_annotate("peak", xy=(3, 14.7))           # one-off label
 
 Both render glyph paths from the bundled DejaVu Sans so output stays
 font-independent.

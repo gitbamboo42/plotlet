@@ -4,17 +4,17 @@ No per-render RNG — jitter offsets are derived from a splitmix64 hash of each
 point's indices so the SVG is byte-identical across runs.
 
 Long-form only:
-  c.add_strip(data=df, x="cat", y="value")
-  c.add_strip(data=df, x="cat", y="value", fill="group", palette={...})
+  c.add_strip(aes(x="cat", y="value"))
+  c.add_strip(aes(x="cat", y="value", fill="group"), palette={...})
 
-Long-form with `fill="col"` dodges sub-strips side-by-side within each cat and
+Mapping `aes(fill="col")` dodges sub-strips side-by-side within each cat and
 emits one legend entry per group level.
 
 Aesthetics:
-  fill=<col>/<literal>  point color (col = column-driven grouping, literal
-                        color string, or None for the cycle default)
+  fill=<literal>        bare literal point color (None = cycle default);
+                        aes(fill="col") → column-driven grouping
   color=<literal>       point outline (defaults to frame color when used)
-  palette=              maps group levels → fills when `fill=` is a column
+  palette=              maps group levels → fills when fill is mapped in aes
 
 Other styling kwargs:
   orientation='v'   'h' for horizontal (cats on y axis)
@@ -49,8 +49,8 @@ def _jitter_hash(*ints):
 
 
 def _resolve_fill_kwarg(data, fill):
-    """For strip/swarm: `fill=` accepts None, literal color, or column name.
-    Returns `(fill_literal, group_col)`."""
+    """For strip/swarm: `fill` is None, a bare literal color, or an
+    aes-mapped column. Returns `(fill_literal, group_col)`."""
     if fill is None:
         return None, None
     kind, value = resolve_aes(data, fill)

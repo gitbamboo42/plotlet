@@ -10,6 +10,7 @@ import math
 import random
 
 import plotlet as pt
+from plotlet import aes
 import pytest
 from _chart_helpers import _bar_quarterly_df
 
@@ -24,8 +25,8 @@ def chart_errorbar():
                 "lo": [0.2, 0.3, 0.2, 0.4, 0.3, 0.5],
                 "hi": [0.5, 0.4, 0.6, 0.3, 0.5, 0.4]}
     c = pt.chart(title="error bars", xlabel="x", ylabel="y", legend=True)
-    c.add_errorbar(data=df_meas, x="x", y="y", yerr="sd", label="measurement")
-    c.add_errorbar(data=df_model, x="x", y="y", yerr=("lo", "hi"),
+    c.add_errorbar(data=df_meas, mapping=aes(x="x", y="y", yerr="sd"), label="measurement")
+    c.add_errorbar(data=df_model, mapping=aes(x="x", y="y"), yerr=("lo", "hi"),
                marker="s", label="model")
     return c
 
@@ -37,7 +38,7 @@ def chart_errorbar_grouped():
     df["sd"] = [round(0.4 + 0.08 * v, 2) for v in df["value"]]
     c = pt.chart(data_width=320, data_height=200,
                  title="errorbar grouped (dodged)", ylabel="$M", legend=True)
-    c.add_errorbar(data=df, x="quarter", y="value", yerr="sd", color="series")
+    c.add_errorbar(data=df, mapping=aes(x="quarter", y="value", yerr="sd", color="series"))
     c.legend()
     return c
 

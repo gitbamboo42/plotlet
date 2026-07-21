@@ -1,11 +1,11 @@
 """Numeric-x bar.
 
-Sibling of the categorical `c.bar`: where `bar` places cats on a band
+Sibling of the categorical `c.add_bar`: where `bar` places cats on a band
 scale and takes bandwidth from the scale, `numeric_bar` anchors bars at
 *numeric* positions (e.g. genome coordinates, time-series with explicit
 numeric x) with a fixed data-unit `width` you control directly.
 
-  c.add_numeric_bar(data=df, x='col', y='col', width=0.8, ...)
+  c.add_numeric_bar(aes(x='col', y='col'), width=0.8, ...)
 """
 
 from ..registry import ArtistSpec, add_artist, declare_coord_support

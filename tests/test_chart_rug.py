@@ -10,6 +10,7 @@ import math
 import random
 
 import plotlet as pt
+from plotlet import aes
 import pytest
 
 
@@ -18,8 +19,10 @@ def chart_rug():
     vals = [rng.gauss(0, 1) for _ in range(150)]
     c = pt.chart(data_width=300, data_height=200,
                  title="density + rug", xlabel="value", ylabel="density")
-    c.add_density_1d(data={"x": vals}, x="x", fill=True)
-    c.add_rug(data={"x": vals}, x="x", color="#444444")
+    df = {"x": vals}
+    c.add_density_1d(data=df, mapping=aes(x="x"), fill=True)
+    df2 = {"x": vals}
+    c.add_rug(data=df2, mapping=aes(x="x"), color="#444444")
     return c
 
 

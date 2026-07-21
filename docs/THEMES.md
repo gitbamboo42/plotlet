@@ -14,25 +14,26 @@ font color. plotlet ships four:
 
 ```python
 import plotlet as pt
+from plotlet import aes
 
-c = pt.chart(theme="dark", title="hits per minute",
+c = pt.chart(df, aes(x="t"), theme="dark", title="hits per minute",
              xlabel="t", ylabel="hits", legend=True)
-c.add_line(data=df, x="t", y="A", label="A")
-c.add_line(data=df, x="t", y="B", label="B")
+c.add_line(aes(y="A"), label="A")
+c.add_line(aes(y="B"), label="B")
 ```
 
 Or chained — `theme` is just a frame method like `title` / `xlabel`:
 
 ```python
-c = pt.chart().theme("minimal").title("residuals").add_line(data=df, x="x", y="resid")
+c = pt.chart().theme("minimal").title("residuals").add_line(df, aes(x="x", y="resid"))
 ```
 
 The theme only affects the chart it's set on. Multi-panel layouts may
 mix themes per leaf:
 
 ```python
-a = pt.chart(theme="minimal", title="raw").add_line(xs, ys)
-b = pt.chart(theme="dark",    title="model").add_line(xs, fits)
+a = pt.chart(theme="minimal", title="raw").add_line(df, aes(x="t", y="raw"))
+b = pt.chart(theme="dark",    title="model").add_line(df, aes(x="t", y="fit"))
 fig = a | b
 ```
 
@@ -98,7 +99,7 @@ pt.register_theme("paper", {
     "grid": {"color": "#dddddd", "default_on": True},
     "font": {"color": "#222222"},
 })
-c = pt.chart(theme="paper").add_line(xs, ys)
+c = pt.chart(theme="paper").add_line(df, aes(x="x", y="y"))
 ```
 
 Or as a JSON file you ship in your project:

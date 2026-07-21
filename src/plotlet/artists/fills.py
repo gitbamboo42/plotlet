@@ -1,11 +1,12 @@
 """Filled-region artists over x/y series.
 
 `fill_between` fills between two curves (`y1` and `y2` columns over a
-shared `x`). `area` stacks rows over `x`, optionally grouped by `fill=`.
+shared `x`). `area` stacks rows over `x`, optionally grouped by
+`aes(fill=...)`.
 
-  c.add_fill_between(data=df, x="x", y1="lo", y2="hi", fill="C0")  # band
-  c.add_area(data=df, x="x", y="y")                                # single
-  c.add_area(data=df, x="x", y="y", fill="series")                 # stacked
+  c.add_fill_between(aes(x="x", y1="lo", y2="hi"), fill="C0")  # band
+  c.add_area(aes(x="x", y="y"))                                # single
+  c.add_area(aes(x="x", y="y", fill="series"))                 # stacked
 """
 from ..registry import ArtistSpec, add_artist
 from ..utils import (pack_opts, to_list, resolve_aes,

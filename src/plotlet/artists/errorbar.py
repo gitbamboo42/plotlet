@@ -1,19 +1,21 @@
 """Points with vertical (and/or horizontal) error bars and optional caps.
 
 Long-form table input:
-  c.add_errorbar(data=df, x="cat", y="mean", yerr="sd")            # offset (sym)
-  c.add_errorbar(data=df, x="cat", y="mean", yerr=0.5)             # scalar offset
-  c.add_errorbar(data=df, x="cat", y="mean", yerr=("lo", "hi"))     # offset (asym)
-  c.add_errorbar(data=df, x="cat", y="mean", ymin="lo", ymax="hi")  # absolute bounds
-  c.add_errorbar(data=df, x="t", y="mean", xerr="terr", yerr="sd")  # both axes
-  c.add_errorbar(data=df, x="cat", y="mean", yerr="sd", color="series")  # grouped
+  c.add_errorbar(aes(x="cat", y="mean", yerr="sd"))             # offset (sym)
+  c.add_errorbar(aes(x="cat", y="mean"), yerr=0.5)              # scalar offset
+  c.add_errorbar(aes(x="cat", y="mean"), yerr=("lo", "hi"))     # offset (asym)
+  c.add_errorbar(aes(x="cat", y="mean", ymin="lo", ymax="hi"))  # absolute bounds
+  c.add_errorbar(aes(x="t", y="mean", xerr="terr", yerr="sd"))  # both axes
+  c.add_errorbar(aes(x="cat", y="mean", yerr="sd", color="series"))  # grouped
 
-`yerr=` / `xerr=` accept a column name, a scalar, or a `(lower, upper)`
-tuple of column names or scalars for asymmetric bars. `ymin=`/`ymax=`
-(and `xmin=`/`xmax=`) take column names for absolute bounds and are
-mutually exclusive with the matching `*err=`.
+`yerr` / `xerr`: a single column maps in aes; an asymmetric
+`(lower, upper)` tuple of column names stays a bare kwarg (aes takes
+single column names only) and each element is read off the data.
+A bare scalar (or scalar tuple) is a literal offset. `ymin`/`ymax`
+(and `xmin`/`xmax`) map columns in aes for absolute bounds and are
+mutually exclusive with the matching `*err`.
 
-`color=` may be a literal color or a column name. Column → one series
+A bare `color=` is a literal color; `aes(color="col")` → one series
 per level (palette= maps levels to colors), and on a categorical axis
 the series dodge within each band. `width=0.8` / `gap=0.1` are the same
 band fractions as bar's, so a dodged errorbar lands on the same slot
@@ -99,8 +101,8 @@ def _errorbar_record(data=None,
     if marker is not UNSET:
         opts["marker"] = marker
 
-    # `color=` may be a literal color or a column name; column → grouped
-    # multi-series (one nested row list per level).
+    # `color` is a literal when passed bare, a column when mapped via
+    # aes; column → grouped multi-series (one nested row list per level).
     color_kind, _ = resolve_aes(data, color)
     if color_kind != "column":
         if color is not None:

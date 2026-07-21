@@ -1,19 +1,19 @@
 """Tukey-style box-and-whisker: Q1-Q3 box, median line, 1.5*IQR whiskers, outlier dots.
 
 Long-form only:
-  c.add_boxplot(data=df, x="cat", y="value")
-  c.add_boxplot(data=df, x="cat", y="value", fill="group", palette={...})
+  c.add_boxplot(aes(x="cat", y="value"))
+  c.add_boxplot(aes(x="cat", y="value", fill="group"), palette={...})
 
-Long-form with `fill="col"` dodges sub-boxes side-by-side within each cat and
-emits one legend entry per group level. A literal `fill="#hex"` paints every
-box the same color; `fill=False` leaves them outline-only.
+Mapping `aes(fill="col")` dodges sub-boxes side-by-side within each cat and
+emits one legend entry per group level. A bare literal `fill="#hex"` paints
+every box the same color; `fill=False` leaves them outline-only.
 
 Aesthetics:
-  fill=True/<col>/<literal>/False  body fill (True = palette/cycle default,
-                                   col = column-driven grouping, literal
-                                   color string, or False for outline-only)
+  fill=True/<literal>/False        body fill (True = palette/cycle default,
+                                   bare literal color string, or False for
+                                   outline-only); aes(fill="col") → grouping
   color=<literal>      box / whisker / cap stroke (defaults to frame color)
-  palette=             maps group levels → fills when `fill=` is a column
+  palette=             maps group levels → fills when fill is mapped in aes
 
 Other styling kwargs:
   orientation='v'       'h' for horizontal (cats on y axis)
@@ -47,8 +47,9 @@ def _resolve_fill_kwarg(data, fill):
     did not pass a literal) and `group_col` is a column name (None when
     fill is not column-driven).
 
-    `fill=True` → defaults; `fill=False` → outline-only; literal string →
-    same color for every box; column name → drives grouping."""
+    `fill=True` → defaults; `fill=False` → outline-only; bare literal
+    string → same color for every box; aes-mapped column → drives
+    grouping."""
     if fill is False or fill is None:
         return False, None, None
     if fill is True:

@@ -7,12 +7,13 @@ CI options:
   ci=None    -> no CI, just points and connectors.
 
 API (long-form only):
-  c.add_pointplot(data=df, x="cat", y="value")
-  c.add_pointplot(data=df, x="cat", y="value", color="group")   # one series per level
+  c.add_pointplot(aes(x="cat", y="value"))
+  c.add_pointplot(aes(x="cat", y="value", color="group"))   # one series per level
 
 Aesthetics:
-  color=             literal color OR column name → one series per level
-  palette=           maps levels → colors when `color=` is a column
+  color=             bare → literal color; aes(color="col") → one series
+                     per level
+  palette=           maps levels → colors when color is mapped in aes
 
 Styling kwargs:
   estimator='mean'   'median' for the central tendency

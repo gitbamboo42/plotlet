@@ -177,11 +177,17 @@ def to_journal(root) -> Journal:
         # Late import to avoid a cycle with chart.py at module load.
         from .chart import _Renderable
         from ..sectors import Sectors
+        from ..utils import Aes
         if isinstance(value, _Renderable):
             _append_node(value)
             return {"$node": _nid_of(value)}
         if isinstance(value, Sectors):
             return {"$sectors": _encode(value._to_dict())}
+        if isinstance(value, Aes):
+            # A facet's recorded calls carry aes(...) containers raw
+            # (its recorder stores calls verbatim); envelope them so
+            # replay rebuilds an Aes, not a plain dict.
+            return {"$aes": dict(value)}
         from .._coord_registry import _COORD_REGISTRY
         if type(value).__name__ in _COORD_REGISTRY:
             return {
@@ -268,13 +274,16 @@ def to_journal(root) -> Journal:
 
     def _append_chart(chart, nid: int) -> None:
         aes = {k: v for k, v in chart._aes.items() if v is not None}
-        journal.append("new_chart", nid, kwargs={
+        kwargs = {
             "data": chart._data,
             "data_width": chart._orig_data_width,
             "data_height": chart._orig_data_height,
             "margin": dict(chart._margin),
             **aes,
-        })
+        }
+        if chart._aes_map:
+            kwargs["mapping"] = dict(chart._aes_map)
+        journal.append("new_chart", nid, kwargs=kwargs)
 
     def _append_leaf(leaf, nid: int) -> None:
         # Non-data leaves — legend and diagram. Constructor state that

@@ -5,17 +5,18 @@ standard normal; pass a `scipy.stats` distribution (or another sample)
 for an arbitrary reference.
 
 API:
-  c.add_qq(data=df, sample="col")                    # vs N(0, 1)
-  c.add_qq(data=df, sample="col", dist=other)        # two-sample / scipy RV
-  c.add_qq(data=df, sample="col", color="group")     # one series per level
+  c.add_qq(aes(sample="col"))                    # vs N(0, 1)
+  c.add_qq(aes(sample="col"), dist=other)        # two-sample / scipy RV
+  c.add_qq(aes(sample="col", color="group"))     # one series per level
 
 The dashed reference line passes through the 0.25/0.75 quantile pair —
 robust to outliers in the tails. Ungrouped it stays neutral gray; with
-`color=` grouping each group's line takes the group color.
+`aes(color=...)` grouping each group's line takes the group color.
 
 Aesthetics:
-  color=          literal point color OR column name → one series per level
-  palette=        maps levels → colors when `color=` is a column
+  color=          bare → literal point color; aes(color="col") → one
+                  series per level
+  palette=        maps levels → colors when color is mapped in aes
 
 Styling kwargs:
   dist="normal"   "normal" | another sample | scipy.stats RV

@@ -1,24 +1,23 @@
 """Scatter — single-series xy.
 
-  c.add_scatter(data=df, x="col_x", y="col_y")                # long-form
-  c.add_scatter(data=df, x="col_x", y="col_y", color="red")   # literal color
-  c.add_scatter(data=df, ..., color="group")                  # categorical → palette
-  c.add_scatter(data=df, ..., color="weight")                 # numeric col → cmap
-  c.add_scatter(data=df, ..., color="g", group="subject")     # invisible finer split
-  c.add_scatter(data=df, ..., alpha="cohort",                 # opacity per level
+  c.add_scatter(aes(x="col_x", y="col_y"))                 # columns via aes
+  c.add_scatter(aes(x="col_x", y="col_y"), color="red")    # literal color
+  c.add_scatter(aes(..., color="group"))                   # categorical → palette
+  c.add_scatter(aes(..., color="weight"))                  # numeric col → cmap
+  c.add_scatter(aes(..., color="g", group="subject"))      # invisible finer split
+  c.add_scatter(aes(..., alpha="cohort"),                  # opacity per level
             alphas=(0.3, 1.0))
-  c.add_scatter(data=df, ..., size=3)                         # fixed marker radius (px)
-  c.add_scatter(data=df, ..., size="mass", sizes=(2, 7))      # graded per-point radius
-  c.add_scatter(data=df, ..., style="group")                  # per-level marker glyph
+  c.add_scatter(aes(...), size=3)                          # fixed marker radius (px)
+  c.add_scatter(aes(..., size="mass"), sizes=(2, 7))       # graded per-point radius
+  c.add_scatter(aes(..., style="group"))                   # per-level marker glyph
 
-`color=` dispatches on the value:
-  * not-a-column string → literal color
-  * column with all-numeric values → continuous cmap (cmap/vmin/vmax/norm)
-  * column with any non-numeric value → categorical palette
+`color="red"` (bare) is always a literal color. `aes(color="col")` maps
+the column: all-numeric values → continuous cmap (cmap/vmin/vmax/norm),
+any non-numeric value → categorical palette.
 To force a numeric column to be treated as categorical, cast to strings
 first: `df["clusters"] = df["clusters"].astype(str)`.
 
-Column-driven categorical splitting (`color`/`group`/`alpha`) is handled
+Column-driven categorical splitting (`color`/`group`/`alpha` in aes) is handled
 at the Chart layer — the artist itself always sees one series per record.
 `size`/`style` are computed per-point and stay inside a single record.
 Continuous color is single-record-only — `group`/`alpha` column splits
@@ -218,7 +217,7 @@ def _resolve_c_range(c_vals, opts):
 
 
 def _is_continuous(values):
-    """Dispatch rule for `color=<col>`: True iff every non-missing value
+    """Dispatch rule for `aes(color="col")`: True iff every non-missing value
     is a real number (not bool). NaN tolerated; all-NaN or empty falls
     back to categorical (safer — avoids degenerate cmap)."""
     saw_num = False
@@ -258,8 +257,8 @@ def _scatter_record(data=None,
                      center=center, size_legend=size_legend,
                      label=label, legend=legend)
 
-    # Resolve `size=`: number/list → literal pixel radius into opts["size"];
-    # column name → keep as `size` for the column-mapping path below.
+    # Resolve `size=`: literal number/list → pixel radius into opts["size"];
+    # aes-mapped column → keep as `size` for the column-mapping path below.
     if size is not None:
         size_kind, size_value = resolve_aes(data, size)
         if size_kind == "column":

@@ -14,6 +14,7 @@ All three return a parent **`Layout`** — it renders, saves, and composes like 
 
 ```python
 import plotlet as pt
+from plotlet import aes
 
 # Single row
 fig = a | b | c
@@ -30,7 +31,7 @@ hm.sectors(col_clusters, axis="x", divider=False, label=False)
 hm.sectors(row_clusters, axis="y", divider=False, label=False)
 # tidy input: `sample` column holds the x labels (one row per heatmap
 # column), each gene column is a value track.
-hm.add_heatmap(data=df, x="sample", values=genes, ...)
+hm.add_heatmap(df, aes(x="sample"), values=genes, ...)
 hm.attach_above(top_strip, top_tree)   # strip closest to host, tree above
 hm.attach_left(left_strip, left_tree)
 fig = pt.grid([[hm, pt.legend()]])

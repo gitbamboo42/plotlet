@@ -3,14 +3,14 @@
 Better than overlaid `hist` calls when comparing two or more distributions
 — no fill-blocking, no semi-transparent muddle.
 
-  c.add_freqpoly(data=df, x="col")                       # long-form
-  c.add_freqpoly(data=df, x="col", color="group")        # one polygon per group
+  c.add_freqpoly(aes(x="col"))                       # columns via aes
+  c.add_freqpoly(aes(x="col", color="group"))        # one polygon per group
 
 Multi-group overlays share bin edges so the polygons are comparable.
 
 Aesthetics:
-  color=         line color (literal) or column name → grouped polygons
-  palette=       maps group levels → colors when `color=` is a column
+  color=         bare → literal line color; aes(color="col") → grouped polygons
+  palette=       maps group levels → colors when color is mapped in aes
 
 Other styling kwargs:
   bins=20         number of bins

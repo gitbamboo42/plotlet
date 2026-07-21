@@ -10,6 +10,7 @@ import math
 import random
 
 import plotlet as pt
+from plotlet import aes
 import pytest
 
 
@@ -20,8 +21,10 @@ def chart_freqpoly():
     c = pt.chart(data_width=300, data_height=200,
                  title="frequency polygon", xlabel="value", ylabel="count",
                  legend=True)
-    c.add_freqpoly(data={"x": a}, x="x", bins=25, label="control")
-    c.add_freqpoly(data={"x": b}, x="x", bins=25, label="treatment")
+    df = {"x": a}
+    c.add_freqpoly(data=df, mapping=aes(x="x"), bins=25, label="control")
+    df2 = {"x": b}
+    c.add_freqpoly(data=df2, mapping=aes(x="x"), bins=25, label="treatment")
     c.legend()
     return c
 

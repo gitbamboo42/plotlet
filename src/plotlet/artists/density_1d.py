@@ -4,13 +4,13 @@ Where `hist` answers "how many in each bin?", `density_1d` answers
 "what's the smoothed distribution shape?" — bin-free, scaled so the
 area integrates to 1 so you can overlay multiple groups fairly.
 
-  c.add_density_1d(data=df, x="col")                      # long-form
-  c.add_density_1d(data=df, x="col", color="group")       # one curve per group
+  c.add_density_1d(aes(x="col"))                      # columns via aes
+  c.add_density_1d(aes(x="col", color="group"))       # one curve per group
 
 Aesthetics:
-  color=         line color (literal) or column name → grouped curves
+  color=         bare → literal line color; aes(color="col") → grouped curves
   fill=False     True shades the area under each curve in the line color
-  palette=       maps group levels → colors when `color=` is a column
+  palette=       maps group levels → colors when color is mapped in aes
 
 Other styling kwargs:
   bw=None        bandwidth override; defaults to Silverman's rule

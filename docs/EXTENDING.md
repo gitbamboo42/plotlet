@@ -14,6 +14,7 @@ package — both are good references.
 
 ```python
 import plotlet as pt
+from plotlet import aes
 from plotlet.utils import to_list, pack_opts
 from plotlet.draw import segment, circle
 
@@ -24,7 +25,12 @@ from plotlet.draw import segment, circle
 #    parameter list IS your artist's kwarg vocabulary, so Python itself
 #    rejects a typo like `c.add_lollipop(..., widht=2)` at render, and
 #    `c.lollipop?` shows the real parameters. `data=` first lets a caller
-#    pass the table positionally (`c.add_lollipop(df, x=, y=)`). Style kwargs
+#    pass the table positionally (`c.add_lollipop(df, aes(x=, y=))`). The
+#    user's `aes(...)` (the reserved `mapping` kwarg) is merged into
+#    plain kwargs as aes-tagged strings before record() runs, so
+#    `data[x]` indexes the column as before. For a kwarg that may be a
+#    column or a literal, `resolve_aes(data, value)` classifies:
+#    aes-tagged → column values, anything else → literal. Style kwargs
 #    the record doesn't consume go into `opts` via `pack_opts` (which
 #    drops the None defaults, so the draw side's `.get(k, default)` still
 #    falls through to your defaults).
@@ -66,9 +72,9 @@ pt.add_artist(pt.ArtistSpec(
     record=my_record, xdomain=my_xdomain, ydomain=my_ydomain, draw=my_draw,
 ))
 
+df = {"x": [1, 2, 3, 4, 5], "y": [3, 7, 2, 9, 4]}
 c = pt.chart()
-c.add_lollipop({"x": [1, 2, 3, 4, 5], "y": [3, 7, 2, 9, 4]},
-           x="x", y="y", label="A")
+c.add_lollipop(df, aes(x="x", y="y"), label="A")
 c.title("Lollipop chart").gridlines(True).legend(True).save_svg("out.svg")
 ```
 
@@ -136,7 +142,7 @@ behavior. What each opt-in is *for*:
 
 | Field | When you need it |
 |---|---|
-| `accepts_data_positional` | Default `True` — enables the `c.add_<artist>(df, x=, y=)` sugar that hoists a single positional arg into `kw["data"]`. Set `False` for matrix-input or single-primary-input artists (`heatmap`, `imshow`, `axhline`, `annotate`) so their `args[0]` doesn't get swallowed. Multi-positional artists (rect, polygon, …) are unaffected either way because the sugar only triggers on `len(args) == 1`. |
+| `accepts_data_positional` | Default `True` — enables the `c.add_<artist>(df, aes(x=, y=))` sugar that hoists a single positional arg into `kw["data"]`. Set `False` for matrix-input or single-primary-input artists (`heatmap`, `imshow`, `axhline`, `annotate`) so their `args[0]` doesn't get swallowed. Multi-positional artists (rect, polygon, …) are unaffected either way because the sugar only triggers on `len(args) == 1`. |
 | `xdomain` / `ydomain` | Your artist's data should drive axis limits. Return `None` for decorative artists (axhline, axvline). |
 | `xdomain_log` / `ydomain_log` | Domain contribution under a **log** scale when it must differ from the plain hook — e.g. a CI band whose non-positive bounds would poison a log domain. `None` (default) → the plain hook serves every scale kind. |
 | `layer` | `"background"` for fills (drawn first), `"foreground"` for reference lines (drawn last). Default `"data"`. |

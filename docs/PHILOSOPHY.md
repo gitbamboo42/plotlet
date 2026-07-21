@@ -23,10 +23,11 @@ making the per-extension cost low.
   modification, since the partition lives on the panel and reshapes
   `x_scale`/`y_scale`. Unifies multi-track layouts and heatmap row /
   column clusters under one concept.
-- Long-form input (`data=df, x=, y=, color=`/`fill=`) for table-shaped
-  marks across the standard vocabulary — a data frame plus column
-  names is the primary entry point. Matrix and shape marks (heatmap,
-  imshow, contour, dendrogram, refline/refspan, rect/polygon) take
+- Long-form input (a data table plus an explicit `aes(x=, y=,
+  color=/fill=)` column mapping; bare kwargs stay literal) for
+  table-shaped marks across the standard vocabulary — a data frame
+  plus `aes(...)` is the primary entry point. Matrix and shape marks
+  (imshow, contour, dendrogram, refline/refspan, rect/polygon) take
   their natural positional input.
 - The standard plotting vocabulary:
   - **xy:** scatter, line, regression

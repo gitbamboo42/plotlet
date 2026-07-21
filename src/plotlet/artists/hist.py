@@ -1,23 +1,23 @@
 """Histogram — binned counts of a 1-D distribution.
 
-  c.add_hist(data=df, x="col")                          # long-form
-  c.add_hist(data=df, x="col", fill="group")            # overlaid by group
-  c.add_hist(data=df, x="col", fill="group", position="stack")
+  c.add_hist(aes(x="col"))                          # columns via aes
+  c.add_hist(aes(x="col", fill="group"))            # overlaid by group
+  c.add_hist(aes(x="col", fill="group"), position="stack")
 
 Multi-group calls share bin edges so the bars are comparable and the
 positions line up.
 
 Aesthetics:
-  fill=         constant color OR column name → grouped multi-series
+  fill=         bare → constant color; aes(fill="col") → grouped multi-series
   color=        stroke color (constant, default None = no stroke)
-  palette=      maps group levels → colors when `fill=` is a column
+  palette=      maps group levels → colors when fill is mapped in aes
 
 Binning:
   bins=10             number of bins, or an explicit edge sequence
   binwidth=           fixed bin width (instead of a count)
   binrange=(lo, hi)   span to bin over; values outside are dropped
-  weights=            column name or sequence — sums weights per bin
-                      instead of counting rows
+  weights=            aes(weights="col") or a literal sequence — sums
+                      weights per bin instead of counting rows
 
 Stats:
   density=False       True normalises so area under each set of bars is 1

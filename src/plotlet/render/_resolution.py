@@ -33,6 +33,7 @@ from ..draw import resolve_color, TAB10
 from ..scales import (_nice_domain, _fmt_tick, _to_epoch,
                       _coerce_time_lim, _AxisDescriptor)
 from ..sectors import SectoredValue
+from ..utils import ColumnRef
 from ..draw import measure_text, text_block_height
 from . import _chrome_bands
 from ._chrome_visibility import resolve_axis_chrome
@@ -269,6 +270,20 @@ def _sector_remap_data(call_kw, state):
     return call_kw
 
 
+def _merge_aes(call):
+    """Fold an artist entry's reserved "mapping" kwarg (plain strings in
+    the journal) into its kwargs as `ColumnRef`-tagged strings — one
+    kwarg namespace from here on, and `resolve_aes` reads the tag
+    instead of sniffing the data. No-op for frame ops and unmapped
+    entries."""
+    if get_artist(call[0]) is None or "mapping" not in call[2]:
+        return call
+    kw = dict(call[2])
+    for k, v in kw.pop("mapping").items():
+        kw[k] = ColumnRef(v)
+    return (call[0], call[1], kw, *call[3:])
+
+
 def _expand_frame_defaults(calls):
     """Insert each artist's `frame_defaults` entries immediately before
     the artist call itself, tagged with a trailing `True` so
@@ -278,9 +293,15 @@ def _expand_frame_defaults(calls):
 
     Defaults regenerate here on every replay rather than being recorded —
     `_calls` and the journal carry only user actions. Returns a new list;
-    the input is never mutated."""
+    the input is never mutated.
+
+    Also folds each artist entry's reserved "aes" kwarg into its kwargs
+    (`_merge_aes`) — this runs first on every replay path (`_replay`,
+    the circular layout's tick scan), so `frame_defaults` hooks and
+    `record()` always see the merged kwarg namespace."""
     out = []
     for call in calls:
+        call = _merge_aes(call)
         spec = get_artist(call[0])
         if spec is not None and spec.frame_defaults is not None:
             for d in spec.frame_defaults(list(call[1]), dict(call[2])) or ():
@@ -440,8 +461,8 @@ def _record_artist(state, spec, args, kw):
             "coordinate= is not accepted on artist calls. "
             "Use c.coordinate(...) once per panel instead."
         )
-    # First-positional-is-data sugar: `c.add_line(df, x=, y=)` is the
-    # same as `c.add_line(data=df, x=, y=)`. Opt-in via
+    # First-positional-is-data sugar: `c.add_line(df, aes(x=, y=))` is the
+    # same as `c.add_line(data=df, mapping=aes(x=, y=))`. Opt-in via
     # `ArtistSpec.accepts_data_positional=True`. Keeps the long-form
     # call shape from carrying a `data=` keyword on every site;
     # multi-positional shapes (e.g. `(xs, ys)`) are rejected by

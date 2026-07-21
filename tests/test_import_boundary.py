@@ -64,7 +64,7 @@ def test_rendering_loads_the_render_half_lazily():
         "import sys\n"
         "import plotlet as pt\n"
         "c = pt.chart({'x': [1, 2], 'y': [3, 4]})\n"
-        "c.add_scatter(x='x', y='y')\n"
+        "c.add_scatter(pt.aes(x='x', y='y'))\n"
         "c.to_svg()\n"
         "assert 'plotlet.render' in sys.modules\n"
     )
@@ -83,7 +83,8 @@ def test_coord_envelope_decodes_in_a_fresh_process(tmp_path):
     import plotlet as pt
 
     c = pt.chart(data_width=300, data_height=300)
-    c.add_scatter(data={"x": [1, 2, 3], "y": [4, 5, 6]}, x="x", y="y")
+    df = {"x": [1, 2, 3], "y": [4, 5, 6]}
+    c.add_scatter(data=df, mapping=pt.aes(x="x", y="y"))
     lay = pt.grid([[c]])
     lay.coordinate(pt.CircularCoordinate(r_inner=0.3))
     blob = json.dumps(pt.to_ir(lay).to_dict())

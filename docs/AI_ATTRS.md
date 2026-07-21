@@ -137,10 +137,12 @@ add_artist(ArtistSpec(
 
 ```python
 import plotlet as pt
+from plotlet import aes
+
+df = {"day": [1, 2, 3, 4], "usd": [10.5, 12.3, 11.0, 14.7]}
 c = pt.chart()
 c.title("Daily revenue").xlabel("day").ylabel("USD")
-c.add_line(data={"day": [1, 2, 3, 4], "usd": [10.5, 12.3, 11.0, 14.7]},
-       x="day", y="usd", label="actual")
+c.add_line(df, aes(x="day", y="usd"), label="actual")
 print(c.to_svg())
 ```
 

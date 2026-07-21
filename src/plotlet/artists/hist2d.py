@@ -6,7 +6,7 @@ rectangular bins under explicit binwidth control. Cells with no points
 stay transparent (the `geom_bin2d` convention, and it keeps a sparse
 scatter readable).
 
-API: c.add_hist2d(data=df, x="col", y="col")
+API: c.add_hist2d(aes(x="col", y="col"))
 
 Binning (scalar applies to both axes; an (x, y) pair sets them apart):
   bins=30             bin count per axis; an explicit edge sequence, or an

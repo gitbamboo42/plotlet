@@ -46,7 +46,7 @@ import resvg_py
 
 from .._spec import _SIZESPEC, _MARGIN_FLOOR
 from .._tree import compute_share_classes, normalize_share_mode
-from ..utils import _to_px, _normalize_data, _data_has_column
+from ..utils import _to_px, _normalize_data, _data_has_column, Aes
 from ..registry import get_artist, all_artist_names
 
 
@@ -76,6 +76,11 @@ def _svg_size(svg: str) -> tuple[int, int]:
     if m is None:
         raise ValueError("could not read width/height off the SVG root tag")
     return int(m.group(1)), int(m.group(2))
+
+
+# `Aes` / `aes` live in utils (neutral vocabulary) so the journal
+# encoder and `_json_layer._decode` can envelope them without importing
+# the record half.
 
 
 def _svg_to_png(svg: str, *, scale: float = 1.0) -> bytes:
@@ -304,6 +309,7 @@ class Chart(_Renderable):
                  data_width: int | float | str | None = None,
                  data_height: int | float | str | None = None,
                  margin: dict | None = None,
+                 mapping: dict | None = None,
                  x: str | None = None, y: str | None = None,
                  fill: str | None = None,
                  color: str | None = None,
@@ -355,7 +361,11 @@ class Chart(_Renderable):
         # so JSON serialization has nothing to envelope.
         self._data = _normalize_data(data)
         # Chart-level aesthetic defaults inherited by artist calls — set
-        # once at chart construction, overridden by per-artist kwargs.
+        # once at chart construction, overridden by per-artist values.
+        # Two pools: `_aes_map` holds column mappings from a chart-level
+        # `mapping=aes(...)`; `_aes` holds literal defaults from bare
+        # kwargs.
+        self._aes_map = dict(mapping) if mapping else {}
         self._aes = {"x": x, "y": y,
                      "fill": fill, "color": color, "group": group,
                      "linestyle": linestyle,
@@ -549,29 +559,65 @@ class Chart(_Renderable):
                             f"{self._leaf_kind} leaves don't take artists — "
                             f"draw {name}() on a pt.chart() and compose the two."
                         )
-                    # Chart-level aesthetic inheritance — fill in missing aes
-                    # from `pt.chart(df, x=, y=, color=, palette=)`. The
+                    # aes containers arrive positionally; fold them into
+                    # Column mappings arrive as `mapping=aes(...)` (or a
+                    # positional aes(...), ggplot-style); fold them into
+                    # the reserved "mapping" entry of the recorded
+                    # kwargs. "mapping" is reserved — no artist kwarg
+                    # may use it for anything else.
+                    aes_map = {}
+                    m = kwargs.pop("mapping", None)
+                    if m is not None:
+                        if not isinstance(m, (Aes, dict)):
+                            raise TypeError(
+                                f"c.{name}(mapping=...) takes aes(...); "
+                                f"got {type(m).__name__}."
+                            )
+                        aes_map.update(m)
+                    rest = []
+                    for a in args:
+                        if isinstance(a, Aes):
+                            dup = set(a) & set(aes_map)
+                            if dup:
+                                raise TypeError(
+                                    f"c.{name}(...): {sorted(dup)} mapped "
+                                    f"in more than one aes(...)."
+                                )
+                            aes_map.update(a)
+                        else:
+                            rest.append(a)
+                    args = tuple(rest)
+                    clash = set(aes_map) & set(kwargs)
+                    if clash:
+                        raise TypeError(
+                            f"c.{name}(...): {sorted(clash)} passed both "
+                            f"inside aes(...) and as a bare kwarg — pick one."
+                        )
+                    # Chart-level aesthetic inheritance — fill in what the
+                    # call didn't set: column mappings from the chart's
+                    # aes(...), literal defaults from its bare kwargs. The
                     # record signature declares the artist's kwarg names
                     # (`__kwarg_names__`, stamped by `add_artist`); only
                     # inject aes the artist can accept, since its
                     # signature would otherwise reject an unknown name.
                     known = getattr(spec.record, "__kwarg_names__", None)
+                    for k, v in self._aes_map.items():
+                        if (k not in aes_map and k not in kwargs
+                                and (known is None or k in known)):
+                            aes_map[k] = v
                     for k, v in self._aes.items():
                         if (v is not None and k not in kwargs
+                                and k not in aes_map
                                 and (known is None or k in known)):
                             kwargs[k] = v
-                    # Data injection — inject the chart-level table when any
-                    # kwarg value names a column on it. Generic by design:
-                    # artists declare their column-referencing kwargs by
-                    # naming convention (string-valued kwarg → column ref),
-                    # so adding a new artist with new endpoint kwargs needs
-                    # no edit here.
+                    # Data injection — a call that maps columns via
+                    # aes(...) draws from the chart-level table.
                     if (self._data is not None and "data" not in kwargs
                             and (known is None or "data" in known)
-                            and any(_data_has_column(self._data, v)
-                                    for v in kwargs.values()
-                                    if isinstance(v, str))):
+                            and aes_map):
                         kwargs["data"] = self._data
+                    if aes_map:
+                        kwargs["mapping"] = dict(aes_map)
                     # Normalize any user-passed `data=` (chart._data is
                     # already normalized in __init__; idempotent no-op
                     # for that path). Positional args get the same
@@ -1066,7 +1112,7 @@ class Layout(_Renderable):
                     f"{self._layout_kind!r}."
                 )
 
-def chart(data=None, *,
+def chart(data=None, mapping=None, *,
           data_width=None, data_height=None, margin=None,
           x=None, y=None, fill=None, color=None, group=None,
           linestyle=None, palette=None,
@@ -1080,14 +1126,23 @@ def chart(data=None, *,
           x_expand=None, y_expand=None,
           legend=None, gridlines=None, clip=None,
           facecolor=None, theme=None, font=None) -> Chart:
-    """Construct a table-bound Chart. Structural kwargs (`data_width`,
-    `data_height`, `margin`) and aes kwargs (`x`, `y`, `fill`, `color`,
-    `group`, `linestyle`, `palette`) go to the Chart constructor.
-    Everything else is a convenience for the equivalent chained method
-    call — e.g. `pt.chart(df, title="foo", xlim=(0, 10))` is
+    """Construct a table-bound Chart. Column mappings go in
+    `mapping=aes(...)` — `pt.chart(df, mapping=aes(x="displ",
+    y="hwy"))`, ggplot-style, positional also accepted — and are
+    inherited by artist calls that don't override them. Structural
+    kwargs (`data_width`, `data_height`, `margin`) and literal aes
+    defaults (`fill`, `color`, `linestyle`, `palette`, …) go to the
+    Chart constructor. Everything else is a convenience for the
+    equivalent chained method call — e.g.
+    `pt.chart(df, title="foo", xlim=(0, 10))` is
     `pt.chart(df).title("foo").xlim(0, 10)`."""
+    # `pt.chart(aes(x=...))` with no data — the mapping arrives in the
+    # data slot; shift it over.
+    if isinstance(data, Aes) and mapping is None:
+        data, mapping = None, data
     c = Chart(data, data_width=data_width, data_height=data_height,
-              margin=margin, x=x, y=y, fill=fill, color=color,
+              margin=margin, mapping=dict(mapping) if mapping else None,
+              x=x, y=y, fill=fill, color=color,
               group=group, linestyle=linestyle, palette=palette)
     if title    is not None: c.title(title)
     if subtitle is not None: c.subtitle(subtitle)

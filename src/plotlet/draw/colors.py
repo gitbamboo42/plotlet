@@ -129,7 +129,7 @@ def palette(name, n=None):
     `n` truncates or cycles past the end. Any continuous colormap name
     ('viridis', …) is sampled at `n` evenly-spaced points (`n` required).
     A '_r' suffix reverses either kind. Accepted anywhere artists take
-    `palette=`, e.g. `c.add_bar(..., fill="group", palette="Set2")`. The
+    `palette=`, e.g. `c.add_bar(aes(fill="group"), palette="Set2")`. The
     returned `Palette` is a plain list that shows swatches in notebooks.
     """
     base = name[:-2] if name.endswith("_r") else name

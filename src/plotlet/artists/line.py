@@ -1,19 +1,19 @@
 """Line / step — connected xy points, single-series per record.
 
-  c.add_line(data=df, x="col_x", y="col_y")                # long-form
-  c.add_line(data=df, x="col_x", y="col_y", color="g")     # one line per color level
-  c.add_line(data=df, x="col_x", y="col_y",                # invisible split — one
-          color="cohort", group="subject")              #   line per subject,
+  c.add_line(aes(x="col_x", y="col_y"))                 # columns via aes
+  c.add_line(aes(x="col_x", y="col_y", color="g"))      # one line per color level
+  c.add_line(aes(x="col_x", y="col_y",                  # invisible split — one
+          color="cohort", group="subject"))             #   line per subject,
                                                         #   colors only by cohort
-  c.add_line(data=df, ..., linestyle="--")                 # literal dash
-  c.add_line(data=df, ..., linestyle="cohort")             # dash cycle per level
-  c.add_line(data=df, ..., alpha="cohort", alphas=(.3, 1)) # opacity per level
-  c.add_line(data=df, ..., arc=False)                      # straight chords under
+  c.add_line(aes(...), linestyle="--")                  # literal dash
+  c.add_line(aes(..., linestyle="cohort"))              # dash cycle per level
+  c.add_line(aes(..., alpha="cohort"), alphas=(.3, 1))  # opacity per level
+  c.add_line(aes(...), arc=False)                       # straight chords under
                                                         #   CircularCoordinate
                                                         #   (no-op in Cartesian)
-  c.add_step(data=df, x="col_x", y="col_y", where="post")  # step variant; where=
+  c.add_step(aes(x="col_x", y="col_y"), where="post")   # step variant; where=
                                                         #   "pre" | "post" | "mid"
-  c.add_line(data=df, x="dose", y="resp",                  # aggregate replicate
+  c.add_line(aes(x="dose", y="resp"),                   # aggregate replicate
           estimator="mean")                             #   rows per x with a
                                                         #   CI band (seaborn
                                                         #   lineplot)
@@ -25,11 +25,11 @@ analytic t interval on the mean; `ci="boot"` a percentile bootstrap
 `n_boot=1000`, `seed=0`, `band_alpha=0.2` tune it. Applies per series
 after color=/group= splitting; needs curve='linear'.
 
-`linestyle=` dispatches on the value:
-  * not-a-column string (`"--"`, `":"`, `"6,3,1,3"`) → literal dash
-  * column name → cycle through dash patterns per level
+`linestyle="--"` (bare) is always a literal dash (`"--"`, `":"`,
+`"6,3,1,3"`). `aes(linestyle="col")` maps the column: dash patterns
+cycle per level.
 
-Column-driven splitting (any of `color`/`group`/`linestyle`/`alpha`) is
+Column-driven splitting (any of `color`/`group`/`linestyle`/`alpha` in aes) is
 handled at the Chart layer — the artist itself always sees one series
 per record.
 """

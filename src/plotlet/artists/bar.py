@@ -1,16 +1,16 @@
 """Bar chart — long-form only.
 
-  c.add_bar(data=df, x="cat", y="val")                                  # single
-  c.add_bar(data=df, x="cat", y="val", fill="C0")                       # constant color
-  c.add_bar(data=df, x="cat", y="val", fill="series", position="stack") # grouped
-  c.add_bar(data=df, x="cat", y="val", fill="series", position="dodge")
-  c.add_bar(data=df, x="cat", y="val", fill="series", position="fill")  # 100% stack
-  c.add_bar(data=df, x="cat", y="mean", fill="series", yerr="sd")       # mean±err
-  c.add_bar(data=df, x="cat", stat="count")                             # countplot
-  c.add_bar(data=df, x="cat", y="raw", stat="mean")                     # mean±CI
+  c.add_bar(aes(x="cat", y="val"))                                  # single
+  c.add_bar(aes(x="cat", y="val"), fill="C0")                       # constant color
+  c.add_bar(aes(x="cat", y="val", fill="series"), position="stack") # grouped
+  c.add_bar(aes(x="cat", y="val", fill="series"), position="dodge")
+  c.add_bar(aes(x="cat", y="val", fill="series"), position="fill")  # 100% stack
+  c.add_bar(aes(x="cat", y="mean", fill="series", yerr="sd"))       # mean±err
+  c.add_bar(aes(x="cat"), stat="count")                             # countplot
+  c.add_bar(aes(x="cat", y="raw"), stat="mean")                     # mean±CI
 
-`position` defaults to `"stack"` whenever `fill=` is a column with more
-than one unique value — except with `yerr=`/`xerr=` or `stat="mean"`,
+`position` defaults to `"stack"` whenever `aes(fill=...)` maps a column
+with more than one unique value — except with `yerr=`/`xerr=` or `stat="mean"`,
 which default to `"dodge"` (error bars aren't defined for stacked bars,
 and stacked means are misleading). Duplicate (cat, group) rows are
 summed; with error bars they raise instead, since offsets don't
@@ -24,12 +24,12 @@ Stats (seaborn countplot / barplot, ggplot geom_bar):
                       level=0.95, n_boot=1000, seed=0 as in pointplot
 
 Aesthetics:
-  fill=         literal color OR column name → grouped multi-series
+  fill=         bare → literal color; aes(fill="col") → grouped multi-series
   color=        stroke color (constant, default None = no stroke)
-  palette=      maps group levels → colors when `fill=` is a column
+  palette=      maps group levels → colors when fill is mapped in aes
 
-Error bars (same specs as the errorbar artist — column name, scalar, or
-a (lower, upper) tuple of either):
+Error bars (same specs as the errorbar artist — aes-mapped column, bare
+scalar, or a (lower, upper) tuple of either):
   yerr=         value-axis error for vertical bars
   xerr=         value-axis error for horizontal bars (orientation='h')
   ecolor=<themed>     whisker color
@@ -244,8 +244,8 @@ def _bar_record(data=None,
                 ecolor=None, capsize=None, palette=None,
                 label=None, legend=None):
     ci = _resolve_stat_ci(stat, data, x, y, ci)
-    # `fill=` may be a literal color or a column name. Column → drives
-    # grouping; literal → applied to every bar.
+    # `fill` is a literal color when passed bare, a column when mapped
+    # via aes. Column → drives grouping; literal → applied to every bar.
     fill_kind, fill_value = resolve_aes(data, fill)
     group_col = fill if fill_kind == "column" else None
     stat_err_lo = stat_err_hi = None

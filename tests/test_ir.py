@@ -18,6 +18,7 @@ import json
 import pytest
 
 import plotlet as pt
+from plotlet import aes
 from plotlet.record.figure_ir import journal_to_ir, ir_to_journal, _node_refs
 
 from test_journal_roundtrip import PLOTS
@@ -62,16 +63,16 @@ def _composed_fig():
     and an inset."""
     data = {"x": [1, 2, 3, 4, 5], "y": [2.0, 3.5, 3.1, 4.8, 4.2]}
     a = pt.chart(data_width=200, data_height=140, title="a")
-    a.add_scatter(data=data, x="x", y="y", label="pts")
+    a.add_scatter(data=data, mapping=aes(x="x", y="y"), label="pts")
     inset = a.inset(rect=(0.55, 0.55, 0.4, 0.4))
-    inset.add_line(data=data, x="x", y="y")
+    inset.add_line(data=data, mapping=aes(x="x", y="y"))
 
     top = pt.chart(data_width=200, data_height=40)
-    top.add_bar(data=data, x="x", y="y")
+    top.add_bar(data=data, mapping=aes(x="x", y="y"))
     a.attach_above(top)
 
     b = pt.chart(data_width=200, data_height=140, title="b")
-    b.add_line(data=data, x="x", y="y", label="trend")
+    b.add_line(data=data, mapping=aes(x="x", y="y"), label="trend")
 
     return a | b | pt.legend(a, b, names={a: "Panel A"})
 
@@ -146,7 +147,7 @@ def test_facet_lowers_to_core_kinds():
     df = {"x": [1, 2, 3, 4, 5, 6], "y": [2, 1, 3, 2, 4, 3],
           "g": ["a", "a", "b", "b", "c", "c"]}
     g = pt.facet(df, by="g", col_wrap=2)
-    g.add_scatter(x="x", y="y")
+    g.add_scatter(aes(x="x", y="y"))
     svg_direct = g.to_svg()
 
     journal = pt.to_journal(g)
@@ -179,9 +180,10 @@ def test_sectored_root_wraps_in_layout():
     """A bare sectored chart lowers to a 1×1 layout root carrying the
     `sectors` op; panel ops — artists, frame state, the panel title —
     stay on the leaf."""
-    c = pt.chart({"x": [1.0, 2.0], "y": [3.0, 4.0]},
+    df = {"x": [1.0, 2.0], "y": [3.0, 4.0]}
+    c = pt.chart(df,
                  title="panel title", xlim=(0, 10))
-    c.add_scatter(x="x", y="y")
+    c.add_scatter(aes(x="x", y="y"))
     c.sectors(pt.Sectors(names=("A",), lengths=(10.0,), gap=2))
 
     root, leaf = _root_and_leaf(pt.to_ir(c))
@@ -196,9 +198,10 @@ def test_circular_root_hoists_title_coordinate_sectors():
     """A container-coordinate root hoists title + coordinate + sectors
     together — the overlay path reads all three off the layout (the
     band, the strategy, and the inner-disc sector inheritance)."""
-    c = pt.chart({"x": [1.0, 2.0], "y": [3.0, 4.0]},
+    df = {"x": [1.0, 2.0], "y": [3.0, 4.0]}
+    c = pt.chart(df,
                  title="ring", xlim=(0, 10), ylim=(0, 5))
-    c.add_scatter(x="x", y="y")
+    c.add_scatter(aes(x="x", y="y"))
     c.coordinate(pt.CircularCoordinate(r_inner=0.4))
     c.sectors(pt.Sectors(names=("A",), lengths=(10.0,), gap=2))
 
@@ -212,8 +215,9 @@ def test_circular_root_hoists_title_coordinate_sectors():
 def test_plain_root_wraps_with_no_hoist():
     """Every root wraps — a plain chart becomes a 1×1 layout with an
     empty op list; panel state (the title) stays on the leaf."""
-    c = pt.chart({"x": [1.0], "y": [2.0]}, title="t")
-    c.add_scatter(x="x", y="y")
+    df = {"x": [1.0], "y": [2.0]}
+    c = pt.chart(df, title="t")
+    c.add_scatter(aes(x="x", y="y"))
     root, leaf = _root_and_leaf(pt.to_ir(c))
     assert root.kind == "layout" and root.init["layout_kind"] == "h"
     assert _op_names(root) == []
@@ -227,9 +231,10 @@ def test_lone_chart_equals_its_grid_form():
     pins the figure background following the sole leaf's theme through
     the wrapper (a lone dark chart keeps its dark canvas)."""
     def chart(theme=None):
-        c = pt.chart({"x": [1.0, 2.0, 3.0], "y": [4.0, 5.0, 6.0]},
+        df = {"x": [1.0, 2.0, 3.0], "y": [4.0, 5.0, 6.0]}
+        c = pt.chart(df,
                      title="t", xlabel="x")
-        c.add_scatter(x="x", y="y")
+        c.add_scatter(aes(x="x", y="y"))
         if theme:
             c.theme(theme)
         return c
@@ -242,11 +247,13 @@ def test_sectored_layout_child_does_not_wrap():
     """Only the root wraps. A sectored chart inside a layout keeps its
     sectors — in-layout charts already have a layout home for
     composition state, and grid cells are charts by API contract."""
-    a = pt.chart({"x": [1.0, 2.0], "y": [3.0, 4.0]}, xlim=(0, 10))
-    a.add_scatter(x="x", y="y")
+    df = {"x": [1.0, 2.0], "y": [3.0, 4.0]}
+    a = pt.chart(df, xlim=(0, 10))
+    a.add_scatter(aes(x="x", y="y"))
     a.sectors(pt.Sectors(names=("A",), lengths=(10.0,), gap=2))
-    b = pt.chart({"x": [1.0], "y": [2.0]})
-    b.add_scatter(x="x", y="y")
+    df2 = {"x": [1.0], "y": [2.0]}
+    b = pt.chart(df2)
+    b.add_scatter(aes(x="x", y="y"))
 
     ir = pt.to_ir(pt.grid([[a, b]]))
     root = next(n for n in ir.nodes if n.nid == ir.root_nid)

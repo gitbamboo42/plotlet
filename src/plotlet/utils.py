@@ -342,19 +342,65 @@ def _data_has_column(data, name):
         return False
 
 
+class Aes(dict):
+    """Column-mapping container returned by `aes(...)`. A distinct type
+    (not a plain dict) so the recorder can tell it apart from positional
+    data, and so the journal can envelope it (`{"$aes": ...}`) when a
+    facet's recorded calls carry one."""
+    __slots__ = ()
+
+
+def aes(**mappings) -> Aes:
+    """Map aesthetics to data columns: `aes(x="displ", color="class")`.
+
+    Pass it as `mapping=` to `pt.chart(...)` or to any artist call
+    (ggplot-style; positional also works). Every value must be a
+    column name (a string); literal values stay as plain kwargs
+    outside `aes(...)`:
+
+        c.add_scatter(data=df, mapping=aes(x="displ", color="class"),
+                      size=3)
+
+    maps x/color to columns and sets a literal marker size. In the
+    journal the mapping is recorded under the reserved `"mapping"` key
+    of the call's kwargs, so a stored journal says which values are
+    column references without consulting the data.
+    """
+    for k, v in mappings.items():
+        if not isinstance(v, str):
+            raise TypeError(
+                f"aes({k}={v!r}) — aes() takes column names (strings). "
+                f"Literal values go as plain kwargs, outside aes()."
+            )
+    return Aes(mappings)
+
+
+class ColumnRef(str):
+    """A string tagged as a column reference.
+
+    Born at the replay boundary (`_record_artist`) from a recorded
+    `aes` dict — never serialized, never user-constructed. A `str`
+    subclass so `data[ref]` and every other string use works
+    unchanged; only `resolve_aes` looks at the tag."""
+    __slots__ = ()
+
+
 def resolve_aes(data, value):
     """Classify an aes value (e.g. `fill=`, `color=`, `group=`) as either
     a literal or a column reference.
 
-    Returns `("literal", value)` when `value` is None, a non-string, or a
-    string that does not match a column of `data`. Returns
-    `("column", values_list)` when `value` is a string and `data` has a
-    column with that name — in which case the per-row column values are
-    materialized via `to_list(...)`. With no `data=` bound, every value
-    is literal."""
-    if value is None or not isinstance(value, str):
-        return ("literal", value)
-    if _data_has_column(data, value):
+    A `ColumnRef` (the user wrote `aes(...)`) is always a column —
+    returns `("column", values_list)` with the per-row values
+    materialized via `to_list(...)`, or raises if `data` has no such
+    column. Everything else — including a bare string that happens to
+    match a column name — is `("literal", value)`. Only `aes(...)`
+    maps to data."""
+    if isinstance(value, ColumnRef):
+        if not _data_has_column(data, value):
+            raise KeyError(
+                f"aes(...={str(value)!r}): the bound data has no column "
+                f"named {str(value)!r}."
+            )
         return ("column", to_list(data[value]))
     return ("literal", value)
 

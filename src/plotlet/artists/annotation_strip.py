@@ -16,7 +16,7 @@ Each cell can carry any combination of fill, text, and border:
   doesn't list; with no fill source at all, cells draw no rect (text /
   border only). cmap is band-mode only — per-block cmap aggregates
   would mask within-block variation.
-- **Text** (`text=True` shows the value; `text="other_col"` pulls
+- **Text** (`text=True` shows the value; `aes(text="other_col")` pulls
   display text from a different column). Position+rotation controlled
   by `side=`, `rotation=`, `fontsize=`, `text_color=`, `text_pad=`.
 - **Border** (`cell_border="#999"` or `{"color":..., "width":...}`).
@@ -24,34 +24,35 @@ Each cell can carry any combination of fill, text, and border:
 
 Three input shapes for the position axis:
 
-- **Categorical** (heatmap-style): pass `position=` as a column of
-  category names; cell width comes from the category scale's bandwidth.
-- **Numeric uniform** (time-series-style): pass `position=` as numbers
-  and set `width=` (scalar) in data units of the position axis.
-- **Numeric interval** (cytoband / sector / gene-track style): pass
-  `x1=`, `x2=` instead of `position=`. Each row's cell spans
+- **Categorical** (heatmap-style): map `aes(position=...)` to a column
+  of category names; cell width comes from the category scale's bandwidth.
+- **Numeric uniform** (time-series-style): map `aes(position=...)` to a
+  numeric column and set `width=` (scalar) in data units of the position
+  axis.
+- **Numeric interval** (cytoband / sector / gene-track style): map
+  `aes(x1=..., x2=...)` instead of `position`. Each row's cell spans
   ``[x1, x2]`` — variable widths.
 
 API examples:
 
     # categorical color bar
-    c.add_annotation_strip(df, position="col", value="col",
+    c.add_annotation_strip(df, aes(position="col", value="col"),
                        palette={...}, name="Group")
     # continuous score bar (band mode only)
-    c.add_annotation_strip(df, position="col", value="col",
+    c.add_annotation_strip(df, aes(position="col", value="col"),
                        cmap="viridis", name="Score")
     # per-position text labels
-    c.add_annotation_strip(df, position="col", value="col",
+    c.add_annotation_strip(df, aes(position="col", value="col"),
                        text=True, side="bottom", rotation=90)
     # decorative single-color strip with one legend entry
-    c.add_annotation_strip(df, position="col", value="col",
+    c.add_annotation_strip(df, aes(position="col", value="col"),
                        fill="#8da0cb", label="track")
     # per-block group titles with fill + text + border
-    c.add_annotation_strip(df, position="col", value="group",
+    c.add_annotation_strip(df, aes(position="col", value="group"),
                        mode="block", palette={...}, text=True,
                        cell_border="#000", text_color="white")
     # variable-width interval strip (cytobands, sector bars, gene tracks)
-    c.add_annotation_strip(df, x1="start", x2="end", value="stain",
+    c.add_annotation_strip(df, aes(x1="start", x2="end", value="stain"),
                        palette={...}, text=True)
 
 `None` / `""` (or NaN in cmap mode) means missing data — drawn as
@@ -121,7 +122,8 @@ def _resolve_text(text_spec, values, data, positions, orient, side):
     """Resolve the ``text=`` tri-state to ``(text_values, text_side)``.
 
     None/False → no per-cell text; True → the `value` column as text
-    (NaN/None scrubbed to None); str → a separate column to read from.
+    (NaN/None scrubbed to None); aes-mapped column → a separate column
+    to read from.
     ``text_side`` defaults by orientation and is validated against it."""
     if text_spec in (None, False):
         return None, None

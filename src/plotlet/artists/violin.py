@@ -1,18 +1,18 @@
 """Mirrored KDE outline per category with a mini-boxplot inside.
 
 Long-form only:
-  c.add_violin(data=df, x="cat", y="value")
-  c.add_violin(data=df, x="cat", y="value", fill="group", palette={...})
+  c.add_violin(aes(x="cat", y="value"))
+  c.add_violin(aes(x="cat", y="value", fill="group"), palette={...})
 
-Long-form with `fill="col"` dodges sub-violins side-by-side within each cat
+Mapping `aes(fill="col")` dodges sub-violins side-by-side within each cat
 and emits one legend entry per group level.
 
 Aesthetics:
-  fill=True/<col>/<literal>/False  body fill (True = palette/cycle default,
-                                   col = column-driven grouping, literal
-                                   color string, or False for outline-only)
+  fill=True/<literal>/False        body fill (True = palette/cycle default,
+                                   bare literal color string, or False for
+                                   outline-only); aes(fill="col") → grouping
   color=<literal>      outline / inner-box stroke (defaults to frame color)
-  palette=             maps group levels → fills when `fill=` is a column
+  palette=             maps group levels → fills when fill is mapped in aes
 
 Other styling kwargs:
   orientation='v'       'h' for horizontal (cats on y axis)

@@ -2,17 +2,19 @@
 
 Fits y ~ x by closed-form OLS, draws the fit line, and shades a confidence
 band using the exact Student-t critical value at n - 2 degrees of freedom.
-The scatter is not drawn here — overlay your own `c.add_scatter(xs, ys)`.
+The scatter is not drawn here — overlay your own
+`c.add_scatter(aes(x="col_x", y="col_y"))`.
 
-  c.add_regression(data=df, x="col_x", y="col_y")           # long-form
-  c.add_regression(data=df, x=..., y=..., color="group")    # one fit per group
-  c.add_regression(data=df, x=..., y=..., order=2)          # polynomial
-  c.add_regression(data=df, x=..., y=..., robust=True)      # Huber IRLS
-  c.add_regression(data=df, x=..., y=..., lowess=True)      # LOWESS smoother
+  c.add_regression(aes(x="col_x", y="col_y"))           # columns via aes
+  c.add_regression(aes(x=..., y=..., color="group"))    # one fit per group
+  c.add_regression(aes(x=..., y=...), order=2)          # polynomial
+  c.add_regression(aes(x=..., y=...), robust=True)      # Huber IRLS
+  c.add_regression(aes(x=..., y=...), lowess=True)      # LOWESS smoother
 
 Styling kwargs:
-  color=         line color (literal) or column name → one fit per level
-  palette=       maps levels → colors when `color=` is a column
+  color=         bare → literal line color; aes(color="col") → one fit
+                 per level
+  palette=       maps levels → colors when color is mapped in aes
   order=1        polynomial degree of the fit (seaborn regplot order=);
                  the band generalizes to t_{α/2, n-p} with the full
                  covariance term  se(ŷ) = σ·sqrt(xᵀ(XᵀX)⁻¹x)

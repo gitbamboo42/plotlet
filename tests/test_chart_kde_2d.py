@@ -10,6 +10,7 @@ import math
 import random
 
 import plotlet as pt
+from plotlet import aes
 import pytest
 
 
@@ -22,8 +23,10 @@ def chart_kde_2d():
           + [rng.gauss(2, 0.8) for _ in range(n)])
     c = pt.chart(data_width=300, data_height=260,
                  title="2-D KDE", xlabel="x", ylabel="y")
-    c.add_scatter(data={"x": xs, "y": ys}, x="x", y="y", size=1.2, alpha=0.25, color="#444444")
-    c.add_kde_2d(data={"x": xs, "y": ys}, x="x", y="y", n_grid=40, cmap="viridis")
+    df = {"x": xs, "y": ys}
+    c.add_scatter(data=df, mapping=aes(x="x", y="y"), size=1.2, alpha=0.25, color="#444444")
+    df2 = {"x": xs, "y": ys}
+    c.add_kde_2d(data=df2, mapping=aes(x="x", y="y"), n_grid=40, cmap="viridis")
     c.legend()
     return c
 
@@ -42,7 +45,7 @@ def chart_kde_2d_filled_color():
     c = pt.chart(data_width=300, data_height=260,
                  title="grouped 2-D KDE (filled)", xlabel="x", ylabel="y",
                  legend=True)
-    c.add_kde_2d(data=df, x="x", y="y", color="g", fill=True, n_grid=40)
+    c.add_kde_2d(data=df, mapping=aes(x="x", y="y", color="g"), fill=True, n_grid=40)
     c.legend()
     return c
 
@@ -63,10 +66,10 @@ def test_kde_2d_color_grouping():
           "y": [0.0, 0.1, 0.2, 5.0, 5.1, 5.2],
           "g": ["a", "a", "a", "b", "b", "b"]}
     c = pt.chart(df)
-    c.add_kde_2d(x="x", y="y", color="g", n_grid=12)
+    c.add_kde_2d(aes(x="x", y="y", color="g"), n_grid=12)
     assert c.to_svg().count('data-plotlet-type="kde_2d"') == 2
 
     c = pt.chart(df)
-    c.add_kde_2d(x="x", y="y", color="g", cmap="viridis")
+    c.add_kde_2d(aes(x="x", y="y", color="g"), cmap="viridis")
     with pytest.raises(TypeError, match="palette="):
         c.to_svg()

@@ -13,7 +13,7 @@ A spec bundles everything the pipeline needs to know about a plot type:
         dict lands in the replayed state's `artists` list. Pure data — no
         scales yet. Style kwargs the record doesn't consume are packed
         into `opts` (via `utils.pack_opts`) for the draw side to read.
-        An artist that fans one `color=`-column call out into per-level
+        An artist that fans one `aes(color=)` grouped call out into per-level
         records keeps the grouping symbolic: each record carries `groups`
         (the level list), `_j` (its index), and `opts["palette"]` — never
         a resolved color. The render half stamps each record's `_color`
@@ -83,7 +83,7 @@ class ArtistSpec:
     layer: str = "data"  # "background" | "data" | "foreground"
     uses_color_cycle: bool = True
     default_color: str | None = None  # used when uses_color_cycle is False
-    # Sugar for `c.add_<artist>(df, x="col", y="col")` → `c.add_<artist>(data=df, ...)`.
+    # Sugar for `c.add_<artist>(df, aes(x="col", y="col"))` → `c.add_<artist>(data=df, ...)`.
     # Disable on positional-only artists (matrix or single primary input) so
     # the lone positional arg isn't hoisted into `kw["data"]`.
     accepts_data_positional: bool = True

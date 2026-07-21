@@ -22,6 +22,7 @@ import pathlib
 import pytest
 
 import plotlet as pt
+from plotlet import aes
 
 # Modules that consume this file's PLOTS rather than defining their own —
 # importing them here would be a cycle.
@@ -97,7 +98,7 @@ def test_json_roundtrip_dates_in_dataframe():
                 datetime.date(2026, 1, 3)],
         "v": [1.5, 2.5, 2.0],
     })
-    c = pt.chart(df, x="day", y="v")
+    c = pt.chart(df, aes(x="day", y="v"))
     c.add_line()
     svg_original = c.to_svg()
 
@@ -112,7 +113,7 @@ def test_json_roundtrip_integer_dataframe():
     normalization must hand the journal plain Python scalars."""
     pd = pytest.importorskip("pandas")
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    c = pt.chart(df, x="a", y="b")
+    c = pt.chart(df, aes(x="a", y="b"))
     c.add_line()
     svg_original = c.to_svg()
 

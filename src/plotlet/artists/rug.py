@@ -4,12 +4,12 @@ No-bin alternative (or companion) to a histogram. Pairs especially well
 with `density_1d` to show both the smoothed estimate and the raw
 observations.
 
-  c.add_rug(data=df, x="col")                       # long-form (orientation="y" too)
-  c.add_rug(data=df, x="col", color="group")        # ticks colored per group
+  c.add_rug(aes(x="col"))                       # columns via aes (orientation="y" too)
+  c.add_rug(aes(x="col", color="group"))        # ticks colored per group
 
 Aesthetics:
-  color=         tick color (literal) or column name → grouped ticks
-  palette=       maps group levels → colors when `color=` is a column
+  color=         bare → literal tick color; aes(color="col") → grouped ticks
+  palette=       maps group levels → colors when color is mapped in aes
 
 Other styling kwargs:
   orientation='x'  'y' draws ticks along the left axis instead

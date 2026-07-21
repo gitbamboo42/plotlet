@@ -10,6 +10,7 @@ import math
 import random
 
 import plotlet as pt
+from plotlet import aes
 import pytest
 from _chart_helpers import _xs
 
@@ -21,7 +22,7 @@ def chart_despined():
     xs = _xs()
     df = {"t": xs, "v": [math.sin(x) for x in xs]}
     c = pt.chart(df, title="despined frame", xlabel="t", ylabel="v")
-    c.add_line(x="t", y="v")
+    c.add_line(aes(x="t", y="v"))
     c.spines(top=False, right=False)
     return c
 
@@ -33,7 +34,7 @@ def chart_restyled_spines():
     xs = _xs()
     df = {"t": xs, "v": [math.sin(x) for x in xs]}
     c = pt.chart(df, title="restyled spines", xlabel="t", ylabel="v")
-    c.add_line(x="t", y="v")
+    c.add_line(aes(x="t", y="v"))
     c.spines(top=False, right=False,
              left={"color": "red", "width": 1.5},
              bottom={"color": "gray"})

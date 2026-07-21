@@ -52,6 +52,7 @@ import math
 import sys
 
 import plotlet as pt
+from plotlet import aes
 from _chart_helpers import _legend_position_chart
 
 
@@ -68,9 +69,11 @@ def _matrix():
 def legend_auto_grouped():
     xs = _xs()
     a = pt.chart(title="alpha", data_width=180, data_height=140)
-    a.add_line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y", label="sin")
+    df = {"x": xs, "y": [math.sin(x) for x in xs]}
+    a.add_line(data=df, mapping=aes(x="x", y="y"), label="sin")
     b = pt.chart(title="beta", data_width=180, data_height=140)
-    b.add_line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y", label="cos")
+    df2 = {"x": xs, "y": [math.cos(x) for x in xs]}
+    b.add_line(data=df2, mapping=aes(x="x", y="y"), label="cos")
     return (a | b) | pt.legend()
 
 
@@ -102,8 +105,10 @@ def legend_mixed():
     im = pt.chart(title="heat", data_width=180, data_height=140)
     im.add_imshow(_matrix(), cmap="plasma")
     lines = pt.chart(title="trace", data_width=180, data_height=140)
-    lines.add_line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y", label="sin")
-    lines.add_line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y", label="cos")
+    df = {"x": xs, "y": [math.sin(x) for x in xs]}
+    lines.add_line(data=df, mapping=aes(x="x", y="y"), label="sin")
+    df2 = {"x": xs, "y": [math.cos(x) for x in xs]}
+    lines.add_line(data=df2, mapping=aes(x="x", y="y"), label="cos")
     return im | lines | pt.legend()
 
 
@@ -112,8 +117,10 @@ def legend_reverse_manual():
     # a free-form manual section (label + color, default rect swatch).
     xs = _xs()
     a = pt.chart(title="alpha", data_width=220, data_height=150)
-    a.add_line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y", label="sin")
-    a.add_line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y", label="cos")
+    df = {"x": xs, "y": [math.sin(x) for x in xs]}
+    a.add_line(data=df, mapping=aes(x="x", y="y"), label="sin")
+    df2 = {"x": xs, "y": [math.cos(x) for x in xs]}
+    a.add_line(data=df2, mapping=aes(x="x", y="y"), label="cos")
     return a | pt.legend(a, reverse=True,
                          entries=[{"label": "threshold", "color": "red"},
                                   {"label": "baseline", "color": "0.6"}])
@@ -122,7 +129,8 @@ def legend_reverse_manual():
 def legend_inline_manual():
     xs = _xs()
     c = pt.chart(data_width=280, data_height=160)
-    c.add_line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y", label="sin")
+    df = {"x": xs, "y": [math.sin(x) for x in xs]}
+    c.add_line(data=df, mapping=aes(x="x", y="y"), label="sin")
     c.legend(True, position="right",
              entries=[{"label": "cutoff", "color": "C3", "alpha": 0.4}])
     return c
@@ -131,11 +139,14 @@ def legend_inline_manual():
 def legend_overrides():
     xs = _xs()
     a = pt.chart(title="alpha", data_width=100, data_height=140)
-    a.add_line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y", label="sin")
+    df = {"x": xs, "y": [math.sin(x) for x in xs]}
+    a.add_line(data=df, mapping=aes(x="x", y="y"), label="sin")
     b = pt.chart(title="beta", data_width=100, data_height=140)
-    b.add_line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y", label="cos")
+    df2 = {"x": xs, "y": [math.cos(x) for x in xs]}
+    b.add_line(data=df2, mapping=aes(x="x", y="y"), label="cos")
     c = pt.chart(title="gamma", data_width=100, data_height=140)
-    c.add_line(data={"x": xs, "y": [math.sin(x) + 0.5 for x in xs]}, x="x", y="y", label="sin+0.5")
+    df3 = {"x": xs, "y": [math.sin(x) + 0.5 for x in xs]}
+    c.add_line(data=df3, mapping=aes(x="x", y="y"), label="sin+0.5")
     return a | b | c | pt.legend(a, b, c, names={a: "Custom", b: None})
 
 
@@ -145,9 +156,11 @@ def legend_flat_fixed():
     # the dimensional primitive). Overrides the content-driven auto-size.
     xs = _xs()
     a = pt.chart(title="alpha", data_width=160, data_height=140)
-    a.add_line(data={"x": xs, "y": [math.sin(x) for x in xs]}, x="x", y="y", label="sin")
+    df = {"x": xs, "y": [math.sin(x) for x in xs]}
+    a.add_line(data=df, mapping=aes(x="x", y="y"), label="sin")
     b = pt.chart(title="beta", data_width=160, data_height=140)
-    b.add_line(data={"x": xs, "y": [math.cos(x) for x in xs]}, x="x", y="y", label="cos")
+    df2 = {"x": xs, "y": [math.cos(x) for x in xs]}
+    b.add_line(data=df2, mapping=aes(x="x", y="y"), label="cos")
     return a | b | pt.legend(a, b, group_by_chart=False,
                              canvas_width=140, canvas_height=160)
 
@@ -165,13 +178,13 @@ def legend_swatch_overrides():
           "grp": ["even" if i % 2 == 0 else "odd" for i in range(50)],
           "mass": [1.0 + (i % 7) for i in range(50)]}
     a = pt.chart(title="tiny", data_width=200, data_height=140)
-    a.add_scatter(data=df, x="x", y="y", color="grp", size=1.5,
+    a.add_scatter(data=df, mapping=aes(x="x", y="y", color="grp"), size=1.5,
               legend={"glyph": "rect"})
     b = pt.chart(title="sized", data_width=200, data_height=140)
-    b.add_scatter(data=df, x="x", y="y", size="mass", sizes=(1, 5),
+    b.add_scatter(data=df, mapping=aes(x="x", y="y", size="mass"), sizes=(1, 5),
               label="signal", legend={"glyph": "rect"})
     c = pt.chart(title="faint", data_width=200, data_height=140)
-    c.add_scatter(data=df, x="x", y="y", color="grp", alpha=0.15, size=2,
+    c.add_scatter(data=df, mapping=aes(x="x", y="y", color="grp"), alpha=0.15, size=2,
               legend={"alpha": 1, "size": 5})
     return (a | b | c) | pt.legend()
 
@@ -189,7 +202,7 @@ def legend_ncols():
           "cat": cats,
           "mass": [1.0 + (i % 9) for i in range(n)]}
     a = pt.chart(title="many levels", data_width=260, data_height=160)
-    a.add_scatter(data=df, x="x", y="y", color="cat", size="mass", sizes=(1.5, 5))
+    a.add_scatter(data=df, mapping=aes(x="x", y="y", color="cat", size="mass"), sizes=(1.5, 5))
     return a | pt.legend(ncols=3)
 
 
@@ -201,10 +214,11 @@ def legend_joined_grid():
     main = pt.chart(title="main", data_width=320, data_height=180)
     main.add_imshow(_matrix(), cmap="viridis", legend={"label": "value"})
     top  = pt.chart(title="top",  data_width=320, data_height=24)
-    top.add_line(data={"x": [0, 1, 2, 3, 4, 5, 6, 7], "y": [3, 1, 2, 4, 1, 2, 3, 1]},
-             x="x", y="y", label="counts")
+    df = {"x": [0, 1, 2, 3, 4, 5, 6, 7], "y": [3, 1, 2, 4, 1, 2, 3, 1]}
+    top.add_line(data=df, mapping=aes(x="x", y="y"), label="counts")
     tree = pt.chart(title="tree", data_width=60,  data_height=180)
-    tree.add_line(data={"x": [0, 1, 2], "y": [2, 3, 4]}, x="x", y="y")
+    df2 = {"x": [0, 1, 2], "y": [2, 3, 4]}
+    tree.add_line(data=df2, mapping=aes(x="x", y="y"))
     return pt.grid([
         [None, top,  None        ],
         [tree, main, pt.legend() ],
@@ -242,8 +256,8 @@ def chart_legend_ncols_bottom():
                  xlabel="t", ylabel="value", gridlines=True,
                  data_width=300, data_height=180)
     for k in range(9):
-        c.add_line(data={"x": xs, "y": [math.sin(x + k * 0.35) + k * 0.15 for x in xs]},
-               x="x", y="y", label=f"phase-{k}")
+        df = {"x": xs, "y": [math.sin(x + k * 0.35) + k * 0.15 for x in xs]}
+        c.add_line(data=df, mapping=aes(x="x", y="y"), label=f"phase-{k}")
     c.legend(position="bottom", ncols=3)
     return c
 
@@ -295,8 +309,10 @@ def test_inline_reverse_keeps_manual_entries_last():
 
     def swatch_ys(reverse):
         c = pt.chart(data_width=200, data_height=120)
-        c.add_line(data={"x": xs, "y": [1, 2, 1]}, x="x", y="y", label="sin")
-        c.add_line(data={"x": xs, "y": [2, 1, 2]}, x="x", y="y", label="cos")
+        df = {"x": xs, "y": [1, 2, 1]}
+        c.add_line(data=df, mapping=aes(x="x", y="y"), label="sin")
+        df2 = {"x": xs, "y": [2, 1, 2]}
+        c.add_line(data=df2, mapping=aes(x="x", y="y"), label="cos")
         c.legend(True, position="right", reverse=reverse,
                  entries=[{"label": "manual", "color": "#123456"}])
         svg = c.to_svg()
@@ -315,7 +331,8 @@ def test_inline_reverse_keeps_manual_entries_last():
 
 def test_legend_glyph_unknown_raises():
     c = pt.chart(data_width=120, data_height=100)
-    c.add_scatter(data={"x": [1, 2], "y": [1, 2]}, x="x", y="y",
+    df = {"x": [1, 2], "y": [1, 2]}
+    c.add_scatter(data=df, mapping=aes(x="x", y="y"),
               label="s", legend={"glyph": "circle"})
     fig = c | pt.legend()
     with pytest.raises(ValueError, match="glyph"):

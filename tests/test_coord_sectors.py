@@ -13,6 +13,7 @@ from __future__ import annotations
 import pytest
 
 import plotlet as pt
+from plotlet import aes
 from plotlet import Sectors
 
 
@@ -24,14 +25,14 @@ def sectors_single_scatter():
                  data_width=480, data_height=180,
                  ylim=(0.0, 1.0))
     c.sectors(PHASES, column="phase")
+    df = {
+        "phase": ["warmup", "warmup", "training", "training",
+                  "cooldown", "cooldown"],
+        "t":     [40, 90, 100, 400, 50, 150],
+        "v":     [0.4, 0.8, 0.3, 0.9, 0.5, 0.7],
+    }
     c.add_scatter(
-        data={
-            "phase": ["warmup", "warmup", "training", "training",
-                      "cooldown", "cooldown"],
-            "t":     [40, 90, 100, 400, 50, 150],
-            "v":     [0.4, 0.8, 0.3, 0.9, 0.5, 0.7],
-        },
-        x="t", y="v", size=8,
+        data=df, mapping=aes(x="t", y="v"), size=8,
     )
     return c
 
@@ -39,25 +40,25 @@ def sectors_single_scatter():
 def sectors_multi_track_share_x():
     t1 = pt.chart(data_width=480, data_height=80,
                   ylabel="scatter", ylim=(0.0, 1.0))
+    df = {
+        "phase": ["warmup", "warmup", "training", "training", "cooldown"],
+        "t":     [40, 90, 100, 400, 80],
+        "v":     [0.4, 0.7, 0.3, 0.9, 0.5],
+    }
     t1.add_scatter(
-        data={
-            "phase": ["warmup", "warmup", "training", "training", "cooldown"],
-            "t":     [40, 90, 100, 400, 80],
-            "v":     [0.4, 0.7, 0.3, 0.9, 0.5],
-        },
-        x="t", y="v", size=8,
+        data=df, mapping=aes(x="t", y="v"), size=8,
     )
 
     t2 = pt.chart(data_width=480, data_height=80,
                   ylabel="line", ylim=(0.0, 1.0))
+    df2 = {
+         "phase": ["warmup", "warmup", "training", "training",
+                   "cooldown", "cooldown"],
+         "t":     [10, 95, 10, 480, 10, 180],
+         "v":     [0.3, 0.6, 0.5, 0.8, 0.2, 0.7],
+     }
     t2.add_line(
-        data={
-            "phase": ["warmup", "warmup", "training", "training",
-                      "cooldown", "cooldown"],
-            "t":     [10, 95, 10, 480, 10, 180],
-            "v":     [0.3, 0.6, 0.5, 0.8, 0.2, 0.7],
-        },
-        x="t", y="v", group="phase",
+        data=df2, mapping=aes(x="t", y="v", group="phase"),
     )
     # Cross-sector reference line — no sector column on its data, so
     # the sector remap must silently pass through.
@@ -77,13 +78,13 @@ def sectors_from_sectors_value():
                  data_width=380, data_height=140,
                  ylim=(0.0, 1.0))
     c.sectors(sec, column="grp")
+    df = {
+        "grp": ["a", "a", "b", "b", "c", "c"],
+        "x":   [0, 9, 0, 19, 0, 4],
+        "y":   [0.2, 0.9, 0.4, 0.6, 0.3, 0.8],
+    }
     c.add_line(
-        data={
-            "grp": ["a", "a", "b", "b", "c", "c"],
-            "x":   [0, 9, 0, 19, 0, 4],
-            "y":   [0.2, 0.9, 0.4, 0.6, 0.3, 0.8],
-        },
-        x="x", y="y", group="grp",
+        data=df, mapping=aes(x="x", y="y", group="grp"),
     )
     return c
 
@@ -100,10 +101,10 @@ def sectors_categorical_x():
          "groupC": ["c6", "c7", "c8", "c9"]},
         axis="x", divider=False,
     )
+    df = {"cat": ["c1","c2","c3","c4","c5","c6","c7","c8","c9"],
+          "v":   [3,    5,    2,    8,    6,    4,    7,    5,    3]}
     c.add_bar(
-        data={"cat": ["c1","c2","c3","c4","c5","c6","c7","c8","c9"],
-              "v":   [3,    5,    2,    8,    6,    4,    7,    5,    3]},
-        x="cat", y="v",
+        data=df, mapping=aes(x="cat", y="v"),
     )
     return c
 
@@ -116,11 +117,11 @@ def sectors_continuous_x():
     c = pt.chart(title="continuous x-sectors with ticks",
                  data_width=440, data_height=180, ylabel="value")
     c.sectors({"A": 100, "B": 60, "C": 80}, column="region", gap=12)
+    df = {"region": ["A",  "A",  "B",  "B",  "C",  "C"],
+          "pos":    [30,   80,   20,   50,   10,   60],
+          "v":      [3,    5,    8,    6,    4,    7]}
     c.add_scatter(
-        data={"region": ["A",  "A",  "B",  "B",  "C",  "C"],
-              "pos":    [30,   80,   20,   50,   10,   60],
-              "v":      [3,    5,    8,    6,    4,    7]},
-        x="pos", y="v",
+        data=df, mapping=aes(x="pos", y="v"),
     )
     c.xticks([0, 50, 100], rotation=90)
     return c
@@ -133,11 +134,11 @@ def sectors_continuous_y():
                  xlabel="value")
     c.sectors({"low": 10, "mid": 20, "high": 15},
               column="band", axis="y")
+    df = {"band": ["low","low","mid","mid","mid","high","high"],
+          "val":  [2,    7,    5,    12,   18,   3,     10],
+          "v":    [0.2,  0.5,  0.3,  0.7,  0.4,  0.6,   0.8]}
     c.add_scatter(
-        data={"band": ["low","low","mid","mid","mid","high","high"],
-              "val":  [2,    7,    5,    12,   18,   3,     10],
-              "v":    [0.2,  0.5,  0.3,  0.7,  0.4,  0.6,   0.8]},
-        x="v", y="val", size=8,
+        data=df, mapping=aes(x="v", y="val"), size=8,
     )
     return c
 
@@ -158,7 +159,7 @@ def sectors_categorical_y_heatmap():
     df = {"col": ["c1", "c2", "c3", "c4"]}
     for name, values in zip(rows, matrix):
         df[name] = values
-    c.add_heatmap(data=df, x="col", values=rows)
+    c.add_heatmap(data=df, mapping=aes(x="col"), values=rows)
     return c
 
 
@@ -171,9 +172,10 @@ def test_sector_labels_follow_axis_side():
     # to hardcode left/bottom: with yticks(side="right") the margin was
     # reserved on the right but the labels drew at negative x, off-canvas.
     def make(tick_side):
-        c = pt.chart({"cat": ["a", "b", "c", "d"], "v": [1, 2, 3, 4]},
+        df = {"cat": ["a", "b", "c", "d"], "v": [1, 2, 3, 4]}
+        c = pt.chart(df,
                      data_width=280, data_height=160)
-        c.add_bar(x="cat", y="v")
+        c.add_bar(aes(x="cat", y="v"))
         c.sectors({"g1": ["a", "b"], "g2": ["c", "d"]}, axis="x")
         c.xticks(side=tick_side)
         c.yticks(side="right" if tick_side == "top" else "left")
@@ -255,11 +257,11 @@ def test_sectors_typo_in_data_raises_clearly():
     import pytest as _pytest
     c = pt.chart(data_width=200, data_height=80)
     c.sectors({"warmup": 100, "training": 500}, column="phase")
+    df = {"phase": ["warmup", "tarining", "warmup"],  # ← typo
+          "t":     [10, 20, 30],
+          "v":     [0.5, 0.5, 0.5]}
     c.add_scatter(
-        data={"phase": ["warmup", "tarining", "warmup"],  # ← typo
-              "t":     [10, 20, 30],
-              "v":     [0.5, 0.5, 0.5]},
-        x="t", y="v",
+        data=df, mapping=aes(x="t", y="v"),
     )
     with _pytest.raises(ValueError, match="tarining"):
         c.to_svg()
@@ -275,9 +277,9 @@ def test_sectors_after_artist_still_remaps():
     recording order; this test pins that behavior."""
     from plotlet.render._resolution import _replay
     c = pt.chart(data_width=200, data_height=80, ylim=(0, 1))
+    df = {"grp": ["g1", "g2"], "x": [25, 25], "y": [0.5, 0.5]}
     c.add_scatter(
-        data={"grp": ["g1", "g2"], "x": [25, 25], "y": [0.5, 0.5]},
-        x="x", y="y",
+        data=df, mapping=aes(x="x", y="y"),
     )
     c.coordinate(pt.CircularCoordinate()).sectors(
         {"g1": 100, "g2": 100}, column="grp",
@@ -300,9 +302,11 @@ def test_layout_sectors_cascade_no_leaf_mutation():
     a Layout-level sectors call composes cleanly with re-renders /
     fit() / regions() without leaking entries between calls."""
     t1 = pt.chart(data_width=200, data_height=60)
-    t1.add_line(data={"phase": ["warmup"], "t": [50], "v": [0.5]}, x="t", y="v")
+    df = {"phase": ["warmup"], "t": [50], "v": [0.5]}
+    t1.add_line(data=df, mapping=aes(x="t", y="v"))
     t2 = pt.chart(data_width=200, data_height=60)
-    t2.add_line(data={"phase": ["training"], "t": [50], "v": [0.5]}, x="t", y="v")
+    df2 = {"phase": ["training"], "t": [50], "v": [0.5]}
+    t2.add_line(data=df2, mapping=aes(x="t", y="v"))
     snapshot_t1 = list(t1._calls)
     snapshot_t2 = list(t2._calls)
     layout = (t1 / t2).sectors(PHASES, column="phase")
@@ -322,11 +326,11 @@ def test_sectors_passthrough_when_column_absent():
     silently pass through — they're an intentional shape."""
     c = pt.chart(data_width=200, data_height=80, ylim=(0, 1))
     c.sectors({"warmup": 100, "training": 500}, column="phase")
+    df = {"phase": ["warmup", "training"],
+          "t":     [50, 300],
+          "v":     [0.4, 0.7]}
     c.add_scatter(
-        data={"phase": ["warmup", "training"],
-              "t":     [50, 300],
-              "v":     [0.4, 0.7]},
-        x="t", y="v",
+        data=df, mapping=aes(x="t", y="v"),
     )
     # No 'phase' column on axhline data → no remap, no error.
     c.add_axhline(0.5, color="#888888")
@@ -363,8 +367,8 @@ def test_sectors_rejects_duplicates_and_nonpositive():
 def test_sectors_requires_column_kwarg():
     c = pt.chart(data_width=200, data_height=80)
     c.sectors({"a": 1, "b": 2}, column="grp")  # ok
-    c.add_line(data={"grp": ["a", "b"], "x": [0, 0], "y": [1, 2]},
-           x="x", y="y", group="grp")
+    df = {"grp": ["a", "b"], "x": [0, 0], "y": [1, 2]}
+    c.add_line(data=df, mapping=aes(x="x", y="y", group="grp"))
     c.to_svg()  # smoke
 
     c2 = pt.chart(data_width=200, data_height=80)

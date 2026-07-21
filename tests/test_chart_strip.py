@@ -10,6 +10,7 @@ import math
 import random
 
 import plotlet as pt
+from plotlet import aes
 import pytest
 
 
@@ -28,7 +29,7 @@ def chart_strip():
                  title="strip fill", xlabel="condition", ylabel="value",
                  legend=True)
     c.xscale("category", order=["A", "B", "C", "D"])
-    c.add_strip(data=data, x="cond", y="value", fill="series",
+    c.add_strip(data=data, mapping=aes(x="cond", y="value", fill="series"),
             palette={"a": "#3F97C5", "b": "#F99917"})
     c.legend()
     return c

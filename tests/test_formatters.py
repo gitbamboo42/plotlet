@@ -2,6 +2,7 @@
 import pytest
 
 import plotlet as pt
+from plotlet import aes
 from plotlet.formatters import get_formatter, _SUPERSCRIPTS, _SUBSCRIPTS
 
 
@@ -39,7 +40,8 @@ def test_power10():
 
 def test_power10_in_svg():
     c = pt.chart()
-    c.add_line(data={"x": [1, 10, 100, 1000], "y": [1, 2, 3, 4]}, x="x", y="y")
+    df = {"x": [1, 10, 100, 1000], "y": [1, 2, 3, 4]}
+    c.add_line(data=df, mapping=aes(x="x", y="y"))
     c.xscale("log")
     c.xticks(format="power10")
     assert ".notdef" not in c.to_svg()

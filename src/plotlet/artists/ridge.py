@@ -10,15 +10,16 @@ Categories are placed at integer y; densities are scaled to a fraction of
 the row spacing.
 
 API (long-form only):
-  c.add_ridge(data=df, x="label", y="value")
-  c.add_ridge(data=df, x="label", y="value", color="cohort")  # overlaid
+  c.add_ridge(aes(x="label", y="value"))
+  c.add_ridge(aes(x="label", y="value", color="cohort"))  # overlaid
                                                           # sub-densities
                                                           # per row
 
 Aesthetics:
-  color=         literal fill color OR column name → one overlaid KDE per
-                 level within each row (ggridges fill= second factor)
-  palette=       maps levels → colors when `color=` is a column
+  color=         bare → literal fill color; aes(color="col") → one
+                 overlaid KDE per level within each row (ggridges
+                 fill= second factor)
+  palette=       maps levels → colors when color is mapped in aes
 
 Styling kwargs:
   overlap=1.4    height of each ridge as a fraction of row spacing

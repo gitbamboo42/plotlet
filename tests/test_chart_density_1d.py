@@ -10,6 +10,7 @@ import math
 import random
 
 import plotlet as pt
+from plotlet import aes
 import pytest
 
 
@@ -20,8 +21,10 @@ def chart_density_1d():
     c = pt.chart(data_width=300, data_height=200,
                  title="density", xlabel="value", ylabel="density",
                  legend=True)
-    c.add_density_1d(data={"x": a}, x="x", label="control", fill=True)
-    c.add_density_1d(data={"x": b}, x="x", label="treatment", fill=True)
+    df = {"x": a}
+    c.add_density_1d(data=df, mapping=aes(x="x"), label="control", fill=True)
+    df2 = {"x": b}
+    c.add_density_1d(data=df2, mapping=aes(x="x"), label="treatment", fill=True)
     c.legend()
     return c
 
@@ -37,7 +40,7 @@ def chart_density_1d_long_color():
     c = pt.chart(data_width=320, data_height=200,
                  title="density (long-form, color)",
                  xlabel="value", ylabel="density", legend=True)
-    c.add_density_1d(data=df, x="val", color="group", fill=True)
+    c.add_density_1d(data=df, mapping=aes(x="val", color="group"), fill=True)
     c.legend()
     return c
 

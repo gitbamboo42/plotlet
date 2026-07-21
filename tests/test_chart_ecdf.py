@@ -10,6 +10,7 @@ import math
 import random
 
 import plotlet as pt
+from plotlet import aes
 import pytest
 
 
@@ -20,8 +21,10 @@ def chart_ecdf():
     c = pt.chart(data_width=300, data_height=200,
                  title="ECDF", xlabel="value", ylabel="F̂(x)",
                  legend=True)
-    c.add_ecdf(data={"x": a}, x="x", label="control")
-    c.add_ecdf(data={"x": b}, x="x", label="treatment")
+    df = {"x": a}
+    c.add_ecdf(data=df, mapping=aes(x="x"), label="control")
+    df2 = {"x": b}
+    c.add_ecdf(data=df2, mapping=aes(x="x"), label="treatment")
     c.legend()
     return c
 

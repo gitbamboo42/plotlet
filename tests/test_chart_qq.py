@@ -10,6 +10,7 @@ import math
 import random
 
 import plotlet as pt
+from plotlet import aes
 import pytest
 
 
@@ -21,7 +22,8 @@ def chart_qq():
                  title="Q-Q vs N(0, 1)",
                  xlabel="theoretical quantile",
                  ylabel="sample quantile")
-    c.add_qq(data={"s": sample}, sample="s", dist="normal")
+    df = {"s": sample}
+    c.add_qq(data=df, mapping=aes(sample="s"), dist="normal")
     return c
 
 
@@ -39,7 +41,7 @@ def chart_qq_color():
                  title="grouped Q-Q vs N(0, 1)",
                  xlabel="theoretical quantile",
                  ylabel="sample quantile", legend=True)
-    c.add_qq(data=df, sample="v", color="g")
+    c.add_qq(data=df, mapping=aes(sample="v", color="g"))
     c.legend()
     return c
 
@@ -61,7 +63,7 @@ def test_qq_color_grouping():
     df = {"v": [rng.gauss(0, 1) for _ in range(40)],
           "g": ["a", "b"] * 20}
     c = pt.chart(df)
-    c.add_qq(sample="v", color="g")
+    c.add_qq(aes(sample="v", color="g"))
     svg = c.to_svg()
     assert svg.count('data-plotlet-type="qq"') == 2
     # each group's robust reference line takes the group color

@@ -141,6 +141,9 @@ def _decode(value: Any, nid_to_node: dict) -> Any:
         if "$sectors" in value:
             from .sectors import Sectors
             return Sectors._from_dict(_decode(value["$sectors"], nid_to_node))
+        if "$aes" in value and len(value) == 1:
+            from .utils import Aes
+            return Aes(value["$aes"])
         return {k: _decode(v, nid_to_node) for k, v in value.items()}
     if isinstance(value, list):
         return [_decode(v, nid_to_node) for v in value]

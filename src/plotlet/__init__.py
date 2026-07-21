@@ -1,15 +1,17 @@
 """plotlet — pure-Python deferred-rendering SVG plot library.
 
     import plotlet as pt
+    from plotlet import aes
+
     c = pt.chart(df, title="...", xlabel="x", ylabel="y", legend=True, gridlines=True)
-    c.add_line(x="time", y="value", color="series")
+    c.add_line(aes(x="time", y="value", color="series"))
     c                         # auto-renders in Jupyter
 
 Chart methods chain for incremental composition:
 
     df = {"x": [1, 2, 3], "y": [1, 4, 9]}
     c = pt.chart()
-    c.add_line(df, x="x", y="y", label="squares")
+    c.add_line(df, aes(x="x", y="y"), label="squares")
     c.title("Hello").legend().gridlines(True)
     c
 """
@@ -18,6 +20,7 @@ from .draw import TAB10, palette, list_palettes
 from .draw import colormap, list_colormaps, register_colormap
 from . import artists  # noqa: F401  — registers built-in artists on import
 from .record.chart import Chart, Layout, chart, grid
+from .utils import aes
 from .record.legend import legend
 from .registry import ArtistSpec, add_artist, artist_table, declare_coord_support
 from .sectors import Sectors

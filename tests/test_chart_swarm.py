@@ -10,6 +10,7 @@ import math
 import random
 
 import plotlet as pt
+from plotlet import aes
 import pytest
 
 
@@ -28,7 +29,7 @@ def chart_swarm():
                  title="swarm fill", xlabel="group", ylabel="value",
                  legend=True)
     c.xscale("category", order=["A", "B", "C", "D"])
-    c.add_swarm(data=data, x="group", y="value", fill="series",
+    c.add_swarm(data=data, mapping=aes(x="group", y="value", fill="series"),
             palette={"a": "#3F97C5", "b": "#F99917"})
     c.legend()
     return c
@@ -48,8 +49,9 @@ def test_swarm_drops_nan():
     # NaN has no position: it used to emit cy="nan" circles and degrade
     # collision placement of every neighboring point.
     nan = float("nan")
-    c = pt.chart({"cat": ["a", "a", "a", "b"], "v": [1.0, nan, 2.0, nan]})
-    c.add_swarm(x="cat", y="v")
+    df = {"cat": ["a", "a", "a", "b"], "v": [1.0, nan, 2.0, nan]}
+    c = pt.chart(df)
+    c.add_swarm(aes(x="cat", y="v"))
     svg = c.to_svg()
     assert "nan" not in svg
     assert svg.count("<circle") == 2

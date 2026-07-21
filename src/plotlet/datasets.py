@@ -24,7 +24,7 @@ Example:
 
     import plotlet as pt
     penguins = pt.load_dataset("penguins")
-    c = pt.chart(penguins, x="bill_length_mm", y="bill_depth_mm", color="species")
+    c = pt.chart(penguins, aes(x="bill_length_mm", y="bill_depth_mm", color="species"))
     c.add_scatter()
 """
 from __future__ import annotations
@@ -79,7 +79,7 @@ def load_dataset(name):
     Pass directly to `pt.chart(...)`:
 
         df = pt.load_dataset("penguins")
-        pt.chart(df, x="bill_length_mm", y="bill_depth_mm", color="species")
+        pt.chart(df, aes(x="bill_length_mm", y="bill_depth_mm", color="species"))
 
     See `pt.list_datasets()` for what's available.
     """
