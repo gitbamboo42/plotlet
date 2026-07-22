@@ -81,3 +81,56 @@ def test_aes_and_bare_kwarg_collision_raises():
         assert "pick one" in str(e)
     else:
         raise AssertionError("expected TypeError for aes/kwarg collision")
+
+
+def test_inherit_aes_false_ignores_chart_mapping():
+    """inherit_aes=False opts an artist out of chart-level aes, so a layer
+    drawn from its own table (without the chart's mapped columns) doesn't
+    inherit a mapping it can't satisfy."""
+    chart_df = {"x": [1, 2, 3, 4], "y": [1, 2, 3, 4], "g": ["a", "a", "b", "b"]}
+    line_df = {"px": [1, 4], "py": [4, 1]}   # no "g" column
+
+    c = pt.chart(chart_df, aes(x="x", y="y", color="g"))
+    c.add_scatter()
+    # without inherit_aes=False the chart's color="g" would leak in and
+    # KeyError on line_df; opting out keeps only the call's own aes
+    c.add_line(line_df, aes(x="px", y="py"), inherit_aes=False)
+    assert c.to_svg()
+
+
+def test_inherit_aes_false_equals_no_chart_aes():
+    """A self-describing artist with inherit_aes=False renders identically
+    to the same artist on a chart that has no aes to inherit."""
+    df = {"x": [1, 2, 3, 4], "y": [1, 2, 3, 4], "g": ["a", "a", "b", "b"]}
+
+    optout = pt.chart(df, aes(x="x", y="y", color="g"))
+    optout.add_line(aes(x="x", y="y"), inherit_aes=False)
+
+    ref = pt.chart(df)
+    ref.add_line(aes(x="x", y="y"))
+
+    assert optout.to_svg() == ref.to_svg()
+
+
+def test_inherit_aes_false_still_inherits_data():
+    """inherit_aes controls aes only (like ggplot2's inherit.aes) — the
+    chart-level table is still inherited when the artist brings none."""
+    df = {"x": [1, 2, 3, 4], "y": [1, 2, 3, 4], "g": ["a", "a", "b", "b"]}
+
+    c = pt.chart(df, aes(x="x", y="y"))
+    c.add_line(aes(x="x", y="y"), inherit_aes=False)   # no own table
+    assert c.to_svg()
+
+
+def test_inherit_aes_is_a_directive_not_recorded():
+    """inherit_aes is consumed at record time — it never lands in the
+    journal or reaches the artist's record fn."""
+    df = {"x": [1, 2, 3, 4], "y": [1, 2, 3, 4], "g": ["a", "a", "b", "b"]}
+
+    c = pt.chart(df, aes(x="x", y="y", color="g"))
+    c.add_line(aes(x="x", y="y"), inherit_aes=False)
+    blob = pt.to_json(c)
+    art = [e for e in blob["entries"] if e["op"] == "line"][0]
+    assert "inherit_aes" not in art["kwargs"]
+    # the recorded mapping carries only what the call kept (no color="g")
+    assert "color" not in art["kwargs"]["mapping"]

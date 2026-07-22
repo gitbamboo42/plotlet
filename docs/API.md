@@ -282,10 +282,17 @@ per level. Not on `scatter` since there's no line to dash.
 Chart-level mappings are set once on the constructor —
 `pt.chart(df, aes(x=, y=, color=, fill=, group=, linestyle=))` —
 and are inherited by calls that don't override them (`aes(alpha=)` is
-per-call only). Literal defaults (`color="red"`, `palette=`) stay as
-plain chart kwargs. Other artists (boxplot, bar, hist, etc.) accept
-only the relevant subset for their geometry; chart-level mappings they
-don't support pass through silently.
+per-call only). Inheritance is per-key: a mark keeps every chart-level
+mapping it doesn't name itself. Literal defaults (`color="red"`,
+`palette=`) stay as plain chart kwargs. Other artists (boxplot, bar,
+hist, etc.) accept only the relevant subset for their geometry;
+chart-level mappings they don't support pass through silently.
+
+To keep an inherited mapping off one mark: pass a constant to override
+it (`c.add_line(color="#333")` blocks the inherited `color`), or
+`inherit_aes=False` to drop *all* chart-level aes on that call —
+ggplot2's `inherit.aes=FALSE`. It affects mappings only; the chart's
+data is still inherited if the mark brings none.
 
 The tables list styling kwargs; the grouping/long-form pattern is
 universal and not repeated.

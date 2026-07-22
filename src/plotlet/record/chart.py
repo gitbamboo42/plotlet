@@ -565,6 +565,12 @@ class Chart(_Renderable):
                     # kwargs. "mapping" is reserved — no artist kwarg
                     # may use it for anything else.
                     aes_map = {}
+                    # `inherit_aes=False` (ggplot2's inherit.aes) opts this
+                    # artist out of the chart-level aes inheritance below —
+                    # it draws with only the mapping its own call gives.
+                    # A record-time directive: consumed here, never recorded
+                    # or handed to the artist's record fn.
+                    inherit_aes = kwargs.pop("inherit_aes", True)
                     m = kwargs.pop("mapping", None)
                     if m is not None:
                         if not isinstance(m, (Aes, dict)):
@@ -600,15 +606,16 @@ class Chart(_Renderable):
                     # inject aes the artist can accept, since its
                     # signature would otherwise reject an unknown name.
                     known = getattr(spec.record, "__kwarg_names__", None)
-                    for k, v in self._aes_map.items():
-                        if (k not in aes_map and k not in kwargs
-                                and (known is None or k in known)):
-                            aes_map[k] = v
-                    for k, v in self._aes.items():
-                        if (v is not None and k not in kwargs
-                                and k not in aes_map
-                                and (known is None or k in known)):
-                            kwargs[k] = v
+                    if inherit_aes:
+                        for k, v in self._aes_map.items():
+                            if (k not in aes_map and k not in kwargs
+                                    and (known is None or k in known)):
+                                aes_map[k] = v
+                        for k, v in self._aes.items():
+                            if (v is not None and k not in kwargs
+                                    and k not in aes_map
+                                    and (known is None or k in known)):
+                                kwargs[k] = v
                     # Data injection — a call that maps columns via
                     # aes(...) draws from the chart-level table. A call
                     # that brings its own data overrides it, whether the
