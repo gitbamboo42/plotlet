@@ -18,12 +18,13 @@ def chart_qq():
     rng = random.Random(16)
     sample = [rng.gauss(0, 1) + 0.2 * (rng.expovariate(1) - 1)
               for _ in range(150)]
-    c = pt.chart(data_width=280, data_height=240,
+    df = {"s": sample}
+
+    c = pt.chart(df, aes(sample="s"), data_width=280, data_height=240,
                  title="Q-Q vs N(0, 1)",
                  xlabel="theoretical quantile",
                  ylabel="sample quantile")
-    df = {"s": sample}
-    c.add_qq(data=df, mapping=aes(sample="s"), dist="normal")
+    c.add_qq(dist="normal")
     return c
 
 
@@ -37,11 +38,12 @@ def chart_qq_color():
         rows_v.append(rng.gauss(0, 1) + 0.8 * (rng.expovariate(1) - 1))
         rows_g.append("skewed")
     df = {"v": rows_v, "g": rows_g}
-    c = pt.chart(data_width=280, data_height=240,
+
+    c = pt.chart(df, aes(sample="v", color="g"), data_width=280, data_height=240,
                  title="grouped Q-Q vs N(0, 1)",
                  xlabel="theoretical quantile",
                  ylabel="sample quantile", legend=True)
-    c.add_qq(data=df, mapping=aes(sample="v", color="g"))
+    c.add_qq()
     c.legend()
     return c
 
@@ -62,8 +64,8 @@ def test_qq_color_grouping():
     rng = random.Random(1)
     df = {"v": [rng.gauss(0, 1) for _ in range(40)],
           "g": ["a", "b"] * 20}
-    c = pt.chart(df)
-    c.add_qq(aes(sample="v", color="g"))
+    c = pt.chart(df, aes(sample="v", color="g"))
+    c.add_qq()
     svg = c.to_svg()
     assert svg.count('data-plotlet-type="qq"') == 2
     # each group's robust reference line takes the group color

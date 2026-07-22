@@ -22,6 +22,7 @@ def chart_heatmap_labeled():
             for r in range(6)]
     rows = [f"r{i}" for i in range(6)]
     cols = [f"c{i}" for i in range(8)]
+
     c = pt.chart(title="heatmap (labeled rows/cols)",
                  xlabel="condition", ylabel="sample")
     c.add_heatmap(data=_tidy_heatmap(data, cols, rows, xname="condition"), mapping=aes(x="condition"), values=rows, cmap="viridis")
@@ -36,6 +37,7 @@ def chart_heatmap_dataframe():
     samples  = [f"sample_{i}" for i in range(n_rows)]
     features = [f"feature_{j}" for j in range(n_cols)]
     tidy = _tidy_heatmap(values, features, samples, xname="feature")
+
     c = pt.chart(title="heatmap (DataFrame branch, diverging cmap)")
     c.add_heatmap(data=_mock_tidy_df(tidy), mapping=aes(x="feature"), values=samples,
               cmap="bwr", center=0)
@@ -53,6 +55,7 @@ def chart_heatmap_annot():
     n = 6
     data = [[math.cos((i - j) * 0.4) for j in range(n)] for i in range(n)]
     labels = [f"v{i}" for i in range(n)]
+
     c = pt.chart(title="correlation matrix (annot=True)")
     c.add_heatmap(data=_tidy_heatmap(data, labels, labels, xname="var"), mapping=aes(x="var"), values=labels,
               cmap="RdBu_r", vmin=-1, vmax=1, annot=True, fmt="+.2f",
@@ -78,6 +81,7 @@ def chart_heatmap_categorical():
         "Gamma":  "#e67e22",
         "Delta":  "#27ae60",
     }
+
     c = pt.chart(title="heatmap (categorical palette, absent=grey)",
                  xlabel="sample", ylabel="row")
     c.add_heatmap(data=_tidy_heatmap(matrix, samples, rows, xname="sample"), mapping=aes(x="sample"), values=rows,
@@ -96,6 +100,7 @@ def chart_heatmap_nan():
         [None,      2.0,          None, 4.0 ],
         [float("nan"), 1.5,       2.5,  None],
     ]
+
     c = pt.chart(title="heatmap (NaN/None → absent_fill)")
     c.add_heatmap(data=_tidy_heatmap(matrix, cols, rows, xname="col"), mapping=aes(x="col"), values=rows, cmap="viridis", absent_fill="#ff9999")
     c.legend()
@@ -112,6 +117,7 @@ def chart_heatmap_palette_annot():
               ["miss", "hit", "miss", "hit"]]
     counts = [[1234, 8, 250, 42],
               [3, 990000, 17, 5]]
+
     c = pt.chart(title="palette heatmap (verbatim numeric annot)")
     c.add_heatmap(data=_tidy_heatmap(matrix, samples, rows, xname="s"), mapping=aes(x="s"), values=rows,
               palette={"hit": "#4477aa", "miss": "#ee6677"}, annot=counts)
@@ -125,6 +131,7 @@ def chart_heatmap_continuous_x():
     matrix = [[math.sin(0.5 * c + r) for c in range(10)] for r in range(6)]
     xs = [float(i) for i in range(10)]
     tracks = [f"r{i}" for i in range(6)]
+
     c = pt.chart(title="heatmap (continuous x)",
                  xlabel="x position", ylabel="track")
     c.add_heatmap(data=_tidy_heatmap(matrix, xs, tracks, xname="x"), mapping=aes(x="x"), values=tracks, cmap="viridis")
@@ -138,6 +145,7 @@ def chart_heatmap_continuous_x_cat_y():
     matrix = [[math.sin(0.4 * c + r) for c in range(12)] for r in range(3)]
     xs = [float(i) for i in range(12)]
     tracks = ["t1", "t2", "t3"]
+
     c = pt.chart(title="heatmap (continuous x, categorical tracks)",
                  xlabel="x position")
     c.add_heatmap(data=_tidy_heatmap(matrix, xs, tracks, xname="x"), mapping=aes(x="x"), values=tracks, cmap="magma")
@@ -150,6 +158,7 @@ def chart_heatmap_continuous_uneven():
     # each column gets a different width.
     matrix = [[1.0, 2.0, 3.0, 4.0, 5.0]]
     xs = [0.0, 1.0, 3.0, 6.0, 10.0]
+
     c = pt.chart(title="heatmap (uneven continuous x)", xlabel="t")
     c.add_heatmap(data=_tidy_heatmap(matrix, xs, ["v"], xname="t"), mapping=aes(x="t"), values=["v"], cmap="viridis", annot=True)
     c.legend()
@@ -164,6 +173,7 @@ def chart_heatmap_continuous_nan():
         [None, 2.0, 5.0, 4.0],
     ]
     xs = [0.0, 1.0, 2.0, 3.0]
+
     c = pt.chart(title="heatmap (continuous + NaN → absent_fill)",
                  xlabel="x")
     c.add_heatmap(data=_tidy_heatmap(matrix, xs, ["a", "b"], xname="x"), mapping=aes(x="x"), values=["a", "b"], cmap="viridis", absent_fill="#ff9999")
@@ -185,6 +195,7 @@ def chart_heatmap_split():
     row_groups = ["A", "B", "A", "C", "A", "B", "C", "B"]
     col_groups = ["X", "Y", "Z", "X", "Y", "Z", "Y", "Z",
                   "X", "Y", "Z", "Y"]
+
     c = pt.chart(title="heatmap (row + column clusters)")
     c.sectors(_by_label(col_labels, col_groups), axis="x",
               divider=False, label=False)
@@ -269,7 +280,7 @@ def test_heatmap_rejects_non_dict_palette():
     # injected into the heatmap call by aes inheritance — reject it
     # clearly instead of crashing on `_palette.items()` at draw.
     df = {"x": [0.0, 1.0], "v": [1.0, 2.0]}
-    c = pt.chart(data=df, mapping=aes(x="x"),
+    c = pt.chart(df, aes(x="x"),
                  palette=["#111111", "#222222"])
     c.add_heatmap()
     with pytest.raises(TypeError, match="palette"):
@@ -279,7 +290,7 @@ def test_heatmap_rejects_non_dict_palette():
 def test_heatmap_inherited_y_not_a_track():
     # A chart-level y binding must not be swept into the value tracks.
     df = {"x": ["a", "b"], "v": [1.0, 2.0], "w": [3.0, 4.0]}
-    c = pt.chart(data=df, mapping=aes(x="x", y="w"))
+    c = pt.chart(df, aes(x="x", y="w"))
     c.add_heatmap()
     assert 'rows="1"' in c.to_svg()
 

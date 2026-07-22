@@ -22,9 +22,10 @@ def chart_scatter_color():
         "y":     [rng.random() * 10 for _ in range(2 * n)],
         "group": ["A"] * n + ["B"] * n,
     }
-    c = pt.chart(df, title="scatter color",
+
+    c = pt.chart(df, aes(x="x", y="y", color="group"), title="scatter color",
                  xlabel="x", ylabel="y", legend=True, gridlines=True)
-    c.add_scatter(aes(x="x", y="y", color="group"), size=3, alpha=0.6)
+    c.add_scatter(size=3, alpha=0.6)
     return c
 
 
@@ -42,12 +43,13 @@ def chart_clip_data_area():
     xs    += [9.7, 9.5, 9.8, 8.6, 7.4]
     ys    += [9.5, 9.8, 7.4, 9.7, 9.5]
     sizes += [13, 14, 13, 14, 13]
-    c = pt.chart(data_width=320, data_height=240, clip=False,
+    df = {"x": xs, "y": ys}
+
+    c = pt.chart(df, aes(x="x", y="y"), data_width=320, data_height=240, clip=False,
                  title="clip=False",
                  xlabel="x", ylabel="y",
                  xlim=(0, 10), ylim=(0, 10))
-    df = {"x": xs, "y": ys}
-    c.add_scatter(data=df, mapping=aes(x="x", y="y"), size=sizes, color="C0", alpha=0.6)
+    c.add_scatter(size=sizes, color="C0", alpha=0.6)
     return c
 
 
@@ -59,9 +61,10 @@ def chart_scatter_size():
         "y":    [math.sin(i / 5) + random.uniform(-0.2, 0.2) for i in range(40)],
         "mass": [abs(math.cos(i / 4)) * 50 + 5 for i in range(40)],
     }
-    c = pt.chart(df, data_width=400, data_height=200,
+
+    c = pt.chart(df, aes(x="x", y="y", size="mass"), data_width=400, data_height=200,
                  title="bubble", xlabel="x", ylabel="y")
-    c.add_scatter(aes(x="x", y="y", size="mass"), sizes=(2, 8))
+    c.add_scatter(sizes=(2, 8))
     c.legend()
     return c
 
@@ -77,10 +80,12 @@ def chart_scatter_size_style_color():
         "mass":  [random.uniform(5, 50) for _ in range(n)],
         "group": [groups[i % 3] for i in range(n)],
     }
-    c = pt.chart(df, data_width=400, data_height=240,
+
+    c = pt.chart(df, aes(x="x", y="y", color="group", size="mass", style="group"),
+                 data_width=400, data_height=240,
                  title="color + size + style", xlabel="x", ylabel="y",
                  legend=True)
-    c.add_scatter(aes(x="x", y="y", color="group", size="mass", style="group"))
+    c.add_scatter()
     return c
 
 
@@ -95,10 +100,11 @@ def chart_scatter_long_color():
                          "y": rng.gauss(my, 0.6),
                          "group": g})
     df = pd.DataFrame(rows)
-    c = pt.chart(data_width=300, data_height=240,
+
+    c = pt.chart(df, aes(x="x", y="y", color="group"), data_width=300, data_height=240,
                  title="scatter (long-form, color)",
                  xlabel="x", ylabel="y", legend=True)
-    c.add_scatter(data=df, mapping=aes(x="x", y="y", color="group"))
+    c.add_scatter()
     c.legend()
     return c
 
@@ -115,10 +121,12 @@ def chart_scatter_alpha_col():
                              "y": rng.gauss(my, 0.7),
                              "group": g, "period": period})
     data = {k: [r[k] for r in rows] for k in rows[0]}
-    c = pt.chart(data_width=300, data_height=240,
+
+    c = pt.chart(data, aes(x="x", y="y", color="group", alpha="period"),
+                 data_width=300, data_height=240,
                  title="scatter (alpha column)", xlabel="x", ylabel="y",
                  legend=True)
-    c.add_scatter(data=data, mapping=aes(x="x", y="y", color="group", alpha="period"))
+    c.add_scatter()
     c.legend()
     return c
 

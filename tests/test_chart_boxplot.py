@@ -27,12 +27,13 @@ def chart_boxplot():
     rows += [{"group": "low", "trt": "A", "score": 12},
              {"group": "high", "trt": "B", "score": 16}]
     data = {k: [r[k] for r in rows] for k in rows[0]}
-    c = pt.chart(data_width=380, data_height=220,
+
+    c = pt.chart(data, aes(x="group", y="score", fill="trt"),
+                 data_width=380, data_height=220,
                  title="boxplot fill", xlabel="group", ylabel="score",
                  legend=True)
     c.xscale("category", order=["ctrl", "low", "mid", "high"])
-    c.add_boxplot(data=data, mapping=aes(x="group", y="score", fill="trt"),
-              palette={"A": "#3F97C5", "B": "#F99917"})
+    c.add_boxplot(palette={"A": "#3F97C5", "B": "#F99917"})
     c.legend()
     return c
 
@@ -48,6 +49,7 @@ def chart_aes_inheritance():
         for _ in range(40):
             rows.append({"group": g, "value": rng.gauss(mu, 0.6)})
     df = pd.DataFrame(rows)
+
     c = pt.chart(df, aes(x="group", y="value"),
                  data_width=320, data_height=240,
                  title="aes inheritance (boxplot + strip)")
@@ -65,10 +67,11 @@ def chart_boxplot_notch_h():
         for _ in range(40):
             rows.append({"site": site, "ph": rng.gauss(mu, 1.1)})
     data = {k: [r[k] for r in rows] for k in rows[0]}
-    c = pt.chart(data_width=320, data_height=200,
+
+    c = pt.chart(data, aes(x="site", y="ph"),
+                 data_width=320, data_height=200,
                  title="boxplot horizontal + notch + means", xlabel="pH")
-    c.add_boxplot(data=data, mapping=aes(x="site", y="ph"), orientation="h",
-              notch=True, showmeans=True)
+    c.add_boxplot(orientation="h", notch=True, showmeans=True)
     return c
 
 
@@ -81,10 +84,11 @@ def chart_boxplot_unfilled():
         for _ in range(35):
             rows.append({"batch": batch, "amount": rng.gauss(mu, 1.4)})
     data = {k: [r[k] for r in rows] for k in rows[0]}
-    c = pt.chart(data_width=300, data_height=200,
+
+    c = pt.chart(data, aes(x="batch", y="amount"),
+                 data_width=300, data_height=200,
                  title="boxplot unfilled, no fliers", ylabel="amount")
-    c.add_boxplot(data=data, mapping=aes(x="batch", y="amount"), fill=False,
-              showfliers=False, whis=1.0, color="#336699")
+    c.add_boxplot(fill=False, showfliers=False, whis=1.0, color="#336699")
     return c
 
 

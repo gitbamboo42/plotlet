@@ -24,10 +24,11 @@ def chart_errorbar():
                 "y": [1.5, 2.6, 3.3, 4.7, 5.9, 6.8],
                 "lo": [0.2, 0.3, 0.2, 0.4, 0.3, 0.5],
                 "hi": [0.5, 0.4, 0.6, 0.3, 0.5, 0.4]}
+
     c = pt.chart(title="error bars", xlabel="x", ylabel="y", legend=True)
-    c.add_errorbar(data=df_meas, mapping=aes(x="x", y="y", yerr="sd"), label="measurement")
-    c.add_errorbar(data=df_model, mapping=aes(x="x", y="y"), yerr=("lo", "hi"),
-               marker="s", label="model")
+    c.add_errorbar(df_meas, aes(x="x", y="y", yerr="sd"), label="measurement")
+    c.add_errorbar(df_model, aes(x="x", y="y"), yerr=("lo", "hi"),
+                   marker="s", label="model")
     return c
 
 
@@ -36,9 +37,11 @@ def chart_errorbar_grouped():
     # per-group legend entries.
     df = _bar_quarterly_df()
     df["sd"] = [round(0.4 + 0.08 * v, 2) for v in df["value"]]
-    c = pt.chart(data_width=320, data_height=200,
+
+    c = pt.chart(df, aes(x="quarter", y="value", yerr="sd", color="series"),
+                 data_width=320, data_height=200,
                  title="errorbar grouped (dodged)", ylabel="$M", legend=True)
-    c.add_errorbar(data=df, mapping=aes(x="quarter", y="value", yerr="sd", color="series"))
+    c.add_errorbar()
     c.legend()
     return c
 

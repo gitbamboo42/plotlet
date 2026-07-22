@@ -62,17 +62,18 @@ def _composed_fig():
     children, a legend with sources and name overrides, an attachment,
     and an inset."""
     data = {"x": [1, 2, 3, 4, 5], "y": [2.0, 3.5, 3.1, 4.8, 4.2]}
-    a = pt.chart(data_width=200, data_height=140, title="a")
-    a.add_scatter(data=data, mapping=aes(x="x", y="y"), label="pts")
-    inset = a.inset(rect=(0.55, 0.55, 0.4, 0.4))
-    inset.add_line(data=data, mapping=aes(x="x", y="y"))
 
-    top = pt.chart(data_width=200, data_height=40)
-    top.add_bar(data=data, mapping=aes(x="x", y="y"))
+    a = pt.chart(data, aes(x="x", y="y"), data_width=200, data_height=140, title="a")
+    a.add_scatter(label="pts")
+    inset = a.inset(rect=(0.55, 0.55, 0.4, 0.4), data=data, mapping=aes(x="x", y="y"))
+    inset.add_line()
+
+    top = pt.chart(data, aes(x="x", y="y"), data_width=200, data_height=40)
+    top.add_bar()
     a.attach_above(top)
 
-    b = pt.chart(data_width=200, data_height=140, title="b")
-    b.add_line(data=data, mapping=aes(x="x", y="y"), label="trend")
+    b = pt.chart(data, aes(x="x", y="y"), data_width=200, data_height=140, title="b")
+    b.add_line(label="trend")
 
     return a | b | pt.legend(a, b, names={a: "Panel A"})
 
@@ -181,6 +182,7 @@ def test_sectored_root_wraps_in_layout():
     `sectors` op; panel ops — artists, frame state, the panel title —
     stay on the leaf."""
     df = {"x": [1.0, 2.0], "y": [3.0, 4.0]}
+
     c = pt.chart(df,
                  title="panel title", xlim=(0, 10))
     c.add_scatter(aes(x="x", y="y"))
@@ -199,6 +201,7 @@ def test_circular_root_hoists_title_coordinate_sectors():
     together — the overlay path reads all three off the layout (the
     band, the strategy, and the inner-disc sector inheritance)."""
     df = {"x": [1.0, 2.0], "y": [3.0, 4.0]}
+
     c = pt.chart(df,
                  title="ring", xlim=(0, 10), ylim=(0, 5))
     c.add_scatter(aes(x="x", y="y"))
@@ -216,6 +219,7 @@ def test_plain_root_wraps_with_no_hoist():
     """Every root wraps — a plain chart becomes a 1×1 layout with an
     empty op list; panel state (the title) stays on the leaf."""
     df = {"x": [1.0], "y": [2.0]}
+
     c = pt.chart(df, title="t")
     c.add_scatter(aes(x="x", y="y"))
     root, leaf = _root_and_leaf(pt.to_ir(c))
@@ -232,6 +236,7 @@ def test_lone_chart_equals_its_grid_form():
     the wrapper (a lone dark chart keeps its dark canvas)."""
     def chart(theme=None):
         df = {"x": [1.0, 2.0, 3.0], "y": [4.0, 5.0, 6.0]}
+
         c = pt.chart(df,
                      title="t", xlabel="x")
         c.add_scatter(aes(x="x", y="y"))
@@ -248,10 +253,12 @@ def test_sectored_layout_child_does_not_wrap():
     sectors — in-layout charts already have a layout home for
     composition state, and grid cells are charts by API contract."""
     df = {"x": [1.0, 2.0], "y": [3.0, 4.0]}
+
     a = pt.chart(df, xlim=(0, 10))
     a.add_scatter(aes(x="x", y="y"))
     a.sectors(pt.Sectors(names=("A",), lengths=(10.0,), gap=2))
     df2 = {"x": [1.0], "y": [2.0]}
+
     b = pt.chart(df2)
     b.add_scatter(aes(x="x", y="y"))
 

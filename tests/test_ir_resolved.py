@@ -120,8 +120,9 @@ def test_resolve_json_safe(label, fn):
 def test_figure_ir_resolve_method():
     """`FigureIR.resolve()` — the method form on a hand-built IR."""
     data = {"x": [1, 2, 3], "y": [2.0, 3.1, 4.5]}
-    c = pt.chart(data_width=200, data_height=140, title="t")
-    c.add_scatter(data=data, mapping=aes(x="x", y="y"))
+
+    c = pt.chart(data, aes(x="x", y="y"), data_width=200, data_height=140, title="t")
+    c.add_scatter()
     via_method = pt.to_ir(c).resolve()
     # a lone chart resolves through its 1×1 layout wrapper; the panel
     # title lives on the leaf
@@ -135,9 +136,11 @@ def test_layout_title_projected():
     `IRLayout.title`, last call wins, `None` when untitled."""
     def pair():
         df = {"x": [1.0, 2.0], "y": [3.0, 4.0]}
+
         a = pt.chart(df)
         a.add_scatter(aes(x="x", y="y"))
         df2 = {"x": [1.0, 2.0], "y": [4.0, 3.0]}
+
         b = pt.chart(df2)
         b.add_line(aes(x="x", y="y"))
         return a | b
@@ -153,6 +156,7 @@ def test_projection_state_is_sparse():
     from `_default_state()`), and there are no duplicate curated
     views: `state` is the single copy."""
     df = {"x": [1.0, 2.0], "y": [3.0, 4.0]}
+
     c = pt.chart(df, title="demo")
     c.add_scatter(aes(x="x", y="y"))
     (panel,) = pt.to_ir(c).resolve().root.children
@@ -171,6 +175,7 @@ def test_themed_panel_round_trips_through_sparse_state():
     under the panel's own theme. The SVG emitted from the projection
     must match the direct render byte for byte."""
     df = {"x": [1.0, 2.0], "y": [3.0, 4.0]}
+
     c = pt.chart(df, theme="minimal")
     c.add_scatter(aes(x="x", y="y"))
     ir = pt.to_ir(c)
@@ -185,6 +190,7 @@ def test_themed_panel_round_trips_through_sparse_state():
 def _rect_chart():
     df = {"x": [1.0, 2.0, 3.0], "y": [2.0, 3.1, 4.5],
           "g": ["a", "b", "a"]}
+
     c = pt.chart(df, title="pin")
     c.add_scatter(aes(x="x", y="y", color="g"))
     return c
@@ -192,9 +198,11 @@ def _rect_chart():
 
 def _rect_layout():
     df = {"x": [1.0, 2.0], "y": [3.0, 4.0]}
+
     a = pt.chart(df)
     a.add_scatter(aes(x="x", y="y"))
     df2 = {"x": [1.0, 2.0], "y": [4.0, 3.0]}
+
     b = pt.chart(df2)
     b.add_line(aes(x="x", y="y"))
     return (a | b).title("pinned pair")
@@ -202,6 +210,7 @@ def _rect_layout():
 
 def _circular():
     df = {"x": [1, 2, 3], "y": [1.0, 4.0, 9.0]}
+
     c = pt.chart(df)
     c.add_scatter(aes(x="x", y="y"))
     lay = pt.grid([[c]])
@@ -270,6 +279,7 @@ def test_resolved_ir_stable_under_render():
     a rendered ResolvedIR stays field-equal to a freshly built one."""
     def build():
         df = {"v": [1.0, 1.5, 2.0, 2.2, 3.0], "g": ["a"] * 3 + ["b"] * 2}
+
         c = pt.chart(df)
         c.add_hist(aes(x="v", fill="g"))
         df2 = {"x": [1.0, 2.0], "y": [1.0, 2.0]}

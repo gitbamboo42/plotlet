@@ -25,12 +25,13 @@ def _xs():
 
 def _demo(theme: str) -> pt.Chart:
     xs = _xs()
+    df = {"x": xs, "y": [math.sin(x) for x in xs]}
+
     c = pt.chart(theme=theme, title=f"theme: {theme}",
                  xlabel="t", ylabel="value", legend=True)
-    df = {"x": xs, "y": [math.sin(x) for x in xs]}
-    c.add_line(data=df, mapping=aes(x="x", y="y"), label="sin(t)")
+    c.add_line(df, aes(x="x", y="y"), label="sin(t)")
     df2 = {"x": xs, "y": [math.cos(x) for x in xs]}
-    c.add_line(data=df2, mapping=aes(x="x", y="y"), label="cos(t)", linestyle="--")
+    c.add_line(df2, aes(x="x", y="y"), label="cos(t)", linestyle="--")
     return c
 
 
@@ -44,12 +45,14 @@ def theme_mixed_layout():
     """Two leaves with different themes side-by-side. Confirms per-leaf
     `active_theme()` scoping works in the layout renderer."""
     xs = _xs()
-    left = pt.chart(theme="minimal", title="minimal", xlabel="t", ylabel="sin")
     df = {"x": xs, "y": [math.sin(x) for x in xs]}
-    left.add_line(data=df, mapping=aes(x="x", y="y"))
-    right = pt.chart(theme="dark", title="dark", xlabel="t", ylabel="cos")
+
+    left = pt.chart(df, aes(x="x", y="y"), theme="minimal", title="minimal", xlabel="t", ylabel="sin")
+    left.add_line()
     df2 = {"x": xs, "y": [math.cos(x) for x in xs]}
-    right.add_line(data=df2, mapping=aes(x="x", y="y"))
+
+    right = pt.chart(df2, aes(x="x", y="y"), theme="dark", title="dark", xlabel="t", ylabel="cos")
+    right.add_line()
     return left | right
 
 
@@ -60,10 +63,11 @@ def theme_dark_scatter():
     rng = random.Random(0)
     xs = [rng.gauss(0, 1) for _ in range(80)]
     ys = [rng.gauss(0, 1) for _ in range(80)]
-    c = pt.chart(theme="dark", title="dark scatter",
-                 xlabel="x", ylabel="y")
     df = {"x": xs, "y": ys}
-    c.add_scatter(data=df, mapping=aes(x="x", y="y"))
+
+    c = pt.chart(df, aes(x="x", y="y"), theme="dark", title="dark scatter",
+                 xlabel="x", ylabel="y")
+    c.add_scatter()
     c.add_axhline(0)  # picks up refline_color from theme
     c.add_axvline(0)
     return c
@@ -73,8 +77,8 @@ def theme_classic_after_dark():
     """Re-rendering a classic chart after a dark one should not bleed
     state. Sanity check for the swap-and-restore mechanism."""
     df = {"x": [1, 2, 3], "y": [1, 2, 3]}
-    pt.chart(theme="dark").add_line(data=df, mapping=aes(x="x", y="y")).to_svg()
-    return pt.chart(title="back to classic").add_line(data=df, mapping=aes(x="x", y="y"))
+    pt.chart(df, aes(x="x", y="y"), theme="dark").add_line().to_svg()
+    return pt.chart(df, aes(x="x", y="y"), title="back to classic").add_line()
 
 
 PLOTS = {

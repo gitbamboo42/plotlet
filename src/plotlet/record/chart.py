@@ -633,11 +633,11 @@ class Chart(_Renderable):
                 self._calls.append((op, list(args), dict(kwargs)))
                 return self
             # Surface the artist's module docstring on the recorder so
-            # `c.line?` / `help(c.line)` / `c.line.__doc__` reach it —
-            # __getattr__ dispatch otherwise blocks Python's standard
+            # `c.add_line?` / `help(c.add_line)` / `c.add_line.__doc__` reach
+            # it — __getattr__ dispatch otherwise blocks Python's standard
             # help path. Frame methods (no spec) keep the empty default.
             # Pointing `__wrapped__` at the record function makes
-            # `inspect.signature(c.bar)` and `c.bar?` show the artist's
+            # `inspect.signature(c.add_bar)` and `c.add_bar?` show the artist's
             # real parameter list.
             if spec is not None:
                 recorder.__wrapped__ = spec.record

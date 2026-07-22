@@ -19,11 +19,12 @@ def chart_long_title():
     # Title text wider than the data region: measure-driven margin grows
     # left and right so the centered title doesn't spill off-canvas.
     # data_width=180 is small; title is ~360 px wide → ~90 px overhang each side.
-    c = pt.chart(data_width=180, data_height=140,
+    df = {"x": [1, 2, 3, 4, 5], "y": [1, 2, 4, 8, 16]}
+
+    c = pt.chart(df, aes(x="x", y="y"), data_width=180, data_height=140,
                  title="A very wide title that exceeds the data region width",
                  xlabel="x", ylabel="y")
-    df = {"x": [1, 2, 3, 4, 5], "y": [1, 2, 4, 8, 16]}
-    c.add_line(data=df, mapping=aes(x="x", y="y"))
+    c.add_line()
     return c
 
 
@@ -33,24 +34,26 @@ def chart_long_ylabel():
     # should grow on top *and* bottom by half the overhang. Title is
     # included so we can verify the vertical overhang doesn't displace
     # the title from its natural slot above the data area.
-    c = pt.chart(data_width=200, data_height=120,
+    df = {"x": [0, 1, 2, 3], "y": [3.2, 4.1, 4.9, 5.5]}
+
+    c = pt.chart(df, aes(x="x", y="y"), data_width=200, data_height=120,
                  title="long ylabel + title",
                  ylabel="Signal intensity (log10 normalized units per sample)",
                  xlabel="time")
-    df = {"x": [0, 1, 2, 3], "y": [3.2, 4.1, 4.9, 5.5]}
-    c.add_line(data=df, mapping=aes(x="x", y="y"))
+    c.add_line()
     return c
 
 
 def chart_subtitle_caption():
     # Subtitle stacks under the title (smaller); caption is the
     # outermost bottom element, right-aligned.
-    c = pt.chart(data_width=340, data_height=170,
+    df = {"x": [1.8, 2.0, 2.8, 3.1, 4.2, 5.3],
+          "y": [29, 31, 26, 27, 23, 20]}
+
+    c = pt.chart(df, aes(x="x", y="y"), data_width=340, data_height=170,
                  title="Fuel efficiency", subtitle="highway, 1999-2008",
                  caption="Source: EPA", xlabel="displ", ylabel="hwy")
-    df = {"x": [1.8, 2.0, 2.8, 3.1, 4.2, 5.3],
-      "y": [29, 31, 26, 27, 23, 20]}
-    c.add_scatter(data=df, mapping=aes(x="x", y="y"))
+    c.add_scatter()
     return c
 
 
@@ -60,10 +63,11 @@ def chart_multiline_labels():
     line is anchored (centered) independently."""
     xs = _xs()
     df = {"t": xs, "sin": [math.sin(x) for x in xs]}
-    c = pt.chart(df, title="two-line title:\nsecond line",
+
+    c = pt.chart(df, aes(x="t", y="sin"), title="two-line title:\nsecond line",
                  xlabel="time\n(seconds)", ylabel="amplitude\n(unitless)",
                  gridlines=True)
-    c.add_line(aes(x="t", y="sin"))
+    c.add_line()
     return c
 
 
@@ -95,10 +99,11 @@ def test_multiline_label_geometry():
     assert text_block_height("ab\ncd\nef", 14) == 14 + 2 * line_height(14)
 
     def cell(title, xlabel, ylabel):
-        c = pt.chart(title=title, xlabel=xlabel, ylabel=ylabel,
-                     data_width=200, data_height=140)
         df = {"x": [0, 1, 2], "y": [1, 0, 2]}
-        c.add_line(data=df, mapping=aes(x="x", y="y"))
+
+        c = pt.chart(df, aes(x="x", y="y"), title=title, xlabel=xlabel, ylabel=ylabel,
+                     data_width=200, data_height=140)
+        c.add_line()
         return c
 
     W0, H0 = natural_size(pt.to_ir(cell("t", "x", "y")))

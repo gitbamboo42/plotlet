@@ -32,9 +32,9 @@ def chart_pointplot():
                  legend=True)
     c.xscale("category", order=cats)
     df = {"t": ctrl_t, "score": ctrl_score}
-    c.add_pointplot(data=df, mapping=aes(x="t", y="score"), label="control")
+    c.add_pointplot(df, aes(x="t", y="score"), label="control")
     df2 = {"t": drug_t, "score": drug_score}
-    c.add_pointplot(data=df2, mapping=aes(x="t", y="score"), label="drug")
+    c.add_pointplot(df2, aes(x="t", y="score"), label="drug")
     c.legend()
     return c
 
@@ -50,11 +50,12 @@ def chart_pointplot_color():
                 rows_t.append(t); rows_a.append(arm)
                 rows_s.append(rng.gauss(5.0 + slope * i, 1.0))
     df = {"t": rows_t, "score": rows_s, "arm": rows_a}
-    c = pt.chart(data_width=320, data_height=200,
+    c = pt.chart(df, aes(x="t", y="score", color="arm"),
+                 data_width=320, data_height=200,
                  title="pointplot color=", xlabel="timepoint",
                  ylabel="score", legend=True)
     c.xscale("category", order=cats)
-    c.add_pointplot(data=df, mapping=aes(x="t", y="score", color="arm"))
+    c.add_pointplot()
     c.legend()
     return c
 
@@ -74,8 +75,8 @@ def test_pointplot_rejects_unknown_ci():
     # pointplot used to fall through to the bootstrap branch on any
     # unknown ci=; it now shares bar/line's validation
     df = {"t": ["a", "a"], "v": [1, 2]}
-    c = pt.chart(df)
-    c.add_pointplot(aes(x="t", y="v"), ci="x")
+    c = pt.chart(df, aes(x="t", y="v"))
+    c.add_pointplot(ci="x")
     with pytest.raises(ValueError, match="ci='x'"):
         c.to_svg()
 
@@ -83,7 +84,7 @@ def test_pointplot_rejects_unknown_ci():
 def test_pointplot_color_series():
     import re
     df = {"t": ["a", "a", "b", "b"], "v": [1, 2, 3, 4], "g": ["x", "y", "x", "y"]}
-    c = pt.chart(df)
-    c.add_pointplot(aes(x="t", y="v", color="g"), ci=None)
+    c = pt.chart(df, aes(x="t", y="v", color="g"))
+    c.add_pointplot(ci=None)
     fills = set(re.findall(r'<circle[^>]*fill="(#[0-9a-f]+)"', c.to_svg()))
     assert {"#1f77b4", "#ff7f0e"} <= fills

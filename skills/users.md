@@ -6,9 +6,17 @@ guide teaches you WHERE to find the answers.
 
 ## Mental model
 
-`import plotlet as pt`. A `pt.chart()` is a **journal**: methods record
-into a list; `to_svg()` / `show()` renders. Same journal → byte-identical
-SVG.
+`import plotlet as pt`. A `pt.chart(df, aes(x=..., y=...))` is a
+**journal**: artist calls record into a list; `to_svg()` / `show()`
+renders. Same journal → byte-identical SVG.
+
+Two rules that won't come from your training data:
+- **Artists are called as `add_<name>`** — `c.add_scatter(...)`,
+  `c.add_line(...)`, not `c.scatter(...)`. Frame methods (`title`,
+  `xlim`, `theme`, …) stay bare.
+- **Column mapping goes through `aes(...)`** — `aes(x="col", color="grp")`
+  reads from the data; a bare string is always a literal (`color="purple"`
+  is the color, not a column). Set `aes` on the chart or per artist.
 
 Chart methods chain. Charts compose with `|` (horizontal), `/`
 (vertical), `pt.grid([[...]])`, `.attach_left/right/above/below(...)`,
@@ -34,7 +42,7 @@ Copy the pattern, adapt the data.
 
 ## Where to find API details
 
-- `help(c.<method>)` / `c.<method>?` — plotlet forwards artist docstrings
+- `help(c.add_<name>)` / `c.add_<name>?` — plotlet forwards artist docstrings
   through the recorder. Always check before first use; signatures are
   not uniform (e.g. some artists take a matrix positionally).
 - `src/plotlet/artists/<name>.py` — core artist source.

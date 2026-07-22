@@ -22,10 +22,10 @@ def chart_table():
         "sin": [math.sin(x) for x in xs],
         "cos": [math.cos(x) for x in xs],
     }
-    c = pt.chart(df, title="chart from table",
+    c = pt.chart(df, aes(x="t"), title="chart from table",
                  xlabel="t", ylabel="value", legend=True, gridlines=True)
-    c.add_line(aes(x="t", y="sin"), label="sin(t)")
-    c.add_line(aes(x="t", y="cos"), label="cos(t)", linestyle="--")
+    c.add_line(aes(y="sin"), label="sin(t)")
+    c.add_line(aes(y="cos"), label="cos(t)", linestyle="--")
     return c
 
 
@@ -37,9 +37,9 @@ def chart_color():
         "v":      [math.sin(x) for x in xs] + [math.cos(x) for x in xs],
         "series": ["sin"] * n + ["cos"] * n,
     }
-    c = pt.chart(df, title="color split",
+    c = pt.chart(df, aes(x="t", y="v", color="series"), title="color split",
                  xlabel="t", ylabel="v", legend=True, gridlines=True)
-    c.add_line(aes(x="t", y="v", color="series"))
+    c.add_line()
     return c
 
 
@@ -48,10 +48,10 @@ def chart_plot_alpha():
     xs = _xs()
     df = {"t": xs, "v": [math.sin(x) for x in xs],
           "w": [math.cos(x) for x in xs]}
-    c = pt.chart(df, title="plot alpha", xlabel="t", ylabel="value",
+    c = pt.chart(df, aes(x="t"), title="plot alpha", xlabel="t", ylabel="value",
                  legend=True)
-    c.add_line(aes(x="t", y="v"), alpha=0.3, label="alpha=0.3")
-    c.add_line(aes(x="t", y="w"), alpha=1.0, label="alpha=1")
+    c.add_line(aes(y="v"), alpha=0.3, label="alpha=0.3")
+    c.add_line(aes(y="w"), alpha=1.0, label="alpha=1")
     return c
 
 
@@ -65,13 +65,13 @@ def chart_curve_steps():
     c = pt.chart(title="curve= modes", xlabel="x", ylabel="y",
                  legend=True, gridlines=True)
     df = {"x": xs, "y": ys}
-    c.add_line(data=df, mapping=aes(x="x", y="y"), curve="linear", marker="o", label="linear")
+    c.add_line(df, aes(x="x", y="y"), curve="linear", marker="o", label="linear")
     df2 = {"x": xs, "y": [v + 2 for v in ys]}
-    c.add_line(data=df2, mapping=aes(x="x", y="y"), curve="step-after", marker="o", label="step-after")
+    c.add_line(df2, aes(x="x", y="y"), curve="step-after", marker="o", label="step-after")
     df3 = {"x": xs, "y": [v + 4 for v in ys]}
-    c.add_line(data=df3, mapping=aes(x="x", y="y"), curve="step-before", marker="o", label="step-before")
+    c.add_line(df3, aes(x="x", y="y"), curve="step-before", marker="o", label="step-before")
     df4 = {"x": xs, "y": [v + 6 for v in ys]}
-    c.add_line(data=df4, mapping=aes(x="x", y="y"), curve="step-mid", marker="o", label="step-mid")
+    c.add_line(df4, aes(x="x", y="y"), curve="step-mid", marker="o", label="step-mid")
     return c
 
 
@@ -182,8 +182,8 @@ def test_chart_line_baseline(name, fn, baseline_compare):
 
 def test_line_estimator_aggregates():
     df = {"x": [0, 0, 1, 1], "y": [1.0, 3.0, 2.0, 6.0]}
-    c = pt.chart(df)
-    c.add_line(aes(x="x", y="y"), estimator="mean", ci=None)
+    c = pt.chart(df, aes(x="x", y="y"))
+    c.add_line(estimator="mean", ci=None)
     svg = c.to_svg()
     assert 'data-plotlet-n="2"' in svg
     assert 'data-plotlet-estimator="mean"' in svg
@@ -195,8 +195,8 @@ def test_line_ci_band_extends_domain():
     df = {"x": [0, 0, 0, 1, 1, 1], "y": [1, 2, 3, 4, 5, 6]}
 
     def ylim_hi(**kw):
-        c = pt.chart(df)
-        c.add_line(aes(x="x", y="y"), estimator="mean", **kw)
+        c = pt.chart(df, aes(x="x", y="y"))
+        c.add_line(estimator="mean", **kw)
         m = re.search(r'data-plotlet-ylim="([^"]*)"', c.to_svg())
         return float(m.group(1).split(",")[1])
 
@@ -208,8 +208,8 @@ def test_line_ci_band_clips_on_log_scale():
     import re
     # all-positive data whose t CI lower bound goes negative
     df = {"x": [0, 0, 0, 1, 1, 1], "y": [1.0, 10.0, 100.0, 2.0, 20.0, 200.0]}
-    c = pt.chart(df)
-    c.add_line(aes(x="x", y="y"), estimator="mean")
+    c = pt.chart(df, aes(x="x", y="y"))
+    c.add_line(estimator="mean")
     c.yscale("log")
     svg = c.to_svg()                       # must not raise, no NaN paths
     assert "nan" not in svg
@@ -226,8 +226,8 @@ def test_line_estimator_validation():
     df = {"x": [0, 1], "y": [1, 2]}
 
     def line(fn="add_line", **kw):
-        c = pt.chart(df)
-        getattr(c, fn)(aes(x="x", y="y"), **kw)
+        c = pt.chart(df, aes(x="x", y="y"))
+        getattr(c, fn)(**kw)
         c.to_svg()
 
     with pytest.raises(TypeError, match="apply with estimator"):

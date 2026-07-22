@@ -23,10 +23,10 @@ def chart_fill_between():
         "lo":   [math.sin(x) - 0.3 for x in xs],
         "hi":   [math.sin(x) + 0.3 for x in xs],
     }
-    c = pt.chart(df, title="fill_between from table",
+    c = pt.chart(df, aes(x="x"), title="fill_between from table",
                  xlabel="x", ylabel="y", legend=True)
-    c.add_fill_between(aes(x="x", y1="lo", y2="hi"), fill="C0", alpha=0.25, label="band")
-    c.add_line(aes(x="x", y="mean", label="mean"), color="C0")
+    c.add_fill_between(aes(y1="lo", y2="hi"), fill="C0", alpha=0.25, label="band")
+    c.add_line(aes(y="mean", label="mean"), color="C0")
     return c
 
 
@@ -37,13 +37,14 @@ def chart_curve_fills():
     xs = [0, 1, 2, 3, 4, 5]
     lo = [0.5, 0.8, 1.2, 1.5, 1.1, 0.9]
     hi = [1.5, 1.8, 2.2, 2.5, 2.1, 1.9]
+    df = {"x": xs, "y1": lo, "y2": hi}
+
     c = pt.chart(title="curve= on fill_between / area",
                  xlabel="t", ylabel="value", legend=True)
-    df = {"x": xs, "y1": lo, "y2": hi}
-    c.add_fill_between(data=df, mapping=aes(x="x", y1="y1", y2="y2"),
+    c.add_fill_between(df, aes(x="x", y1="y1", y2="y2"),
                    curve="step-after", fill="C0", alpha=0.3, label="step band")
     df_area = {"x": xs, "y": [1.0, 1.3, 1.7, 2.0, 1.6, 1.4]}
-    c.add_area(data=df_area, mapping=aes(x="x", y="y"), curve="step-after",
+    c.add_area(df_area, aes(x="x", y="y"), curve="step-after",
            color="C1", alpha=0.5, label="step area")
     return c
 
@@ -55,10 +56,11 @@ def chart_area():
     df = {"t": xs,
           "sin": [math.sin(x) for x in xs],
           "cos_shifted": [math.cos(x) - 0.5 for x in xs]}
-    c = pt.chart(title="area (base=0 and base=-0.5)",
+
+    c = pt.chart(df, aes(x="t"), title="area (base=0 and base=-0.5)",
                  xlabel="t", ylabel="y", legend=True)
-    c.add_area(data=df, mapping=aes(x="t", y="sin", label="sin"), color="C0", alpha=0.3)
-    c.add_area(data=df, mapping=aes(x="t", y="cos_shifted"), base=-0.5,
+    c.add_area(aes(y="sin", label="sin"), color="C0", alpha=0.3)
+    c.add_area(aes(y="cos_shifted"), base=-0.5,
            color="C3", alpha=0.4, label="cos shifted")
     return c
 
@@ -66,14 +68,15 @@ def chart_area():
 def chart_step():
     # step() sugar — all three where= modes.
     xs = list(range(8))
+    df = {"x": xs, "y": [1, 3, 2, 5, 4, 3, 6, 5]}
+
     c = pt.chart(data_width=400, data_height=180,
                  title="step modes", xlabel="x", ylabel="y", legend=True)
-    df = {"x": xs, "y": [1, 3, 2, 5, 4, 3, 6, 5]}
-    c.add_step(data=df, mapping=aes(x="x", y="y"), where="post", label="post")
+    c.add_step(df, aes(x="x", y="y"), where="post", label="post")
     df2 = {"x": xs, "y": [1.5, 3.5, 2.5, 5.5, 4.5, 3.5, 6.5, 5.5]}
-    c.add_step(data=df2, mapping=aes(x="x", y="y"), where="pre", label="pre", color="C1")
+    c.add_step(df2, aes(x="x", y="y"), where="pre", label="pre", color="C1")
     df3 = {"x": xs, "y": [2, 4, 3, 6, 5, 4, 7, 6]}
-    c.add_step(data=df3, mapping=aes(x="x", y="y"), where="mid", label="mid", color="C2")
+    c.add_step(df3, aes(x="x", y="y"), where="mid", label="mid", color="C2")
     return c
 
 
@@ -91,11 +94,13 @@ def chart_area_stack():
         for src, vals in series_data.items():
             rows_year.append(x); rows_src.append(src)
             rows_val.append(vals[x])
-    c = pt.chart(data_width=320, data_height=220,
+    df = {"year": rows_year, "source": rows_src, "twh": rows_val}
+
+    c = pt.chart(df, aes(x="year", y="twh", fill="source"),
+                 data_width=320, data_height=220,
                  title="generation mix", xlabel="year", ylabel="TWh",
                  legend=True)
-    df = {"year": rows_year, "source": rows_src, "twh": rows_val}
-    c.add_area(data=df, mapping=aes(x="year", y="twh", fill="source"))
+    c.add_area()
     c.legend()
     return c
 

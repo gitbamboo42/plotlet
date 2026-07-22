@@ -25,12 +25,13 @@ def chart_violin():
                 rows.append({"grp": group, "trt": trt,
                              "value": rng.gauss(mu, sd)})
     data = {k: [r[k] for r in rows] for k in rows[0]}
-    c = pt.chart(data_width=380, data_height=220,
+
+    c = pt.chart(data, aes(x="grp", y="value", fill="trt"),
+                 data_width=380, data_height=220,
                  title="violin fill", xlabel="group", ylabel="value",
                  legend=True)
     c.xscale("category", order=["ctrl", "+drug", "low", "high"])
-    c.add_violin(data=data, mapping=aes(x="grp", y="value", fill="trt"),
-             palette={"A": "#3F97C5", "B": "#F99917"}, inner="box")
+    c.add_violin(palette={"A": "#3F97C5", "B": "#F99917"}, inner="box")
     c.legend()
     return c
 

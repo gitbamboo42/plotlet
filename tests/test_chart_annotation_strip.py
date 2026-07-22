@@ -16,12 +16,11 @@ def strip_cmap_band():
     # Continuous cmap fill with a NaN (missing → absent_fill) and the
     # gradient legend. Covers the record-side vmin/vmax range, the
     # cmap+norm draw path, and legend_gradient.
-    c = pt.chart(data_height=14)
     df = {"col": [f"c{i+1}" for i in range(6)],
-      "v": [0.1, 2.5, float("nan"), 1.2, 3.0, 0.7]}
-    c.add_annotation_strip(df,
-                       aes(position="col", value="v"), cmap="viridis",
-                       absent_fill="#eee", name="Score")
+          "v": [0.1, 2.5, float("nan"), 1.2, 3.0, 0.7]}
+
+    c = pt.chart(df, aes(position="col", value="v"), data_height=14)
+    c.add_annotation_strip(cmap="viridis", absent_fill="#eee", name="Score")
     return pt.grid([[c, pt.legend()]])
 
 
@@ -29,65 +28,64 @@ def strip_interval_text():
     # Cytoband-style variable-width intervals: x1=/x2= extents, centered
     # per-cell text, and the interval frame-defaults branch (spines stay
     # on, position ticks dropped).
-    c = pt.chart(title="interval strip", data_height=20)
     df = {"start": [0, 30, 50, 90], "end": [30, 50, 90, 120],
-      "stain": ["gneg", "gpos", "gneg", "acen"]}
-    c.add_annotation_strip(df,
-                       aes(x1="start", x2="end", value="stain"),
-                       palette={"gneg": "#eee", "gpos": "#666", "acen": "#c33"},
-                       text=True)
+          "stain": ["gneg", "gpos", "gneg", "acen"]}
+
+    c = pt.chart(df, aes(x1="start", x2="end", value="stain"),
+                 title="interval strip", data_height=20)
+    c.add_annotation_strip(
+        palette={"gneg": "#eee", "gpos": "#666", "acen": "#c33"}, text=True)
     return c
 
 
 def strip_orient_y_left():
     # Vertical column strip: orientation="y" transposition and the
     # side="left" text anchor.
-    c = pt.chart(data_width=18)
     df = {"row": ["r1", "r2", "r3", "r4"],
-      "g": ["A", "A", "B", "B"]}
-    c.add_annotation_strip(df,
-                       aes(position="row", value="g"), orientation="y",
-                       palette={"A": "#1f77b4", "B": "#ff7f0e"},
-                       text=True, side="left", text_color="white")
+          "g": ["A", "A", "B", "B"]}
+
+    c = pt.chart(df, aes(position="row", value="g"), data_width=18)
+    c.add_annotation_strip(orientation="y",
+                            palette={"A": "#1f77b4", "B": "#ff7f0e"},
+                            text=True, side="left", text_color="white")
     return c
 
 
 def strip_numeric_width_rot():
     # Numeric uniform positions with scalar width= (time-series regime
     # tags) and rotated bottom-side text (the "start"-anchor branch).
-    c = pt.chart(data_height=26)
     df = {"pos": [0, 1, 2, 3, 4, 5],
-      "tag": ["u", "u", "d", "d", "u", "d"]}
-    c.add_annotation_strip(df,
-                       aes(position="pos", value="tag"), width=1.0,
-                       palette={"u": "#8dd3c7", "d": "#fb8072"},
-                       text=True, rotation=90)
+          "tag": ["u", "u", "d", "d", "u", "d"]}
+
+    c = pt.chart(df, aes(position="pos", value="tag"), data_height=26)
+    c.add_annotation_strip(width=1.0,
+                            palette={"u": "#8dd3c7", "d": "#fb8072"},
+                            text=True, rotation=90)
     return c
 
 
 def strip_fill_label():
     # Decorative single-color strip: fill= constant + one legend entry
     # via label= (no palette, no cmap).
-    c = pt.chart(data_height=14)
     df = {"col": ["a", "b", "c", "d"],
-      "v": ["k", "k", "k", "k"]}
-    c.add_annotation_strip(df,
-                       aes(position="col", value="v"),
-                       fill="#8da0cb", label="track")
+          "v": ["k", "k", "k", "k"]}
+
+    c = pt.chart(df, aes(position="col", value="v"), data_height=14)
+    c.add_annotation_strip(fill="#8da0cb", label="track")
     return pt.grid([[c, pt.legend()]])
 
 
 def strip_ring_interval():
     # Interval strip on a ring (ideogram-style): covers the warp rect
     # projection and the tangent-rotated text anchors.
-    c = pt.chart(title="ideogram — ring")
-    c.coordinate(pt.CircularCoordinate())
     df = {"start": [0, 30, 50, 90], "end": [30, 50, 90, 120],
-      "stain": ["gneg", "gpos", "gneg", "acen"]}
-    c.add_annotation_strip(df,
-                       aes(x1="start", x2="end", value="stain"),
-                       palette={"gneg": "#eee", "gpos": "#666", "acen": "#c33"},
-                       text=True)
+          "stain": ["gneg", "gpos", "gneg", "acen"]}
+
+    c = pt.chart(df, aes(x1="start", x2="end", value="stain"),
+                 title="ideogram — ring")
+    c.coordinate(pt.CircularCoordinate())
+    c.add_annotation_strip(
+        palette={"gneg": "#eee", "gpos": "#666", "acen": "#c33"}, text=True)
     return c
 
 
@@ -108,15 +106,15 @@ def chart_heatmap_split_attached():
     col_sums = [sum(matrix[r][c] for r in range(nrows)) for c in range(ncols)]
 
     df = {"col": col_labels, "sum": col_sums}
-    bar = pt.chart(df,
-                   data_height=40, ylabel="sum")
-    bar.add_bar(aes(x="col", y="sum"), fill="#555")
 
-    strip = pt.chart(data_height=14)
+    bar = pt.chart(df, aes(x="col", y="sum"), data_height=40, ylabel="sum")
+    bar.add_bar(fill="#555")
+
     df2 = {"col": col_labels, "group": col_groups}
-    strip.add_annotation_strip(df2,
-                           aes(position="col", value="group", name="group"),
-                           palette=palette)
+
+    strip = pt.chart(df2, aes(position="col", value="group", name="group"),
+                      data_height=14)
+    strip.add_annotation_strip(palette=palette)
 
     hm = pt.chart(title="heatmap (split + attached)",
                   data_width=420, data_height=240)
@@ -142,11 +140,10 @@ def chart_heatmap_block_titles():
     row_labels = [f"r{i+1}" for i in range(nrows)]
     col_groups = ["alpha"] * 3 + ["beta"] * 4 + ["gamma"] * 2
 
-    titles = pt.chart(data_height=18)
     df = {"col": col_labels, "group": col_groups}
-    titles.add_annotation_strip(df,
-                            aes(position="col", value="group"),
-                            mode="block", text=True)
+
+    titles = pt.chart(df, aes(position="col", value="group"), data_height=18)
+    titles.add_annotation_strip(mode="block", text=True)
 
     hm = pt.chart(data_width=360, data_height=180)
     hm.sectors(_by_label(col_labels, col_groups), axis="x",
@@ -168,12 +165,11 @@ def chart_heatmap_block_filled():
     col_groups = ["alpha"] * 3 + ["beta"] * 4 + ["gamma"] * 2
     palette = {"alpha": pt.TAB10[0], "beta": pt.TAB10[1], "gamma": pt.TAB10[2]}
 
-    block = pt.chart(data_height=22)
     df = {"col": col_labels, "group": col_groups}
-    block.add_annotation_strip(df,
-                           aes(position="col", value="group"),
-                           mode="block", palette=palette, text=True,
-                           text_color="white", cell_border="#222")
+
+    block = pt.chart(df, aes(position="col", value="group"), data_height=22)
+    block.add_annotation_strip(mode="block", palette=palette, text=True,
+                                text_color="white", cell_border="#222")
 
     hm = pt.chart(data_width=360, data_height=180)
     hm.sectors(_by_label(col_labels, col_groups), axis="x",

@@ -186,9 +186,10 @@ def main() -> int:
     # Same check on a chart with content (so spines render alongside data
     # artists / ticks / grid). Extra `<line>` elements should not pollute
     # the spine match.
-    c = pt.chart(data_width=300, data_height=200, gridlines=True)
     df = {"x": [1, 2, 3, 4], "y": [1, 4, 9, 16]}
-    c.add_line(data=df, mapping=aes(x="x", y="y"), label="sq")
+
+    c = pt.chart(df, aes(x="x", y="y"), data_width=300, data_height=200, gridlines=True)
+    c.add_line(label="sq")
     rects = _spine_rects(c.to_svg())
     _check("spine rect count, chart with content", len(rects), 1, failures)
     if rects:
@@ -201,9 +202,10 @@ def main() -> int:
     # to coordinate against, so the data region inside the grid must
     # match the standalone render exactly.
     def _make_leaf():
-        c = pt.chart(data_width=240, data_height=180, title="hi", xlabel="x")
         df = {"x": [0, 1, 2, 3], "y": [0, 1, 4, 9]}
-        c.add_line(data=df, mapping=aes(x="x", y="y"))
+
+        c = pt.chart(df, aes(x="x", y="y"), data_width=240, data_height=180, title="hi", xlabel="x")
+        c.add_line()
         return c
 
     standalone = _spine_rects(_make_leaf().to_svg())

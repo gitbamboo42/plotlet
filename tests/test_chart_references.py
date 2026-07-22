@@ -18,11 +18,12 @@ from _chart_helpers import _xs
 def chart_reflines():
     xs = _xs()
     df = {"t": xs, "v": [math.sin(x) for x in xs]}
-    c = pt.chart(df, title="reference lines",
+
+    c = pt.chart(df, aes(x="t", y="v"), title="reference lines",
                  xlabel="t", ylabel="v", legend=True, gridlines=True)
     c.add_axhspan(-0.5, 0.5, color="C2")
     c.add_axvspan(2.0, 3.5)
-    c.add_line(aes(x="t", y="v"), label="sin(t)")
+    c.add_line(label="sin(t)")
     c.add_axhline(0)
     c.add_axhline(0.8, color="red", linestyle="--", label="upper")
     c.add_axvline(math.pi, color="gray", linestyle=":")
@@ -35,11 +36,12 @@ def chart_axline():
     rng = random.Random(31)
     obs = [i * 0.5 + rng.gauss(0, 0.6) for i in range(20)]
     pred = [v + rng.gauss(0, 0.5) for v in obs]
-    c = pt.chart(data_width=260, data_height=220,
+    df = {"o": obs, "p": pred}
+
+    c = pt.chart(df, aes(x="o", y="p"), data_width=260, data_height=220,
                  title="observed vs predicted",
                  xlabel="observed", ylabel="predicted", legend=True)
-    df = {"o": obs, "p": pred}
-    c.add_scatter(data=df, mapping=aes(x="o", y="p"), size=2.5, alpha=0.7)
+    c.add_scatter(size=2.5, alpha=0.7)
     c.add_axline((0, 0), slope=1, linestyle="--", label="y = x")
     c.add_axline((0, 8), (8, 4), color="C3", label="two-point")
     return c

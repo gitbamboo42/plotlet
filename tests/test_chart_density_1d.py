@@ -18,13 +18,14 @@ def chart_density_1d():
     rng = random.Random(10)
     a = [rng.gauss(0, 1) for _ in range(300)]
     b = [rng.gauss(1.2, 1.3) for _ in range(300)]
+    df = {"x": a}
+
     c = pt.chart(data_width=300, data_height=200,
                  title="density", xlabel="value", ylabel="density",
                  legend=True)
-    df = {"x": a}
-    c.add_density_1d(data=df, mapping=aes(x="x"), label="control", fill=True)
+    c.add_density_1d(df, aes(x="x"), label="control", fill=True)
     df2 = {"x": b}
-    c.add_density_1d(data=df2, mapping=aes(x="x"), label="treatment", fill=True)
+    c.add_density_1d(df2, aes(x="x"), label="treatment", fill=True)
     c.legend()
     return c
 
@@ -37,10 +38,12 @@ def chart_density_1d_long_color():
         for _ in range(300):
             rows.append({"val": rng.gauss(mu, 1.0), "group": g})
     df = pd.DataFrame(rows)
-    c = pt.chart(data_width=320, data_height=200,
+
+    c = pt.chart(df, aes(x="val", color="group"),
+                 data_width=320, data_height=200,
                  title="density (long-form, color)",
                  xlabel="value", ylabel="density", legend=True)
-    c.add_density_1d(data=df, mapping=aes(x="val", color="group"), fill=True)
+    c.add_density_1d(fill=True)
     c.legend()
     return c
 

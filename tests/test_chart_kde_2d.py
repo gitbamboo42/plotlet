@@ -21,12 +21,13 @@ def chart_kde_2d():
           + [rng.gauss(1.2, 1.0) for _ in range(n)])
     ys = ([rng.gauss(0, 1.0) for _ in range(n)]
           + [rng.gauss(2, 0.8) for _ in range(n)])
+    df = {"x": xs, "y": ys}
+
     c = pt.chart(data_width=300, data_height=260,
                  title="2-D KDE", xlabel="x", ylabel="y")
-    df = {"x": xs, "y": ys}
-    c.add_scatter(data=df, mapping=aes(x="x", y="y"), size=1.2, alpha=0.25, color="#444444")
+    c.add_scatter(df, aes(x="x", y="y"), size=1.2, alpha=0.25, color="#444444")
     df2 = {"x": xs, "y": ys}
-    c.add_kde_2d(data=df2, mapping=aes(x="x", y="y"), n_grid=40, cmap="viridis")
+    c.add_kde_2d(df2, aes(x="x", y="y"), n_grid=40, cmap="viridis")
     c.legend()
     return c
 
@@ -42,10 +43,11 @@ def chart_kde_2d_filled_color():
             rows_y.append(rng.gauss(my, 0.7))
             rows_g.append(g)
     df = {"x": rows_x, "y": rows_y, "g": rows_g}
-    c = pt.chart(data_width=300, data_height=260,
+
+    c = pt.chart(df, aes(x="x", y="y", color="g"), data_width=300, data_height=260,
                  title="grouped 2-D KDE (filled)", xlabel="x", ylabel="y",
                  legend=True)
-    c.add_kde_2d(data=df, mapping=aes(x="x", y="y", color="g"), fill=True, n_grid=40)
+    c.add_kde_2d(fill=True, n_grid=40)
     c.legend()
     return c
 
@@ -65,11 +67,11 @@ def test_kde_2d_color_grouping():
     df = {"x": [0.0, 0.1, 0.2, 5.0, 5.1, 5.2],
           "y": [0.0, 0.1, 0.2, 5.0, 5.1, 5.2],
           "g": ["a", "a", "a", "b", "b", "b"]}
-    c = pt.chart(df)
-    c.add_kde_2d(aes(x="x", y="y", color="g"), n_grid=12)
+    c = pt.chart(df, aes(x="x", y="y", color="g"))
+    c.add_kde_2d(n_grid=12)
     assert c.to_svg().count('data-plotlet-type="kde_2d"') == 2
 
-    c = pt.chart(df)
-    c.add_kde_2d(aes(x="x", y="y", color="g"), cmap="viridis")
+    c = pt.chart(df, aes(x="x", y="y", color="g"))
+    c.add_kde_2d(cmap="viridis")
     with pytest.raises(TypeError, match="palette="):
         c.to_svg()

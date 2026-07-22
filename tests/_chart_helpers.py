@@ -81,13 +81,14 @@ def _legend_position_chart(position):
     — the data region stays at the user-requested size; the canvas grows
     on the named side to accommodate the legend block."""
     xs = _xs()
+    df = {"x": xs, "y": [math.sin(x) for x in xs]}
+    df2 = {"x": xs, "y": [math.cos(x) for x in xs]}
+
     c = pt.chart(title=f"legend {position}",
                  xlabel="t", ylabel="value", gridlines=True,
                  data_width=300, data_height=180)
-    df = {"x": xs, "y": [math.sin(x) for x in xs]}
-    c.add_line(data=df, mapping=aes(x="x", y="y"), label="sin(t)")
-    df2 = {"x": xs, "y": [math.cos(x) for x in xs]}
-    c.add_line(data=df2, mapping=aes(x="x", y="y"), label="cos(t)", linestyle="--")
+    c.add_line(df, aes(x="x", y="y"), label="sin(t)")
+    c.add_line(df2, aes(x="x", y="y"), label="cos(t)", linestyle="--")
     c.legend(position=position)
     return c
 
@@ -134,6 +135,7 @@ def _big_continuous_heatmap(with_y_sectors):
     data = {"x": [float(i) for i in range(501)]}
     for r, name in enumerate(tracks):
         data[name] = [math.sin(0.01 * i + r) for i in range(501)]
+
     c = pt.chart(data_width=400, data_height=300)
     if with_y_sectors:
         c.sectors({"A": tracks[:10], "B": tracks[10:]}, axis="y",

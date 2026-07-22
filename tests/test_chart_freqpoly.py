@@ -18,13 +18,14 @@ def chart_freqpoly():
     rng = random.Random(14)
     a = [rng.gauss(0, 1) for _ in range(400)]
     b = [rng.gauss(1, 1.4) for _ in range(400)]
+    df = {"x": a}
+
     c = pt.chart(data_width=300, data_height=200,
                  title="frequency polygon", xlabel="value", ylabel="count",
                  legend=True)
-    df = {"x": a}
-    c.add_freqpoly(data=df, mapping=aes(x="x"), bins=25, label="control")
+    c.add_freqpoly(df, aes(x="x"), bins=25, label="control")
     df2 = {"x": b}
-    c.add_freqpoly(data=df2, mapping=aes(x="x"), bins=25, label="treatment")
+    c.add_freqpoly(df2, aes(x="x"), bins=25, label="treatment")
     c.legend()
     return c
 

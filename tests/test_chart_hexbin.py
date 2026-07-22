@@ -19,10 +19,11 @@ def chart_hexbin():
     n = 3000
     xs = [rng.gauss(0, 1) + rng.gauss(0, 0.4) for _ in range(n)]
     ys = [x + rng.gauss(0, 1) for x in xs]
-    c = pt.chart(data_width=300, data_height=260,
-                 title="hexbin", xlabel="x", ylabel="y")
     df = {"x": xs, "y": ys}
-    c.add_hexbin(data=df, mapping=aes(x="x", y="y"), gridsize=22)
+
+    c = pt.chart(df, aes(x="x", y="y"), data_width=300, data_height=260,
+                 title="hexbin", xlabel="x", ylabel="y")
+    c.add_hexbin(gridsize=22)
     return c | pt.legend(c)
 
 

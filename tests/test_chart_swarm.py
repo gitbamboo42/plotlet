@@ -25,12 +25,13 @@ def chart_swarm():
                 rows.append({"group": group, "series": series,
                              "value": rng.gauss(mu, sd)})
     data = {k: [r[k] for r in rows] for k in rows[0]}
-    c = pt.chart(data_width=360, data_height=220,
+
+    c = pt.chart(data, aes(x="group", y="value", fill="series"),
+                 data_width=360, data_height=220,
                  title="swarm fill", xlabel="group", ylabel="value",
                  legend=True)
     c.xscale("category", order=["A", "B", "C", "D"])
-    c.add_swarm(data=data, mapping=aes(x="group", y="value", fill="series"),
-            palette={"a": "#3F97C5", "b": "#F99917"})
+    c.add_swarm(palette={"a": "#3F97C5", "b": "#F99917"})
     c.legend()
     return c
 

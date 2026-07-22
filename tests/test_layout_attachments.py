@@ -40,17 +40,17 @@ def attach_four_sides_chained():
     host.add_heatmap(data=hm_df, mapping=aes(x="col"), values=rows)
 
     def row_line(values):
-        c = pt.chart(data_width=44)
-        c.yscale("category", order=rows, padding=0)
         df = {"x": values, "y": rows}
-        c.add_line(data=df, mapping=aes(x="x", y="y"))
+        c = pt.chart(df, aes(x="x", y="y"), data_width=44)
+        c.yscale("category", order=rows, padding=0)
+        c.add_line()
         return c
 
     def col_line(values):
-        c = pt.chart(data_height=34)
-        c.xscale("category", order=cols, padding=0)
         df = {"x": cols, "y": values}
-        c.add_line(data=df, mapping=aes(x="x", y="y"))
+        c = pt.chart(df, aes(x="x", y="y"), data_height=34)
+        c.xscale("category", order=cols, padding=0)
+        c.add_line()
         return c
 
     host.attach_left(row_line([2, 4, 1, 3]), row_line([3, 1, 4, 2]))
@@ -65,12 +65,12 @@ def attach_with_peer_legend():
     # host-with-attachments is a single block from the outside.
     host = pt.chart(data_width=180, data_height=120)
     df = {"x": [1, 2, 3, 4, 5], "y": [2, 4, 1, 3, 5]}
-    host.add_line(data=df, mapping=aes(x="x", y="y"), label="series A")
+    host.add_line(df, aes(x="x", y="y"), label="series A")
     df2 = {"x": [1, 2, 3, 4, 5], "y": [1, 2, 3, 4, 5]}
-    host.add_line(data=df2, mapping=aes(x="x", y="y"), label="series B")
-    top_track = pt.chart(data_height=28)
+    host.add_line(df2, aes(x="x", y="y"), label="series B")
     df3 = {"x": [1, 2, 3, 4, 5], "y": [0.2, 0.7, 0.4, 0.6, 0.3]}
-    top_track.add_line(data=df3, mapping=aes(x="x", y="y"))
+    top_track = pt.chart(df3, aes(x="x", y="y"), data_height=28)
+    top_track.add_line()
     host.attach_above(top_track)
     return host | pt.legend()
 
@@ -104,9 +104,9 @@ def _run_invariants() -> int:
     # stamps the locked dims), not on the user's charts.
     from plotlet.render import hydrate
     from plotlet.render._layout_engine import _build_plan
-    host = pt.chart(data_width=200, data_height=150)
     df = {"x": [1, 2, 3], "y": [1, 2, 3]}
-    host.add_line(data=df, mapping=aes(x="x", y="y"))
+    host = pt.chart(df, aes(x="x", y="y"), data_width=200, data_height=150)
+    host.add_line()
     left = pt.chart(data_width=40, data_height=999)
     left.add_annotate("L", xy=(0.5, 1.0))
     host.attach_left(left)
@@ -121,12 +121,12 @@ def _run_invariants() -> int:
     _check(left._data_height == 999 and left._data_width == 40,
            "render never mutates the user's chart objects")
 
-    top = pt.chart(data_width=999, data_height=40)
-    host2 = pt.chart(data_width=200, data_height=150)
-    df2 = {"x": [1, 2, 3], "y": [1, 2, 3]}
-    host2.add_line(data=df2, mapping=aes(x="x", y="y"))
     df3 = {"x": [0, 1, 2], "y": [1, 2, 1]}
-    top.add_line(data=df3, mapping=aes(x="x", y="y"))
+    top = pt.chart(df3, aes(x="x", y="y"), data_width=999, data_height=40)
+    top.add_line()
+    df2 = {"x": [1, 2, 3], "y": [1, 2, 3]}
+    host2 = pt.chart(df2, aes(x="x", y="y"), data_width=200, data_height=150)
+    host2.add_line()
     host2.attach_above(top)
     root2 = hydrate(pt.to_ir(host2))
     _build_plan(root2)
@@ -137,7 +137,7 @@ def _run_invariants() -> int:
 
     # Validation: double-attach the same chart, attach already-parented chart.
     df4 = {"x": [1, 2, 3], "y": [1, 2, 3]}
-    h3 = pt.chart(); h3.add_line(data=df4, mapping=aes(x="x", y="y"))
+    h3 = pt.chart(df4, aes(x="x", y="y")); h3.add_line()
     label = pt.chart(); label.add_annotate("x", xy=(0.5, 1.0))
     h3.attach_left(label)
     try:
@@ -147,9 +147,9 @@ def _run_invariants() -> int:
         _check(True, "re-attaching same chart raises")
 
     df5 = {"x": [1, 2, 3], "y": [1, 2, 3]}
-    a = pt.chart(); a.add_line(data=df5, mapping=aes(x="x", y="y"))
+    a = pt.chart(df5, aes(x="x", y="y")); a.add_line()
     df6 = {"x": [1, 2, 3], "y": [3, 2, 1]}
-    b = pt.chart(); b.add_line(data=df6, mapping=aes(x="x", y="y"))
+    b = pt.chart(df6, aes(x="x", y="y")); b.add_line()
     _ = a | b
     c = pt.chart()
     try:
@@ -163,9 +163,9 @@ def _run_invariants() -> int:
     # `materialize()` on the hydrated tree, so we hydrate and run it
     # explicitly here.
     df7 = {"x": [1, 2, 3], "y": [1, 2, 3]}
-    h4 = pt.chart(); h4.add_line(data=df7, mapping=aes(x="x", y="y"))
+    h4 = pt.chart(df7, aes(x="x", y="y")); h4.add_line()
     df8 = {"x": [1, 2, 3], "y": [1, 2, 3]}
-    other = pt.chart(); other.add_line(data=df8, mapping=aes(x="x", y="y"))
+    other = pt.chart(df8, aes(x="x", y="y")); other.add_line()
     side = pt.chart(); side.add_annotate("s", xy=(0.5, 1.0))
     side._share_y = other
     with warnings.catch_warnings(record=True) as caught:
@@ -181,7 +181,7 @@ def _run_invariants() -> int:
 
     # Peer composition still works: host's _parent stays None until composed.
     df9 = {"x": [1, 2, 3], "y": [1, 2, 3]}
-    h5 = pt.chart(); h5.add_line(data=df9, mapping=aes(x="x", y="y"))
+    h5 = pt.chart(df9, aes(x="x", y="y")); h5.add_line()
     side2 = pt.chart(); side2.add_annotate("s", xy=(0.5, 1.0))
     h5.attach_left(side2)
     _check(h5._parent is None, "host's _parent stays None until composed as peer")
@@ -192,9 +192,9 @@ def _run_invariants() -> int:
     # without → each keeps its own top margin, but the attachment's
     # canvas is offset so its data area starts at the same y as the
     # host's data area.
-    h6 = pt.chart(data_width=200, data_height=150, title="TITLE")
     df10 = {"x": [1, 2, 3], "y": [1, 2, 3]}
-    h6.add_line(data=df10, mapping=aes(x="x", y="y"))
+    h6 = pt.chart(df10, aes(x="x", y="y"), data_width=200, data_height=150, title="TITLE")
+    h6.add_line()
     left2 = pt.chart(data_width=40)
     left2.add_annotate("L", xy=(0.5, 2.0))
     h6.attach_left(left2)
@@ -218,14 +218,14 @@ def _run_invariants() -> int:
 
     # Sector inheritance: above-attachment picks up host's x-sectors.
     from plotlet.render._layout_engine import _resolve_panels as _rp
-    h7 = pt.chart(data_width=240, data_height=100)
+    df11 = {"chr": ["chr1"], "x": [50], "y": [1]}
+    h7 = pt.chart(df11, aes(x="x", y="y"), data_width=240, data_height=100)
     h7.sectors({"chr1": 100, "chr2": 200}, axis="x", column="chr",
                divider=True, label=True)
-    df11 = {"chr": ["chr1"], "x": [50], "y": [1]}
-    h7.add_line(data=df11, mapping=aes(x="x", y="y"))
-    top7 = pt.chart(data_height=30)
+    h7.add_line()
     df12 = {"chr": ["chr2"], "x": [10], "y": [1]}
-    top7.add_line(data=df12, mapping=aes(x="x", y="y"))
+    top7 = pt.chart(df12, aes(x="x", y="y"), data_height=30)
+    top7.add_line()
     h7.attach_above(top7)
     root7 = hydrate(pt.to_ir(h7))
     materialize(root7)
@@ -253,10 +253,10 @@ def _run_invariants() -> int:
     for name, values in zip(rows7, h8_mat):
         h8_df[name] = values
     h8.add_heatmap(data=h8_df, mapping=aes(x="col"), values=rows7)
-    left8 = pt.chart(data_width=20)
-    left8.yscale("category", order=rows7, padding=0)
     df13 = {"x": [1, 2, 1, 2], "y": rows7}
-    left8.add_line(data=df13, mapping=aes(x="x", y="y"))
+    left8 = pt.chart(df13, aes(x="x", y="y"), data_width=20)
+    left8.yscale("category", order=rows7, padding=0)
+    left8.add_line()
     h8.attach_left(left8)
     root8 = hydrate(pt.to_ir(h8))
     materialize(root8)
@@ -267,15 +267,15 @@ def _run_invariants() -> int:
            "left attachment inherits host's y_sectors (categorical)")
 
     # Explicit attachment-side sectors call wins over inheritance.
-    h9 = pt.chart(data_width=240, data_height=100)
-    h9.sectors({"chr1": 100}, axis="x", column="chr", divider=True, label=True)
     df14 = {"chr": ["chr1"], "x": [50], "y": [1]}
-    h9.add_line(data=df14, mapping=aes(x="x", y="y"))
-    top9 = pt.chart(data_height=30)
+    h9 = pt.chart(df14, aes(x="x", y="y"), data_width=240, data_height=100)
+    h9.sectors({"chr1": 100}, axis="x", column="chr", divider=True, label=True)
+    h9.add_line()
+    df15 = {"chr": ["chr1"], "x": [50], "y": [1]}
+    top9 = pt.chart(df15, aes(x="x", y="y"), data_height=30)
     top9.sectors({"chr1": 100}, axis="x", column="chr",
                  divider=True, label=True)
-    df15 = {"chr": ["chr1"], "x": [50], "y": [1]}
-    top9.add_line(data=df15, mapping=aes(x="x", y="y"))
+    top9.add_line()
     h9.attach_above(top9)
     root9 = hydrate(pt.to_ir(h9))
     materialize(root9)
@@ -330,11 +330,12 @@ def test_attachments_invariants():
 def test_attach_above_promotes_subtitle():
     def build(**chart_kw):
         df = {"x": [1, 2, 3], "y": [1, 2, 3]}
-        host = pt.chart(df, **chart_kw)
-        host.add_scatter(aes(x="x", y="y"))
-        top = pt.chart(data_height=30)
+
+        host = pt.chart(df, aes(x="x", y="y"), **chart_kw)
+        host.add_scatter()
         df2 = {"x": [1, 2, 3], "y": [1, 2, 1]}
-        top.add_line(data=df2, mapping=aes(x="x", y="y"))
+        top = pt.chart(df2, aes(x="x", y="y"), data_height=30)
+        top.add_line()
         host.attach_above(top)
         return host.regions()
 

@@ -241,9 +241,9 @@ def _demo(font: str | None, title: str, theme: str | None = None) -> pt.Chart:
         kw["theme"] = theme
     c = pt.chart(title=title, xlabel="t", ylabel="value", legend=True, **kw)
     df = {"x": xs, "y": [math.sin(x) for x in xs]}
-    c.add_line(data=df, mapping=aes(x="x", y="y"), label="sin(t)")
+    c.add_line(df, aes(x="x", y="y"), label="sin(t)")
     df2 = {"x": xs, "y": [math.cos(x) for x in xs]}
-    c.add_line(data=df2, mapping=aes(x="x", y="y"), label="cos(t)", linestyle="--")
+    c.add_line(df2, aes(x="x", y="y"), label="cos(t)", linestyle="--")
     return c
 
 
@@ -270,9 +270,9 @@ def _variant_demo(font: str | None, title: str) -> pt.Chart:
     df = {"label": ["alpha", "beta", "gamma", "delta"],
           "rate": [0.42, 0.35, 0.28, 0.21]}
     kw = {"font": font} if font else {}
-    c = pt.chart(data_width=320, data_height=200, title=title,
-                 ylabel="rate", **kw)
-    c.add_bar(data=df, mapping=aes(x="label", y="rate"), fill="#5599aa")
+    c = pt.chart(df, aes(x="label", y="rate"), data_width=320,
+                 data_height=200, title=title, ylabel="rate", **kw)
+    c.add_bar(fill="#5599aa")
     c.xticks(fontweight="bold")
     c.yticks(fontstyle="italic", fontweight="bold")
     return c
@@ -291,12 +291,16 @@ def font_mixed_layout():
     `_node_style()` scoping keeps each panel's measurement and render
     on its own face."""
     xs = [i * 0.1 for i in range(64)]
-    left = pt.chart(title="DejaVu Sans", xlabel="t", ylabel="sin")
+
     df = {"x": xs, "y": [math.sin(x) for x in xs]}
-    left.add_line(data=df, mapping=aes(x="x", y="y"))
-    right = pt.chart(title="Arimo", xlabel="t", ylabel="cos", font="Arimo")
+    left = pt.chart(df, aes(x="x", y="y"), title="DejaVu Sans", xlabel="t",
+                     ylabel="sin")
+    left.add_line()
+
     df2 = {"x": xs, "y": [math.cos(x) for x in xs]}
-    right.add_line(data=df2, mapping=aes(x="x", y="y"))
+    right = pt.chart(df2, aes(x="x", y="y"), title="Arimo", xlabel="t",
+                      ylabel="cos", font="Arimo")
+    right.add_line()
     return left | right
 
 

@@ -18,13 +18,14 @@ def chart_ecdf():
     rng = random.Random(8)
     a = [rng.gauss(0, 1) for _ in range(200)]
     b = [rng.gauss(0.6, 1.3) for _ in range(200)]
+    df = {"x": a}
+
     c = pt.chart(data_width=300, data_height=200,
                  title="ECDF", xlabel="value", ylabel="F̂(x)",
                  legend=True)
-    df = {"x": a}
-    c.add_ecdf(data=df, mapping=aes(x="x"), label="control")
+    c.add_ecdf(df, aes(x="x"), label="control")
     df2 = {"x": b}
-    c.add_ecdf(data=df2, mapping=aes(x="x"), label="treatment")
+    c.add_ecdf(df2, aes(x="x"), label="treatment")
     c.legend()
     return c
 

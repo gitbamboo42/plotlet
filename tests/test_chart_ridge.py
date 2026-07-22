@@ -23,9 +23,10 @@ def chart_ridge():
             rows_label.append(lbl)
             rows_value.append(rng.gauss(20 + i, 3))
     df = {"month": rows_label, "value": rows_value}
-    c = pt.chart(data_width=320, data_height=260,
+
+    c = pt.chart(df, aes(x="month", y="value"), data_width=320, data_height=260,
                  title="ridge", xlabel="value")
-    c.add_ridge(data=df, mapping=aes(x="month", y="value"), overlap=1.6)
+    c.add_ridge(overlap=1.6)
     c.yticks([])
     return c
 
@@ -40,9 +41,10 @@ def chart_ridge_color():
                 rows_m.append(month); rows_g.append(g)
                 rows_v.append(rng.gauss(15 + i * 2 + shift, 2.5))
     df = {"month": rows_m, "temp": rows_v, "period": rows_g}
-    c = pt.chart(data_width=320, data_height=260,
+
+    c = pt.chart(df, aes(x="month", y="temp", color="period"), data_width=320, data_height=260,
                  title="grouped ridge", xlabel="temperature", legend=True)
-    c.add_ridge(data=df, mapping=aes(x="month", y="temp", color="period"), overlap=1.6)
+    c.add_ridge(overlap=1.6)
     c.yticks([])
     c.legend()
     return c
@@ -63,7 +65,8 @@ def test_ridge_color_series():
     import re
     df = {"m": ["Jan"] * 8, "v": [1, 2, 3, 4, 11, 12, 13, 14],
           "g": ["day"] * 4 + ["night"] * 4}
-    c = pt.chart(df)
-    c.add_ridge(aes(x="m", y="v", color="g"))
+
+    c = pt.chart(df, aes(x="m", y="v", color="g"))
+    c.add_ridge()
     fills = set(re.findall(r'<path[^>]*fill="(#[0-9a-f]+)"', c.to_svg()))
     assert {"#1f77b4", "#ff7f0e"} <= fills

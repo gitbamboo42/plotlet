@@ -18,10 +18,11 @@ def chart_text():
     # Data-anchored text labels. Single-point and batched-list forms.
     xs = [1, 2, 3, 4, 5]
     ys = [3, 7, 4, 9, 5]
-    c = pt.chart(title="text annotations", xlabel="x", ylabel="y")
     df = {"x": xs, "y": ys}
-    c.add_scatter(data=df, mapping=aes(x="x", y="y"))
     df2 = {"x": xs, "y": ys, "label": ["A", "B", "C", "D", "E"]}
+
+    c = pt.chart(df, aes(x="x", y="y"), title="text annotations", xlabel="x", ylabel="y")
+    c.add_scatter()
     c.add_text(data=df2, mapping=aes(x="x", y="y", label="label"), dy=-10, ha="center")
     c.add_annotate("peak", xy=(3, 9.5), color="C3", ha="center")
     return c
@@ -31,10 +32,11 @@ def chart_text_bbox():
     # Text labels with a background box — readable over dense data.
     xs = [i * 0.1 for i in range(120)]
     ys = [math.sin(x * 3) * math.exp(-x * 0.1) for x in xs]
-    c = pt.chart(data_width=420, data_height=200, title="text bbox",
-                 xlabel="t", ylabel="y")
     df = {"x": xs, "y": ys}
-    c.add_line(data=df, mapping=aes(x="x", y="y"))
+
+    c = pt.chart(df, aes(x="x", y="y"), data_width=420, data_height=200,
+                 title="text bbox", xlabel="t", ylabel="y")
+    c.add_line()
     c.add_annotate("plain", xy=(2.0, 0.5), fontsize=12)
     c.add_annotate("on white", xy=(4.0, 0.5), fontsize=12, bbox=True)
     c.add_annotate("tinted", xy=(6.0, 0.5), fontsize=12,
@@ -48,10 +50,11 @@ def chart_annotate():
     # Text label + arrow to a data point. Both endpoints in data coords.
     xs = [i * 0.2 for i in range(40)]
     ys = [math.sin(x) + math.sin(2 * x) * 0.4 for x in xs]
-    c = pt.chart(data_width=400, data_height=200,
-                 title="annotate", xlabel="x", ylabel="y")
     df = {"x": xs, "y": ys}
-    c.add_line(data=df, mapping=aes(x="x", y="y"))
+
+    c = pt.chart(df, aes(x="x", y="y"), data_width=400, data_height=200,
+                 title="annotate", xlabel="x", ylabel="y")
+    c.add_line()
     max_i = ys.index(max(ys))
     # Label sits left of the peak (ha="right" → glyphs extend left from
     # the anchor): margins only reserve chrome space, so a left-anchored

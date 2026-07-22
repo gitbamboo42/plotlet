@@ -20,9 +20,9 @@ def chart_rug():
     c = pt.chart(data_width=300, data_height=200,
                  title="density + rug", xlabel="value", ylabel="density")
     df = {"x": vals}
-    c.add_density_1d(data=df, mapping=aes(x="x"), fill=True)
+    c.add_density_1d(df, aes(x="x"), fill=True)
     df2 = {"x": vals}
-    c.add_rug(data=df2, mapping=aes(x="x"), color="#444444")
+    c.add_rug(df2, aes(x="x"), color="#444444")
     return c
 
 

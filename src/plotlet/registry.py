@@ -57,7 +57,7 @@ A spec bundles everything the pipeline needs to know about a plot type:
         is in order.
 
 `add_artist(name, ...)` is the public extension API. After calling it, users
-can do `fig.<name>(...)` and it Just Works.
+can do `c.add_<name>(...)` and it Just Works.
 """
 from __future__ import annotations
 

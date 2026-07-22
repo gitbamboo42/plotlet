@@ -23,19 +23,19 @@ def chart_category_x_scatter():
         "sample": [s for s in samples for _ in range(8)],
         "value":  [rng.gauss(0, 1) for _ in range(32)],
     }
-    c = pt.chart(df, title="scatter on categorical x", xlabel="sample", ylabel="value",
-                 xscale="category")
-    c.add_scatter(aes(x="sample", y="value"), color="C0", alpha=0.6)
+    c = pt.chart(df, aes(x="sample", y="value"), title="scatter on categorical x",
+                 xlabel="sample", ylabel="value", xscale="category")
+    c.add_scatter(color="C0", alpha=0.6)
     return c
 
 
 def chart_category_x_order():
     # Explicit order= reorders bars from their default first-appearance.
     df = {"sample": ["S1", "S2", "S3"], "count": [12, 7, 19]}
-    c = pt.chart(df, title="bar with explicit category order",
+    c = pt.chart(df, aes(x="sample", y="count"), title="bar with explicit category order",
                  xlabel="sample", ylabel="count")
     c.xscale("category", order=["S3", "S1", "S2"])
-    c.add_bar(aes(x="sample", y="count"), fill="C2")
+    c.add_bar(fill="C2")
     return c
 
 
@@ -47,9 +47,9 @@ def chart_category_y_scatter():
         "group": [g for g in groups for _ in range(10)],
         "x":     [rng.gauss(0, 1) for _ in range(30)],
     }
-    c = pt.chart(df, title="scatter on categorical y", xlabel="x", ylabel="group",
-                 yscale="category")
-    c.add_scatter(aes(x="x", y="group"), color="C3", alpha=0.6)
+    c = pt.chart(df, aes(x="x", y="group"), title="scatter on categorical y",
+                 xlabel="x", ylabel="group", yscale="category")
+    c.add_scatter(color="C3", alpha=0.6)
     return c
 
 
@@ -61,10 +61,10 @@ def chart_category_y_order():
         "group": [g for g in groups for _ in range(10)],
         "x":     [rng.gauss(0, 1) for _ in range(30)],
     }
-    c = pt.chart(df, title="scatter on categorical y, explicit order",
+    c = pt.chart(df, aes(x="x", y="group"), title="scatter on categorical y, explicit order",
                  xlabel="x", ylabel="group")
     c.yscale("category", order=["gamma", "alpha", "beta"])
-    c.add_scatter(aes(x="x", y="group"), color="C3", alpha=0.6)
+    c.add_scatter(color="C3", alpha=0.6)
     return c
 
 
@@ -72,9 +72,9 @@ def chart_hide_yticks():
     # Metadata-strip pattern: numeric y for positioning, but ticks suppressed
     # via yticks([]).
     df = {"sample": ["S1", "S2", "S3", "S4"], "stage": [0.5] * 4}
-    c = pt.chart(df, data_width=320, data_height=24, title="metadata strip",
-                 ylabel="stage")
-    c.add_bar(aes(x="sample", y="stage"), fill="C1")
+    c = pt.chart(df, aes(x="sample", y="stage"), data_width=320, data_height=24,
+                 title="metadata strip", ylabel="stage")
+    c.add_bar(fill="C1")
     c.ylim(0, 1)
     c.yticks([])
     return c
@@ -84,9 +84,9 @@ def chart_xticks_rotation():
     # Rotate category labels that would crowd horizontally.
     df = {"month": ["Jan", "Feb", "Mar", "Apr", "May"],
           "count": [12, 7, 19, 14, 9]}
-    c = pt.chart(df, data_width=320, data_height=180,
+    c = pt.chart(df, aes(x="month", y="count"), data_width=320, data_height=180,
                  title="rotated x labels", ylabel="count")
-    c.add_bar(aes(x="month", y="count"), fill="C0")
+    c.add_bar(fill="C0")
     c.xticks(rotation=45)
     return c
 
@@ -101,8 +101,8 @@ def chart_xticks_top_share_x():
     xs = [i * 0.1 for i in range(64)]
     df = {"x": xs, "y": [math.sin(t) for t in xs]}
     df2 = {"x": xs, "y": [math.cos(t) for t in xs]}
-    top = pt.chart(df, ylabel="sin").add_line(aes(x="x", y="y"))
-    bot = pt.chart(df2, xlabel="x", ylabel="cos").add_line(aes(x="x", y="y"))
+    top = pt.chart(df, aes(x="x", y="y"), ylabel="sin").add_line()
+    bot = pt.chart(df2, aes(x="x", y="y"), xlabel="x", ylabel="cos").add_line()
     bot.xticks(side="top")
     return pt.grid([[top], [bot]]).share_x("col")
 
@@ -112,9 +112,9 @@ def chart_xticks_flipped_sides():
     # xlabel/ylabel and title all follow.
     xs = [i * 0.1 for i in range(64)]
     df = {"x": xs, "y": [math.sin(t) for t in xs]}
-    c = pt.chart(df, title="x on top, y on right",
+    c = pt.chart(df, aes(x="x", y="y"), title="x on top, y on right",
                  xlabel="x", ylabel="y")
-    c.add_line(aes(x="x", y="y"))
+    c.add_line()
     c.xticks(side="top")
     c.yticks(side="right")
     return c
@@ -126,8 +126,8 @@ def chart_xticks_inward():
     # other test.
     xs = [i * 0.1 for i in range(64)]
     df = {"x": xs, "y": [math.sin(t) for t in xs]}
-    c = pt.chart(df, title="inward ticks", xlabel="x", ylabel="y")
-    c.add_line(aes(x="x", y="y"))
+    c = pt.chart(df, aes(x="x", y="y"), title="inward ticks", xlabel="x", ylabel="y")
+    c.add_line()
     c.xticks(direction="in")
     c.yticks(direction="in")
     return c
@@ -137,8 +137,8 @@ def chart_xticks_marks_off():
     # Hide tick marks but keep labels (compare to xticks([]) which hides both).
     xs = [i * 0.1 for i in range(64)]
     df = {"x": xs, "y": [math.sin(t) for t in xs]}
-    c = pt.chart(df, title="labels only, no tick marks", xlabel="x", ylabel="y")
-    c.add_line(aes(x="x", y="y"))
+    c = pt.chart(df, aes(x="x", y="y"), title="labels only, no tick marks", xlabel="x", ylabel="y")
+    c.add_line()
     c.xticks(marks=False)
     c.yticks(marks=False)
     return c
@@ -148,8 +148,8 @@ def chart_xticks_explicit():
     # Explicit positions and labels, plus a fontsize override.
     xs = [i * 0.1 for i in range(64)]
     df = {"x": xs, "y": [math.sin(t) for t in xs]}
-    c = pt.chart(df, title="explicit ticks", xlabel="x", ylabel="y")
-    c.add_line(aes(x="x", y="y"))
+    c = pt.chart(df, aes(x="x", y="y"), title="explicit ticks", xlabel="x", ylabel="y")
+    c.add_line()
     c.xticks([0, math.pi, 2 * math.pi], ["0", "π", "2π"], fontsize=14)
     return c
 
@@ -157,9 +157,10 @@ def chart_xticks_explicit():
 def chart_category_padding_zero():
     # Contiguous track: cells butt up with no inner gap.
     df = {"x": ["a", "b", "c", "d", "e"], "v": [1, 2, 3, 2, 1]}
-    c = pt.chart(df, data_width=320, data_height=60, title="padding=0 (contiguous)")
+    c = pt.chart(df, aes(x="x", y="v"), data_width=320, data_height=60,
+                 title="padding=0 (contiguous)")
     c.xscale("category", padding=0)
-    c.add_bar(aes(x="x", y="v"), fill="C0")
+    c.add_bar(fill="C0")
     return c
 
 
@@ -168,9 +169,10 @@ def chart_errorbar_category_x():
     df = {"cat":  ["control", "low", "mid", "high"],
           "mean": [2.1, 3.4, 4.6, 5.2],
           "sd":   [0.3, 0.4, 0.5, 0.6]}
-    c = pt.chart(title="response by level", xlabel="level", ylabel="response")
-    c.add_bar(data=df, mapping=aes(x="cat", y="mean"), fill="#cccccc")
-    c.add_errorbar(data=df, mapping=aes(x="cat", y="mean", yerr="sd"))
+    c = pt.chart(df, aes(x="cat", y="mean"), title="response by level",
+                 xlabel="level", ylabel="response")
+    c.add_bar(fill="#cccccc")
+    c.add_errorbar(aes(yerr="sd"))
     return c
 
 
@@ -193,9 +195,9 @@ def chart_long_rotated_xticks():
     df = {"sample": ["sample_alpha_2024", "sample_beta_2024", "sample_gamma_2024",
                       "sample_delta_2024", "sample_epsilon_2024"],
           "count":  [12, 7, 19, 14, 9]}
-    c = pt.chart(df, data_width=300, data_height=180,
+    c = pt.chart(df, aes(x="sample", y="count"), data_width=300, data_height=180,
                  title="long rotated x-tick labels", ylabel="count")
-    c.add_bar(aes(x="sample", y="count"), fill="C0")
+    c.add_bar(fill="C0")
     c.xticks(rotation=45)
     return c
 
@@ -206,9 +208,9 @@ def chart_xticks_fontstyle_italic():
     # path-loaded fonts with no italic sibling).
     df = {"label": ["alpha", "beta", "gamma", "delta", "epsilon"],
           "rate": [0.42, 0.35, 0.28, 0.21, 0.18]}
-    c = pt.chart(data_width=320, data_height=200,
+    c = pt.chart(df, aes(x="label", y="rate"), data_width=320, data_height=200,
                  title="italic labels", ylabel="rate")
-    c.add_bar(data=df, mapping=aes(x="label", y="rate"), fill="#5599aa")
+    c.add_bar(fill="#5599aa")
     c.xticks(fontstyle="italic")
     return c
 
@@ -218,9 +220,9 @@ def chart_xticks_decoration():
     # overline. Each is rendered as a stroke line at the conventional
     # offset relative to the baseline / cap-top.
     df = {"cat": ["under", "strike", "over"], "val": [3, 4, 5]}
-    c = pt.chart(data_width=260, data_height=160,
+    c = pt.chart(df, aes(x="cat", y="val"), data_width=260, data_height=160,
                  title="tick label decorations")
-    c.add_bar(data=df, mapping=aes(x="cat", y="val"), fill="#5599aa")
+    c.add_bar(fill="#5599aa")
     # Single-axis-wide style; mixing three on one chart isn't currently
     # supported (would need per-tick override).
     c.xticks(decoration="underline")
@@ -235,37 +237,40 @@ def chart_xticks_rotation_negative():
     # rotated labels into the chart body.
     df = {"sample": ["Sample-1", "Sample-2", "Sample-3", "Sample-4"],
           "value":  [10, 20, 15, 25]}
-    c = pt.chart(data_width=300, data_height=180,
+    c = pt.chart(df, aes(x="sample", y="value"), data_width=300, data_height=180,
                  title="negative rotation stays below data",
                  xlabel="samples", ylabel="value")
-    c.add_bar(data=df, mapping=aes(x="sample", y="value"), fill="#888")
+    c.add_bar(fill="#888")
     c.xticks(rotation=-90)
     return c
 
 
 def chart_ticks_step():
-    c = pt.chart(data_width=400, data_height=170,
-                 title="step=0.25", xlabel="x", ylabel="y", gridlines=True)
     df = {"x": [0, 0.5, 1.0, 1.5, 2.0], "y": [0, 1, 4, 9, 16]}
-    c.add_line(data=df, mapping=aes(x="x", y="y"), marker="o")
+
+    c = pt.chart(df, aes(x="x", y="y"), data_width=400, data_height=170,
+                 title="step=0.25", xlabel="x", ylabel="y", gridlines=True)
+    c.add_line(marker="o")
     c.xticks(step=0.25)
     return c
 
 
 def chart_ticks_count():
-    c = pt.chart(data_width=400, data_height=170,
-                 title="count=4", xlabel="x", ylabel="y", gridlines=True)
     df = {"x": list(range(11)), "y": [i * i for i in range(11)]}
-    c.add_line(data=df, mapping=aes(x="x", y="y"), marker="o")
+
+    c = pt.chart(df, aes(x="x", y="y"), data_width=400, data_height=170,
+                 title="count=4", xlabel="x", ylabel="y", gridlines=True)
+    c.add_line(marker="o")
     c.xticks(count=4)
     return c
 
 
 def chart_minor_ticks_linear():
-    c = pt.chart(data_width=400, data_height=180,
-                 title="minor ticks", xlabel="x", ylabel="y", gridlines=True)
     df = {"x": [0, 1, 2, 3, 4, 5], "y": [0, 1, 4, 9, 16, 25]}
-    c.add_line(data=df, mapping=aes(x="x", y="y"), marker="o")
+
+    c = pt.chart(df, aes(x="x", y="y"), data_width=400, data_height=180,
+                 title="minor ticks", xlabel="x", ylabel="y", gridlines=True)
+    c.add_line(marker="o")
     c.xticks(minor=True)
     c.yticks(minor=True)
     return c
@@ -274,39 +279,42 @@ def chart_minor_ticks_linear():
 def chart_power10_math_text():
     # power10 log ticks + unicode super/subscripts in axis labels +
     # italic in-plot text — the math-text vocabulary in one baseline.
+    df = {"x": [1, 10, 100, 1000, 10000],
+          "y": [0.001, 0.01, 0.1, 1, 10]}
+
     c = pt.chart(data_width=400, data_height=190, title="math text",
                  xlabel="dose (mol·L" + pt.superscript("-1") + ")",
                  ylabel="H" + pt.subscript("2") + "O flux (kg·m"
                         + pt.superscript("-2") + ")")
-    df = {"x": [1, 10, 100, 1000, 10000],
-      "y": [0.001, 0.01, 0.1, 1, 10]}
-    c.add_line(data=df, mapping=aes(x="x", y="y"), marker="o")
+    c.add_line(df, aes(x="x", y="y"), marker="o")
     c.xscale("log")
     c.yscale("log")
     c.xticks(format="power10")
     c.yticks(format="power10")
     df2 = {"x": [10], "y": [1], "s": ["BRCA1"]}
-    c.add_text(data=df2, mapping=aes(x="x", y="y", label="s"), fontstyle="italic")
+    c.add_text(df2, aes(x="x", y="y", label="s"), fontstyle="italic")
     return c
 
 
 def chart_minor_grid():
     # which="both": thin minor lines between the major ones, auto
     # positions on the linear axes without minor ticks enabled.
-    c = pt.chart(data_width=400, data_height=180,
-                 title="minor grid", xlabel="x", ylabel="y", gridlines="both")
     df = {"x": [0, 1, 2, 3, 4, 5], "y": [0, 1, 4, 9, 16, 25]}
-    c.add_line(data=df, mapping=aes(x="x", y="y"), marker="o")
+
+    c = pt.chart(df, aes(x="x", y="y"), data_width=400, data_height=180,
+                 title="minor grid", xlabel="x", ylabel="y", gridlines="both")
+    c.add_line(marker="o")
     return c
 
 
 def chart_minor_grid_log():
     # log x: minor gridlines at the 2..9 decade multipliers, drawn from
     # c.gridlines(which=) with explicit minor ticks shown too.
-    c = pt.chart(data_width=400, data_height=180,
-                 title="minor grid log", xlabel="freq", ylabel="amp")
     df = {"x": [1, 10, 100, 1000, 10000], "y": [1, 5, 12, 25, 60]}
-    c.add_line(data=df, mapping=aes(x="x", y="y"), marker="o")
+
+    c = pt.chart(df, aes(x="x", y="y"), data_width=400, data_height=180,
+                 title="minor grid log", xlabel="freq", ylabel="amp")
+    c.add_line(marker="o")
     c.xscale("log")
     c.xticks(minor=True)
     c.gridlines(which="both")
@@ -314,10 +322,11 @@ def chart_minor_grid_log():
 
 
 def chart_minor_ticks_log():
-    c = pt.chart(data_width=400, data_height=180,
-                 title="minor ticks log", xlabel="freq", ylabel="amp")
     df = {"x": [1, 10, 100, 1000, 10000], "y": [1, 5, 12, 25, 60]}
-    c.add_line(data=df, mapping=aes(x="x", y="y"), marker="o")
+
+    c = pt.chart(df, aes(x="x", y="y"), data_width=400, data_height=180,
+                 title="minor ticks log", xlabel="freq", ylabel="amp")
+    c.add_line(marker="o")
     c.xscale("log")
     c.xticks(minor=True)
     return c
@@ -327,10 +336,11 @@ def chart_reverse_y():
     # Reversed y axis: classic oceanography depth profile (0 on top).
     times = list(range(8))
     depths = [10, 28, 65, 130, 220, 360, 480, 620]
-    c = pt.chart(data_width=320, data_height=180,
-                 title="depth profile", xlabel="time", ylabel="depth (m)")
     df = {"x": times, "y": depths}
-    c.add_line(data=df, mapping=aes(x="x", y="y"), marker="o")
+
+    c = pt.chart(df, aes(x="x", y="y"), data_width=320, data_height=180,
+                 title="depth profile", xlabel="time", ylabel="depth (m)")
+    c.add_line(marker="o")
     c.yscale("linear", reverse=True)
     return c
 
@@ -339,9 +349,9 @@ def chart_sqrt_y():
     # sqrt scale on y compresses large counts while keeping small ones visible.
     df = {"bin": ["A", "B", "C", "D", "E", "F", "G"],
           "count": [1, 9, 25, 49, 100, 256, 484]}
-    c = pt.chart(data_width=320, data_height=180,
+    c = pt.chart(df, aes(x="bin", y="count"), data_width=320, data_height=180,
                  title="sqrt y", xlabel="bin", ylabel="count")
-    c.add_bar(data=df, mapping=aes(x="bin", y="count"))
+    c.add_bar()
     c.yscale("sqrt")
     return c
 
@@ -351,30 +361,33 @@ def chart_symlog_x():
     # a linear band around 0. Signed-magnitude domains.
     xs = [-2000, -250, -25, -2, -0.5, 0, 0.5, 2, 25, 250, 2000]
     ys = [abs(x) ** 0.5 for x in xs]
-    c = pt.chart(data_width=400, data_height=180,
-                 title="symlog axis", xlabel="signed magnitude", ylabel="sqrt(|x|)")
     df = {"x": xs, "y": ys}
-    c.add_scatter(data=df, mapping=aes(x="x", y="y"), size=2.5)
+
+    c = pt.chart(df, aes(x="x", y="y"), data_width=400, data_height=180,
+                 title="symlog axis", xlabel="signed magnitude", ylabel="sqrt(|x|)")
+    c.add_scatter(size=2.5)
     c.xscale("symlog", linthresh=1.0)
     return c
 
 
 def chart_tick_format_string():
     # Format string: '{:.0%}' renders y-ticks as percentages.
-    c = pt.chart(data_width=320, data_height=180,
-                 title="completion rate", xlabel="week", ylabel="rate")
     df = {"x": list(range(8)), "y": [0.05, 0.12, 0.18, 0.27, 0.42, 0.55, 0.71, 0.88]}
-    c.add_line(data=df, mapping=aes(x="x", y="y"))
+
+    c = pt.chart(df, aes(x="x", y="y"), data_width=320, data_height=180,
+                 title="completion rate", xlabel="week", ylabel="rate")
+    c.add_line()
     c.yticks(format="{:.0%}")
     return c
 
 
 def chart_tick_format_named():
     # Named formatter: `pt.formatters.money` handles the K/M compaction.
-    c = pt.chart(data_width=320, data_height=180,
-                 title="revenue", xlabel="month", ylabel="revenue")
     df = {"x": list(range(8)), "y": [1200, 4500, 8300, 18000, 45000, 92000, 410000, 1_250_000]}
-    c.add_line(data=df, mapping=aes(x="x", y="y"))
+
+    c = pt.chart(df, aes(x="x", y="y"), data_width=320, data_height=180,
+                 title="revenue", xlabel="month", ylabel="revenue")
+    c.add_line()
     c.yticks(format="money")
     return c
 
@@ -383,10 +396,11 @@ def chart_time_axis_dates():
     # Auto-detect: date values on x → time scale, calendar-aligned ticks.
     dates = [datetime.date(2024, 1, 1) + datetime.timedelta(days=30 * i) for i in range(12)]
     vals  = [10, 12, 9, 15, 18, 22, 25, 21, 17, 14, 12, 11]
-    c = pt.chart(data_width=400, data_height=180,
-                 title="2024 monthly units", ylabel="units", gridlines=True)
     df = {"x": dates, "y": vals}
-    c.add_line(data=df, mapping=aes(x="x", y="y"), marker="o")
+
+    c = pt.chart(df, aes(x="x", y="y"), data_width=400, data_height=180,
+                 title="2024 monthly units", ylabel="units", gridlines=True)
+    c.add_line(marker="o")
     return c
 
 
@@ -396,10 +410,11 @@ def chart_time_axis_hours():
     base = datetime.datetime(2024, 6, 1, 0, 0, tzinfo=datetime.timezone.utc)
     times = [base + datetime.timedelta(hours=i) for i in range(0, 25, 2)]
     vals  = [math.sin(i / 4) * 5 + 10 for i in range(len(times))]
-    c = pt.chart(data_width=220, data_height=320,
-                 title="signal over a day", xlabel="value", ylabel="time (UTC)")
     df = {"x": vals, "y": times}
-    c.add_line(data=df, mapping=aes(x="x", y="y"))
+
+    c = pt.chart(df, aes(x="x", y="y"), data_width=220, data_height=320,
+                 title="signal over a day", xlabel="value", ylabel="time (UTC)")
+    c.add_line()
     return c
 
 
@@ -450,8 +465,8 @@ def test_log_scale_single_point_domain():
     # with "log scale needs strictly positive domain".
     import re
     df = {"x": [0.3], "y": [1.0]}
-    c = pt.chart(df)
-    c.add_scatter(aes(x="x", y="y"))
+    c = pt.chart(df, aes(x="x", y="y"))
+    c.add_scatter()
     c.xscale("log")
     m = re.search(r'data-plotlet-xlim="([^"]*)"', c.to_svg())
     lo, hi = (float(v) for v in m.group(1).split(","))

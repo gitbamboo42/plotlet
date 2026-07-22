@@ -25,12 +25,13 @@ def chart_strip():
                 rows.append({"cond": cond, "series": series,
                              "value": rng.gauss(mu, sd)})
     data = {k: [r[k] for r in rows] for k in rows[0]}
-    c = pt.chart(data_width=360, data_height=220,
+
+    c = pt.chart(data, aes(x="cond", y="value", fill="series"),
+                 data_width=360, data_height=220,
                  title="strip fill", xlabel="condition", ylabel="value",
                  legend=True)
     c.xscale("category", order=["A", "B", "C", "D"])
-    c.add_strip(data=data, mapping=aes(x="cond", y="value", fill="series"),
-            palette={"a": "#3F97C5", "b": "#F99917"})
+    c.add_strip(palette={"a": "#3F97C5", "b": "#F99917"})
     c.legend()
     return c
 

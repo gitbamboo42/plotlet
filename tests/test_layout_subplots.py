@@ -37,32 +37,35 @@ def _xs():
 
 def _sin(data_width=220, data_height=320):
     xs = _xs()
-    c = pt.chart(title="sin", data_width=data_width, data_height=data_height)
     df = {"x": xs, "y": [math.sin(x) for x in xs]}
-    c.add_line(data=df, mapping=aes(x="x", y="y"))
+
+    c = pt.chart(df, aes(x="x", y="y"), title="sin", data_width=data_width, data_height=data_height)
+    c.add_line()
     return c
 
 
 def _cos(data_width=220, data_height=320):
     xs = _xs()
-    c = pt.chart(title="cos", data_width=data_width, data_height=data_height)
     df = {"x": xs, "y": [math.cos(x) for x in xs]}
-    c.add_line(data=df, mapping=aes(x="x", y="y"))
+
+    c = pt.chart(df, aes(x="x", y="y"), title="cos", data_width=data_width, data_height=data_height)
+    c.add_line()
     return c
 
 
 def _bar(label="bar", data_width=220, data_height=320):
     df = {"x": ["a", "b", "c"], "y": [3, 1, 2]}
-    c = pt.chart(df,
-                 title=label, data_width=data_width, data_height=data_height)
-    c.add_bar(aes(x="x", y="y"))
+
+    c = pt.chart(df, aes(x="x", y="y"), title=label, data_width=data_width, data_height=data_height)
+    c.add_bar()
     return c
 
 
 def _hist(data_width=220, data_height=320):
-    c = pt.chart(title="hist", data_width=data_width, data_height=data_height)
     df = {"x": [0.1, 0.4, 0.5, 0.55, 0.7, 0.8, 0.9, 1.1, 1.3]}
-    c.add_hist(data=df, mapping=aes(x="x"), bins=6)
+
+    c = pt.chart(df, aes(x="x"), title="hist", data_width=data_width, data_height=data_height)
+    c.add_hist(bins=6)
     return c
 
 
@@ -94,13 +97,13 @@ def two_by_two():
 def grid_with_spacers():
     # 3-col 2-row irregular grid with None corners.
     df = {"x":["a","b","c"], "y":[3,1,2]}
-    top  = pt.chart(df, title="top",   data_width=120, data_height=24);  top.add_bar(aes(x="x", y="y"))
+    top  = pt.chart(df, aes(x="x", y="y"), title="top",   data_width=120, data_height=24);  top.add_bar()
     df2 = {"x": [1,2,3], "y": [3,1,2]}
-    left = pt.chart(title="left",  data_width=120, data_height=220); left.add_line(data=df2, mapping=aes(x="x", y="y"))
+    left = pt.chart(df2, aes(x="x", y="y"), title="left",  data_width=120, data_height=220); left.add_line()
     df3 = {"x": [1,2,3], "y": [1,4,9]}
-    main = pt.chart(title="main",  data_width=120, data_height=220); main.add_line(data=df3, mapping=aes(x="x", y="y"))
+    main = pt.chart(df3, aes(x="x", y="y"), title="main",  data_width=120, data_height=220); main.add_line()
     df4 = {"x": [1,2,3], "y": [2,2,1]}
-    right= pt.chart(title="right", data_width=120, data_height=220); right.add_line(data=df4, mapping=aes(x="x", y="y"))
+    right= pt.chart(df4, aes(x="x", y="y"), title="right", data_width=120, data_height=220); right.add_line()
     return pt.grid([
         [None, top,  None ],
         [left, main, right],
@@ -117,16 +120,16 @@ def measure_driven_alignment():
     # across rows. Cells in column 1 (`b`, `d`) keep their default
     # narrower left margin since neither has a long label requirement.
     df = {"x": [1,2,3], "y": [1,2,3]}
-    a = pt.chart(title="a", data_width=180, data_height=140); a.add_line(data=df, mapping=aes(x="x", y="y"))
+    a = pt.chart(df, aes(x="x", y="y"), title="a", data_width=180, data_height=140); a.add_line()
     df2 = {"x": [1,2,3], "y": [3,2,1]}
-    b = pt.chart(title="b", data_width=180, data_height=140); b.add_line(data=df2, mapping=aes(x="x", y="y"))
-    c = pt.chart(data_width=180, data_height=140, ylabel="categories")
+    b = pt.chart(df2, aes(x="x", y="y"), title="b", data_width=180, data_height=140); b.add_line()
     df3 = {"x": [1,2,3,4,5],
        "y": ["measurement_alpha", "measurement_beta", "measurement_gamma",
              "measurement_delta", "measurement_epsilon"]}
-    c.add_scatter(data=df3, mapping=aes(x="x", y="y"))
+    c = pt.chart(df3, aes(x="x", y="y"), data_width=180, data_height=140, ylabel="categories")
+    c.add_scatter()
     df4 = {"x": [1,2,3], "y": [1,2,3]}
-    d = pt.chart(data_width=180, data_height=140); d.add_line(data=df4, mapping=aes(x="x", y="y"))
+    d = pt.chart(df4, aes(x="x", y="y"), data_width=180, data_height=140); d.add_line()
     return pt.grid([[a, b], [c, d]])
 
 
@@ -138,51 +141,51 @@ def body_first_unequal_columns():
     # parameter on pt.grid: per-leaf data_width IS the way to express
     # "make this column twice as wide as that one."
     df = {"x": [1,2,3], "y": [1,4,9]}
-    a = pt.chart(title="a", data_width=80,  data_height=300); a.add_line(data=df, mapping=aes(x="x", y="y"))
+    a = pt.chart(df, aes(x="x", y="y"), title="a", data_width=80,  data_height=300); a.add_line()
     df2 = {"x": [1,2,3], "y": [3,1,2]}
-    b = pt.chart(title="b", data_width=160, data_height=300); b.add_line(data=df2, mapping=aes(x="x", y="y"))
+    b = pt.chart(df2, aes(x="x", y="y"), title="b", data_width=160, data_height=300); b.add_line()
     df3 = {"x": [1,2,3], "y": [5,2,4]}
-    c = pt.chart(title="c", data_width=160, data_height=300); c.add_line(data=df3, mapping=aes(x="x", y="y"))
+    c = pt.chart(df3, aes(x="x", y="y"), title="c", data_width=160, data_height=300); c.add_line()
     return pt.grid([[a, b, c]])
 
 
 def share_y_collapses_gap():
     # share_y → joined, gap 0.
     df = {"x": [1,2,3], "y": [1,4,9]}
-    hm   = pt.chart(title="hm",   data_width=220); hm.add_line(data=df, mapping=aes(x="x", y="y"))
+    hm   = pt.chart(df, aes(x="x", y="y"), title="hm",   data_width=220); hm.add_line()
     df2 = {"x": [1,2,3], "y": [3,1,2]}
-    tree = pt.chart(title="tree", data_width=220); tree.add_line(data=df2, mapping=aes(x="x", y="y"))
+    tree = pt.chart(df2, aes(x="x", y="y"), title="tree", data_width=220); tree.add_line()
     return (tree | hm).share_y()
 
 
 def share_x_collapses_gap_vertical():
     # share_x → joined, gap 0.
     df = {"x": [1, 2, 3], "y": [1, 4, 9]}
-    main = pt.chart(title="main", data_height=120); main.add_line(data=df, mapping=aes(x="x", y="y"))
+    main = pt.chart(df, aes(x="x", y="y"), title="main", data_height=120); main.add_line()
     df2 = {"x": [1, 2, 3], "y": [3, 1, 2]}
-    top  = pt.chart(title="top",  data_height=120); top.add_line(data=df2, mapping=aes(x="x", y="y"))
+    top  = pt.chart(df2, aes(x="x", y="y"), title="top",  data_height=120); top.add_line()
     return (top / main).share_x()
 
 
 def share_x_three_panels():
     # Three vertically-stacked panels all share x via parent-level .share_x().
     df = {"x": [0, 5, 10], "y": [0, 1, 0]}
-    main = pt.chart(title="main", data_height=60); main.add_line(data=df, mapping=aes(x="x", y="y"))
+    main = pt.chart(df, aes(x="x", y="y"), title="main", data_height=60); main.add_line()
     df2 = {"x": [0, 5, 10], "y": [10, 0, 10]}
-    mid  = pt.chart(title="mid",  data_height=60); mid.add_line(data=df2, mapping=aes(x="x", y="y"))
+    mid  = pt.chart(df2, aes(x="x", y="y"), title="mid",  data_height=60); mid.add_line()
     df3 = {"x": [0, 5, 10], "y": [5, 5, 5]}
-    top  = pt.chart(title="top",  data_height=60); top.add_line(data=df3, mapping=aes(x="x", y="y"))
+    top  = pt.chart(df3, aes(x="x", y="y"), title="top",  data_height=60); top.add_line()
     return (top / mid / main).share_x()
 
 
 def share_y_chain():
     # Three side-by-side panels all share y via parent-level .share_y().
     df = {"x": [1,2,3], "y": [0, 100, 0]}
-    a = pt.chart(title="a", data_width=130); a.add_line(data=df, mapping=aes(x="x", y="y"))
+    a = pt.chart(df, aes(x="x", y="y"), title="a", data_width=130); a.add_line()
     df2 = {"x": [1,2,3], "y": [10, 50, 90]}
-    b = pt.chart(title="b", data_width=130); b.add_line(data=df2, mapping=aes(x="x", y="y"))
+    b = pt.chart(df2, aes(x="x", y="y"), title="b", data_width=130); b.add_line()
     df3 = {"x": [1,2,3], "y": [20, 40, 60]}
-    c = pt.chart(title="c", data_width=130); c.add_line(data=df3, mapping=aes(x="x", y="y"))
+    c = pt.chart(df3, aes(x="x", y="y"), title="c", data_width=130); c.add_line()
     return (a | b | c).share_y()
 
 
@@ -191,20 +194,20 @@ def width_hint_narrow_side():
     # `hm | pt.colorbar(hm)` — body-first per-leaf widths express the
     # main:side ratio directly.
     df = {"x": [1,2,3], "y": [1,4,9]}
-    main = pt.chart(title="main", data_width=440); main.add_line(data=df, mapping=aes(x="x", y="y"))
-    side = pt.chart(title="side", data_width=24)
+    main = pt.chart(df, aes(x="x", y="y"), title="main", data_width=440); main.add_line()
     df2 = {"x": [1, 1, 1], "y": [1, 4, 9]}
-    side.add_line(data=df2, mapping=aes(x="x", y="y"))
+    side = pt.chart(df2, aes(x="x", y="y"), title="side", data_width=24)
+    side.add_line()
     return (main | side).share_y()
 
 
 def height_hint_short_top():
     # Short top track over a main panel.
     df = {"x":["a","b","c"], "y":[1,2,3]}
-    top  = pt.chart(df, title="top",  data_height=24)
-    top.add_bar(aes(x="x", y="y"))
+    top  = pt.chart(df, aes(x="x", y="y"), title="top",  data_height=24)
+    top.add_bar()
     df2 = {"x":["a","b","c"], "y":[3,1,2]}
-    main = pt.chart(df2, title="main", data_height=240); main.add_bar(aes(x="x", y="y"))
+    main = pt.chart(df2, aes(x="x", y="y"), title="main", data_height=240); main.add_bar()
     return (top / main).share_x()
 
 
@@ -215,18 +218,18 @@ def share_x_mismatched_groups():
     # in both panels; the bottom panel's a|bcdef grouping and 30px gap
     # are ignored. Pins the anchor-wins policy of `_axis_descriptor`.
     cats = list("abcdef")
-    top = pt.chart(title="anchor: abc|def, gap 14", data_height=100)
+    df = {"cat": cats, "val": [3, 5, 2, 6, 4, 7]}
+    top = pt.chart(df, aes(x="cat", y="val"), title="anchor: abc|def, gap 14", data_height=100)
     top.xscale("category",
                groups={"a": 1, "b": 1, "c": 1, "d": 2, "e": 2, "f": 2},
                split_gap=14)
-    df = {"cat": cats, "val": [3, 5, 2, 6, 4, 7]}
-    top.add_bar(data=df, mapping=aes(x="cat", y="val"))
-    main = pt.chart(title="ignored: a|bcdef, gap 30", data_height=100)
+    top.add_bar()
+    df2 = {"cat": cats, "val": [2, 4, 6, 1, 3, 5]}
+    main = pt.chart(df2, aes(x="cat", y="val"), title="ignored: a|bcdef, gap 30", data_height=100)
     main.xscale("category",
                 groups={"a": 1, "b": 2, "c": 2, "d": 2, "e": 2, "f": 2},
                 split_gap=30)
-    df2 = {"cat": cats, "val": [2, 4, 6, 1, 3, 5]}
-    main.add_bar(data=df2, mapping=aes(x="cat", y="val"))
+    main.add_bar()
     return (top / main).share_x()
 
 
@@ -248,15 +251,15 @@ def complex_grid_shares():
     # Annotated-heatmap shape via grid with column/row sharing:
     # `share_x="col"` → top↔main share x (column 1); `share_y="row"` →
     # tree↔main share y (row 1).
-    main = pt.chart(title="main", data_width=400, data_height=240)
     df = {"x": [1,2,3,4,5], "y": [2,4,1,5,3]}
-    main.add_line(data=df, mapping=aes(x="x", y="y"))
-    top  = pt.chart(title="top",  data_width=400, data_height=24)
+    main = pt.chart(df, aes(x="x", y="y"), title="main", data_width=400, data_height=240)
+    main.add_line()
     df2 = {"x": [1,2,3,4,5], "y": [1,1,3,1,1]}
-    top.add_line(data=df2, mapping=aes(x="x", y="y"))
-    tree = pt.chart(title="tree", data_width=60,  data_height=240)
+    top  = pt.chart(df2, aes(x="x", y="y"), title="top",  data_width=400, data_height=24)
+    top.add_line()
     df3 = {"x": [0,1,2], "y": [2,3,4]}
-    tree.add_line(data=df3, mapping=aes(x="x", y="y"))
+    tree = pt.chart(df3, aes(x="x", y="y"), title="tree", data_width=60,  data_height=240)
+    tree.add_line()
     return pt.grid([
         [None, top ],
         [tree, main],
@@ -272,10 +275,10 @@ def share_x_scatter_heatmap():
     # (otherwise the scatter's auto domain-padding insets the cells).
     import math
     cols = [float(c) for c in range(12)]
-    sc = pt.chart(title="signal", data_height=110)
     df2 = {"x": cols,
        "y": [math.sin(0.6 * c) + 0.2 * c for c in cols]}
-    sc.add_scatter(data=df2, mapping=aes(x="x", y="y"))
+    sc = pt.chart(df2, aes(x="x", y="y"), title="signal", data_height=110)
+    sc.add_scatter()
     sc.xlim(-0.5, 11.5)
     tracks = ["t1", "t2", "t3"]
     df = {"x": cols}
@@ -326,15 +329,15 @@ def share_x_col_v_of_h():
     # outer `share_x("col")` aligns the same column across rows (column
     # widths differ on purpose to match the multi-track use case).
     def row(name):
-        a = pt.chart(title=f"{name}-c1", data_width=160, data_height=70)
-        b = pt.chart(title=f"{name}-c2", data_width=110, data_height=70)
-        c = pt.chart(title=f"{name}-c3", data_width= 70, data_height=70)
         df = {"x": [0, 1, 2, 3, 4], "y": [0, 1, 2, 1, 0]}
-        a.add_line(data=df, mapping=aes(x="x", y="y"))
+        a = pt.chart(df, aes(x="x", y="y"), title=f"{name}-c1", data_width=160, data_height=70)
+        a.add_line()
         df2 = {"x": [0, 1, 2, 3], "y": [2, 1, 3, 1]}
-        b.add_line(data=df2, mapping=aes(x="x", y="y"))
+        b = pt.chart(df2, aes(x="x", y="y"), title=f"{name}-c2", data_width=110, data_height=70)
+        b.add_line()
         df3 = {"x": [0, 1, 2], "y": [1, 2, 1]}
-        c.add_line(data=df3, mapping=aes(x="x", y="y"))
+        c = pt.chart(df3, aes(x="x", y="y"), title=f"{name}-c3", data_width= 70, data_height=70)
+        c.add_line()
         return (a | b | c).share_y().gap(0)
     return (row("r1") / row("r2") / row("r3")).share_x("col")
 
@@ -347,13 +350,13 @@ def chart_inset_zoom():
     counts = [950, 320, 80, 45, 28, 18, 12, 8, 5, 3]
     df = {"category": labels, "count": counts}
     df_tail = {"category": labels[2:], "count": counts[2:]}
-    c = pt.chart(data_width=440, data_height=240,
+    c = pt.chart(df, aes(x="category", y="count"), data_width=440, data_height=240,
                  title="long-tail distribution",
                  xlabel="category", ylabel="count")
-    c.add_bar(data=df, mapping=aes(x="category", y="count"))
+    c.add_bar()
     inset = c.inset(rect=(0.4, 0.45, 0.55, 0.45),
                     ylim=(0, 100))
-    inset.add_bar(data=df_tail, mapping=aes(x="category", y="count"))
+    inset.add_bar(df_tail, aes(x="category", y="count"))
     return c
 
 
@@ -390,9 +393,9 @@ def _run_invariants():
 
     # 1. show-on-child raises with a useful message
     df = {"x": [1,2,3], "y": [1,2,3]}
-    a = pt.chart(); a.add_line(data=df, mapping=aes(x="x", y="y"))
+    a = pt.chart(df, aes(x="x", y="y")); a.add_line()
     df2 = {"x": [1,2,3], "y": [3,2,1]}
-    b = pt.chart(); b.add_line(data=df2, mapping=aes(x="x", y="y"))
+    b = pt.chart(df2, aes(x="x", y="y")); b.add_line()
     parent = a | b
     try:
         a.to_svg()
@@ -403,11 +406,11 @@ def _run_invariants():
 
     # 2. single-parent invariant
     df3 = {"x": [1,2,3], "y": [1,2,3]}
-    c = pt.chart(); c.add_line(data=df3, mapping=aes(x="x", y="y"))
+    c = pt.chart(df3, aes(x="x", y="y")); c.add_line()
     df4 = {"x": [1,2,3], "y": [3,2,1]}
-    d = pt.chart(); d.add_line(data=df4, mapping=aes(x="x", y="y"))
+    d = pt.chart(df4, aes(x="x", y="y")); d.add_line()
     df5 = {"x": [1,2,3], "y": [2,2,2]}
-    e = pt.chart(); e.add_line(data=df5, mapping=aes(x="x", y="y"))
+    e = pt.chart(df5, aes(x="x", y="y")); e.add_line()
     cd = c | d
     try:
         c | e
@@ -419,11 +422,11 @@ def _run_invariants():
     # parses), preserving append-only journal semantics; the engine's
     # flat 3-cell view comes from `_effective_children()` at render time.
     df6 = {"x": [1], "y": [1]}
-    p = pt.chart(); p.add_line(data=df6, mapping=aes(x="x", y="y"))
+    p = pt.chart(df6, aes(x="x", y="y")); p.add_line()
     df7 = {"x": [1], "y": [1]}
-    q = pt.chart(); q.add_line(data=df7, mapping=aes(x="x", y="y"))
+    q = pt.chart(df7, aes(x="x", y="y")); q.add_line()
     df8 = {"x": [1], "y": [1]}
-    r = pt.chart(); r.add_line(data=df8, mapping=aes(x="x", y="y"))
+    r = pt.chart(df8, aes(x="x", y="y")); r.add_line()
     row = p | q | r
     flat = row._effective_children()
     if flat != [p, q, r]:
@@ -431,11 +434,11 @@ def _run_invariants():
 
     # 4. cross-direction nests, doesn't flatten
     df9 = {"x": [1], "y": [1]}
-    s = pt.chart(); s.add_line(data=df9, mapping=aes(x="x", y="y"))
+    s = pt.chart(df9, aes(x="x", y="y")); s.add_line()
     df10 = {"x": [1], "y": [1]}
-    t = pt.chart(); t.add_line(data=df10, mapping=aes(x="x", y="y"))
+    t = pt.chart(df10, aes(x="x", y="y")); t.add_line()
     df11 = {"x": [1], "y": [1]}
-    u = pt.chart(); u.add_line(data=df11, mapping=aes(x="x", y="y"))
+    u = pt.chart(df11, aes(x="x", y="y")); u.add_line()
     pair = s | t
     col = pair / u
     if col._layout_kind != "v" or len(col._children) != 2:
@@ -446,7 +449,7 @@ def _run_invariants():
 
     # 5. pt.grid validates row shape
     df12 = {"x": [1], "y": [1]}
-    a1 = pt.chart(); a1.add_line(data=df12, mapping=aes(x="x", y="y"))
+    a1 = pt.chart(df12, aes(x="x", y="y")); a1.add_line()
     try:
         pt.grid([[a1, None], [a1]])
         failures.append("expected ValueError on ragged grid")
@@ -462,9 +465,9 @@ def _run_invariants():
     # the cycle guard still raises.
     from plotlet.render._layout_engine import _topo_order
     df13 = {"x": [1,2], "y": [1,2]}
-    f1 = pt.chart(); f1.add_line(data=df13, mapping=aes(x="x", y="y"))
+    f1 = pt.chart(df13, aes(x="x", y="y")); f1.add_line()
     df14 = {"x": [1,2], "y": [2,1]}
-    f2 = pt.chart(); f2.add_line(data=df14, mapping=aes(x="x", y="y"))
+    f2 = pt.chart(df14, aes(x="x", y="y")); f2.add_line()
     f1._share_y = f2
     f2._share_y = f1
     try:
@@ -478,7 +481,7 @@ def _run_invariants():
     # method; the parent flavor lives on Layout. AttributeError is the
     # expected outcome (post Phase 3 leaf/parent type split).
     df15 = {"x": [1,2], "y": [1,2]}
-    leaf = pt.chart(); leaf.add_line(data=df15, mapping=aes(x="x", y="y"))
+    leaf = pt.chart(df15, aes(x="x", y="y")); leaf.add_line()
     try:
         leaf.share_x()
         failures.append("expected AttributeError calling share_x() on a leaf")
@@ -487,7 +490,7 @@ def _run_invariants():
 
     # 7b. parent-level gap() doesn't exist on a leaf, same as share().
     df16 = {"x": [1,2], "y": [1,2]}
-    leaf = pt.chart(); leaf.add_line(data=df16, mapping=aes(x="x", y="y"))
+    leaf = pt.chart(df16, aes(x="x", y="y")); leaf.add_line()
     try:
         leaf.gap(0)
         failures.append("expected AttributeError calling gap() on a leaf")
@@ -497,9 +500,9 @@ def _run_invariants():
     # 8. share scale plumbing — leaves in same share class get the same
     # descriptor, and the y range is the UNION of all leaves' data.
     df17 = {"x": [0, 10], "y": [0, 100]}
-    src = pt.chart(); src.add_line(data=df17, mapping=aes(x="x", y="y"))
+    src = pt.chart(df17, aes(x="x", y="y")); src.add_line()
     df18 = {"x": [0, 10], "y": [-5, 5]}
-    shr = pt.chart(); shr.add_line(data=df18, mapping=aes(x="x", y="y"))
+    shr = pt.chart(df18, aes(x="x", y="y")); shr.add_line()
     parent = (src | shr).share_y()
     from plotlet.render._layout_engine import _resolve_panels
     from plotlet.render import hydrate, materialize
@@ -524,15 +527,15 @@ def _run_invariants():
     # with a useful message — every sub-row must have the same number
     # of cells for the column mapping to be unambiguous.
     df19 = {"x": [1], "y": [1]}
-    a1 = pt.chart(); a1.add_line(data=df19, mapping=aes(x="x", y="y"))
+    a1 = pt.chart(df19, aes(x="x", y="y")); a1.add_line()
     df20 = {"x": [1], "y": [1]}
-    a2 = pt.chart(); a2.add_line(data=df20, mapping=aes(x="x", y="y"))
+    a2 = pt.chart(df20, aes(x="x", y="y")); a2.add_line()
     df21 = {"x": [1], "y": [1]}
-    a3 = pt.chart(); a3.add_line(data=df21, mapping=aes(x="x", y="y"))
+    a3 = pt.chart(df21, aes(x="x", y="y")); a3.add_line()
     df22 = {"x": [1], "y": [1]}
-    b1 = pt.chart(); b1.add_line(data=df22, mapping=aes(x="x", y="y"))
+    b1 = pt.chart(df22, aes(x="x", y="y")); b1.add_line()
     df23 = {"x": [1], "y": [1]}
-    b2 = pt.chart(); b2.add_line(data=df23, mapping=aes(x="x", y="y"))
+    b2 = pt.chart(df23, aes(x="x", y="y")); b2.add_line()
     r_long  = a1 | a2 | a3
     r_short = b1 | b2
     try:
@@ -546,11 +549,11 @@ def _run_invariants():
     # 10. Cross-layout share_x("col") errors when a child isn't an h-layout
     # (e.g., a bare chart sneaking into the vertical stack).
     df24 = {"x": [1], "y": [1]}
-    p1 = pt.chart(); p1.add_line(data=df24, mapping=aes(x="x", y="y"))
+    p1 = pt.chart(df24, aes(x="x", y="y")); p1.add_line()
     df25 = {"x": [1], "y": [1]}
-    p2 = pt.chart(); p2.add_line(data=df25, mapping=aes(x="x", y="y"))
+    p2 = pt.chart(df25, aes(x="x", y="y")); p2.add_line()
     df26 = {"x": [1], "y": [1]}
-    q = pt.chart(); q.add_line(data=df26, mapping=aes(x="x", y="y"))
+    q = pt.chart(df26, aes(x="x", y="y")); q.add_line()
     r_ok = p1 | p2
     try:
         (r_ok / q).share_x("col")
@@ -597,21 +600,21 @@ def test_data_total_size_reflects_share_scaling():
     total is (200+50, max(100, 100)) — not the raw (300, 200)."""
     from plotlet.render import data_total_size
 
-    a = pt.chart(data_width=200, data_height=100)
     df = {"x": [1, 2, 3], "y": [1, 2, 3]}
-    a.add_scatter(data=df, mapping=aes(x="x", y="y"))
-    b = pt.chart(data_width=100, data_height=200)
+    a = pt.chart(df, aes(x="x", y="y"), data_width=200, data_height=100)
+    a.add_scatter()
     df2 = {"x": [1, 2, 3], "y": [3, 2, 1]}
-    b.add_scatter(data=df2, mapping=aes(x="x", y="y"))
+    b = pt.chart(df2, aes(x="x", y="y"), data_width=100, data_height=200)
+    b.add_scatter()
 
     assert data_total_size(pt.to_ir(a | b)) == (300.0, 200.0)   # unshared control
 
-    a2 = pt.chart(data_width=200, data_height=100)
     df3 = {"x": [1, 2, 3], "y": [1, 2, 3]}
-    a2.add_scatter(data=df3, mapping=aes(x="x", y="y"))
-    b2 = pt.chart(data_width=100, data_height=200)
+    a2 = pt.chart(df3, aes(x="x", y="y"), data_width=200, data_height=100)
+    a2.add_scatter()
     df4 = {"x": [1, 2, 3], "y": [3, 2, 1]}
-    b2.add_scatter(data=df4, mapping=aes(x="x", y="y"))
+    b2 = pt.chart(df4, aes(x="x", y="y"), data_width=100, data_height=200)
+    b2.add_scatter()
 
     assert data_total_size(pt.to_ir((a2 | b2).share_y())) == (250.0, 100.0)
 
@@ -625,9 +628,9 @@ def test_layout_title_band():
     from plotlet.render import natural_size
 
     def cell(t):
-        c = pt.chart(title=t, data_width=160, data_height=110)
         df = {"x": [1, 2, 3], "y": [3, 1, 2]}
-        c.add_scatter(data=df, mapping=aes(x="x", y="y"))
+        c = pt.chart(df, aes(x="x", y="y"), title=t, data_width=160, data_height=110)
+        c.add_scatter()
         return c
 
     band = _PADSPEC["title"] + _FONTSPEC["title_size"]
@@ -657,12 +660,12 @@ def test_fit_scales_insets():
     # fit() must scale them with the host or they overflow their
     # declared fraction of the shrunken panel.
     df = {"x": [1, 2, 3], "y": [1, 4, 9]}
-    c = pt.chart(df,
+    c = pt.chart(df, aes(x="x", y="y"),
                  data_width=400, data_height=300)
-    c.add_line(aes(x="x", y="y"))
+    c.add_line()
     ins = c.inset((0.6, 0.6, 0.35, 0.35))
     df2 = {"x": [1, 2], "y": [2, 1]}
-    ins.add_line(data=df2, mapping=aes(x="x", y="y"))
+    ins.add_line(df2, aes(x="x", y="y"))
 
     fitted = c.fit(canvas_width=250)
     host_ratio = fitted._data_width / c._data_width
