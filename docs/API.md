@@ -261,7 +261,7 @@ c = pt.chart(df, aes(x="t", y="v"))          # chart-level mapping, inherited
 c.add_line()                                 # inherits df + mapping
 c.add_line(aes(color="g"))                   # adds a column mapping
 c.add_line(aes(x="t", y="v"), color="red")   # literals stay bare
-c.add_line(df2, aes(x="t", y="v"))           # per-call data: positional, before aes
+c.add_line(df2, aes(x="t", y="v"))           # per-call data — overrides the chart's df
 c.add_line(data=df2, mapping=aes(x="t", y="v"))  # fully named spelling
 ```
 

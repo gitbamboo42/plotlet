@@ -610,8 +610,12 @@ class Chart(_Renderable):
                                 and (known is None or k in known)):
                             kwargs[k] = v
                     # Data injection — a call that maps columns via
-                    # aes(...) draws from the chart-level table.
+                    # aes(...) draws from the chart-level table. A call
+                    # that brings its own data overrides it, whether the
+                    # data came as `data=` (in kwargs) or positionally
+                    # (in args) — so inject only when the call gave none.
                     if (self._data is not None and "data" not in kwargs
+                            and not args
                             and (known is None or "data" in known)
                             and aes_map):
                         kwargs["data"] = self._data
