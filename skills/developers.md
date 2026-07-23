@@ -54,14 +54,30 @@ live in [README.md](README.md) and [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md).
 
 ## Debugging rendered output
 
-For layout/chrome questions (title, panel, spines, ticks, legend bboxes, overlap, clipping) use `c.regions()` — returns structured `{"kind","bbox","name","meta"}` dicts.
+Every pipeline seam is inspectable — reach for the stage that owns the
+symptom instead of re-rendering to a PNG and eyeballing, or adding print
+statements inside artist code. That default is slow and blind here; each
+call below returns structured data:
 
-When debugging a bug that spans the pipeline, maintain a `work-notes/debug.md`
-as you go: dump the figure's state at each layer (recorded journal, lowered
-`FigureIR`, what the render half does with it) and state your diagnosis —
-which layer is at fault and why — so the human author can follow the
-reasoning, not just the conclusion. `work-notes/` is gitignored, so never
-commit it.
+| Symptom | Stage to inspect | Call |
+|---|---|---|
+| Wrong data/mapping recorded, artist got the wrong kwargs | journal (what was said) | `pt.to_journal(c).to_dict()["entries"]` (or `c._calls`) |
+| Autoscale / palette / limits wrong | resolved IR (what render decided) | `pt.to_ir(c).resolve().to_dict()` |
+| Finished plot's semantics (labels, scales, per-series range) | SVG schema layer | parse `data-plotlet-*` from `c.to_svg()` — schema in [docs/AI_ATTRS.md](docs/AI_ATTRS.md) |
+| Title/label/legend overlap or clipping | lint (auto edge-clip + overlap) | `from plotlet.lint import lint; lint(c)` — imported from `plotlet.lint`, not `pt.lint` |
+| Exact chrome geometry (title, ticks, spines, legend, panel bboxes) | regions sink | `c.regions()` → `{"kind","bbox","name","meta"}` |
+| Layout / grid / composition wrong | layout schematic | `pt.layout_diagram(c).show()` |
+
+Each fact lives at exactly one stage (see [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md),
+"verification over trust"), so the inspection also localizes the fault:
+if the journal is right but the resolved IR is wrong, the bug is in
+lowering, not recording.
+
+When a bug spans the pipeline, maintain a `work-notes/debug.md` as you
+go: dump the figure's state at each layer (journal, `FigureIR`, resolved
+IR, `regions()`) and state your diagnosis — which layer is at fault and
+why — so the human author can follow the reasoning, not just the
+conclusion. `work-notes/` is gitignored, so never commit it.
 
 ## Style
 

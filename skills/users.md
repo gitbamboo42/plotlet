@@ -48,6 +48,41 @@ Copy the pattern, adapt the data.
 - `src/plotlet/artists/<name>.py` — core artist source.
 - `docs/` — deep dives on subplots, coordinates, themes, extending, SVG schema.
 
+## Debugging: read the figure back, don't re-render and eyeball
+
+plotlet is built so every stage of a figure is machine-readable. When a
+plot comes out wrong, **do not fall back to render-a-PNG-and-guess or
+matplotlib-style print debugging** — that is slow and blind here. Each
+stage below returns structured data in one call; pick the row that
+matches the symptom and read the answer directly.
+
+| Symptom | One call | What it answers |
+|---|---|---|
+| A series is missing / wrong color / `aes` looks ignored | `pt.to_journal(c).to_dict()["entries"]` | What was actually recorded — did the data / mapping land on that artist call? |
+| Autoscale clips the data, limits look wrong, `log`/`symlog` did nothing | `pt.to_ir(c).resolve().to_dict()` | What the renderer *decided*: trained scales, baked palette, effective limits and margins |
+| "Does the finished plot actually say what I meant?" | parse `data-plotlet-*` out of `c.to_svg()` (snippet below) | Plot type, axis labels, x/y scale, resolved `xlim`/`ylim`, and per-series label, color, range, point count |
+| Title / label / legend overlaps or is cut off | `from plotlet.lint import lint` then `lint(c)` | Automated edge-clip + overlap warnings, each naming the region pair; `str(w)` prints it |
+| Need the exact box of a chrome element (title, ticks, legend, panel) | `c.regions()` | `{"kind","bbox","name","meta"}` per element, outer-SVG coords; filter by `r["name"]` |
+| Panels misaligned, wrong grid, composition off | `pt.layout_diagram(c).show()` | A schematic render of the panel boxes and their nesting |
+
+`lint` is imported from `plotlet.lint` — it is **not** `pt.lint`. The
+others (`to_journal`, `to_ir`, `regions`, `layout_diagram`) are on `pt`
+or the chart.
+
+Read the SVG's semantic layer back — the "did I plot what I meant?" check:
+
+```python
+import re
+svg = c.to_svg()
+for line in svg.splitlines():
+    hits = re.findall(r'data-plotlet-[a-z-]+="[^"]*"', line)
+    if hits:
+        print(" ".join(hits))
+# -> PANEL xlabel=... xlim=... ; ARTIST 0 line label=a color=#1f77b4 n=... x-min=... ...
+```
+
+Full attribute schema: [docs/AI_ATTRS.md](../docs/AI_ATTRS.md).
+
 ## Constraints (won't change)
 
 - No interactivity (hover, zoom, pan, click, animation).
