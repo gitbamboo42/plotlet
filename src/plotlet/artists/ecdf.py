@@ -16,9 +16,14 @@ Other styling kwargs:
   complement=False   True draws 1 - F̂(x) (survival function)
   linewidth=1.5      stroke width
   label=None         legend label (single-series only)
+  simplify=None      None = auto-drop step vertices the stroke can't show
+                     above `dense_threshold` observations (the curve has
+                     ~2 vertices per observation); True/False forces it
+                     on/off (see draw/_simplify.py)
 """
 from ..registry import ArtistSpec, add_artist
 from ..draw import polyline, segment
+from ..draw import should_simplify, simplify_path_pts
 from ..utils import pack_opts, long_form_1d, resolve_aes
 from ..draw import resolve_color
 from ..utils import group_color
@@ -30,7 +35,7 @@ def _ecdf_record(data=None,
                  x=None, color=None,
                  # style — packed into opts for the draw/legend side
                  complement=None, linewidth=None, palette=None,
-                 label=None, legend=None):
+                 simplify=None, label=None, legend=None):
     if data is None or x is None:
         raise TypeError(
             "ecdf requires data=, x= (color= optional)."
@@ -39,7 +44,8 @@ def _ecdf_record(data=None,
     group_col = color if color_kind == "column" else None
     groups, vals = long_form_1d(data, x, group_col)
     opts = pack_opts(complement=complement, linewidth=linewidth,
-                     palette=palette, label=label, legend=legend)
+                     palette=palette, simplify=simplify,
+                     label=label, legend=legend)
     if color_kind == "literal" and color_value is not None:
         opts["_color_literal"] = color_value
     vals = [sorted(g) for g in vals]
@@ -59,6 +65,22 @@ def _ecdf_draw(a, ctx):
     complement = a["opts"].get("complement", False)
     color_literal = resolve_color(a["opts"].get("_color_literal"))
     fallback = color_literal if color_literal is not None else ctx.color
+    # Dense-curve decimation, as in line.py: the step curve has ~2
+    # vertices per observation, so a big sample balloons the polyline.
+    # The vertices are x-sorted by construction, so the min-max reducer
+    # applies cleanly. Threshold reads the call's total observation
+    # count across groups. Affine only; simplify=True under a warp is
+    # an explicit request that can't be honored, so it raises.
+    simplify_opt = a["opts"].get("simplify")
+    simplify = False
+    if ctx.warp is None:
+        n_total = sum(len(g) for g in a["vals"])
+        simplify = should_simplify(n_total, simplify_opt, False)
+    elif simplify_opt is True:
+        raise ValueError(
+            "ecdf: simplify=True, but the panel's coordinate system is "
+            "not affine — decimation works in Cartesian pixels."
+        )
     out = []
     for j, data in enumerate(a["vals"]):
         n = len(data)
@@ -74,6 +96,8 @@ def _ecdf_draw(a, ctx):
             pts.append((px, ctx.y_scale(prev_y)))
             pts.append((px, ctx.y_scale(y)))
             prev_y = y
+        if simplify:
+            pts = simplify_path_pts(pts)
         out.append(polyline(pts, color=col, width=lw, project=ctx.warp))
     return "".join(out)
 

@@ -25,7 +25,7 @@ from ..registry import ArtistSpec, add_artist
 from ..draw import segment
 from ..utils import to_list, long_form_1d, resolve_aes, pack_opts
 from ..draw import resolve_color
-from ..draw import parse_rgb, should_rasterize, splat_ticks
+from ..draw import parse_rgb, raster_declined, should_rasterize, splat_ticks
 from ..utils import group_color
 
 
@@ -71,11 +71,26 @@ def _rug_draw(a, ctx):
     fallback = color_literal if color_literal is not None else ctx.color
     axis = _rug_axis(a)
     n_total = sum(len(vals) for vals in a["vals"])
-    raster = (ctx.warp is None
-              and should_rasterize(n_total, a["opts"].get("rasterize")))
+    colors = [group_color(a["groups"], palette, j, fallback)
+              for j in range(len(a["vals"]))]
+    # All-or-nothing raster decision: either every group splats or the
+    # whole rug stays vector, so one odd group color can't mix the two
+    # looks in a single rug. Declines are loud (raster_declined).
+    raster = False
+    if should_rasterize(n_total, a["opts"].get("rasterize")):
+        reason = None
+        if ctx.warp is not None:
+            reason = "the panel's coordinate system is not affine"
+        elif any(parse_rgb(c) is None for c in colors):
+            reason = "a group color is not a plain solid color"
+        if reason is None:
+            raster = True
+        else:
+            raster_declined("rug", n_total, reason,
+                            a["opts"].get("rasterize"))
     out = []
     for j, vals in enumerate(a["vals"]):
-        col = group_color(a["groups"], palette, j, fallback)
+        col = colors[j]
         clean = [v for v in vals if not (isinstance(v, float) and math.isnan(v))]
         if axis == "x":
             y_base = ctx.ih

@@ -33,7 +33,7 @@ from ..utils import (pack_opts, resolve_aes, dodge_positions,
                      categorical_groups, group_color as _group_fill)
 from ..draw import resolve_color
 from ..draw import circle
-from ..draw import should_rasterize, splat_disks_by_color
+from ..draw import raster_declined, should_rasterize, splat_disks_by_color
 from .._spec import _FRAME
 
 
@@ -136,12 +136,21 @@ def _strip_draw(a, ctx):
                 vp = val_scale(v)
                 cx, cy = (vp, cp + off) if horizontal else (cp + off, vp)
                 marks.append((col, cx, cy))
-    # Raster fast-path: no outline, affine coords, above threshold.
-    if (lw <= 0 and ctx.warp is None
-            and should_rasterize(len(marks), opts.get("rasterize"))):
-        img = splat_disks_by_color(marks, r, alpha, ctx.iw, ctx.ih)
-        if img is not None:
-            return img
+    # Raster fast-path above the mark threshold; a style the splatter
+    # can't reproduce declines loudly (raster_declined) before falling
+    # back to vector marks.
+    if should_rasterize(len(marks), opts.get("rasterize")):
+        reason = None
+        if ctx.warp is not None:
+            reason = "the panel's coordinate system is not affine"
+        elif lw > 0:
+            reason = "point outlines (linewidth > 0) can't be splatted"
+        if reason is None:
+            img = splat_disks_by_color(marks, r, alpha, ctx.iw, ctx.ih)
+            if img is not None:
+                return img
+            reason = "a group color is not a plain solid color"
+        raster_declined("strip", len(marks), reason, opts.get("rasterize"))
     out = [circle(cx, cy, r, fill=col, alpha=alpha,
                   stroke=stroke if lw > 0 else None,
                   stroke_width=lw, project=ctx.warp)

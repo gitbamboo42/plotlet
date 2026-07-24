@@ -140,15 +140,24 @@ limit, and the SVG itself balloons. If your artist draws one mark per row
 
 | Helper | Use |
 |---|---|
-| `should_rasterize(n, opts.get("rasterize"))` | Decide vector vs raster — explicit `rasterize=` kwarg wins, else auto above `raster_threshold`. |
+| `should_rasterize(n, opts.get("rasterize"))` | Decide vector vs raster — explicit `rasterize=` kwarg wins, else auto above `dense_threshold` (the one spec number for "too many marks for per-mark vector output", shared with line decimation). |
 | `splat_disks(px, py, radius, rgb, alpha, iw, ih)` | One solid-color disk cloud → one `<image>`. `px`/`py` are panel pixels; `rgb` from `parse_rgb(color)`. |
 | `splat_disks_by_color(marks, radius, alpha, iw, ih)` | `marks` = `(color, px, py)` tuples; splats one `<image>` per color (for category artists). |
 | `splat_ticks(pos, lo, hi, width, rgb, alpha, iw, ih, *, vertical)` | Axis-aligned ticks (rug). |
+| `raster_declined(artist, n, reason, opts.get("rasterize"))` | Call when you decided to rasterize but can't — raises on explicit `rasterize=True`, warns in auto mode. Never decline silently. |
 
 Gate it on `ctx.warp is None` and a single-solid-color style; fall back to
-the vector loop otherwise. Overlapping same-color marks composite exactly
-as stacked vector marks, and the output stays byte-identical. See
+the vector loop otherwise (through `raster_declined`, so the user hears
+about it). Overlapping same-color marks composite exactly as stacked
+vector marks, and the output stays byte-identical. See
 [`draw/_raster.py`](../src/plotlet/draw/_raster.py) for the full rationale.
+
+Dense *lines* are a different problem: a whole series is already one
+`<path>` node, so the node limit never triggers — the d-string just
+balloons. Don't splat strokes (a path paints its color once across
+self-overlaps; per-mark alpha stacking would darken them). Decimate
+vertices instead with `should_simplify` / `simplify_path_pts` — see
+[`draw/_simplify.py`](../src/plotlet/draw/_simplify.py).
 
 ---
 

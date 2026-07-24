@@ -24,8 +24,9 @@ from .font import (measure_text, cap_height, descender, tick_band_height,
 from .format import coord, stroke_w, opacity, degree
 from .linestyles import resolve_linestyle
 from ._png import encode_rgb, image_png, encode_rgba, image_png_rgba
-from ._raster import (parse_rgb, should_rasterize, splat_disks,
-                      splat_disks_by_color, splat_ticks)
+from ._raster import (parse_rgb, should_rasterize, raster_declined,
+                      splat_disks, splat_disks_by_color, splat_ticks)
+from ._simplify import should_simplify, simplify_path_pts
 
 __all__ = [
     "text_path", "marker", "op", "segment", "rect", "circle",
@@ -40,6 +41,7 @@ __all__ = [
     "coord", "stroke_w", "opacity", "degree",
     "resolve_linestyle",
     "encode_rgb", "image_png", "encode_rgba", "image_png_rgba",
-    "parse_rgb", "should_rasterize", "splat_disks",
+    "parse_rgb", "should_rasterize", "raster_declined", "splat_disks",
     "splat_disks_by_color", "splat_ticks",
+    "should_simplify", "simplify_path_pts",
 ]

@@ -29,6 +29,13 @@ after color=/group= splitting; needs curve='linear'.
 `"6,3,1,3"`). `aes(linestyle="col")` maps the column: dash patterns
 cycle per level.
 
+Dense lines (simplify=): a long series is one `<path>`, so the cost is
+the d-string size, not the node count. Above `dense_threshold`
+vertices (or with `simplify=True`; `False` never) the affine path drops
+the vertices the stroke can't show at pixel resolution — same drawn
+pixels, far smaller output (see `draw/_simplify.py`). Auto mode skips
+dashed lines, whose dash phase follows arc length.
+
 Column-driven splitting (any of `color`/`group`/`linestyle`/`alpha` in aes) is
 handled at the Chart layer — the artist itself always sees one series
 per record.
@@ -39,7 +46,8 @@ import random
 from ..registry import ArtistSpec, add_artist
 from ..utils import UNSET, pack_opts, quantile, validate_ci, ci_bounds
 from .._spec import _D
-from ..draw import coord, marker, path as draw_path, polygon, polyline
+from ..draw import coord, dash_attr, marker, path as draw_path, polygon, polyline
+from ..draw import should_simplify, simplify_path_pts
 from ._shared import (_xy_minmax, _line_legend_entries, _CURVE_VALUES,
                        _step_coords, expand_xy_long_form, DEFAULT_ALPHA_RANGE)
 
@@ -63,6 +71,24 @@ def _artist_line(a, xs_, ys_, col, xs, ys, warp=None):
                 for px, py in path_pts]
     ls = opts.get("linestyle")
     lw = opts.get("linewidth", _D["linewidth"])
+    # Dense-line decimation: above the vertex threshold (or simplify=True)
+    # drop the vertices the stroke can't show — the series stays one
+    # vector <path>, just with a sane d-string (draw/_simplify.py).
+    # Affine only: under a warp the Cartesian pixel grid the decimation
+    # works in is not the screen grid.
+    simplify_opt = opts.get("simplify")
+    if warp is None:
+        # Gate on the artist call's total (_fanout_n) like the raster
+        # path, so a grouped dense line decimates like an ungrouped one.
+        n_fin = sum(1 for p in path_pts if p is not None)
+        if should_simplify(opts.get("_fanout_n", n_fin), simplify_opt,
+                           bool(dash_attr(ls))):
+            path_pts = simplify_path_pts(path_pts)
+    elif simplify_opt is True:
+        raise ValueError(
+            "line: simplify=True, but the panel's coordinate system is "
+            "not affine — decimation works in Cartesian pixels."
+        )
     if ls not in ("", "none"):
         if warp is None:
             # Single <path> with multiple M/L subpaths — broken lines (None
@@ -120,7 +146,8 @@ def _line_record(data=None,
                  estimator=None, ci=UNSET, level=0.95, n_boot=1000, seed=0,
                  # style — packed into opts for the draw/attrs side
                  curve=None, arc=None, marker=None, size=None,
-                 linewidth=None, band_alpha=None, label=None, legend=None):
+                 linewidth=None, band_alpha=None, simplify=None,
+                 label=None, legend=None):
     if data is None or x is None or y is None:
         raise TypeError(
             "line requires data=, x=, y= (color/group/linestyle/alpha optional)."
@@ -141,7 +168,8 @@ def _line_record(data=None,
         )
     opts = pack_opts(curve=curve, arc=arc, marker=marker, size=size,
                      linewidth=linewidth, band_alpha=band_alpha,
-                     estimator=estimator, label=label, legend=legend)
+                     simplify=simplify, estimator=estimator,
+                     label=label, legend=legend)
     records = expand_xy_long_form("line", data, x, y,
                                    color, group, linestyle, alpha,
                                    palette, alphas, opts)
@@ -149,6 +177,14 @@ def _line_record(data=None,
         for rec in records:
             _aggregate_series(rec, estimator, "t" if ci is UNSET else ci,
                               level, n_boot, seed)
+        # Aggregation shrank the series, so restamp the fan-out total —
+        # the decimation gate must see what will actually be drawn, not
+        # the raw replicate-row count. Unconditional: a record the fast
+        # path never stamped gets exactly the count the draw-side
+        # fallback would compute, so nothing changes for it.
+        n_total = sum(len(rec["xs"]) for rec in records)
+        for rec in records:
+            rec["opts"]["_fanout_n"] = n_total
     return records
 
 

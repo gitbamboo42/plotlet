@@ -30,7 +30,7 @@ from scipy.stats import norm
 
 from ..registry import ArtistSpec, add_artist
 from ..draw import circle, segment
-from ..draw import parse_rgb, should_rasterize, splat_disks
+from ..draw import parse_rgb, raster_declined, should_rasterize, splat_disks
 from ..utils import to_list, resolve_aes, long_form_1d, pack_opts
 from .._spec import _D
 
@@ -67,11 +67,15 @@ def _qq_record(data=None, sample=None, color=None, palette=None,
                      label=label, legend=legend, rasterize=rasterize)
     if color_kind == "column":
         groups, vals = long_form_1d(data, sample, color)
+        # The raster threshold gates on the call's total point count, not
+        # each group's slice (see expand_xy_long_form in _shared.py).
+        n_total = sum(len(v) for v in vals)
         records = []
         for j, (g, v) in enumerate(zip(groups, vals)):
             opts = dict(base)
             opts["palette"] = palette
             opts["label"] = str(g)
+            opts["_fanout_n"] = n_total
             rec = _qq_build(v, opts)
             rec["groups"] = groups
             rec["_j"] = j
@@ -92,11 +96,25 @@ def _qq_draw(a, ctx):
     alpha = a["opts"].get("alpha", 0.7)
     px_all = [ctx.x_scale(tx) for tx in a["theo"]]
     py_all = [ctx.y_scale(sy) for sy in a["sample"]]
-    # Raster fast-path for the dots (the reference line stays vector below).
-    rgb = parse_rgb(col) if ctx.warp is None else None
-    if rgb is not None and should_rasterize(len(px_all), a["opts"].get("rasterize")):
-        out = [splat_disks(px_all, py_all, r, rgb, alpha, ctx.iw, ctx.ih)]
-    else:
+    # Raster fast-path for the dots (the reference line stays vector
+    # below). The threshold reads the call's total count (_fanout_n), so
+    # grouped qq rasterizes like ungrouped; declines are loud.
+    out = None
+    n_total = a["opts"].get("_fanout_n", len(px_all))
+    if should_rasterize(n_total, a["opts"].get("rasterize")):
+        reason = None
+        rgb = None
+        if ctx.warp is not None:
+            reason = "the panel's coordinate system is not affine"
+        else:
+            rgb = parse_rgb(col)
+            if rgb is None:
+                reason = f"color {col!r} is not a plain solid color"
+        if reason is None:
+            out = [splat_disks(px_all, py_all, r, rgb, alpha, ctx.iw, ctx.ih)]
+        else:
+            raster_declined("qq", n_total, reason, a["opts"].get("rasterize"))
+    if out is None:
         out = [circle(px, py, r, fill=col, alpha=alpha, project=ctx.warp)
                for px, py in zip(px_all, py_all)]
     n = len(a["sample"])

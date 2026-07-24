@@ -104,6 +104,11 @@ def expand_xy_long_form(kind, data, x_col, y_col,
         elif alpha_value is not None:
             opts["alpha"] = alpha_value
         records.append({"type": kind, "xs": xs_g, "ys": ys_g, "opts": opts})
+    # The raster/simplify thresholds gate on the artist call's total mark
+    # count, not each fan-out slice — ten 10k-point groups strain the
+    # renderer exactly like one 100k-point series.
+    for rec in records:
+        rec["opts"]["_fanout_n"] = n
     return records
 
 

@@ -31,7 +31,7 @@ from ..registry import ArtistSpec, add_artist
 from ..utils import pack_opts, to_list, resolve_aes, palette_color
 from ..draw import marker
 from ..draw import TAB10
-from ..draw import parse_rgb, should_rasterize, splat_disks
+from ..draw import parse_rgb, raster_declined, should_rasterize, splat_disks
 from ..draw import colormap_lut, ContinuousNorm
 from .._spec import _D, _LEGSPEC
 from ._shared import (_xy_minmax, expand_xy_long_form,
@@ -77,23 +77,23 @@ def _artist_scatter(a, xs_, ys_, col, xs, ys, warp=None):
     return "".join(out)
 
 
-def _can_rasterize(a):
-    """The raster fast-path only covers the plain dense-scatter case:
-    one solid color, one scalar marker radius, round marker, no edges,
-    no per-point color ramp. Anything fancier keeps the per-point vector
-    markers (correctness over speed)."""
+def _raster_block_reason(a):
+    """Why the raster fast-path can't take this record, or None if it
+    can. Only the plain dense-scatter case splats: one solid color, one
+    scalar marker radius, round marker, no edges, no per-point color
+    ramp. Anything fancier keeps the per-point vector markers
+    (correctness over speed)."""
     opts = a["opts"]
     if opts.get("c") is not None:
-        return False
+        return "per-point colors (continuous color mapping) need one node per point"
     if isinstance(opts.get("size", _D["scatter_size"]), (list, tuple)):
-        return False
-    if isinstance(opts.get("marker", "o"), (list, tuple)):
-        return False
-    if opts.get("marker", "o") != "o":
-        return False
+        return "per-point sizes (size mapping) need one node per point"
+    marker = opts.get("marker", "o")
+    if isinstance(marker, (list, tuple)) or marker != "o":
+        return "only the round 'o' marker can be splatted"
     if opts.get("edgecolor") is not None:
-        return False
-    return True
+        return "marker outlines (edgecolor=) can't be splatted"
+    return None
 
 
 _STYLE_CYCLE = ("o", "s", "^", "v", "x", "+")
@@ -221,6 +221,9 @@ def _expand_with_aesthetics(data, x_col, y_col, color, group, alpha,
                      alpha_levels=alpha_levels,
                      palette=palette, alphas=alphas, labeled=labeled)
         records.append({"type": "scatter", "xs": xs_g, "ys": ys_g, "opts": opts})
+    # See expand_xy_long_form: thresholds gate on the call's total count.
+    for rec in records:
+        rec["opts"]["_fanout_n"] = n
     if size_legend is not None and records:
         records[0]["_size_legend"] = size_legend
     return records
@@ -357,20 +360,27 @@ def _scatter_data_attrs(a):
 def _scatter_draw(a, ctx):
     # Raster fast-path for dense scatter: above a point threshold (or when
     # rasterize=True), splat the whole cloud into one <image> instead of
-    # N markers. rasterize=False forces the vector path. Only kicks in for
-    # affine coords and the plain single-color/round/no-edge style; a
-    # fancier style or an unparseable color falls back to vector markers.
+    # N markers. The threshold reads the artist call's total mark count
+    # (_fanout_n), so a grouped cloud rasterizes like an ungrouped one.
+    # rasterize=False forces the vector path; a style the splatter can't
+    # reproduce declines loudly via raster_declined before falling back.
     opts = a["opts"]
     xs, ys = a["xs"], a["ys"]
-    if (ctx.warp is None and _can_rasterize(a)
-            and should_rasterize(len(xs), opts.get("rasterize"))):
-        rgb = parse_rgb(ctx.color)
-        if rgb is not None:
+    n = opts.get("_fanout_n", len(xs))
+    if should_rasterize(n, opts.get("rasterize")):
+        reason = _raster_block_reason(a)
+        if reason is None and ctx.warp is not None:
+            reason = "the panel's coordinate system is not affine"
+        rgb = parse_rgb(ctx.color) if reason is None else None
+        if reason is None and rgb is None:
+            reason = f"color {ctx.color!r} is not a plain solid color"
+        if reason is None:
             px = [ctx.x_scale(x) for x in xs]
             py = [ctx.y_scale(y) for y in ys]
             radius = float(opts.get("size", _D["scatter_size"]))
             alpha = float(opts.get("alpha", _D["scatter_alpha"]))
             return splat_disks(px, py, radius, rgb, alpha, ctx.iw, ctx.ih)
+        raster_declined("scatter", n, reason, opts.get("rasterize"))
     return _artist_scatter(a, ctx.x_scale, ctx.y_scale, ctx.color,
                            xs, ys, warp=ctx.warp)
 

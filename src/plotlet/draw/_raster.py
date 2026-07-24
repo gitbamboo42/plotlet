@@ -25,6 +25,7 @@ anything fancier (per-point color ramp, outlines) stays on the vector
 path -- correctness over speed.
 """
 import math
+import warnings
 
 import numpy as np
 from scipy.signal import fftconvolve
@@ -61,14 +62,32 @@ def parse_rgb(c):
 
 def should_rasterize(n, rasterized_opt):
     """Vector vs raster for `n` marks. Explicit `rasterize=` wins;
-    otherwise auto above the spec threshold."""
+    otherwise auto above `dense_threshold` — the one spec number for
+    "this many marks is too many for per-mark vector output", shared
+    with the line decimation in `draw/_simplify.py`."""
     if rasterized_opt is not None:
         return bool(rasterized_opt)
-    return n >= _D.get("raster_threshold", 20000)
+    return n >= _D.get("dense_threshold", 20000)
+
+
+def raster_declined(artist, n, reason, rasterize_opt):
+    """The artist decided to rasterize (explicit `rasterize=True`, or auto
+    above the threshold) but can't honor it for `reason`. An explicit
+    request must never be silently ignored, so it raises. In auto mode it
+    warns instead: the vector fallback is exactly the giant output the
+    fast-path exists to avoid, and without the warning a later resvg
+    node-limit failure would be a mystery."""
+    if rasterize_opt is True:
+        raise ValueError(f"{artist}: rasterize=True, but {reason}.")
+    warnings.warn(
+        f"{artist}: {n} marks stay vector because {reason}; the SVG will "
+        f"be large and save_png may hit resvg's node limit. Pass "
+        f"rasterize=False to silence this warning.",
+        RuntimeWarning)
 
 
 def _supersample():
-    return max(1, int(_D.get("raster_supersample", 3)))
+    return max(1, int(_D.get("dense_supersample", 3)))
 
 
 def _compose(cov, rgb, alpha, iw, ih, W, H):
