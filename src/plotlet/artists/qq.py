@@ -22,11 +22,15 @@ Styling kwargs:
   dist="normal"   "normal" | another sample | scipy.stats RV
   size=2.5        point radius in pixels
   alpha=0.7       point opacity
+  rasterize=None  None = auto-raster the dots to one <image> above the
+                  point threshold (the reference line stays vector);
+                  True/False forces it on/off
 """
 from scipy.stats import norm
 
 from ..registry import ArtistSpec, add_artist
 from ..draw import circle, segment
+from ..draw import parse_rgb, should_rasterize, splat_disks
 from ..utils import to_list, resolve_aes, long_form_1d, pack_opts
 from .._spec import _D
 
@@ -54,12 +58,13 @@ def _qq_build(values, kw):
 def _qq_record(data=None, sample=None, color=None, palette=None,
                # `dist` is consumed by `_qq_build` at record; the rest are
                # style read at draw. All ride in opts.
-               dist=None, size=None, alpha=None, label=None, legend=None):
+               dist=None, size=None, alpha=None, label=None, legend=None,
+               rasterize=None):
     if data is None or sample is None:
         raise TypeError("qq requires data=, sample= (dist= optional).")
     color_kind, color_value = resolve_aes(data, color)
     base = pack_opts(dist=dist, size=size, alpha=alpha,
-                     label=label, legend=legend)
+                     label=label, legend=legend, rasterize=rasterize)
     if color_kind == "column":
         groups, vals = long_form_1d(data, sample, color)
         records = []
@@ -85,10 +90,15 @@ def _qq_draw(a, ctx):
     col = ctx.color
     r = a["opts"].get("size", 2.5)
     alpha = a["opts"].get("alpha", 0.7)
-    out = []
-    for tx, sy in zip(a["theo"], a["sample"]):
-        px = ctx.x_scale(tx); py = ctx.y_scale(sy)
-        out.append(circle(px, py, r, fill=col, alpha=alpha, project=ctx.warp))
+    px_all = [ctx.x_scale(tx) for tx in a["theo"]]
+    py_all = [ctx.y_scale(sy) for sy in a["sample"]]
+    # Raster fast-path for the dots (the reference line stays vector below).
+    rgb = parse_rgb(col) if ctx.warp is None else None
+    if rgb is not None and should_rasterize(len(px_all), a["opts"].get("rasterize")):
+        out = [splat_disks(px_all, py_all, r, rgb, alpha, ctx.iw, ctx.ih)]
+    else:
+        out = [circle(px, py, r, fill=col, alpha=alpha, project=ctx.warp)
+               for px, py in zip(px_all, py_all)]
     n = len(a["sample"])
     if n >= 4:
         i25 = int(0.25 * (n - 1)); i75 = int(0.75 * (n - 1))

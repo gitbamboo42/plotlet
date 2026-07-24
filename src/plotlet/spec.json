@@ -69,6 +69,8 @@
     "marker_stroke_width": 1.4,
     "scatter_size": 3.5,
     "scatter_alpha": 0.85,
+    "raster_threshold": 20000,
+    "raster_supersample": 3,
     "fill_alpha": 0.3,
     "bar_alpha": 1,
     "hist_alpha": 1,

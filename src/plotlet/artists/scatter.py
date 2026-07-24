@@ -10,6 +10,8 @@
   c.add_scatter(aes(...), size=3)                          # fixed marker radius (px)
   c.add_scatter(aes(..., size="mass"), sizes=(2, 7))       # graded per-point radius
   c.add_scatter(aes(..., style="group"))                   # per-level marker glyph
+  c.add_scatter(aes(...), rasterize=True)                  # force dots → one <image>
+                                                           # (auto above the point threshold)
 
 `color="red"` (bare) is always a literal color. `aes(color="col")` maps
 the column: all-numeric values → continuous cmap (cmap/vmin/vmax/norm),
@@ -29,6 +31,7 @@ from ..registry import ArtistSpec, add_artist
 from ..utils import pack_opts, to_list, resolve_aes, palette_color
 from ..draw import marker
 from ..draw import TAB10
+from ..draw import parse_rgb, should_rasterize, splat_disks
 from ..draw import colormap_lut, ContinuousNorm
 from .._spec import _D, _LEGSPEC
 from ._shared import (_xy_minmax, expand_xy_long_form,
@@ -72,6 +75,25 @@ def _artist_scatter(a, xs_, ys_, col, xs, ys, warp=None):
                           edgecolor=edgecolor, edgewidth=linewidth,
                           project=warp))
     return "".join(out)
+
+
+def _can_rasterize(a):
+    """The raster fast-path only covers the plain dense-scatter case:
+    one solid color, one scalar marker radius, round marker, no edges,
+    no per-point color ramp. Anything fancier keeps the per-point vector
+    markers (correctness over speed)."""
+    opts = a["opts"]
+    if opts.get("c") is not None:
+        return False
+    if isinstance(opts.get("size", _D["scatter_size"]), (list, tuple)):
+        return False
+    if isinstance(opts.get("marker", "o"), (list, tuple)):
+        return False
+    if opts.get("marker", "o") != "o":
+        return False
+    if opts.get("edgecolor") is not None:
+        return False
+    return True
 
 
 _STYLE_CYCLE = ("o", "s", "^", "v", "x", "+")
@@ -244,7 +266,7 @@ def _scatter_record(data=None,
                     # style — packed into opts for the draw/legend/attrs side
                     marker=None, edgecolor=None, linewidth=None,
                     cmap=None, vmin=None, vmax=None, norm=None, center=None,
-                    size_legend=None, label=None, legend=None,
+                    size_legend=None, label=None, legend=None, rasterize=None,
                     # scatter has no line to dash; inherited chart-level
                     # linestyle/fill aes are accepted and ignored
                     linestyle=None, fill=None):
@@ -255,7 +277,7 @@ def _scatter_record(data=None,
     opts = pack_opts(marker=marker, edgecolor=edgecolor, linewidth=linewidth,
                      cmap=cmap, vmin=vmin, vmax=vmax, norm=norm,
                      center=center, size_legend=size_legend,
-                     label=label, legend=legend)
+                     label=label, legend=legend, rasterize=rasterize)
 
     # Resolve `size=`: literal number/list → pixel radius into opts["size"];
     # aes-mapped column → keep as `size` for the column-mapping path below.
@@ -333,8 +355,24 @@ def _scatter_data_attrs(a):
 
 
 def _scatter_draw(a, ctx):
+    # Raster fast-path for dense scatter: above a point threshold (or when
+    # rasterize=True), splat the whole cloud into one <image> instead of
+    # N markers. rasterize=False forces the vector path. Only kicks in for
+    # affine coords and the plain single-color/round/no-edge style; a
+    # fancier style or an unparseable color falls back to vector markers.
+    opts = a["opts"]
+    xs, ys = a["xs"], a["ys"]
+    if (ctx.warp is None and _can_rasterize(a)
+            and should_rasterize(len(xs), opts.get("rasterize"))):
+        rgb = parse_rgb(ctx.color)
+        if rgb is not None:
+            px = [ctx.x_scale(x) for x in xs]
+            py = [ctx.y_scale(y) for y in ys]
+            radius = float(opts.get("size", _D["scatter_size"]))
+            alpha = float(opts.get("alpha", _D["scatter_alpha"]))
+            return splat_disks(px, py, radius, rgb, alpha, ctx.iw, ctx.ih)
     return _artist_scatter(a, ctx.x_scale, ctx.y_scale, ctx.color,
-                           a["xs"], a["ys"], warp=ctx.warp)
+                           xs, ys, warp=ctx.warp)
 
 
 def _scatter_legend_gradient(a):

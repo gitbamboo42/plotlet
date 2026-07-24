@@ -131,6 +131,25 @@ channel — leave them `None` for the lean single-`opacity` path.
 When no helper fits — Bézier curves, `<text>`, `<image>`, gradients — drop
 to a raw f-string. It's just SVG.
 
+### Dense marks — raster fast-path
+
+One SVG node per data point stops scaling around a million marks: resvg
+(our only rasterizer, for `save_png`) refuses documents past a node
+limit, and the SVG itself balloons. If your artist draws one mark per row
+(a point cloud), splat the marks into one `<image>` instead:
+
+| Helper | Use |
+|---|---|
+| `should_rasterize(n, opts.get("rasterize"))` | Decide vector vs raster — explicit `rasterize=` kwarg wins, else auto above `raster_threshold`. |
+| `splat_disks(px, py, radius, rgb, alpha, iw, ih)` | One solid-color disk cloud → one `<image>`. `px`/`py` are panel pixels; `rgb` from `parse_rgb(color)`. |
+| `splat_disks_by_color(marks, radius, alpha, iw, ih)` | `marks` = `(color, px, py)` tuples; splats one `<image>` per color (for category artists). |
+| `splat_ticks(pos, lo, hi, width, rgb, alpha, iw, ih, *, vertical)` | Axis-aligned ticks (rug). |
+
+Gate it on `ctx.warp is None` and a single-solid-color style; fall back to
+the vector loop otherwise. Overlapping same-color marks composite exactly
+as stacked vector marks, and the output stays byte-identical. See
+[`draw/_raster.py`](../src/plotlet/draw/_raster.py) for the full rationale.
+
 ---
 
 ## ArtistSpec fields

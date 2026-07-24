@@ -25,12 +25,15 @@ Other styling kwargs:
   size=3            point radius in pixels
   alpha=0.7         point opacity
   linewidth=0       outline stroke width (0 = no outline)
+  rasterize=None    None = auto-raster to one <image> above the point
+                    threshold; True/False forces it on/off
 """
 from ..registry import ArtistSpec, add_artist
 from ..utils import (pack_opts, resolve_aes, dodge_positions,
                      categorical_groups, group_color as _group_fill)
 from ..draw import resolve_color
 from ..draw import circle
+from ..draw import should_rasterize, splat_disks_by_color
 from .._spec import _FRAME
 
 
@@ -66,7 +69,7 @@ def _strip_record(data=None,
                   orientation=None, width=None, gap=None,
                   color=None, palette=None,
                   jitter=None, size=None, alpha=None, linewidth=None,
-                  label=None, legend=None):
+                  label=None, legend=None, rasterize=None):
     if data is None or x is None or y is None:
         raise TypeError(
             "strip requires data=, x=, y= (fill= optional)."
@@ -76,7 +79,7 @@ def _strip_record(data=None,
     opts = pack_opts(orientation=orientation, width=width, gap=gap,
                      color=color, palette=palette, jitter=jitter,
                      size=size, alpha=alpha, linewidth=linewidth,
-                     label=label, legend=legend)
+                     label=label, legend=legend, rasterize=rasterize)
     if fill_literal is not None:
         opts["_fill_literal"] = fill_literal
     if group_col is not None and group_col == x:
@@ -115,7 +118,7 @@ def _strip_draw(a, ctx):
     horizontal = _strip_horizontal(a)
     cat_scale, val_scale = (ctx.y_scale, ctx.x_scale) if horizontal else (ctx.x_scale, ctx.y_scale)
     redundant = opts.get("_redundant_grouping", False)
-    out = []
+    marks = []  # (color, cx, cy) — computed once, drawn as vector or raster
     for i, cat in enumerate(cats):
         for j in range(n_groups):
             vs = vals[i][j]
@@ -132,9 +135,17 @@ def _strip_draw(a, ctx):
                 off = _jitter_hash(i, j, k) * slot_w * jitter
                 vp = val_scale(v)
                 cx, cy = (vp, cp + off) if horizontal else (cp + off, vp)
-                out.append(circle(cx, cy, r, fill=col, alpha=alpha,
-                                  stroke=stroke if lw > 0 else None,
-                                  stroke_width=lw, project=ctx.warp))
+                marks.append((col, cx, cy))
+    # Raster fast-path: no outline, affine coords, above threshold.
+    if (lw <= 0 and ctx.warp is None
+            and should_rasterize(len(marks), opts.get("rasterize"))):
+        img = splat_disks_by_color(marks, r, alpha, ctx.iw, ctx.ih)
+        if img is not None:
+            return img
+    out = [circle(cx, cy, r, fill=col, alpha=alpha,
+                  stroke=stroke if lw > 0 else None,
+                  stroke_width=lw, project=ctx.warp)
+           for col, cx, cy in marks]
     return "".join(out)
 
 

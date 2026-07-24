@@ -48,6 +48,33 @@ def encode_rgb(pixels: bytes, width: int, height: int) -> bytes:
             + _chunk(b"IEND", b""))
 
 
+def encode_rgba(pixels: bytes, width: int, height: int) -> bytes:
+    """Like `encode_rgb` but color type 6 (RGBA) — 4 bytes/pixel, straight
+    (non-premultiplied) alpha. Used by the point-cloud raster fast-path
+    (`draw/_raster.py`) so the panel grid shows through the transparent
+    gaps between marks."""
+    expected = width * height * 4
+    if len(pixels) != expected:
+        raise ValueError(f"pixel buffer is {len(pixels)} bytes, expected {expected}")
+
+    def _chunk(typ: bytes, data: bytes) -> bytes:
+        return (struct.pack(">I", len(data)) + typ + data
+                + struct.pack(">I", zlib.crc32(typ + data) & 0xFFFFFFFF))
+
+    sig = b"\x89PNG\r\n\x1a\n"
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+
+    raw = bytearray()
+    stride = width * 4
+    for y in range(height):
+        raw.append(0)
+        raw.extend(pixels[y * stride : (y + 1) * stride])
+
+    return (sig + _chunk(b"IHDR", ihdr)
+            + _chunk(b"IDAT", _zlib_stored(bytes(raw)))
+            + _chunk(b"IEND", b""))
+
+
 def _zlib_stored(data: bytes) -> bytes:
     """A zlib stream of stored (BTYPE=00) deflate blocks — one canonical
     encoding, no compressor freedom. 0x78 0x01: CMF = deflate/32K window,
@@ -75,4 +102,17 @@ def image_png(x, y, w, h, pixels, width, height):
     return (f'<image x="{x:.3f}" y="{y:.3f}" '
             f'width="{w:.3f}" height="{h:.3f}" '
             f'preserveAspectRatio="none" image-rendering="pixelated" '
+            f'href="data:image/png;base64,{b64}"/>')
+
+
+def image_png_rgba(x, y, w, h, pixels, width, height):
+    """One `<image>` element with a packed RGBA buffer as a base64 PNG.
+    Unlike `image_png`, this scales *smoothly* (no `image-rendering:
+    pixelated`) — the point-cloud raster is supersampled and looks better
+    downsampled with interpolation than pixel-doubled."""
+    png = encode_rgba(bytes(pixels), width, height)
+    b64 = base64.b64encode(png).decode("ascii")
+    return (f'<image x="{x:.3f}" y="{y:.3f}" '
+            f'width="{w:.3f}" height="{h:.3f}" '
+            f'preserveAspectRatio="none" '
             f'href="data:image/png;base64,{b64}"/>')

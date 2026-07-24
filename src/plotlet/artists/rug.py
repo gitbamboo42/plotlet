@@ -16,6 +16,8 @@ Other styling kwargs:
   length=0.04    tick length as a fraction of axis pixel extent
   alpha=0.6      tick opacity
   linewidth=0.8  tick stroke width
+  rasterize=None None = auto-raster ticks to one <image> above the point
+                 threshold; True/False forces it on/off
 """
 import math
 
@@ -23,13 +25,15 @@ from ..registry import ArtistSpec, add_artist
 from ..draw import segment
 from ..utils import to_list, long_form_1d, resolve_aes, pack_opts
 from ..draw import resolve_color
+from ..draw import parse_rgb, should_rasterize, splat_ticks
 from ..utils import group_color
 
 
 def _rug_record(data=None, x=None, color=None,
                 # style — packed into opts for the draw side
                 orientation=None, palette=None, length=None,
-                alpha=None, linewidth=None, label=None, legend=None):
+                alpha=None, linewidth=None, label=None, legend=None,
+                rasterize=None):
     if data is None or x is None:
         raise TypeError(
             "rug requires data=, x= (color= optional)."
@@ -39,7 +43,7 @@ def _rug_record(data=None, x=None, color=None,
     groups, vals = long_form_1d(data, x, group_col)
     opts = pack_opts(orientation=orientation, palette=palette, length=length,
                      alpha=alpha, linewidth=linewidth, label=label,
-                     legend=legend)
+                     legend=legend, rasterize=rasterize)
     if color_kind == "literal" and color_value is not None:
         opts["_color_literal"] = color_value
     return {"type": "rug", "groups": groups, "vals": vals, "opts": opts}
@@ -66,26 +70,37 @@ def _rug_draw(a, ctx):
     color_literal = resolve_color(a["opts"].get("_color_literal"))
     fallback = color_literal if color_literal is not None else ctx.color
     axis = _rug_axis(a)
+    n_total = sum(len(vals) for vals in a["vals"])
+    raster = (ctx.warp is None
+              and should_rasterize(n_total, a["opts"].get("rasterize")))
     out = []
     for j, vals in enumerate(a["vals"]):
         col = group_color(a["groups"], palette, j, fallback)
+        clean = [v for v in vals if not (isinstance(v, float) and math.isnan(v))]
         if axis == "x":
             y_base = ctx.ih
             y_top = y_base - length * ctx.ih
-            for v in vals:
-                if isinstance(v, float) and math.isnan(v):
-                    continue
-                px = ctx.x_scale(v)
+            pos = [ctx.x_scale(v) for v in clean]
+        else:
+            x_base = 0
+            x_right = length * ctx.iw
+            pos = [ctx.y_scale(v) for v in clean]
+        rgb = parse_rgb(col) if raster else None
+        if rgb is not None:
+            if axis == "x":
+                out.append(splat_ticks(pos, y_top, y_base, lw, rgb, alpha,
+                                       ctx.iw, ctx.ih, vertical=True))
+            else:
+                out.append(splat_ticks(pos, x_base, x_right, lw, rgb, alpha,
+                                       ctx.iw, ctx.ih, vertical=False))
+            continue
+        if axis == "x":
+            for px in pos:
                 out.append(segment(px, y_base, px, y_top,
                                    color=col, width=lw, alpha=alpha,
                                    project=ctx.warp))
         else:
-            x_base = 0
-            x_right = length * ctx.iw
-            for v in vals:
-                if isinstance(v, float) and math.isnan(v):
-                    continue
-                py = ctx.y_scale(v)
+            for py in pos:
                 out.append(segment(x_base, py, x_right, py,
                                    color=col, width=lw, alpha=alpha,
                                    project=ctx.warp))
