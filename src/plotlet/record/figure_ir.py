@@ -43,10 +43,12 @@ inset charts — appears earlier in the list. Hydrating the render tree is
 therefore a single forward pass. The order is derived by depth-first
 walk from the root, so two IRs of the same figure list nodes identically.
 
-Value envelopes (`{"$node": nid}`, `{"$coord": ...}`, `{"$sectors": ...}`)
-are shared with the journal — the IR stores values exactly as
-`to_journal` encoded them, and `_json_layer._decode` resolves them back
-at hydration time.
+Value envelopes (`{"$node": nid}`, `{"$coord": ...}`, `{"$sectors": ...}`,
+`{"$data": id}`) are shared with the journal — the IR stores values
+exactly as `to_journal` encoded them, and `_json_layer._decode` resolves
+them back at hydration time. `FigureIR.data` is the journal's data table,
+carried through lowering unchanged: bulk tables live there once, and
+`$data` refs in init / op values point into it.
 
 A second lowering stage lives in `render/resolved_ir.py`: `FigureIR.resolve()`
 returns the resolved IR (trained scales, baked palettes, effective
@@ -99,6 +101,7 @@ class FigureIR:
     """
     nodes: list[IRNode]
     root_nid: int
+    data: dict[str, Any] = field(default_factory=dict)
 
     def to_svg(self, *, clean: bool = False) -> str:
         from ..render import render_svg
@@ -144,6 +147,7 @@ class FigureIR:
                 "ops": json_safe(n.ops),
                 "insets": json_safe(n.insets),
             } for n in self.nodes],
+            "data": json_safe(self.data),
         }
 
     @classmethod
@@ -162,7 +166,8 @@ class FigureIR:
             ops=json_hydrate(nd["ops"]),
             insets=json_hydrate(nd["insets"]),
         ) for nd in d["nodes"]]
-        return cls(nodes=nodes, root_nid=d["root_nid"])
+        return cls(nodes=nodes, root_nid=d["root_nid"],
+                   data=json_hydrate(d["data"]))
 
     def __repr__(self) -> str:
         return (f"<FigureIR root_nid={self.root_nid} "
@@ -257,7 +262,8 @@ def journal_to_ir(journal, root_nid: int | None = None) -> FigureIR:
     for nid in nodes:
         _visit(nid)
 
-    return FigureIR(nodes=ordered, root_nid=root_nid)
+    return FigureIR(nodes=ordered, root_nid=root_nid,
+                    data=dict(journal.data))
 
 
 def _is_container_coord_op(op: dict) -> bool:
@@ -374,7 +380,8 @@ def _expand_facet(journal, root_nid: int):
         if entry["nid"] != root_nid:
             continue
         if entry["op"] == "new_facet_grid":
-            kw = {k: _decode(v, {}) for k, v in entry["kwargs"].items()}
+            kw = {k: _decode(v, {}, journal.data)
+                  for k, v in entry["kwargs"].items()}
             fg = FacetGrid(kw["data"], by=kw["by"],
                            row=kw["row"], col=kw["col"],
                            col_wrap=kw["col_wrap"],
@@ -382,8 +389,9 @@ def _expand_facet(journal, root_nid: int):
                            chart_opts=kw["chart_opts"])
         else:
             getattr(fg, entry["op"])(
-                *[_decode(a, {}) for a in entry.get("args", [])],
-                **{k: _decode(v, {})
+                *[_decode(a, {}, journal.data)
+                  for a in entry.get("args", [])],
+                **{k: _decode(v, {}, journal.data)
                    for k, v in entry.get("kwargs", {}).items()})
     return fg._materialize()
 
@@ -398,7 +406,7 @@ def ir_to_journal(ir: FigureIR):
     IR's dependency order — create event, then ops, then insets — which
     is a valid journal ordering (every reference resolves backwards)."""
     from .journal import Journal
-    journal = Journal(root_nid=ir.root_nid)
+    journal = Journal(root_nid=ir.root_nid, data=dict(ir.data))
     for n in ir.nodes:
         if n.kind in ("legend", "diagram"):
             journal.append("new_leaf", n.nid,

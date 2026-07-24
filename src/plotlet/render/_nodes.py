@@ -191,7 +191,7 @@ def hydrate(ir):
     validate(ir)
     nid_to_node: dict[int, object] = {}
     for n in ir.nodes:
-        init = _decode(n.init, nid_to_node)
+        init = _decode(n.init, nid_to_node, ir.data)
         if n.kind == "chart":
             node = _chart_node(init)
         elif n.kind in ("legend", "diagram"):
@@ -211,8 +211,9 @@ def hydrate(ir):
 
         node._calls = [
             (op["op"],
-             [_decode(a, nid_to_node) for a in op["args"]],
-             {k: _decode(v, nid_to_node) for k, v in op["kwargs"].items()})
+             [_decode(a, nid_to_node, ir.data) for a in op["args"]],
+             {k: _decode(v, nid_to_node, ir.data)
+              for k, v in op["kwargs"].items()})
             for op in n.ops
         ]
         for ins in n.insets:

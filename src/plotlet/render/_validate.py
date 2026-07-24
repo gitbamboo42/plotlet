@@ -58,10 +58,11 @@ def _layout_op_ok(name: str) -> bool:
     return name in _LAYOUT_MATERIALIZED or name in _LAYOUT_PASSTHROUGH
 
 
-def _check_values(value, kinds: dict, where: str) -> None:
+def _check_values(value, kinds: dict, where: str, data_ids) -> None:
     """Walk one init / op value: every `{"$node"}` envelope must point at
-    an earlier node, `{"$coord"}` names must resolve, and both must be
-    well-formed. Containers recurse; everything else passes."""
+    an earlier node, `{"$coord"}` names must resolve, `{"$data"}` refs
+    must point into the IR's data table, and all must be well-formed.
+    Containers recurse; everything else passes."""
     if isinstance(value, dict):
         if "$node" in value:
             if len(value) != 1 or not isinstance(value["$node"], int):
@@ -74,6 +75,19 @@ def _check_values(value, kinds: dict, where: str) -> None:
                     f"{where}: $node envelope references node "
                     f"{value['$node']}, which is not defined earlier in "
                     f"the table (nodes must be in dependency order)."
+                )
+            return
+        if "$data" in value:
+            if len(value) != 1 or not isinstance(value["$data"], str):
+                raise _err(
+                    f"{where}: malformed $data envelope {value!r} — "
+                    f"expected exactly {{'$data': <str id>}}."
+                )
+            if value["$data"] not in data_ids:
+                raise _err(
+                    f"{where}: $data envelope references table "
+                    f"{value['$data']!r}, which is not in the IR's data "
+                    f"section (ids: {sorted(data_ids)})."
                 )
             return
         if "$coord" in value:
@@ -109,7 +123,7 @@ def _check_values(value, kinds: dict, where: str) -> None:
                     f"render_layout. The registered class differs from "
                     f"the one this blob was recorded against."
                 )
-            _check_values(value.get("kwargs", {}), kinds, where)
+            _check_values(value.get("kwargs", {}), kinds, where, data_ids)
             return
         if "$sectors" in value:
             if not isinstance(value["$sectors"], dict):
@@ -117,16 +131,16 @@ def _check_values(value, kinds: dict, where: str) -> None:
                     f"{where}: malformed $sectors envelope {value!r} — "
                     f"the payload must be the Sectors dict form."
                 )
-            _check_values(value["$sectors"], kinds, where)
+            _check_values(value["$sectors"], kinds, where, data_ids)
             return
         for v in value.values():
-            _check_values(v, kinds, where)
+            _check_values(v, kinds, where, data_ids)
     elif isinstance(value, (list, tuple)):
         for v in value:
-            _check_values(v, kinds, where)
+            _check_values(v, kinds, where, data_ids)
 
 
-def _check_init(node, kinds: dict) -> None:
+def _check_init(node, kinds: dict, data_ids) -> None:
     where = f"node {node.nid} ({node.kind}) init"
     if not isinstance(node.init, dict):
         raise _err(f"{where}: expected a dict, got {type(node.init).__name__}.")
@@ -192,10 +206,10 @@ def _check_init(node, kinds: dict) -> None:
                     f"children has {len(children)} entries."
                 )
 
-    _check_values(node.init, kinds, where)
+    _check_values(node.init, kinds, where, data_ids)
 
 
-def _check_ops(node, kinds: dict) -> None:
+def _check_ops(node, kinds: dict, data_ids) -> None:
     op_ok = _layout_op_ok if node.kind == "layout" else _chart_op_ok
     family = ("a layout-state method" if node.kind == "layout"
               else "a registered artist, frame method, or attach_*")
@@ -218,8 +232,8 @@ def _check_ops(node, kinds: dict) -> None:
                 f"referencing one needs `import plotlet.extensions.<name>` "
                 f"first."
             )
-        _check_values(op["args"], kinds, where)
-        _check_values(op["kwargs"], kinds, where)
+        _check_values(op["args"], kinds, where, data_ids)
+        _check_values(op["kwargs"], kinds, where, data_ids)
 
 
 def _check_insets(node, kinds: dict) -> None:
@@ -259,6 +273,14 @@ def validate(ir):
     if not getattr(ir, "nodes", None):
         raise _err("the node table is empty.")
 
+    if (not isinstance(ir.data, dict)
+            or any(not isinstance(k, str) for k in ir.data)):
+        raise _err(
+            f"the data section must be a dict keyed by str data ids; "
+            f"got {type(ir.data).__name__}."
+        )
+    data_ids = frozenset(ir.data)
+
     kinds: dict[int, str] = {}
     for node in ir.nodes:
         if not isinstance(node.nid, int):
@@ -270,8 +292,8 @@ def validate(ir):
                 f"node {node.nid}: unknown kind {node.kind!r} — the render "
                 f"vocabulary is {list(_KINDS)}."
             )
-        _check_init(node, kinds)
-        _check_ops(node, kinds)
+        _check_init(node, kinds, data_ids)
+        _check_ops(node, kinds, data_ids)
         _check_insets(node, kinds)
         kinds[node.nid] = node.kind
 

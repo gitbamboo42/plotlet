@@ -310,6 +310,7 @@ def test_leaf_root_rejected():
     broken = pt.FigureIR(
         nodes=[n for n in ir.nodes if n.nid != wrapper.nid],
         root_nid=leaf.nid,
+        data=ir.data,
     )
     with pytest.raises(ValueError, match="root .* layout"):
         validate(broken)
@@ -327,3 +328,31 @@ def test_render_entry_rejects_broken_ir():
         ir.to_svg()
     with pytest.raises(ValueError, match="invalid FigureIR"):
         ir.resolve()
+
+
+# ---------------------------------------------------------------------------
+# $data envelopes and the data section
+# ---------------------------------------------------------------------------
+
+
+def test_dangling_data_ref():
+    # A `$data` ref must resolve against the IR's data section —
+    # dangling refs fail here, not as an opaque replay error.
+    ir = _chart_ir()
+    ir.data.clear()
+    _expect(ir, "$data envelope references")
+
+
+def test_malformed_data_envelope():
+    # `{"$data": ...}` must be exactly the single-key, str-id form.
+    ir = _chart_ir()
+    op = next(op for op in _node(ir, "chart").ops
+              if "data" in op["kwargs"])
+    op["kwargs"]["data"] = {"$data": 1}
+    _expect(ir, "malformed $data envelope")
+
+
+def test_non_dict_data_section():
+    ir = _chart_ir()
+    ir.data = ["not", "a", "dict"]
+    _expect(ir, "data section")

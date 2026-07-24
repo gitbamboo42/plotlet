@@ -121,3 +121,56 @@ def test_json_roundtrip_integer_dataframe():
     assert all(type(v) is int for row in journal_df.values for v in row)
     text = json.dumps(pt.to_json(c))
     assert pt.from_json(json.loads(text)).to_svg() == svg_original
+
+
+def test_data_lives_in_the_data_section():
+    """Bulk tables sit once in the journal's data section; entries carry
+    `{"$data": id}` refs. A chart and its bare artists share one table
+    object, so they intern to a single entry."""
+    df = {"x": [1, 2, 3], "y": [3, 1, 2]}
+
+    c = pt.chart(df, aes(x="x", y="y"))
+    c.add_line()
+    c.add_scatter()
+
+    journal = pt.to_journal(c)
+    assert list(journal.data) == ["d1"]
+    for entry in journal.entries:
+        data = entry["kwargs"].get("data")
+        if data is not None:
+            assert data == {"$data": "d1"}
+
+    blob = journal.to_dict()
+    assert list(blob["data"]) == ["d1"]
+    assert '"$data"' in json.dumps(blob["entries"])
+
+
+def test_data_section_ids_are_deterministic():
+    """Two journals of the same figure mint identical data ids —
+    first-encounter order, like nids."""
+    df = {"x": [1, 2], "y": [3, 4]}
+    df2 = {"x": [0, 3], "y": [1, 1]}
+
+    def build():
+        c = pt.chart(df, aes(x="x", y="y"))
+        c.add_line()
+        c.add_scatter(df2, aes(x="x", y="y"), inherit_aes=False)
+        return c
+
+    j1, j2 = pt.to_journal(build()), pt.to_journal(build())
+    assert j1.entries == j2.entries
+    assert j1.data == j2.data
+    assert list(j1.data) == ["d1", "d2"]
+
+
+def test_facet_journal_stores_one_table():
+    """A facet journals its full table once — panel subsets only appear
+    in the expanded (lowered) form, one entry each."""
+    df = {"t": [1, 2, 3], "v": [5, 6, 4], "grp": ["p", "p", "q"]}
+
+    fg = pt.facet(df, by="grp")
+    fg.add_line(aes(x="t", y="v"))
+
+    journal = pt.to_journal(fg)
+    assert list(journal.data) == ["d1"]
+    assert journal.data["d1"] == df

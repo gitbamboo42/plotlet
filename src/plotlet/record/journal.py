@@ -36,6 +36,16 @@ Node ids: opaque monotonic ints from a per-journal counter starting at
 1 — two journals of the same plot get identical nids, so journal
 diffing is sane.
 
+Bulk data lives outside the entries: every data table (`data=` on a
+chart / facet / artist call, or an artist's positional table) is stored
+once in `Journal.data` under an id ("d1", "d2", … in first-encounter
+order), and the entry carries a `{"$data": id}` reference instead. One
+rule, no size threshold. This keeps the event list readable, stores a
+table shared by chart and artists exactly once, and lets every walker
+over entry values (encode, validate, hydrate) skip the bulk data
+entirely — the walkers' cost scales with the number of entries, not the
+number of data points.
+
 Rendering goes journal → IR → plot: at render time the journal is
 lowered to the figure IR (`figure_ir.py`) — the per-node compiled form — and
 the render half hydrates its private node tree from that
@@ -61,9 +71,13 @@ class Journal:
     `root_nid` names which node in the journal is the plot root — set
     by `to_journal`; can't be inferred from the entries alone (an
     inner-coord chart or attachment may follow the root's `new_*`).
+
+    `data` is the data table: data id → normalized table (DataFrameLite
+    or dict of columns). Entries reference tables as `{"$data": id}`.
     """
     entries: list[dict] = field(default_factory=list)
     root_nid: int | None = None
+    data: dict[str, Any] = field(default_factory=dict)
 
     def append(self, op: str, nid: int,
                args: list | None = None,
@@ -85,6 +99,7 @@ class Journal:
             "version": _JOURNAL_VERSION,
             "root_nid": self.root_nid,
             "entries": json_safe(self.entries),
+            "data": json_safe(self.data),
         }
 
     @classmethod
@@ -97,7 +112,8 @@ class Journal:
                 f"expected {_JOURNAL_VERSION}."
             )
         return cls(entries=json_hydrate(d["entries"]),
-                   root_nid=d["root_nid"])
+                   root_nid=d["root_nid"],
+                   data=json_hydrate(d["data"]))
 
 
 _JOURNAL_VERSION = 1
@@ -144,17 +160,37 @@ def to_journal(root) -> Journal:
     identity, and every recorded method call in order.
     """
     from .facet import FacetGrid
+    # Late imports to avoid a cycle with chart.py at module load —
+    # hoisted out of `_encode`, which runs once per entry value.
+    from .chart import _Renderable
+    from ..sectors import Sectors
+    from ..utils import Aes, DataFrameLite
+    from .._coord_registry import _COORD_REGISTRY
 
     journal = Journal()
     nid_map: dict[int, int] = {}    # id(python_object) → nid
     # Per-journal counter — start at 1 so 0 can mean "unset". Local so two
     # journals of the same plot have identical nids and diffing is sane.
     nid_counter = itertools.count(1)
+    data_ids: dict[int, str] = {}   # id(table) → data id
 
     def _nid_of(node) -> int:
         if id(node) not in nid_map:
             nid_map[id(node)] = next(nid_counter)
         return nid_map[id(node)]
+
+    def _intern(table) -> dict:
+        """Store `table` once in `journal.data`, return its `{"$data": id}`
+        reference. Identity-keyed: the chart's `_data` object is the very
+        object the recorder injects into artist calls, so a chart and its
+        artists collapse to one table entry. Ids mint "d1", "d2", … in
+        first-encounter order — deterministic, like nids."""
+        did = data_ids.get(id(table))
+        if did is None:
+            did = f"d{len(data_ids) + 1}"
+            data_ids[id(table)] = did
+            journal.data[did] = table
+        return {"$data": did}
 
     def _encode(value: Any) -> Any:
         """Envelope plotlet-typed values so the flat journal carries no
@@ -174,10 +210,6 @@ def to_journal(root) -> Journal:
         alone, not of which classes the decoding process has registered.
         `render.validate` cross-checks the flag against the registered
         class, so a stale or hand-authored lie fails loudly."""
-        # Late import to avoid a cycle with chart.py at module load.
-        from .chart import _Renderable
-        from ..sectors import Sectors
-        from ..utils import Aes
         if isinstance(value, _Renderable):
             _append_node(value)
             return {"$node": _nid_of(value)}
@@ -188,7 +220,6 @@ def to_journal(root) -> Journal:
             # (its recorder stores calls verbatim); envelope them so
             # replay rebuilds an Aes, not a plain dict.
             return {"$aes": dict(value)}
-        from .._coord_registry import _COORD_REGISTRY
         if type(value).__name__ in _COORD_REGISTRY:
             return {
                 "$coord": type(value).__name__,
@@ -262,7 +293,7 @@ def to_journal(root) -> Journal:
 
     def _append_facet_grid(fg, nid: int) -> None:
         journal.append("new_facet_grid", nid, kwargs={
-            "data": fg._data,
+            "data": _intern(fg._data) if fg._data is not None else None,
             "by": fg._by,
             "row": fg._row,
             "col": fg._col,
@@ -275,7 +306,7 @@ def to_journal(root) -> Journal:
     def _append_chart(chart, nid: int) -> None:
         aes = {k: v for k, v in chart._aes.items() if v is not None}
         kwargs = {
-            "data": chart._data,
+            "data": _intern(chart._data) if chart._data is not None else None,
             "data_width": chart._orig_data_width,
             "data_height": chart._orig_data_height,
             "margin": dict(chart._margin),
@@ -335,8 +366,23 @@ def to_journal(root) -> Journal:
     def _append_call(nid: int, entry) -> None:
         """A `_calls` entry — `(name, args, kwargs)`, always a user
         action. Artist frame defaults are never recorded; `_replay`
-        regenerates them from the artist call on every render."""
+        regenerates them from the artist call on every render.
+
+        Data slots intern before `_encode` so the encoder never walks a
+        bulk table: `data=` kwargs, and an artist's positional table
+        (the only ops whose first positional is a dict / DataFrameLite
+        are artist calls with `accepts_data_positional`). `Aes` is a
+        dict subclass but a column mapping, not a table — it must reach
+        `_encode` and wire as `$aes`, or a JSON round-trip would degrade
+        it to a plain dict that replay mistakes for positional data."""
         name, args, kwargs = entry
+        args = list(args)
+        kwargs = dict(kwargs)
+        if (args and isinstance(args[0], (DataFrameLite, dict))
+                and not isinstance(args[0], Aes)):
+            args[0] = _intern(args[0])
+        if isinstance(kwargs.get("data"), (DataFrameLite, dict)):
+            kwargs["data"] = _intern(kwargs["data"])
         journal.append(name, nid,
                        args=[_encode(a) for a in args],
                        kwargs={k: _encode(v) for k, v in kwargs.items()})

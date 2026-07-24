@@ -616,27 +616,30 @@ class Chart(_Renderable):
                                     and k not in aes_map
                                     and (known is None or k in known)):
                                 kwargs[k] = v
+                    if aes_map:
+                        kwargs["mapping"] = dict(aes_map)
+                    # Normalize any user-passed `data=`. Positional args
+                    # get the same treatment — `c.add_heatmap(df, ...)`
+                    # passes df positionally, and the artist expects a
+                    # normalized value regardless of position.
+                    if "data" in kwargs:
+                        kwargs["data"] = _normalize_data(kwargs["data"])
+                    args = tuple(_normalize_data(a) for a in args)
                     # Data injection — a call that maps columns via
                     # aes(...) draws from the chart-level table. A call
                     # that brings its own data overrides it, whether the
                     # data came as `data=` (in kwargs) or positionally
                     # (in args) — so inject only when the call gave none.
+                    # After normalization on purpose: `self._data` is
+                    # already normalized in __init__, and re-normalizing
+                    # would copy a dict table — every artist must share
+                    # the chart's table *object* so `to_journal` interns
+                    # chart + artists as one data-table entry.
                     if (self._data is not None and "data" not in kwargs
                             and not args
                             and (known is None or "data" in known)
                             and aes_map):
                         kwargs["data"] = self._data
-                    if aes_map:
-                        kwargs["mapping"] = dict(aes_map)
-                    # Normalize any user-passed `data=` (chart._data is
-                    # already normalized in __init__; idempotent no-op
-                    # for that path). Positional args get the same
-                    # treatment — `c.add_heatmap(df, ...)` passes df
-                    # positionally, and the artist expects a normalized
-                    # value regardless of position.
-                    if "data" in kwargs:
-                        kwargs["data"] = _normalize_data(kwargs["data"])
-                    args = tuple(_normalize_data(a) for a in args)
                 # Only the user action is recorded — an artist's
                 # frame_defaults regenerate inside `_replay` on every
                 # render (see `_expand_frame_defaults` in render/_resolution.py).

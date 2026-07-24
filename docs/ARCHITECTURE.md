@@ -52,7 +52,7 @@ kinds below.
 ### Shape
 
 ```python
-FigureIR(nodes=[IRNode, ...], root_nid=<int>)
+FigureIR(nodes=[IRNode, ...], root_nid=<int>, data={<id>: <table>, ...})
 IRNode(nid, kind, init, ops, insets)
 ```
 
@@ -64,6 +64,14 @@ IRNode(nid, kind, init, ops, insets)
 - `insets` — `[{"rect": [x, y, w, h], "chart_nid": <nid>}, ...]`
   (fractional rect in the host's data area). Insets live on leaf
   nodes — never on a layout — and `chart_nid` must name a chart node.
+- `data` — the data section: data id (`"d1"`, `"d2"`, … in
+  first-encounter order) → normalized table (`DataFrameLite` or dict of
+  columns), shared verbatim with the journal (`Journal.data`). Every
+  bulk table sits here exactly once; init and op values reference it
+  with the `$data` envelope (below). A table shared by a chart and its
+  artists is one entry — `to_journal` interns by object identity. This
+  keeps entry values small (walkers over them never touch bulk data)
+  and the serialized form free of duplicated tables.
 
 **Dependency order.** `nodes` is ordered so that every nid a node
 references — layout children, legend sources, inset charts, `$node`
@@ -78,9 +86,9 @@ defaults. `data_width`, `data_height` (px or unit strings; unread under
 a container coord, which sizes from its own geometry — e.g.
 `CircularCoordinate.data_diameter`), `margin` (dict with
 `left/right/top/bottom`), plus recorder-only state the render half
-ignores: `data`, the chart-level `aes(...)` mapping, and literal
-defaults (`color`, `palette`, ...) — those are already baked into the
-ops at record time.
+ignores: `data` (a `$data` ref into the data section), the chart-level
+`aes(...)` mapping, and literal defaults (`color`, `palette`, ...) —
+those are already baked into the ops at record time.
 
 **`legend`** — standalone legend leaf. Required: `canvas_width`,
 `canvas_height` (the canvas is the dimensional primitive; data dims are
@@ -102,7 +110,8 @@ for grid holes). Grids additionally require integer `grid_rows` /
 
 An op is one recorded method call, **post**-normalization: chart-level
 `aes(...)` and data injection already applied, `data=` normalized to
-the canonical table form — and **pre**-`spec.record`: the artist's
+the canonical table form and stored as a `$data` ref into the data
+section — and **pre**-`spec.record`: the artist's
 `record()` runs at replay, not before. Artist `frame_defaults` are never present;
 they regenerate inside `_replay` on every render.
 
@@ -140,19 +149,23 @@ class and rejects a mismatch.
 
 ### Value envelopes
 
-Three envelopes, shared verbatim with the journal, may appear anywhere
+Four envelopes, shared verbatim with the journal, may appear anywhere
 in init or op values; `_decode` (`_json_layer.py`) resolves them at
 hydration:
 
     {"$node": <nid>}                     cross-node reference (attachments,
                                          coord inners, legend name keys)
+    {"$data": <id>}                      data-table reference into the
+                                         IR's data section
     {"$coord": <class name>,             coord instance, via the coord
      "container": <bool>, "kwargs"}     registry (`register_coord_codec`);
                                          `container` = class defines
                                          `render_layout`, required
     {"$sectors": {...}}                  Sectors value
 
-A dict containing the key `$node` must be exactly that single-key form.
+A dict containing the key `$node` or `$data` must be exactly that
+single-key form, and a `$data` id must exist in the data section —
+`validate` rejects dangling refs.
 In the JSON form (`to_dict` / `from_dict`), non-JSON-native values
 (tuples, sets, dates/datetimes, DataFrames, non-string-keyed dicts)
 are additionally wrapped by `_json_layer` envelopes (`$tuple`, `$set`,

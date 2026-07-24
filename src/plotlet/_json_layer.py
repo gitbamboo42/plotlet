@@ -28,10 +28,10 @@ Envelope keys used here:
     $dict_pairs   dict whose keys aren't all JSON-native strings
 
 `_decode` at the bottom handles the other envelope family — the
-*reference* envelopes ($node / $coord / $sectors) that journals and IRs
-carry whether or not they ever touch JSON. It lives here because both
-halves need it (the render tree's hydrator and the front half's facet
-expansion) and it resolves only against shared vocabulary.
+*reference* envelopes ($node / $coord / $sectors / $data) that journals
+and IRs carry whether or not they ever touch JSON. It lives here because
+both halves need it (the render tree's hydrator and the front half's
+facet expansion) and it resolves only against shared vocabulary.
 """
 from __future__ import annotations
 from typing import Any
@@ -119,34 +119,40 @@ def json_hydrate(value: Any) -> Any:
     return value
 
 
-def _decode(value: Any, nid_to_node: dict) -> Any:
+def _decode(value: Any, nid_to_node: dict, data_table: dict) -> Any:
     """Resolve plotlet's *reference* envelopes back to live objects —
     `{"$node"}` via `nid_to_node`, `{"$coord"}` via the coord registry,
-    `{"$sectors"}` via `Sectors`. Containers recurse; everything else
-    passes through.
+    `{"$sectors"}` via `Sectors`, `{"$data"}` via `data_table` (the
+    Journal's / FigureIR's data section). Containers recurse; everything
+    else passes through.
 
     Distinct from `json_hydrate` above: that undoes the JSON-native
-    envelopes at the JSON boundary, while these three envelopes live in
-    journals and IRs whether or not they ever touch JSON, and decode at
-    hydration time. Shared vocabulary — used by the render tree's
+    envelopes at the JSON boundary, while these reference envelopes live
+    in journals and IRs whether or not they ever touch JSON, and decode
+    at hydration time. Shared vocabulary — used by the render tree's
     hydrator (`render.hydrate`) and by the facet expansion in
     `record/figure_ir.py`."""
     if isinstance(value, dict):
         if "$node" in value and len(value) == 1:
             return nid_to_node[value["$node"]]
+        if "$data" in value and len(value) == 1:
+            return data_table[value["$data"]]
         if "$coord" in value:
             from ._coord_registry import resolve_coord
             cls = resolve_coord(value["$coord"])
-            return cls._from_dict(_decode(value.get("kwargs", {}), nid_to_node))
+            return cls._from_dict(
+                _decode(value.get("kwargs", {}), nid_to_node, data_table))
         if "$sectors" in value:
             from .sectors import Sectors
-            return Sectors._from_dict(_decode(value["$sectors"], nid_to_node))
+            return Sectors._from_dict(
+                _decode(value["$sectors"], nid_to_node, data_table))
         if "$aes" in value and len(value) == 1:
             from .utils import Aes
             return Aes(value["$aes"])
-        return {k: _decode(v, nid_to_node) for k, v in value.items()}
+        return {k: _decode(v, nid_to_node, data_table)
+                for k, v in value.items()}
     if isinstance(value, list):
-        return [_decode(v, nid_to_node) for v in value]
+        return [_decode(v, nid_to_node, data_table) for v in value]
     if isinstance(value, tuple):
-        return tuple(_decode(v, nid_to_node) for v in value)
+        return tuple(_decode(v, nid_to_node, data_table) for v in value)
     return value
