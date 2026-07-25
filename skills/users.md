@@ -22,6 +22,51 @@ Chart methods chain. Charts compose with `|` (horizontal), `/`
 (vertical), `pt.grid([[...]])`, `.attach_left/right/above/below(...)`,
 `.share_x()` / `.share_y()`, `pt.legend()`.
 
+## Script style
+
+House style for any code that *uses* plotlet — test baselines, examples,
+docs, notebooks — not for plotlet's own source. plotlet's shape is
+ggplot2's (`ggplot(df, aes(x, y)) + geom_line()`), not matplotlib's
+`ax.plot(x, y)`: the mapping goes on the chart once and layers stay bare.
+
+```python
+df = {"x": [1, 2, 3, 4], "y": [2, 4, 3, 5], "g": ["a", "a", "b", "b"]}
+
+c = pt.chart(df, aes(x="x", y="y", color="g"), data_width=560, data_height=320)
+c.add_line()      # inherits x, y, color from the chart
+c.add_scatter()   # same mapping, no repetition
+```
+
+- **Table + `aes` go positionally on `pt.chart(...)`; artists stay bare** —
+  they inherit the chart mapping and carry only their own styling
+  (`color=`, `linewidth=`, `label=`, `alpha=`). Drop `data=` / `mapping=`.
+- **Data first, one blank line, then the chart.** Every table is a
+  variable at the top; never build a dict inline in a plotting call
+  (`pt.chart({"x": [1, 2], ...})`, `c.add_line(data={...})`).
+
+Advanced cases — a layer with its own table/columns, opting out of an
+inherited aesthetic (`inherit_aes=False`), and artists that need explicit
+`data=` (heatmap, imshow, contour, dendrogram, text, annotate, reference
+lines) — see `tests/test_aes.py` and `help(c.add_<name>)`.
+
+## Sizing: pixels and a data region, not inches and figsize
+
+There is no `figsize`, no `dpi`, no inches-by-default.
+
+- **`data_width` / `data_height` size the data region in pixels**
+  (defaults 524 × 322), set on the chart:
+  `pt.chart(df, aes(...), data_width=700, data_height=400)`. They size the
+  *data rectangle*, not the whole canvas — chrome (title, ticks, labels,
+  legend) grows *outward* from it, so the plotted region is exactly what
+  you asked for.
+- **Bare numbers are pixels.** A unit-suffixed string converts
+  (`"4in"`, `"10cm"`, `"72pt"`), but px is the native unit.
+- **Circular plots size by `data_diameter` (pixels), not radius** — the
+  outer diameter of the data ring, passed on the coordinate:
+  `c.coordinate(pt.CircularCoordinate(data_diameter=360))`. Default 320;
+  the set diameter is exactly what renders, chrome grows the canvas
+  outward.
+
 ## Where to find examples
 
 **Never assume a signature — read a working example first.**
