@@ -1,5 +1,17 @@
-"""imshow needs a preprocessing step (2-D-ify, autocompute vmin/vmax) before
-domain can be computed. We do that in record() rather than draw().
+"""2-D array → colored grid. Branches between many <rect>s and one PNG.
+
+The threshold (`imshow_max_rects` in spec.json) trades vector cleanliness
+for SVG file size. Below the threshold, each cell is its own <rect> — sharp
+at any zoom. Above, the whole image is encoded as base64 PNG.
+
+`origin` controls vertical orientation. Default `"lower"` puts row 0 at
+the BOTTOM of the data rectangle (Cartesian). Opt in to `"upper"` for
+matrix-style display (row 0 at top, what you see when you print the
+array); the panel auto-inverts the y-axis in that case so tick "0"
+lands next to row 0.
+
+Color mapping goes through `ContinuousNorm`, which supports `norm="log"`
+and `center=` on top of the default linear range.
 """
 from ..registry import ArtistSpec, add_artist
 from ..utils import to_list_2d, pack_opts
@@ -11,21 +23,6 @@ from ..draw.colors import auto_label_color
 
 
 def _artist_imshow(a, xs_, ys_, col):
-    """2-D array → colored grid. Branches between many <rect>s and one PNG.
-
-    The threshold (`imshow_max_rects` in spec.json) trades vector cleanliness
-    for SVG file size. Below the threshold, each cell is its own <rect> — sharp
-    at any zoom. Above, the whole image is encoded as base64 PNG.
-
-    `origin` controls vertical orientation. Default `"lower"` puts row 0 at
-    the BOTTOM of the data rectangle (Cartesian). Opt in to `"upper"` for
-    matrix-style display (row 0 at top, what you see when you print the
-    array); the panel auto-inverts the y-axis in that case so tick "0"
-    lands next to row 0.
-
-    Color mapping goes through `ContinuousNorm`, which supports `norm="log"`
-    and `center=` on top of the default linear range.
-    """
     nrows = a["_nrows"]; ncols = a["_ncols"]
     if nrows == 0 or ncols == 0:
         return ""
@@ -180,6 +177,8 @@ def _imshow_data_attrs(a):
     return out
 
 
+# imshow needs a preprocessing step (2-D-ify, autocompute vmin/vmax) before
+# domain can be computed. We do that in record() rather than draw().
 def _imshow_record(matrix,
                    # vmin/vmax/norm drive autoscale here and also ride in
                    # opts (norm read at draw; vmin/vmax by the legend)
