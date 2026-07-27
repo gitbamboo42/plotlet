@@ -28,8 +28,10 @@ jobs:
       - run: pip install . mistune==3.1.4
       # The extensions gallery page. The import check makes a broken
       # install fail the build instead of shipping a gallery-less site.
+      # statsmodels is loess's optional dependency — without it the
+      # gallery drops the loess tile.
       - run: |
-          pip install git+https://github.com/gitbamboo42/plotlet-extensions.git
+          pip install git+https://github.com/gitbamboo42/plotlet-extensions.git statsmodels
           python -c "import plotlet.extensions"
       - run: python site/gen_site.py
       - uses: actions/upload-pages-artifact@v3
