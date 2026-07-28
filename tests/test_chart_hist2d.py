@@ -42,6 +42,7 @@ def test_hist2d_counts_and_transparent_empties():
     df = {"x": [0.5, 0.5, 1.5, 2.5], "y": [0.5, 0.5, 0.5, 1.5]}
     c = pt.chart(df, aes(x="x", y="y"))
     c.add_hist2d(bins=([0, 1, 2, 3], [0, 1, 2]))
+    c.legend(False)   # the colorbar's gradient strip would match fill="rgb(
     svg = c.to_svg()
     assert 'data-plotlet-count-max="2"' in svg
     assert 'data-plotlet-bins-x="3"' in svg

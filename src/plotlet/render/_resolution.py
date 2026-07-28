@@ -403,7 +403,17 @@ def _default_state() -> _PanelState:
         "spine_walls_color": None, "spine_walls_width": None,
         "spine_walls_linestyle": None,
         "grid": _GRIDSPEC.get("default_on", False), "grid_which": "major",
-        "legend": False,
+        # None = auto: draw when artists contribute entries (a mapped
+        # discrete aesthetic, a `label=`, or a gradient) — a mapped
+        # aesthetic without a guide can't be decoded. `c.legend(True)` /
+        # `False` forces. Auto stays off on custom-coordinate panels
+        # (no margin band to place the block in) and where
+        # `legend_auto_off` is stamped by `_resolve_panels`: figures
+        # with a `pt.legend(...)` leaf (that leaf owns legend
+        # placement) and attachment clusters (the margin band the
+        # legend would sit in is occupied by attached panels).
+        "legend": None,
+        "legend_auto_off": False,
         # Inline-legend placement. Outside tokens: `"right"` (default),
         # `"left"`, `"top"`, `"bottom"` — reserve margin space beside the
         # data area. Inside tokens: `"top-right"`, `"top-left"`,
@@ -1159,7 +1169,10 @@ def _inline_legend_layout(state, env=None):
     whose range depends on render geometry (hexbin's pixel-space bin
     counts) can label exactly what draw will paint. The standalone
     `pt.legend()` leaf harvests without a panel and passes no env."""
-    if not state["legend"]:
+    on = state["legend"]
+    if on is None:
+        on = state["coordinate"] is None and not state["legend_auto_off"]
+    if not on:
         return None
     disc, cont = _legend_sources(state, env)
     if not disc and not cont:
@@ -1182,6 +1195,10 @@ def _legend_sources(state, env):
     for a in state["artists"]:
         spec = get_artist(a["type"])
         if spec is None:
+            continue
+        # Per-artist opt-out: add_*(..., legend=False) keeps this
+        # artist out of every legend (in-frame and pt.legend leaves).
+        if (a.get("opts") or {}).get("legend") is False:
             continue
         a = _legend_source_artist(a)
         if spec.legend_gradient is not None:
@@ -1520,6 +1537,19 @@ def _required_margin(state, dw, dh, layout_opts: "_PanelOpts") -> dict:
             top = top + gap + lh
         elif pos == "bottom":
             bottom = bottom + gap + lh
+        # Side legends are centered on the data area (`_emit_inline_legend`),
+        # so a block taller than `dh` (short panels: annotation strips)
+        # spills half the excess past each edge; same story horizontally
+        # for a top/bottom block wider than `dw`. Reserve the spill like
+        # the label overhangs above.
+        if pos in ("right", "left"):
+            spill = max(0.0, (lh - dh) / 2.0)
+            top    = max(top,    spill)
+            bottom = max(bottom, spill)
+        else:
+            spill = max(0.0, (lw - dw) / 2.0)
+            left  = max(left,  spill)
+            right = max(right, spill)
 
     # Coordinate-aware frame: the projected parallelogram may extend outside
     # the data area.  Inflate each side by however far the frame sticks out.

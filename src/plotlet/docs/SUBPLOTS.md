@@ -97,6 +97,8 @@ pt.grid([[a, b], [c, d]]).title("Figure 2")
 
 One constructor for both discrete swatches and continuous gradients — geometry follows from the source's color mapping, not the constructor name. A "colorbar" is just `pt.legend(hm)` where `hm` has a continuous cmap; no separate `pt.colorbar()` call.
 
+A `pt.legend(...)` leaf anywhere in the figure takes over legend management: every panel's automatic in-frame legend stands down, so entries appear once, in the leaf. `c.legend(True)` on a panel forces its in-frame legend back on.
+
 ```python
 # Panel form — explicit grid cell
 pt.grid([[hm, pt.legend(hm)]])

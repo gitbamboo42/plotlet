@@ -19,9 +19,8 @@ for arm, slope in (("control", 0.04), ("drug", 0.45)):
 
 c = pt.chart(data, aes(x="week", y="score", color="arm"),
              title="response over time", xlabel="timepoint",
-             ylabel="score", legend=True,
+             ylabel="score",
              data_width=320, data_height=200)
 c.xscale("category", order=weeks)
 c.add_pointplot()
-c.legend()
 

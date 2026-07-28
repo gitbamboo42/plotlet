@@ -14,7 +14,9 @@ sizing, shipped examples, machine-readable debugging."
 
 `import plotlet as pt`. A `pt.chart(df, aes(x=..., y=...))` is a
 **journal**: artist calls record into a list; `to_svg()` / `show()`
-renders. Same journal → byte-identical SVG.
+renders. Same journal → byte-identical SVG. To write a file, use
+`save_svg(path)` / `save_png` / `save_pdf` / `save_html` — there is
+no generic `.save()`.
 
 Two rules that won't come from your training data:
 - **Artists are called as `add_<name>`** — `c.add_scatter(...)`,
@@ -27,6 +29,14 @@ Two rules that won't come from your training data:
 Chart methods chain. Charts compose with `|` (horizontal), `/`
 (vertical), `pt.grid([[...]])`, `.attach_left/right/above/below(...)`,
 `.share_x()` / `.share_y()`, `pt.legend()`.
+
+Legends are automatic: a discrete `aes` mapping, a `label=`, or a
+gradient (heatmap / imshow) draws its key or colorbar without any call.
+`c.legend(False)` hides it, a single layer opts out with
+`c.add_<name>(..., legend=False)`, `c.legend(position=...)` moves it,
+and a `pt.legend(...)` panel in a composition takes over (per-panel
+auto legends stand down; same in attachment clusters, where
+`c.legend(True)` forces one back).
 
 ## Script style
 

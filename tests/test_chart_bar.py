@@ -139,7 +139,8 @@ def chart_bar_errorbar_aligned():
                  data_width=320, data_height=200,
                  title="bar + errorbar share dodge slots", ylabel="$M")
     c.add_bar(aes(fill="series"), position="dodge", alpha=0.45)
-    c.add_errorbar(aes(yerr="sd", color="series"), marker=None)
+    c.add_errorbar(aes(yerr="sd", color="series"), marker=None,
+                   legend=False)   # bars already carry the series key
     return c
 
 
@@ -338,7 +339,9 @@ def test_errorbar_dodge_aligns_with_bar_slots():
     # The load-bearing composition contract: a grouped errorbar's stems
     # land on the same pixel centers as dodged bars over the same table.
     import re
-    svg = chart_bar_errorbar_aligned().to_svg()
+    c = chart_bar_errorbar_aligned()
+    c.legend(False)   # legend swatches would match the color regexes below
+    svg = c.to_svg()
     centers = [float(m[0]) + float(m[1]) / 2 for m in re.findall(
         r'<rect x="([0-9.]+)" y="[0-9.]+" width="([0-9.]+)" height="[0-9.]+"'
         r' fill="#(?:1f77b4|ff7f0e|2ca02c)"', svg)]

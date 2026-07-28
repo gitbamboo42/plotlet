@@ -474,7 +474,15 @@ class Chart(_Renderable):
                entries: list | None = None, **kwargs) -> "Chart":
         """Toggle the in-frame overlay legend.
 
-        `chart.legend()` or `chart.legend(True)` turns it on; `False` off.
+        By default the legend is automatic: it draws whenever an artist
+        contributes entries (a discrete `aes` mapping, a `label=`, or a
+        continuous gradient). Auto stays off on custom-coordinate
+        panels, in attachment clusters, and in figures that place a
+        `pt.legend(...)` leaf — there `chart.legend()` or
+        `chart.legend(True)` forces it on; `False` turns it off
+        anywhere. A single artist opts out of all legends with
+        `add_*(..., legend=False)` — say, an errorbar layered on bars
+        that already carry the series key.
         `position=` places the block (modeled on vega-lite's `orient`):
 
         - **Outside tokens** reserve margin space beside the data area:

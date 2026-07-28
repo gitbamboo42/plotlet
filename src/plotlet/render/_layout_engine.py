@@ -971,6 +971,19 @@ def _resolve_panels(root, *, measure_margins=True
     leaves = [l for l in _iter_leaves(root) if l._leaf_kind == "data"]
     # Replay every leaf into its settled state dict.
     states = _replay_leaves(leaves)
+    # Auto in-frame legends stand down (`_legend_block`) where drawing
+    # one by default would misfire; `c.legend(True)` still forces one.
+    # (1) A pt.legend(...) leaf anywhere: the figure's legends are
+    # explicitly managed — suppress everywhere. (2) Attachment
+    # clusters: attached panels occupy the margin bands the legend
+    # would be placed in.
+    if any(l._leaf_kind == "legend" for l in _iter_leaves(root)):
+        for state in states.values():
+            state["legend_auto_off"] = True
+    else:
+        for l in leaves:
+            if l._is_attached or _attachments.has_attachments(l):
+                states[id(l)]["legend_auto_off"] = True
     # Axis descriptors before share scaling: both are pure data-space
     # (no pixel dims involved), and the scaling pass needs the resolved
     # domains to honor `c.aspect(...)` locks.

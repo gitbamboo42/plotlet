@@ -19,6 +19,6 @@ c = pt.chart(df, aes(x="flipper_length_mm", y="body_mass_g",
                      color="species"),
              title="Palmer penguins",
              xlabel="flipper length (mm)", ylabel="body mass (g)",
-             legend=True, gridlines=True)
+             gridlines=True)
 c.add_scatter(size=3, alpha=0.7)
 

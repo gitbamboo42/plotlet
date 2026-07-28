@@ -17,7 +17,7 @@ import plotlet as pt
 from plotlet import aes
 
 c = pt.chart(df, aes(x="t"), theme="dark", title="hits per minute",
-             xlabel="t", ylabel="hits", legend=True)
+             xlabel="t", ylabel="hits")
 c.add_line(aes(y="A"), label="A")
 c.add_line(aes(y="B"), label="B")
 ```

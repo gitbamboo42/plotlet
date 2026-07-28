@@ -14,6 +14,6 @@ df = {k: [raw[k][i] for i in keep] for k in ("species", "body_mass_g")}
 
 c = pt.chart(df, aes(x="body_mass_g", fill="species"),
              title="body mass", xlabel="body mass (g)", ylabel="count",
-             legend=True, data_width=380, data_height=200)
+             data_width=380, data_height=200)
 c.add_hist(bins=24, position="stack")
 

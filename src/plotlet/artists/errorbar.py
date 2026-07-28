@@ -229,11 +229,12 @@ def _legend_paint(col):
     def paint(a, ctx, x0, y_mid):
         msize = a["opts"].get("size", ctx.defaults["markersize"])
         cx = x0 + _LEGSPEC["swatch_width"] / 2
-        return (
-            segment(cx, y_mid - 5, cx, y_mid + 5,
-                    color=col, width=_D["errorbar_linewidth"])
-            + marker(a["opts"].get("marker", "o"), cx, y_mid, msize, col, 1)
-        )
+        out = segment(cx, y_mid - 5, cx, y_mid + 5,
+                      color=col, width=_D["errorbar_linewidth"])
+        mk = a["opts"].get("marker", "o")
+        if mk:
+            out += marker(mk, cx, y_mid, msize, col, 1)
+        return out
     return paint
 
 

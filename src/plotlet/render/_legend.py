@@ -98,6 +98,9 @@ def _build_groups(sources: list, states: dict[int, dict],
             spec = get_artist(a["type"])
             if spec is None:
                 continue
+            # add_*(..., legend=False) — artist opted out of legends.
+            if (a.get("opts") or {}).get("legend") is False:
+                continue
             a = _legend_source_artist(a)
             if spec.legend_gradient is not None:
                 desc = spec.legend_gradient(a)
