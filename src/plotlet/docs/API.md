@@ -94,7 +94,7 @@ in its supporting artists via `pt.declare_coord_support(name, [...])`;
 the renderer raises if you mix a coord with an artist not in that list.
 See [`plotlet-cookbook/circle/`](https://github.com/gitbamboo42/plotlet-cookbook/tree/main/circle) for a worked example and the
 protocol notes at the top of
-[`src/plotlet/render/_coord_circular.py`](../src/plotlet/render/_coord_circular.py).
+[`src/plotlet/render/_coord_circular.py`](../render/_coord_circular.py).
 
 ### Scales
 

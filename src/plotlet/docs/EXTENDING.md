@@ -150,21 +150,21 @@ Gate it on `ctx.warp is None` and a single-solid-color style; fall back to
 the vector loop otherwise (through `raster_declined`, so the user hears
 about it). Overlapping same-color marks composite exactly as stacked
 vector marks, and the output stays byte-identical. See
-[`draw/_raster.py`](../src/plotlet/draw/_raster.py) for the full rationale.
+[`draw/_raster.py`](../draw/_raster.py) for the full rationale.
 
 Dense *lines* are a different problem: a whole series is already one
 `<path>` node, so the node limit never triggers — the d-string just
 balloons. Don't splat strokes (a path paints its color once across
 self-overlaps; per-mark alpha stacking would darken them). Decimate
 vertices instead with `should_simplify` / `simplify_path_pts` — see
-[`draw/_simplify.py`](../src/plotlet/draw/_simplify.py).
+[`draw/_simplify.py`](../draw/_simplify.py).
 
 ---
 
 ## ArtistSpec fields
 
 The authoritative field list, signatures, and defaults are the
-`ArtistSpec` dataclass in [`registry.py`](../src/plotlet/registry.py) —
+`ArtistSpec` dataclass in [`registry.py`](../registry.py) —
 `name`, `record`, and `draw` are required; everything else is an opt-in
 behavior. What each opt-in is *for*:
 
@@ -220,7 +220,7 @@ and is passed to `xdomain` / `ydomain` / `draw` as `a`. Two conventions:
 
 Keys starting with `_` (e.g. `_bins`, `_data`, `_color`) are conventionally
 "computed during render, used during draw" — see how `imshow` and `hist`
-stash pre-processed data in [`artists/`](../src/plotlet/artists/).
+stash pre-processed data in [`artists/`](../artists/).
 
 Respect deferred rendering: `record` runs early, `draw` runs at `to_svg()`
 time. Don't compute scales or colors in `record` — they don't exist yet.
@@ -233,7 +233,7 @@ If you're writing a dendrogram variant (radial, icicle, curved branches,
 sunburst, …), don't reach for `scipy.cluster.hierarchy` directly — the
 `plotlet.cluster` module exposes the full layout pipeline so a third-party
 tree artist is purely a *renderer*. Canonical example: the `curved_tree`
-test fixture ([`tests/_curved_tree.py`](../tests/_curved_tree.py)), a
+test fixture ([`tests/_curved_tree.py`](../../../tests/_curved_tree.py)), a
 curved-branch renderer built entirely on the public cluster API.
 
 The helpers below live in the `plotlet.cluster` module, reachable either

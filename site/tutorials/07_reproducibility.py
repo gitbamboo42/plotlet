@@ -71,9 +71,10 @@ c.add_scatter(size=2.5, alpha=0.6)
 <code>pt.artist_table()</code> lists every installed artist with its
 capabilities, and <code>help(c.add_scatter)</code> forwards the
 artist&rsquo;s docstring through the recorder. AI-oriented onboarding
-docs ship in the repo
-(<a href="https://github.com/gitbamboo42/plotlet/tree/main/skills">skills/</a>)
-for tools that generate plotlet code on your behalf.""",
+guides ship inside the package
+(<a href="https://github.com/gitbamboo42/plotlet/tree/main/src/plotlet/skills">skills/</a>)
+&mdash; <code>pt.skill()</code> prints the users guide for tools that
+generate plotlet code on your behalf.""",
             code="""\
 names = sorted({row["name"] for row in pt.artist_table()
                 if row["origin"] == "core"})

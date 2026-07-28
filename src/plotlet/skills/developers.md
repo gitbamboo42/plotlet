@@ -5,7 +5,7 @@ AI-oriented onboarding for working on the plotlet codebase. Vendor-neutral
 your tool expects. Human contributors can read it directly.
 
 > **Docs in this repo help us make decisions — they are not textbooks.**
-> This applies to every Markdown file: `skills/developers.md`, `README.md`, `docs/*.md`.
+> This applies to every Markdown file: `src/plotlet/skills/*.md`, `README.md`, `src/plotlet/docs/*.md`.
 > If a fact is derivable from `ls src/plotlet/` or reading a well-named module,
 > it doesn't belong in any of them. Policies, non-obvious whys, project
 > direction, and reference tables that need to be explicit do.
@@ -20,9 +20,17 @@ journal, and rendering lowers it journal → `FigureIR` → SVG. The
 recording half (the `record/` package) never imports
 the render half at module level; the [`render/`](src/plotlet/render/)
 package never imports the recording half at all — the `FigureIR` is the
-one contract between them ([docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), enforced by
+one contract between them ([docs/ARCHITECTURE.md](src/plotlet/docs/ARCHITECTURE.md), enforced by
 `tests/test_import_boundary.py`). Product positioning and why-not-X
-live in [README.md](README.md) and [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md).
+live in [README.md](README.md) and [docs/PHILOSOPHY.md](src/plotlet/docs/PHILOSOPHY.md).
+
+The AI guides (`src/plotlet/skills/`), deep-dive docs
+(`src/plotlet/docs/`), and per-plot-type examples
+(`src/plotlet/examples/`) ship in the wheel so an installed package is
+self-sufficient — `pt.skill()` prints the guides, and the users guide
+points at the shipped copies. The same examples are executed by
+`site/gen_site.py` to build the website, so a broken example fails the
+site build.
 
 ## Load-bearing policies (not derivable from code)
 
@@ -41,12 +49,12 @@ live in [README.md](README.md) and [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md).
 
 ## Deep dives
 
-- The render pipeline and the FigureIR contract → [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- Custom plot types → [docs/EXTENDING.md](docs/EXTENDING.md)
-- Coordinate systems (Circular, custom projections) → [docs/COORDINATES.md](docs/COORDINATES.md)
-- Multi-panel layouts, `share_x` / `share_y` → [docs/SUBPLOTS.md](docs/SUBPLOTS.md)
-- Themes → [docs/THEMES.md](docs/THEMES.md)
-- AI-readable SVG attrs → [docs/AI_ATTRS.md](docs/AI_ATTRS.md)
+- The render pipeline and the FigureIR contract → [docs/ARCHITECTURE.md](src/plotlet/docs/ARCHITECTURE.md)
+- Custom plot types → [docs/EXTENDING.md](src/plotlet/docs/EXTENDING.md)
+- Coordinate systems (Circular, custom projections) → [docs/COORDINATES.md](src/plotlet/docs/COORDINATES.md)
+- Multi-panel layouts, `share_x` / `share_y` → [docs/SUBPLOTS.md](src/plotlet/docs/SUBPLOTS.md)
+- Themes → [docs/THEMES.md](src/plotlet/docs/THEMES.md)
+- AI-readable SVG attrs → [docs/AI_ATTRS.md](src/plotlet/docs/AI_ATTRS.md)
 
 ## Running tests
 
@@ -108,12 +116,12 @@ call below returns structured data:
 |---|---|---|
 | Wrong data/mapping recorded, artist got the wrong kwargs | journal (what was said) | `pt.to_journal(c).to_dict()["entries"]` (or `c._calls`) |
 | Autoscale / palette / limits wrong | resolved IR (what render decided) | `pt.to_ir(c).resolve().to_dict()` |
-| Finished plot's semantics (labels, scales, per-series range) | SVG schema layer | parse `data-plotlet-*` from `c.to_svg()` — schema in [docs/AI_ATTRS.md](docs/AI_ATTRS.md) |
+| Finished plot's semantics (labels, scales, per-series range) | SVG schema layer | parse `data-plotlet-*` from `c.to_svg()` — schema in [docs/AI_ATTRS.md](src/plotlet/docs/AI_ATTRS.md) |
 | Title/label/legend overlap or clipping | lint (auto edge-clip + overlap) | `from plotlet.lint import lint; lint(c)` — imported from `plotlet.lint`, not `pt.lint` |
 | Exact chrome geometry (title, ticks, spines, legend, panel bboxes) | regions sink | `c.regions()` → `{"kind","bbox","name","meta"}` |
 | Layout / grid / composition wrong | layout schematic | `pt.layout_diagram(c).show()` |
 
-Each fact lives at exactly one stage (see [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md),
+Each fact lives at exactly one stage (see [docs/PHILOSOPHY.md](src/plotlet/docs/PHILOSOPHY.md),
 "verification over trust"), so the inspection also localizes the fault:
 if the journal is right but the resolved IR is wrong, the bug is in
 lowering, not recording.

@@ -72,7 +72,7 @@ geometry. `"dasharray": null` drops the dash (solid gridlines — how
 `minimal` gets its look). Unspecified keys fall through to `classic` —
 which is just `spec.json` with no overrides. The authoritative key set
 and the default values live in
-[`src/plotlet/spec.json`](../src/plotlet/spec.json).
+[`src/plotlet/spec.json`](../spec.json).
 
 `font.family` doubles as the face selector: its first comma-separated
 segment takes the same values as `c.font(...)` — a bundled name or a
@@ -81,7 +81,7 @@ segment takes the same values as `c.font(...)` — a bundled name or a
 font="Arimo"` compose.
 
 Convention: **the data palette stays orthogonal to theme.** TAB10 and
-the named-color shortcuts live in [`src/plotlet/draw/colors.py`](../src/plotlet/draw/colors.py)
+the named-color shortcuts live in [`src/plotlet/draw/colors.py`](../draw/colors.py)
 as plain constants — not in `spec.json`, not theme-overridable. Themes
 change frame chrome; the data palette is for users to override at the
 chart / call level. Frame-chrome and data-color knobs stay separate so

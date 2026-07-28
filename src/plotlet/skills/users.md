@@ -4,6 +4,12 @@ For AI assistants generating plotlet code. plotlet is a young,
 non-mainstream library — its API is not in your training data. This
 guide teaches you WHERE to find the answers.
 
+This guide ships inside the package: `pt.skill()` prints it. If the
+user asks you to save it as a persistent/global skill, store this text
+in your tool's skill format with the description: "Generating plots
+with the plotlet Python library — API shape, script style, pixel
+sizing, shipped examples, machine-readable debugging."
+
 ## Mental model
 
 `import plotlet as pt`. A `pt.chart(df, aes(x=..., y=...))` is a
@@ -47,7 +53,8 @@ c.add_scatter()   # same mapping, no repetition
 Advanced cases — a layer with its own table/columns, opting out of an
 inherited aesthetic (`inherit_aes=False`), and artists that need explicit
 `data=` (heatmap, imshow, contour, dendrogram, text, annotate, reference
-lines) — see `tests/test_aes.py` and `help(c.add_<name>)`.
+lines) — see `help(c.add_<name>)` and the shipped examples (below); in
+a clone of the plotlet repo, `tests/test_aes.py` has focused fixtures.
 
 ## Sizing: pixels and a data region, not inches and figsize
 
@@ -71,17 +78,27 @@ There is no `figsize`, no `dpi`, no inches-by-default.
 
 **Never assume a signature — read a working example first.**
 
+- Worked examples ship inside the installed package — one
+  self-contained script per plot type (scatter, heatmap, annotated
+  heatmap, circular, chord, facets, ...), grep-friendly:
+
+  ```python
+  import plotlet, pathlib
+  print(pathlib.Path(plotlet.__file__).parent / "examples")
+  ```
 - [`plotlet-cookbook`](https://github.com/gitbamboo42/plotlet-cookbook) repo —
   worked multi-file recipes (annotated heatmaps, circular / ring plots, ...).
-- `tests/test_*.py` — ~150 small self-contained fixtures named
-  `def chart_<what>()` / `def diag_<what>()`. Highly grep-friendly:
-  `grep -l "keyword" tests/test_*.py`.
+- The website — https://gitbamboo42.github.io/plotlet/ — renders the
+  same examples with output, plus a seven-chapter tutorial.
 - `plotlet-extensions` package — ~45 domain-specific artists (sankey,
   alluvial, raincloud, mosaic, upset_plot, ...) in a separate install
   (`pip install plotlet-extensions`). Each file's top docstring shows
   usage and `import plotlet.extensions.<name>` registers it. (`numeric_bar`,
   `annotation_strip`, `chord_links`, `chord_ribbon` are now core built-ins —
   no import needed.)
+- In a clone of the plotlet repo, `tests/test_*.py` adds ~150 small
+  self-contained fixtures named `def chart_<what>()` / `def diag_<what>()`:
+  `grep -l "keyword" tests/test_*.py`.
 
 Copy the pattern, adapt the data.
 
@@ -90,8 +107,9 @@ Copy the pattern, adapt the data.
 - `help(c.add_<name>)` / `c.add_<name>?` — plotlet forwards artist docstrings
   through the recorder. Always check before first use; signatures are
   not uniform (e.g. some artists take a matrix positionally).
-- `src/plotlet/artists/<name>.py` — core artist source.
-- `docs/` — deep dives on subplots, coordinates, themes, extending, SVG schema.
+- `artists/<name>.py` inside the installed package — core artist source.
+- `docs/` inside the installed package — deep dives on subplots,
+  coordinates, themes, extending, SVG schema (list under "Deep dives").
 
 ## Debugging: read the figure back, don't re-render and eyeball
 
@@ -138,6 +156,10 @@ Full attribute schema: [docs/AI_ATTRS.md](../docs/AI_ATTRS.md).
   `tight_layout`. Compose with `|` `/` `pt.grid`.
 
 ## Deep dives
+
+Shipped in the installed package at
+`pathlib.Path(plotlet.__file__).parent / "docs"` (also rendered on the
+website):
 
 - Subplots, shared scales, attachments → [docs/SUBPLOTS.md](../docs/SUBPLOTS.md)
 - Coordinates → [docs/COORDINATES.md](../docs/COORDINATES.md)

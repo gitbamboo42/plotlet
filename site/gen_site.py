@@ -42,7 +42,12 @@ from plot_types import TILES  # noqa: E402
 # ---------------------------------------------------------------------------
 
 HERE = Path(__file__).resolve().parent
-EXAMPLES = HERE / "examples"
+# The examples and docs live inside the package (they ship in the wheel
+# so `pt.skill()` users have them offline); the site builds from the
+# same files.
+PKG = HERE.parent / "src" / "plotlet"
+EXAMPLES = PKG / "examples"
+DOCS = PKG / "docs"
 BUILD = HERE / "build"
 
 GITHUB = "https://github.com/gitbamboo42/plotlet"
@@ -603,7 +608,7 @@ def _rewrite_doc_link(href: str, stem: str) -> str:
         if target.upper() == "README":
             return GITHUB + anchor
         raise SystemExit(f"docs/{stem}.md links to unknown doc: {href}")
-    resolved = (HERE.parent / "docs" / path).resolve()
+    resolved = (DOCS / path).resolve()
     repo = HERE.parent.resolve()
     if not resolved.exists() or not resolved.is_relative_to(repo):
         raise SystemExit(f"docs/{stem}.md has a dead relative link: {href}")
@@ -613,7 +618,7 @@ def _rewrite_doc_link(href: str, stem: str) -> str:
 def render_docs() -> list[dict]:
     out = []
     for stem in DOC_STEMS:
-        src = (HERE.parent / "docs" / f"{stem}.md").read_text()
+        src = (DOCS / f"{stem}.md").read_text()
         body = _MARKDOWN(src)
         # Lift the leading h1 out as the page title.
         m = re.match(r"\s*<h1>(.*?)</h1>", body, re.S)
@@ -731,6 +736,9 @@ main { max-width: 1080px; margin: 0 auto; padding: 32px 24px 64px; }
 .hero h1 { font-size: 34px; line-height: 1.2; margin: 0 0 10px; }
 .hero h1 code { font-size: inherit; }
 .hero p.tag { font-size: 19px; color: var(--muted); margin: 0 0 22px; max-width: 46em; }
+/* Inline code in large prose scales with the text around it instead of
+   the global 13px, which reads two sizes too small there. */
+.hero p.tag code, .wayfind a code { font-size: 0.9em; }
 .install {
   margin: 22px 0 0; display: inline-block; background: var(--code-bg);
   border: 1px solid var(--line); border-radius: 8px; padding: 9px 16px;
@@ -1545,18 +1553,21 @@ palette, category order. The four sections below inspect this chart:</p>
 <div class="tut-content">
 <section class="hero">
   <h1>For AI agents</h1>
-  <p class="tag lead" id="docs-for-ai">Give your assistant
-  <a class="main" href="{GITHUB}/blob/main/skills/users.md">
-  skills/users.md</a> and start plotting &mdash; one short doc teaches
-  an AI the whole library.</p>
+  <p class="tag lead" id="docs-for-ai">The guide
+  (<a class="main"
+  href="{GITHUB}/blob/main/src/plotlet/skills/users.md">users.md</a>)
+  ships inside the package; one short doc teaches an AI
+  the whole library. Tell your assistant &ldquo;run plotlet&rsquo;s
+  <code>skill()</code> and follow it&rdquo; &mdash; or save it as a
+  persistent skill to make it stick across sessions.</p>
   <p class="tag">What makes one doc enough is the architecture under
   it, and this page demonstrates it with real output, executed on
   every build: every pipeline seam answers questions as structured
   data, correctness is verified by diffing bytes instead of trusting
   eyes, and the plot vocabulary extends when it runs out.
   (Contributing to plotlet itself? Give your tool
-  <a href="{GITHUB}/blob/main/skills/developers.md">
-  skills/developers.md</a>.)</p>
+  <a href="{GITHUB}/blob/main/src/plotlet/skills/developers.md">
+  the developers guide</a> &mdash; <code>pt.skill("developer")</code>.)</p>
 </section>
 {sections}
 </div>

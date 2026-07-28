@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "plotlet"
-version = "0.6.1"
+version = "0.6.2"
 description = "Python library for reproducible, multi-panel scientific figures, with byte-identical output across machines and an extension API for custom plot types."
 readme = "README.md"
 license = "MIT"
@@ -70,4 +70,8 @@ namespaces = true
 # draw/fonts/*.txt are the font licenses — DejaVu (Bitstream Vera–derived)
 # and Arimo (SIL OFL 1.1) both require the license text to accompany
 # redistribution, so they must ship in the wheel next to the TTFs.
-plotlet = ["spec.json", "themes/*.json", "draw/fonts/*.ttf", "draw/fonts/*.txt", "_datasets/*.csv"]
+plotlet = ["spec.json", "themes/*.json", "draw/fonts/*.ttf", "draw/fonts/*.txt", "_datasets/*.csv",
+           # AI onboarding: pt.skill() reads skills/, and the guides point
+           # at the shipped docs/ and examples/ so an installed package is
+           # self-sufficient — no repo clone, no web access needed.
+           "skills/*.md", "docs/*.md", "examples/*.py"]

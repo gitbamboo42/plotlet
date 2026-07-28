@@ -14,7 +14,7 @@ on the root.
 
 | Attribute              | Example                | Notes                                      |
 |------------------------|------------------------|--------------------------------------------|
-| `data-plotlet-version` | `"0.6.1"`              | the plotlet release that emitted this SVG  |
+| `data-plotlet-version` | `"0.6.2"`              | the plotlet release that emitted this SVG  |
 | `data-plotlet-schema`  | `"2"`                  | bumped only when names change incompatibly |
 | `data-plotlet-kind`    | `"layout"`             | always `"layout"` — a lone chart is a 1x1 layout |
 
@@ -149,7 +149,7 @@ print(c.to_svg())
 What an AI sees, semantically:
 
 ```
-SVG kind=layout plotlet=0.6.1 schema=2
+SVG kind=layout plotlet=0.6.2 schema=2
   PANEL title="Daily revenue" xlabel=day ylabel=USD
         xscale=linear xlim=1.0,4.0  yscale=linear ylim=10.0,15.0
     ARTIST 0 type=line label=actual color=#1f77b4
@@ -163,7 +163,7 @@ inversion.
 
 ## Schema-only consumer: `pt.layout_diagram`
 
-[`pt.layout_diagram(chart)`](../src/plotlet/layout_diagram.py) is a debug
+[`pt.layout_diagram(chart)`](../layout_diagram.py) is a debug
 visualizer that reads *only* `data-plotlet-*` attrs — no private imports.
 Treat its source as the canonical worked example for building your own
 schema consumer (layout linter, AI inspection script, etc.).
