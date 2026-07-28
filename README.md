@@ -1,6 +1,6 @@
 # plotlet
 
-plotlet is a Python library for reproducible, multi-panel scientific figures. Byte-identical output across machines, a standard plotting vocabulary, built-in Cartesian and circular coordinate systems, and an easy way to add your own plot types.
+plotlet is a Python library for reproducible, multi-panel scientific figures, built for AI authorship: figures are written, inspected, and verified as data, not pixels. Byte-identical output across machines, a standard plotting vocabulary, built-in Cartesian and circular coordinate systems, and an easy way to add your own plot types.
 
 ## Documentation
 
@@ -24,7 +24,7 @@ pip install plotlet
 
 ## For AI assistants
 
-Tell your assistant to run plotlet's `skill()` and follow it.
+Tell your assistant to run plotlet's `skill()` and follow it. The guides, docs, and worked examples ship inside the installed package; the [page for AI agents](https://gitbamboo42.github.io/plotlet/agents.html) shows the full workflow.
 
 ## Development
 

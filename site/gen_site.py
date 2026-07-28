@@ -1112,8 +1112,7 @@ def build_index(examples: list[dict]) -> str:
   program &mdash; an AI assistant, a test script, a CI job &mdash; that
   can&rsquo;t eyeball pixels. So every pipeline stage answers questions
   as structured data, and the same script produces the same SVG, byte
-  for byte, on every machine. Figures a human can diff are the side
-  effect.</p>
+  for byte, on every machine.</p>
 </section>
 
 <div class="cards">{cards}</div>
