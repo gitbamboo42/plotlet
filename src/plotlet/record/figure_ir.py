@@ -66,6 +66,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .._json_layer import _decode
+from ..utils import all_primitive
 
 _IR_VERSION = 1
 
@@ -354,6 +355,10 @@ def _node_refs(node: IRNode) -> list[int]:
             for v in value.values():
                 _walk(v)
         elif isinstance(value, (list, tuple)):
+            # Bulk numeric rows can't contain $node envelopes — one
+            # flat scan instead of per-cell recursion.
+            if all_primitive(value):
+                return
             for v in value:
                 _walk(v)
 

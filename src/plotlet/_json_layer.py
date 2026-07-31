@@ -36,7 +36,7 @@ facet expansion) and it resolves only against shared vocabulary.
 from __future__ import annotations
 from typing import Any
 
-from .utils import DataFrameLite
+from .utils import DataFrameLite, all_primitive
 
 
 def json_safe(value: Any) -> Any:
@@ -83,6 +83,11 @@ def json_safe(value: Any) -> Any:
         return {"$dict_pairs": [[json_safe(k), json_safe(v)]
                                 for k, v in value.items()]}
     if isinstance(value, list):
+        # Bulk numeric rows are already JSON-native — one flat scan
+        # instead of per-cell recursion (same bail-out in json_hydrate,
+        # _decode, and the journal/IR walkers).
+        if all_primitive(value):
+            return list(value)
         return [json_safe(v) for v in value]
     return value
 
@@ -115,6 +120,8 @@ def json_hydrate(value: Any) -> Any:
                     for k, v in value["$dict_pairs"]}
         return {k: json_hydrate(v) for k, v in value.items()}
     if isinstance(value, list):
+        if all_primitive(value):
+            return list(value)
         return [json_hydrate(v) for v in value]
     return value
 
@@ -152,7 +159,11 @@ def _decode(value: Any, nid_to_node: dict, data_table: dict) -> Any:
         return {k: _decode(v, nid_to_node, data_table)
                 for k, v in value.items()}
     if isinstance(value, list):
+        if all_primitive(value):
+            return list(value)
         return [_decode(v, nid_to_node, data_table) for v in value]
     if isinstance(value, tuple):
+        if all_primitive(value):
+            return value
         return tuple(_decode(v, nid_to_node, data_table) for v in value)
     return value

@@ -152,6 +152,28 @@ class DataFrameLite:
         return len(self.values)
 
 
+_PRIMITIVE_TYPES = frozenset((int, float, str, bool, type(None)))
+
+
+def all_primitive(seq):
+    """One C-speed scan: True iff every element of `seq` is a plain
+    scalar (int/float/str/bool/None). The fast bail-out that lets the
+    per-element walkers (normalize, journal encode/decode, IR ref-walk,
+    validate) treat a bulk numeric row as one unit instead of recursing
+    cell by cell — a row of plain scalars can't contain the envelopes,
+    nodes, or foreign types they hunt for. Exact `type()` membership,
+    not isinstance: a numpy scalar must fail the scan so the slow path
+    still converts it.
+
+    `set(map(type, ...))` keeps the scan entirely in C — `all()` over a
+    genexp pays per-element bytecode, which was the top render cost for
+    multi-megacell matrices. The first-element probe restores the
+    short-circuit for the common non-primitive case (a row of rows)."""
+    if seq and type(seq[0]) not in _PRIMITIVE_TYPES:
+        return False
+    return set(map(type, seq)).issubset(_PRIMITIVE_TYPES)
+
+
 def _normalize_data(data):
     """Coerce DataFrame-shaped and numpy inputs to plain Python at the
     boundary. After this, no library-specific value ever enters the
@@ -207,8 +229,13 @@ def _normalize_data(data):
     if isinstance(data, dict):
         return {k: _normalize_data(v) for k, v in data.items()}
     if isinstance(data, list):
+        # `list(...)` keeps the rebuild's snapshot-copy semantics.
+        if all_primitive(data):
+            return list(data)
         return [_normalize_data(v) for v in data]
     if isinstance(data, tuple):
+        if all_primitive(data):
+            return data
         return tuple(_normalize_data(v) for v in data)
     return data
 

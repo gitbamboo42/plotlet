@@ -123,6 +123,34 @@ def test_json_roundtrip_integer_dataframe():
     assert pt.from_json(json.loads(text)).to_svg() == svg_original
 
 
+def test_almost_primitive_rows_still_take_the_slow_path():
+    """The walkers' `all_primitive` bail-out treats a row of plain
+    scalars as one unit. This pins its safety condition: a row that is
+    *almost* primitive — foreign scalars (numpy) or special values
+    (dates) hiding past the first element — must fail the scan and get
+    the full per-element treatment, everywhere from normalization to
+    JSON."""
+    np = pytest.importorskip("numpy")
+    # numpy scalars after a long plain prefix: normalization must still
+    # convert every one (json.dumps crashes on np.int64 if it doesn't).
+    df = {"x": list(range(50)) + [np.int64(50), np.int64(51)],
+          "y": [float(v) for v in range(50)] + [np.float64(2.5),
+                                                np.float64(7.5)]}
+
+    c = pt.chart(df, aes(x="x", y="y"))
+    c.add_line()
+    svg_original = c.to_svg()
+    text = json.dumps(pt.to_json(c))
+    assert pt.from_json(json.loads(text)).to_svg() == svg_original
+
+    # A date past a long primitive prefix must still envelope as $date.
+    import datetime
+    from plotlet._json_layer import json_safe
+    out = json_safe([1.0] * 50 + [datetime.date(2026, 1, 1)])
+    assert out[-1] == {"$date": "2026-01-01"}
+    assert out[:50] == [1.0] * 50
+
+
 def test_data_lives_in_the_data_section():
     """Bulk tables sit once in the journal's data section; entries carry
     `{"$data": id}` refs. A chart and its bare artists share one table

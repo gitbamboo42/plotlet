@@ -164,7 +164,7 @@ def to_journal(root) -> Journal:
     # hoisted out of `_encode`, which runs once per entry value.
     from .chart import _Renderable
     from ..sectors import Sectors
-    from ..utils import Aes, DataFrameLite
+    from ..utils import Aes, DataFrameLite, all_primitive
     from .._coord_registry import _COORD_REGISTRY
 
     journal = Journal()
@@ -229,8 +229,14 @@ def to_journal(root) -> Journal:
         if isinstance(value, dict):
             return {k: _encode(v) for k, v in value.items()}
         if isinstance(value, list):
+            # Bulk numeric rows can't contain envelope-worthy values —
+            # one flat scan instead of per-cell recursion.
+            if all_primitive(value):
+                return list(value)
             return [_encode(v) for v in value]
         if isinstance(value, tuple):
+            if all_primitive(value):
+                return value
             return tuple(_encode(v) for v in value)
         return value
 

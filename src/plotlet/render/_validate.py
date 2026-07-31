@@ -34,6 +34,8 @@ field, `_json_layer` envelope decoding) are enforced upstream in
 """
 from __future__ import annotations
 
+from ..utils import all_primitive
+
 _KINDS = ("chart", "legend", "diagram", "layout")
 _LAYOUT_KINDS = ("h", "v", "grid")
 _MARGIN_SIDES = ("left", "right", "top", "bottom")
@@ -136,6 +138,10 @@ def _check_values(value, kinds: dict, where: str, data_ids) -> None:
         for v in value.values():
             _check_values(v, kinds, where, data_ids)
     elif isinstance(value, (list, tuple)):
+        # Bulk numeric rows can't contain envelopes — one flat scan
+        # instead of per-cell recursion.
+        if all_primitive(value):
+            return
         for v in value:
             _check_values(v, kinds, where, data_ids)
 
