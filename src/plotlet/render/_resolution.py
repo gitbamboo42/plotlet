@@ -33,7 +33,7 @@ from ..draw import resolve_color, TAB10
 from ..scales import (_nice_domain, _fmt_tick, _to_epoch,
                       _coerce_time_lim, _AxisDescriptor)
 from ..sectors import SectoredValue
-from ..utils import ColumnRef
+from ..utils import ColumnRef, DataFrameLite
 from ..draw import measure_text, text_block_height
 from . import _chrome_bands
 from ._chrome_visibility import resolve_axis_chrome
@@ -284,6 +284,26 @@ def _merge_aes(call):
     return (call[0], call[1], kw, *call[3:])
 
 
+def _hoist_table_positional(call):
+    """First-positional-is-data sugar: `c.add_line(df, aes(x=, y=))` is
+    the same as `c.add_line(data=df, mapping=aes(x=, y=))`. Opt-in via
+    `ArtistSpec.data_input == "table"` (the default). Type-gated: only
+    a table-shaped value (dict / DataFrame) reads as the data — any
+    other bare value (a matrix, a scalar) falls through to the record
+    fn, whose own signature or usage error handles it (heatmap teaching
+    the tidy form for a bare matrix). Runs before `frame_defaults` so
+    hooks and `record()` both see the long form."""
+    spec = get_artist(call[0])
+    args = call[1]
+    if (spec is None or spec.data_input != "table" or len(args) != 1
+            or "data" in call[2]
+            or not isinstance(args[0], (dict, DataFrameLite))):
+        return call
+    kw = dict(call[2])
+    kw["data"] = args[0]
+    return (call[0], [], kw, *call[3:])
+
+
 def _expand_frame_defaults(calls):
     """Insert each artist's `frame_defaults` entries immediately before
     the artist call itself, tagged with a trailing `True` so
@@ -301,7 +321,7 @@ def _expand_frame_defaults(calls):
     `record()` always see the merged kwarg namespace."""
     out = []
     for call in calls:
-        call = _merge_aes(call)
+        call = _hoist_table_positional(_merge_aes(call))
         spec = get_artist(call[0])
         if spec is not None and spec.frame_defaults is not None:
             for d in spec.frame_defaults(list(call[1]), dict(call[2])) or ():
@@ -471,15 +491,10 @@ def _record_artist(state, spec, args, kw):
             "coordinate= is not accepted on artist calls. "
             "Use c.coordinate(...) once per panel instead."
         )
-    # First-positional-is-data sugar: `c.add_line(df, aes(x=, y=))` is the
-    # same as `c.add_line(data=df, mapping=aes(x=, y=))`. Opt-in via
-    # `ArtistSpec.accepts_data_positional=True`. Keeps the long-form
-    # call shape from carrying a `data=` keyword on every site;
-    # multi-positional shapes (e.g. `(xs, ys)`) are rejected by
-    # each record fn so the artist sees only long-form input.
-    if (spec.accepts_data_positional and len(call_args) == 1
-            and "data" not in call_kw):
-        call_kw["data"] = call_args.pop(0)
+    # First-positional-is-data sugar already applied: replay hoists a
+    # table-shaped positional into `data=` before frame_defaults run
+    # (`_hoist_table_positional` above), so the record fn only ever
+    # sees the long form.
     # Sector remap: when continuous sectors are active on x or y
     # and the data table has the corresponding sector column,
     # offset values into the global sector coordinate so a single

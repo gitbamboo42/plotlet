@@ -175,7 +175,7 @@ def _axhline_data_attrs(a):  return {"y": a["y"]}
 
 add_artist(ArtistSpec(
     name="axhline",
-    accepts_data_positional=False,
+    data_input="none",
     record=_axhline_record,
     xdomain=lambda a: None, ydomain=lambda a: None,
     draw=lambda a, ctx: _artist_axhline(a, ctx.x_scale, ctx.y_scale, ctx.iw, ctx.ih, ctx.color, ctx.warp),
@@ -202,7 +202,7 @@ def _axvline_data_attrs(a):  return {"x": a["x"]}
 
 add_artist(ArtistSpec(
     name="axvline",
-    accepts_data_positional=False,
+    data_input="none",
     record=_axvline_record,
     xdomain=lambda a: None, ydomain=lambda a: None,
     draw=lambda a, ctx: _artist_axvline(a, ctx.x_scale, ctx.y_scale, ctx.iw, ctx.ih, ctx.color, ctx.warp),
@@ -243,7 +243,7 @@ def _axline_data_attrs(a):
 
 add_artist(ArtistSpec(
     name="axline",
-    accepts_data_positional=False,
+    data_input="none",
     record=_axline_record,
     xdomain=lambda a: None, ydomain=lambda a: None,
     draw=_artist_axline,
@@ -269,6 +269,7 @@ def _axhspan_record(ymin, ymax, color=None, alpha=None,
 
 add_artist(ArtistSpec(
     name="axhspan",
+    data_input="none",
     record=_axhspan_record,
     xdomain=lambda a: None, ydomain=lambda a: None,
     draw=lambda a, ctx: _artist_axhspan(a, ctx.x_scale, ctx.y_scale, ctx.iw, ctx.ih, ctx.color, ctx.warp),
@@ -294,6 +295,7 @@ def _axvspan_record(xmin, xmax, color=None, alpha=None,
 
 add_artist(ArtistSpec(
     name="axvspan",
+    data_input="none",
     record=_axvspan_record,
     xdomain=lambda a: None, ydomain=lambda a: None,
     draw=lambda a, ctx: _artist_axvspan(a, ctx.x_scale, ctx.y_scale, ctx.iw, ctx.ih, ctx.color, ctx.warp),
@@ -327,6 +329,7 @@ def _hlines_record(y, xmin, xmax, color=None, linewidth=None,
 
 add_artist(ArtistSpec(
     name="hlines",
+    data_input="none",
     record=_hlines_record,
     xdomain=lambda a: a["xmins"] + a["xmaxs"],
     ydomain=lambda a: a["ys"],
@@ -358,6 +361,7 @@ def _vlines_record(x, ymin, ymax, color=None, linewidth=None,
 
 add_artist(ArtistSpec(
     name="vlines",
+    data_input="none",
     record=_vlines_record,
     xdomain=lambda a: a["xs"],
     ydomain=lambda a: a["ymins"] + a["ymaxs"],

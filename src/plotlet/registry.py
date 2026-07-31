@@ -83,10 +83,23 @@ class ArtistSpec:
     layer: str = "data"  # "background" | "data" | "foreground"
     uses_color_cycle: bool = True
     default_color: str | None = None  # used when uses_color_cycle is False
-    # Sugar for `c.add_<artist>(df, aes(x="col", y="col"))` → `c.add_<artist>(data=df, ...)`.
-    # Disable on positional-only artists (matrix or single primary input) so
-    # the lone positional arg isn't hoisted into `kw["data"]`.
-    accepts_data_positional: bool = True
+    # What kind of data the artist reads, and how the caller may hand
+    # it in.
+    #   "table" (default) — the artist reads a table, and the caller may
+    #       pass it either with the `data` keyword or as the bare first
+    #       argument — both mean the same thing. Only a value shaped
+    #       like a table (dict / DataFrame) is read that way; any other
+    #       bare value falls through to the record fn's own handling.
+    #   "matrix" — the artist reads a matrix of numbers instead of a
+    #       table, passed as the bare first argument (imshow, contour,
+    #       dendrogram).
+    #   "none" — the artist reads no data at all — its arguments are
+    #       plain settings, and nothing ever reinterprets them
+    #       (axhline, annotate, rect).
+    # Declare the value that makes a true sentence about the artist; the
+    # recorder's bare-argument shorthand ("table") and the journal's
+    # data-section interning ("matrix", plus every table) derive from it.
+    data_input: str = "table"
     # Returns a list of legend-entry dicts:
     #   {"label": str, "color": str, "alpha"?: float, "group"?: str,
     #    "paint"?: callable, "_a"?: dict}
@@ -194,6 +207,11 @@ def add_artist(spec: ArtistSpec) -> None:
     ``declare_coord_support(coord_name, [spec.name])`` after this — core
     artists' opt-in lives next to the coord class definition; extension
     artists' opt-in lives right after their own ``add_artist`` call."""
+    if spec.data_input not in ("table", "matrix", "none"):
+        raise ValueError(
+            f"ArtistSpec {spec.name!r}: data_input={spec.data_input!r} — "
+            f"must be 'table', 'matrix', or 'none'."
+        )
     spec.record.__kwarg_names__ = _record_kwarg_names(spec.record)
     _REGISTRY[spec.name] = spec
     frame = inspect.currentframe()

@@ -115,6 +115,7 @@ def _rect_ydomain(a):
 
 add_artist(ArtistSpec(
     name="rect",
+    data_input="none",
     record=_rect_record,
     xdomain=_rect_xdomain,
     ydomain=_rect_ydomain,
@@ -142,6 +143,7 @@ def _polygon_record(xs, ys, fill=None, color=None, linewidth=None,
 
 add_artist(ArtistSpec(
     name="polygon",
+    data_input="none",
     record=_polygon_record,
     xdomain=lambda a: a["xs"],
     ydomain=lambda a: a["ys"],
@@ -177,6 +179,7 @@ def _polyline_record(xs, ys, color=None, linewidth=None, linestyle=None,
 
 add_artist(ArtistSpec(
     name="polyline",
+    data_input="none",
     record=_polyline_record,
     xdomain=lambda a: a["xs"],
     ydomain=lambda a: a["ys"],

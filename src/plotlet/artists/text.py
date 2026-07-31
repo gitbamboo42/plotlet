@@ -284,7 +284,7 @@ def _annotate_data_attrs(a):
 
 add_artist(ArtistSpec(
     name="annotate",
-    accepts_data_positional=False,
+    data_input="none",
     record=_annotate_record,
     xdomain=_annotate_xdomain,
     ydomain=_annotate_ydomain,

@@ -65,13 +65,15 @@ IRNode(nid, kind, init, ops, insets)
   (fractional rect in the host's data area). Insets live on leaf
   nodes — never on a layout — and `chart_nid` must name a chart node.
 - `data` — the data section: data id (`"d1"`, `"d2"`, … in
-  first-encounter order) → normalized table (`DataFrameLite` or dict of
-  columns), shared verbatim with the journal (`Journal.data`). Every
-  bulk table sits here exactly once; init and op values reference it
-  with the `$data` envelope (below). A table shared by a chart and its
-  artists is one entry — `to_journal` interns by object identity. This
-  keeps entry values small (walkers over them never touch bulk data)
-  and the serialized form free of duplicated tables.
+  first-encounter order) → normalized bulk data, shared verbatim with
+  the journal (`Journal.data`): a table (`DataFrameLite` or dict of
+  columns) or a matrix artist's positional matrix (imshow, contour —
+  declared via `ArtistSpec.data_input="matrix"`). Every bulk value sits
+  here exactly once; init and op values reference it with the `$data`
+  envelope (below). A table shared by a chart and its artists is one
+  entry — `to_journal` interns by object identity. This keeps entry
+  values small (walkers over them never touch bulk data) and the
+  serialized form free of duplicated tables.
 
 **Dependency order.** `nodes` is ordered so that every nid a node
 references — layout children, legend sources, inset charts, `$node`

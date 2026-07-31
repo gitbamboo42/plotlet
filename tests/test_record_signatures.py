@@ -42,6 +42,26 @@ def test_positional_table_still_hoists():
     assert c.to_svg()
 
 
+def test_data_input_declarations_match_signatures():
+    # `ArtistSpec.data_input` states what data the artist reads; the
+    # record signature is the ground truth. Table readers must have a
+    # `data` parameter; "none" artists must not — a mismatch means the
+    # declaration lies about the artist. ("matrix" is unchecked: the
+    # bare matrix binds to whatever the record fn names its first
+    # parameter — imshow's `matrix`, dendrogram's `data`.)
+    from plotlet.registry import _REGISTRY
+    for name, spec in _REGISTRY.items():
+        if spec.record.__kwarg_names__ is None:
+            continue    # **kw record (step, demo artists) — unknowable here
+        has_data = "data" in spec.record.__kwarg_names__
+        if spec.data_input == "table":
+            assert has_data, f"{name}: data_input={spec.data_input!r} " \
+                             f"but record() has no data parameter"
+        elif spec.data_input == "none":
+            assert not has_data, f"{name}: data_input={spec.data_input!r} " \
+                                 f"but record() takes data="
+
+
 def test_chart_level_aes_skips_artists_without_that_parameter():
     # group= is a line/scatter aes; bar has no group parameter — the
     # recorder must skip injecting it instead of crashing bar's record.

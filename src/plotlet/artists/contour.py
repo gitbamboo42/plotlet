@@ -154,7 +154,7 @@ def _contour_legend_gradient(a):
 
 add_artist(ArtistSpec(
     name="contour",
-    accepts_data_positional=False,
+    data_input="matrix",
     record=_contour_record,
     xdomain=_contour_xdomain,
     ydomain=_contour_ydomain,

@@ -188,7 +188,7 @@ def _curved_frame_defaults(args, kw):
 
 add_artist(ArtistSpec(
     name="curved_tree",
-    accepts_data_positional=False,
+    data_input="matrix",
     record=_curved_record,
     xdomain=_curved_xdomain,
     ydomain=_curved_ydomain,

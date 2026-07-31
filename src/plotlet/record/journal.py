@@ -72,8 +72,9 @@ class Journal:
     by `to_journal`; can't be inferred from the entries alone (an
     inner-coord chart or attachment may follow the root's `new_*`).
 
-    `data` is the data table: data id → normalized table (DataFrameLite
-    or dict of columns). Entries reference tables as `{"$data": id}`.
+    `data` is the data table: data id → normalized bulk data — a table
+    (DataFrameLite or dict of columns) or a matrix (list of scalar rows,
+    e.g. imshow's input). Entries reference it as `{"$data": id}`.
     """
     entries: list[dict] = field(default_factory=list)
     root_nid: int | None = None
@@ -165,6 +166,7 @@ def to_journal(root) -> Journal:
     from .chart import _Renderable
     from ..sectors import Sectors
     from ..utils import Aes, DataFrameLite, all_primitive
+    from ..registry import get_artist
     from .._coord_registry import _COORD_REGISTRY
 
     journal = Journal()
@@ -374,18 +376,24 @@ def to_journal(root) -> Journal:
         action. Artist frame defaults are never recorded; `_replay`
         regenerates them from the artist call on every render.
 
-        Data slots intern before `_encode` so the encoder never walks a
-        bulk table: `data=` kwargs, and an artist's positional table
-        (the only ops whose first positional is a dict / DataFrameLite
-        are artist calls with `accepts_data_positional`). `Aes` is a
-        dict subclass but a column mapping, not a table — it must reach
-        `_encode` and wire as `$aes`, or a JSON round-trip would degrade
-        it to a plain dict that replay mistakes for positional data."""
+        Data slots intern before `_encode` so the encoder never walks
+        bulk data: `data=` kwargs, an artist's positional table (the
+        only ops whose first positional is a dict / DataFrameLite are
+        artist calls with `data_input="table"`), and the positional
+        matrix of a matrix artist (`data_input="matrix"` — imshow, contour).
+        `Aes` is a dict subclass but a column mapping, not a table — it
+        must reach `_encode` and wire as `$aes`, or a JSON round-trip
+        would degrade it to a plain dict that replay mistakes for
+        positional data."""
         name, args, kwargs = entry
         args = list(args)
         kwargs = dict(kwargs)
         if (args and isinstance(args[0], (DataFrameLite, dict))
                 and not isinstance(args[0], Aes)):
+            args[0] = _intern(args[0])
+        spec = get_artist(name)
+        if (spec is not None and spec.data_input == "matrix"
+                and args and type(args[0]) is list):
             args[0] = _intern(args[0])
         if isinstance(kwargs.get("data"), (DataFrameLite, dict)):
             kwargs["data"] = _intern(kwargs["data"])

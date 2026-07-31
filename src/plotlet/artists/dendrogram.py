@@ -262,7 +262,7 @@ def _dendrogram_data_attrs(a):
 
 add_artist(ArtistSpec(
     name="dendrogram",
-    accepts_data_positional=False,
+    data_input="matrix",
     record=_dendrogram_record,
     xdomain=_dendrogram_xdomain,
     ydomain=_dendrogram_ydomain,

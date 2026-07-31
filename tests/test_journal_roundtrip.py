@@ -151,6 +151,33 @@ def test_almost_primitive_rows_still_take_the_slow_path():
     assert out[:50] == [1.0] * 50
 
 
+def test_grid_artists_intern_their_matrix_in_the_data_section():
+    """A matrix artist's input (`ArtistSpec.data_input="matrix"`) is
+    payload, not call structure: it lands in the data section once
+    and the entry carries a `$data` ref — at any size, exactly like
+    tables. Both round-trip paths reproduce the SVG byte-for-byte."""
+    big = [[float(r * 100 + c) for c in range(100)] for r in range(100)]
+    c = pt.chart()
+    c.add_imshow(big)
+    svg_original = c.to_svg()
+
+    j = pt.to_journal(c)
+    entry = next(e for e in j.entries if e["op"] == "imshow")
+    ref = entry["args"][0]
+    assert set(ref) == {"$data"} and j.data[ref["$data"]] == big
+    assert pt.from_journal(j).to_svg() == svg_original
+    assert pt.from_json(json.loads(json.dumps(pt.to_json(c)))).to_svg() \
+        == svg_original
+
+    # No size floor: a tiny matrix is still data, like a tiny table.
+    c2 = pt.chart()
+    c2.add_imshow([[1.0, 2.0], [3.0, 4.0]])
+    j2 = pt.to_journal(c2)
+    entry2 = next(e for e in j2.entries if e["op"] == "imshow")
+    assert entry2["args"][0] == {"$data": "d1"}
+    assert pt.from_journal(j2).to_svg() == c2.to_svg()
+
+
 def test_data_lives_in_the_data_section():
     """Bulk tables sit once in the journal's data section; entries carry
     `{"$data": id}` refs. A chart and its bare artists share one table
