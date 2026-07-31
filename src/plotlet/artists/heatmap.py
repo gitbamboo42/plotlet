@@ -33,7 +33,9 @@ as a base64 PNG inside one `<image>` — `_png_for_blocks` for a categorical
 x (honours sector splits), a single imshow-style image for a continuous x
 — except when a flat image can't represent the geometry (a warp, uneven
 or sector-tagged continuous cells, y sector splits): `_use_rects` then
-keeps the per-cell rects at any size.
+keeps the per-cell rects at any size. Either PNG path pools cells denser
+than `raster_oversample` per display pixel before encoding — mean for
+value cells, mode for palette cells (see `_png_fallback`).
 
 For categorical-x clustering with visual gaps and ordering, call
 ``c.sectors({cluster: [members], ...}, axis="x" | "y")`` on the panel.
@@ -52,6 +54,7 @@ from ..draw import image_png
 from ..draw import colormap_lut, ContinuousNorm
 from ..draw import resolve_color
 from ..draw.colors import auto_label_color
+from ._shared import pool_target, pool_mean, pool_mode, pool_grid, rgb_buffer
 
 
 def _hex_to_rgb(h):
@@ -176,7 +179,7 @@ def _parse_heatmap_input(kw):
     return matrix, xs, [str(v) for v in values]
 
 
-def _png_for_blocks(ctx, cols, rows, bw, bh, rgb_at):
+def _png_for_blocks(ctx, matrix, cols, rows, bw, bh, pool, rgb_of):
     """Emit one `<image>` per (row-block × col-block) cell-flush region.
 
     Reads block boundaries straight off the shared scales — this is the
@@ -184,20 +187,23 @@ def _png_for_blocks(ctx, cols, rows, bw, bh, rgb_at):
     display order even when a peer artist (dendrogram) drove the cats
     order. `_splits.block_bboxes_2d` yields a single full-range block
     when no splits are set, so this is also the no-split fallback — one
-    PNG covering all cells.
+    PNG covering all cells. Each block pools independently against its
+    own pixel extent. Returns `(elements, downsampled)`.
     """
     out = []
+    downsampled = False
     for r0, r1, c0, c1, sy_t, sy_b, sx_l, sx_r in _splits.block_bboxes_2d(
             ctx, rows, cols, bw, bh,
             ctx.y_scale.splits, ctx.x_scale.splits):
-        buf = bytearray()
-        for r in range(r0, r1):
-            for c in range(c0, c1):
-                rr, gg, bb = rgb_at(r, c)
-                buf.append(rr); buf.append(gg); buf.append(bb)
+        grid = [[matrix[r][c] for c in range(c0, c1)] for r in range(r0, r1)]
+        out_w = pool_target(c1 - c0, sx_r - sx_l)
+        out_h = pool_target(r1 - r0, sy_b - sy_t)
+        if (out_w, out_h) != (c1 - c0, r1 - r0):
+            grid = pool_grid(grid, out_h, out_w, pool)
+            downsampled = True
         out.append(image_png(sx_l, sy_t, sx_r - sx_l, sy_b - sy_t,
-                             buf, c1 - c0, r1 - r0))
-    return out
+                             rgb_buffer(grid, rgb_of), out_w, out_h))
+    return out, downsampled
 
 
 def _heatmap_frame_defaults(args, kw):
@@ -461,26 +467,33 @@ def _use_rects(a, ctx, nrows, ncols):
     return False
 
 
-def _png_fallback(ctx, xgeom, ygeom, xcats, ycats, rgb_at):
+def _png_fallback(ctx, matrix, xgeom, ygeom, xcats, ycats, pool, rgb_of):
     """Large-grid PNG path. Fully categorical → `_png_for_blocks` (honours
     sector splits). A continuous x → one uniform `<image>` spanning the
     cell bbox, mirroring imshow; rows/cols are walked in pixel order so a
-    reversed or descending axis still lands right."""
+    reversed or descending axis still lands right.
+
+    Cells past `raster_oversample` per display pixel are pooled (`pool`
+    is mean for value cells, mode for palette cells) before colorizing —
+    the viewer can't show them, and its nearest-neighbour downscale would
+    drop cells where pooling summarizes them. Returns
+    `(elements, downsampled)`."""
     if xcats is not None:
-        return _png_for_blocks(ctx, xcats, ycats,
-                               xgeom[0][1], ygeom[0][1], rgb_at)
+        return _png_for_blocks(ctx, matrix, xcats, ycats,
+                               xgeom[0][1], ygeom[0][1], pool, rgb_of)
     ncols = len(xgeom); nrows = len(ygeom)
     col_order = sorted(range(ncols), key=lambda c: xgeom[c][0])
     row_order = sorted(range(nrows), key=lambda r: ygeom[r][0])
     sx_l = min(g[0] for g in xgeom); sx_r = max(g[0] + g[1] for g in xgeom)
     sy_t = min(g[0] for g in ygeom); sy_b = max(g[0] + g[1] for g in ygeom)
-    buf = bytearray()
-    for r in row_order:
-        for c in col_order:
-            rr, gg, bb = rgb_at(r, c)
-            buf.append(rr); buf.append(gg); buf.append(bb)
+    grid = [[matrix[r][c] for c in col_order] for r in row_order]
+    out_w = pool_target(ncols, sx_r - sx_l)
+    out_h = pool_target(nrows, sy_b - sy_t)
+    downsampled = (out_w, out_h) != (ncols, nrows)
+    if downsampled:
+        grid = pool_grid(grid, out_h, out_w, pool)
     return [image_png(sx_l, sy_t, sx_r - sx_l, sy_b - sy_t,
-                      buf, ncols, nrows)]
+                      rgb_buffer(grid, rgb_of), out_w, out_h)], downsampled
 
 
 def _heatmap_annot(a, ctx, matrix, annot_arg, xgeom, ygeom, txt_col_at, fmt):
@@ -554,10 +567,11 @@ def _heatmap_draw_categorical(a, ctx):
     else:
         rgb_map = {k: _hex_to_rgb(v) for k, v in palette.items()}
         absent_rgb = _hex_to_rgb(absent_fill)
-        def rgb_at(r, c):
-            v = matrix[r][c]
+        def rgb_of(v):
             return rgb_map.get(v, absent_rgb) if v is not None else absent_rgb
-        out.extend(_png_fallback(ctx, xgeom, ygeom, xcats, ycats, rgb_at))
+        elems, a["_downsampled"] = _png_fallback(
+            ctx, matrix, xgeom, ygeom, xcats, ycats, pool_mode, rgb_of)
+        out.extend(elems)
 
     def txt_col_at(r, c):
         v = matrix[r][c]
@@ -608,13 +622,14 @@ def _heatmap_draw(a, ctx):
                     out.append(rect(x0, y0, bw, bh, fill=fill,
                                     project=ctx.warp))
     else:
-        def rgb_at(r, c):
-            v = matrix[r][c]
+        def rgb_of(v):
             if v is None or v != v:
                 return absent_rgb
             i = int(norm.to_unit(v) * 255 + 0.5) * 3
             return lut[i], lut[i + 1], lut[i + 2]
-        out.extend(_png_fallback(ctx, xgeom, ygeom, xcats, ycats, rgb_at))
+        elems, a["_downsampled"] = _png_fallback(
+            ctx, matrix, xgeom, ygeom, xcats, ycats, pool_mean, rgb_of)
+        out.extend(elems)
 
     def txt_col_at(r, c):
         v = matrix[r][c]
@@ -678,14 +693,19 @@ def _heatmap_encoding(a):
 
 
 def _heatmap_data_attrs(a):
+    # `downsampled` is stashed by the draw pass — tells AI readers the
+    # embedded PNG is a pooled summary, not one pixel per matrix cell.
     if a.get("_is_categorical"):
-        return {
+        out = {
             "rows": a["_nrows"],
             "cols": a["_ncols"],
             "mode": "categorical",
             "categories": list(a["_palette"].keys()),
             **_heatmap_axis_attrs(a),
         }
+        if a.get("_downsampled"):
+            out["downsampled"] = "true"
+        return out
     out = {
         "rows": a["_nrows"],
         "cols": a["_ncols"],
@@ -695,6 +715,8 @@ def _heatmap_data_attrs(a):
         "data-encoding": _heatmap_encoding(a),
         **_heatmap_axis_attrs(a),
     }
+    if a.get("_downsampled"):
+        out["downsampled"] = "true"
     norm = a["opts"].get("norm", "linear")
     if norm != "linear":
         out["norm"] = norm

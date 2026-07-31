@@ -12,6 +12,9 @@ import random
 import plotlet as pt
 import pytest
 
+from _chart_helpers import _embedded_png, _png_dims
+from plotlet.artists._shared import pool_grid, pool_mean, pool_mode, pool_target
+
 
 def chart_imshow_rect():
     data = [[math.sin(r * 0.4) * math.cos(c * 0.3) for c in range(20)]
@@ -117,9 +120,22 @@ def chart_imshow_annot_auto():
     return c
 
 
+def chart_imshow_png_pooled():
+    # 150x150 grid in a 40x40-px data region — far past what the display
+    # can resolve. The PNG path mean-pools down to `raster_oversample`
+    # pixels per display pixel (an 80x80 image), which both bounds the
+    # SVG and shows bin means instead of a nearest-neighbour subsample.
+    data = [[math.sin(r * 0.4) + math.cos(c * 0.3) for c in range(150)]
+            for r in range(150)]
+    c = pt.chart(title="imshow (pooled PNG)", data_width=40, data_height=40)
+    c.add_imshow(data, cmap="viridis")
+    return c
+
+
 PLOTS = {
     "imshow_rect": chart_imshow_rect,
     "imshow_png": chart_imshow_png,
+    "imshow_png_pooled": chart_imshow_png_pooled,
     "imshow_diverging": chart_imshow_diverging,
     "imshow_origin_upper": chart_imshow_origin_upper,
     "imshow_center": chart_imshow_diverging_center,
@@ -133,3 +149,42 @@ PLOTS = {
 @pytest.mark.parametrize("name,fn", list(PLOTS.items()), ids=list(PLOTS.keys()))
 def test_chart_imshow_baseline(name, fn, baseline_compare):
     baseline_compare("chart_imshow", name, fn().to_svg())
+
+
+def _dense_imshow(data_width, data_height):
+    data = [[(r + c) % 7 for c in range(150)] for r in range(150)]
+    c = pt.chart(data_width=data_width, data_height=data_height)
+    c.add_imshow(data)
+    return c.to_svg()
+
+
+def test_imshow_png_downsamples_to_display_resolution():
+    # 150x150 cells in 40x40 px → pooled to ceil(40 * raster_oversample)
+    # = 80 per axis, and the markup says so.
+    svg = _dense_imshow(40, 40)
+    assert 'downsampled="true"' in svg
+    assert _png_dims(_embedded_png(svg)) == (80, 80)
+
+
+def test_imshow_png_full_resolution_when_it_fits():
+    # Same grid with room to show every cell → untouched, no attr.
+    svg = _dense_imshow(400, 400)
+    assert "downsampled" not in svg
+    assert _png_dims(_embedded_png(svg)) == (150, 150)
+
+
+def test_pool_helpers():
+    nan = float("nan")
+    # Mean pooling ignores NaN within a bin.
+    assert pool_grid([[1.0, 3.0, nan, 5.0],
+                      [2.0, 4.0, nan, nan]], 1, 2, pool_mean) == [[2.5, 5.0]]
+    # An all-NaN bin stays NaN (renders as the absent color).
+    v = pool_grid([[nan]], 1, 1, pool_mean)[0][0]
+    assert v != v
+    # Mode: majority wins, ties break to first-seen, NaN folds into None.
+    assert pool_mode(["a", "b", "b"]) == "b"
+    assert pool_mode(["a", "b"]) == "a"
+    assert pool_mode([nan, None, "z"]) is None
+    # Target: full resolution until raster_oversample cells/px, then capped.
+    assert pool_target(100, 100.0) == 100
+    assert pool_target(300, 100.0) == 200

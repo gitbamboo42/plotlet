@@ -12,7 +12,9 @@ import random
 import plotlet as pt
 from plotlet import aes
 import pytest
-from _chart_helpers import _big_continuous_heatmap, _by_label, _mock_tidy_df, _tidy_heatmap
+from _chart_helpers import (_big_continuous_heatmap, _by_label, _embedded_png,
+                            _mock_tidy_df, _png_dims, _png_rgb_pixels,
+                            _tidy_heatmap)
 
 
 def chart_heatmap_labeled():
@@ -328,6 +330,39 @@ def test_heatmap_large_grid_encoding_matches_markup():
     svg = _big_continuous_heatmap(with_y_sectors=True)
     assert "<image" not in svg
     assert 'data-encoding="rects"' in svg
+
+
+def test_heatmap_png_downsamples_to_display_resolution():
+    # 600 continuous-x columns in a 100-px-wide region → x pooled to
+    # ceil(100 * raster_oversample) = 200; the 20 tracks fit in 300 px
+    # of height and stay at full resolution.
+    tracks = [f"t{i}" for i in range(20)]
+    data = {"x": [float(i) for i in range(600)]}
+    for r, name in enumerate(tracks):
+        data[name] = [math.sin(0.01 * i + r) for i in range(600)]
+    c = pt.chart(data_width=100, data_height=300)
+    c.add_heatmap(data=data, mapping=aes(x="x"))
+    svg = c.to_svg()
+    assert 'downsampled="true"' in svg
+    assert _png_dims(_embedded_png(svg)) == (200, 20)
+
+
+def test_heatmap_palette_png_pools_by_mode():
+    # Categorical cells pool by mode, not mean: every pooled pixel is
+    # still one of the palette colors, never a blend.
+    tracks = [f"t{i}" for i in range(20)]
+    data = {"x": [f"c{i}" for i in range(600)]}
+    for name in tracks:
+        data[name] = ["a" if (i // 3) % 2 == 0 else "b" for i in range(600)]
+    c = pt.chart(data_width=100, data_height=300)
+    c.add_heatmap(data=data, mapping=aes(x="x"),
+                  palette={"a": "#ff0000", "b": "#0000ff"})
+    svg = c.to_svg()
+    assert 'downsampled="true"' in svg
+    png = _embedded_png(svg)
+    assert _png_dims(png) == (200, 20)
+    colors = {px for row in _png_rgb_pixels(png) for px in row}
+    assert colors <= {(255, 0, 0), (0, 0, 255)}
 
 
 def test_heatmap_large_categorical_ring_uses_rects():

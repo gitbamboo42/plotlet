@@ -92,8 +92,8 @@ Type-specific attrs:
 | `hlines` / `vlines` | `n`, `x-min`, `x-max`, `y-min`, `y-max`                                  |
 | `text`          | `n`, `x-min`, `x-max`, `y-min`, `y-max`                                      |
 | `annotate`      | `x`, `y` (annotated point), `tx`, `ty` (text position), `text`               |
-| `imshow`        | `rows`, `cols`, `vmin`, `vmax`, `cmap`, `extent`, `data-encoding` (`"rects"` below ~10000 cells, `"png-embedded"` above); when non-default: `origin`, `norm`, `center`, `annot` (`"values"`/`"custom"`) |
-| `heatmap`       | `rows`, `cols`, `data-encoding` plus either `vmin`, `vmax`, `cmap` (value mode) or `mode="categorical"`, `categories` (palette mode); numeric-`x` charts add `x-axis="continuous"`, `x-extent`; when non-default: `norm`, `center`, `annot` |
+| `imshow`        | `rows`, `cols`, `vmin`, `vmax`, `cmap`, `extent`, `data-encoding` (`"rects"` below ~10000 cells, `"png-embedded"` above); `downsampled="true"` when the embedded PNG was mean-pooled below one pixel per cell; when non-default: `origin`, `norm`, `center`, `annot` (`"values"`/`"custom"`) |
+| `heatmap`       | `rows`, `cols`, `data-encoding` plus either `vmin`, `vmax`, `cmap` (value mode) or `mode="categorical"`, `categories` (palette mode); `downsampled="true"` when the embedded PNG was pooled below one pixel per cell; numeric-`x` charts add `x-axis="continuous"`, `x-extent`; when non-default: `norm`, `center`, `annot` |
 | `hist2d`        | `n` (raw obs), `bins-x`, `bins-y`, `count-max`                               |
 | `dendrogram`    | `orientation`, `n-leaves`, `max-height`, `leaves` (concatenated scipy leaf order) |
 

@@ -3,11 +3,76 @@
 Each built-in artist registers one of the `*_legend_entries` functions so
 the legend dispatch in `_render_inner` can stay generic — no type-string matching.
 Paint logic is a nested closure; there are no shared swatch helpers.
+
+The `pool_*` / `rgb_buffer` helpers back the PNG-embedded raster paths of
+imshow and heatmap: a grid denser than the display can show is box-pooled
+down before encoding. All pooling rules are deterministic (fixed bin
+edges, fixed iteration order, first-seen tie-breaks), so the
+byte-identical-SVG guarantee holds.
 """
-from .._spec import _LEGSPEC
+import math
+
+from .._spec import _LEGSPEC, _D
 from ..draw import marker, segment, rect
 from ..draw import TAB10
 from ..utils import to_list, resolve_aes, palette_color
+
+
+def pool_target(n_cells, px):
+    """Output-pixel count along one raster axis: full data resolution
+    until cells outnumber `raster_oversample` per display pixel, then
+    capped at that. The oversample headroom keeps hi-dpi rendering and
+    moderate zoom sharp; past it the viewer can't show the extra cells
+    anyway, and its nearest-neighbour downscale would *subsample* them
+    (drop cells) where pooling summarizes them."""
+    cap = max(1, math.ceil(px * _D["raster_oversample"]))
+    return n_cells if n_cells <= cap else cap
+
+
+def pool_mean(values):
+    """NaN/None-ignoring mean of one pooling bin; an all-absent bin → NaN
+    (renders as the artist's absent color, like a NaN cell)."""
+    fin = [v for v in values if v is not None and v == v]
+    if not fin:
+        return float("nan")
+    return sum(fin) / len(fin)
+
+
+def pool_mode(values):
+    """Most frequent value in one pooling bin, for categorical cells
+    (a mean of category labels is meaningless). NaN folds into None —
+    both render as absent. Ties break to the first-seen value."""
+    counts = {}
+    for v in values:
+        if isinstance(v, float) and v != v:
+            v = None
+        counts[v] = counts.get(v, 0) + 1
+    return max(counts.items(), key=lambda kv: kv[1])[0]
+
+
+def pool_grid(matrix, out_h, out_w, pool):
+    """Box-pool a `[row][col]` grid down to `out_h × out_w`. Bin edges by
+    integer rounding; every bin is non-empty because `out_* <= n_*`."""
+    nrows = len(matrix)
+    ncols = len(matrix[0])
+    re = [nrows * i // out_h for i in range(out_h + 1)]
+    ce = [ncols * j // out_w for j in range(out_w + 1)]
+    return [[pool([matrix[r][c]
+                   for r in range(re[i], re[i + 1])
+                   for c in range(ce[j], ce[j + 1])])
+             for j in range(out_w)]
+            for i in range(out_h)]
+
+
+def rgb_buffer(grid, rgb_of):
+    """Flatten a `[row][col]` value grid into a packed RGB byte buffer
+    via `rgb_of(value) -> (r, g, b)` — the input `image_png` expects."""
+    buf = bytearray()
+    for row in grid:
+        for v in row:
+            r, g, b = rgb_of(v)
+            buf.append(r); buf.append(g); buf.append(b)
+    return buf
 
 
 # Used by long-form expansion for `linestyle=` and `alpha=` column splits.

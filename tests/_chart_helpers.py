@@ -149,3 +149,32 @@ def _png_dims(png: bytes) -> tuple[int, int]:
     import struct
     assert png[:8] == b"\x89PNG\r\n\x1a\n"
     return struct.unpack(">II", png[16:24])
+
+
+def _embedded_png(svg: str) -> bytes:
+    """Decode the first base64 PNG data URI embedded in an SVG."""
+    import base64
+    import re
+    m = re.search(r'href="data:image/png;base64,([^"]+)"', svg)
+    assert m, "no embedded PNG in SVG"
+    return base64.b64decode(m.group(1))
+
+
+def _png_rgb_pixels(png: bytes):
+    """Decode an RGB (color type 2, filter 0) PNG — the only kind plotlet
+    emits — into a `[row][col]` grid of `(r, g, b)` tuples."""
+    import struct
+    import zlib
+    w, h = _png_dims(png)
+    i = 8
+    idat = b""
+    while i < len(png):
+        ln, typ = struct.unpack(">I4s", png[i:i + 8])
+        if typ == b"IDAT":
+            idat += png[i + 8:i + 8 + ln]
+        i += 12 + ln
+    raw = zlib.decompress(idat)
+    stride = w * 3 + 1     # one filter byte per scanline
+    return [[tuple(raw[y * stride + 1 + x * 3:y * stride + 4 + x * 3])
+             for x in range(w)]
+            for y in range(h)]

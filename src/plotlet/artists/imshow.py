@@ -2,7 +2,9 @@
 
 The threshold (`imshow_max_rects` in spec.json) trades vector cleanliness
 for SVG file size. Below the threshold, each cell is its own <rect> — sharp
-at any zoom. Above, the whole image is encoded as base64 PNG.
+at any zoom. Above, the whole image is encoded as base64 PNG. A grid
+denser than `raster_oversample` cells per display pixel is mean-pooled
+down to that cap before encoding (see `_png_pass`).
 
 `origin` controls vertical orientation. Default `"lower"` puts row 0 at
 the BOTTOM of the data rectangle (Cartesian). Opt in to `"upper"` for
@@ -20,6 +22,7 @@ from ..draw import rect, text_path
 from ..draw import image_png
 from ..draw import colormap_lut, ContinuousNorm
 from ..draw.colors import auto_label_color
+from ._shared import pool_target, pool_mean, pool_grid, rgb_buffer
 
 
 def _artist_imshow(a, xs_, ys_, col):
@@ -62,8 +65,8 @@ def _artist_imshow(a, xs_, ys_, col):
         out = _rects_pass(rows_in_render_order, norm, lut,
                           sx_l, sy_t, cw, ch, ncols)
     else:
-        out = _png_pass(rows_in_render_order, norm, lut,
-                        sx_l, sy_t, pw, ph, ncols, nrows)
+        out, a["_downsampled"] = _png_pass(rows_in_render_order, norm, lut,
+                                           sx_l, sy_t, pw, ph, ncols, nrows)
 
     annot = opts.get("annot", False)
     if annot is not False and annot is not None:
@@ -96,13 +99,21 @@ def _rects_pass(rows, norm, lut, sx_l, sy_t, cw, ch, ncols):
 
 
 def _png_pass(rows, norm, lut, sx_l, sy_t, pw, ph, ncols, nrows):
-    """Whole image as one base64 PNG — bounded SVG size for big arrays."""
-    buf = bytearray()
-    for row in rows:
-        for c in range(ncols):
-            rgb = _cell_rgb(row[c], norm, lut)
-            buf.extend((0, 0, 0) if rgb is None else rgb)
-    return [image_png(sx_l, sy_t, pw, ph, buf, ncols, nrows)]
+    """Whole image as one base64 PNG — bounded SVG size for big arrays.
+
+    A grid denser than `raster_oversample` cells per display pixel is
+    mean-pooled to that cap first: the viewer can't show the extra cells,
+    and its nearest-neighbour downscale would drop them where the pooled
+    mean summarizes them — so the pooled image is both smaller and more
+    faithful. Returns `(elements, downsampled)`."""
+    out_w = pool_target(ncols, pw)
+    out_h = pool_target(nrows, ph)
+    downsampled = (out_w, out_h) != (ncols, nrows)
+    if downsampled:
+        rows = pool_grid(rows, out_h, out_w, pool_mean)
+        ncols, nrows = out_w, out_h
+    buf = rgb_buffer(rows, lambda v: _cell_rgb(v, norm, lut) or (0, 0, 0))
+    return [image_png(sx_l, sy_t, pw, ph, buf, ncols, nrows)], downsampled
 
 
 def _annot_pass(a, rows_in_render_order, row_indices, norm, lut,
@@ -159,6 +170,10 @@ def _imshow_data_attrs(a):
         "data-encoding": "png-embedded" if (a["_nrows"] * a["_ncols"]
                                               > _D["imshow_max_rects"]) else "rects",
     }
+    # Stashed by the draw pass — tells AI readers the embedded PNG is a
+    # pooled summary, not one pixel per matrix cell.
+    if a.get("_downsampled"):
+        out["downsampled"] = "true"
     extent = a["opts"].get("extent")
     if extent is not None:
         out["extent"] = ",".join(repr(float(v)) for v in extent)
