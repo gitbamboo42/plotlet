@@ -12,6 +12,8 @@ byte-identical-SVG guarantee holds.
 """
 import math
 
+import numpy as np
+
 from .._spec import _LEGSPEC, _D
 from ..draw import marker, segment, rect
 from ..draw import TAB10
@@ -73,6 +75,84 @@ def rgb_buffer(grid, rgb_of):
             r, g, b = rgb_of(v)
             buf.append(r); buf.append(g); buf.append(b)
     return buf
+
+
+def minmax_grid(d, lo, hi):
+    """NaN/None-ignoring min/max over a 2-D cell grid, for autoscale.
+    Fills only the unset bounds; returns `(lo, hi, found)` where `found`
+    says whether any finite cell existed (callers keep their empty-grid
+    defaults). Vectorized — min/max are comparisons, not arithmetic, so
+    the result is exact; a ±0.0 tie canonicalizes to +0.0 (`x + 0.0`)
+    so it can't depend on scan order. Non-numeric cells fall back to
+    the scalar scan."""
+    try:
+        a = np.asarray(d, dtype=np.float64)     # None cells → NaN
+    except (TypeError, ValueError):
+        flat = [v for row in d for v in row if v is not None and v == v]
+        if flat:
+            if lo is None: lo = min(flat)
+            if hi is None: hi = max(flat)
+        return lo, hi, bool(flat)
+    if bool(np.isnan(a).all()):
+        return lo, hi, False
+    if lo is None: lo = float(np.nanmin(a)) + 0.0
+    if hi is None: hi = float(np.nanmax(a)) + 0.0
+    return lo, hi, True
+
+
+def _pool_mean_np(a, out_h, out_w):
+    """`pool_grid(..., pool_mean)` vectorized: box-pool a 2-D float
+    array to `out_h × out_w` by NaN-ignoring mean.
+
+    Bit-identical to the scalar path by construction: cells are added
+    in the same row-major order (vectorized *across* bins, sequential
+    *within* each bin via the offset loop), NaN adds 0.0 — exact, since
+    `x + 0.0 == x` — and one final division mirrors `sum(fin)/len(fin)`.
+    Only elementwise ops: `np.sum`/`np.mean` pairwise summation is a
+    numpy implementation detail that may change across versions, which
+    would break byte-identical SVG across machines."""
+    nrows, ncols = a.shape
+    re = np.array([nrows * i // out_h for i in range(out_h + 1)])
+    ce = np.array([ncols * j // out_w for j in range(out_w + 1)])
+    r0, rl = re[:-1], np.diff(re)
+    c0, cl = ce[:-1], np.diff(ce)
+    valid = ~np.isnan(a)
+    vals = np.where(valid, a, 0.0)
+    acc = np.zeros((out_h, out_w))
+    cnt = np.zeros((out_h, out_w), dtype=np.int64)
+    for dr in range(int(rl.max())):
+        ri = np.nonzero(dr < rl)[0]
+        row_v = vals[r0[ri] + dr]       # gather rows once per offset
+        row_m = valid[r0[ri] + dr]
+        for dc in range(int(cl.max())):
+            ci = np.nonzero(dc < cl)[0]
+            dst = np.ix_(ri, ci)
+            acc[dst] += row_v[:, c0[ci] + dc]
+            cnt[dst] += row_m[:, c0[ci] + dc]
+    return np.divide(acc, cnt, out=np.full((out_h, out_w), np.nan),
+                     where=cnt > 0)
+
+
+def png_value_cells(rows, out_h, out_w, norm, lut, absent_rgb):
+    """Vectorized pool + colormap for a numeric cell grid → `(rgb_bytes,
+    downsampled)`, or None when the norm only has a scalar form (log) —
+    the caller then falls back to `pool_grid` + `rgb_buffer`. `rows` is
+    a nested list (None/NaN cells → absent color) or a 2-D ndarray."""
+    if norm.kind == "log":
+        return None
+    a = np.asarray(rows, dtype=np.float64)      # None cells → NaN
+    downsampled = (out_h, out_w) != a.shape
+    if downsampled:
+        a = _pool_mean_np(a, out_h, out_w)
+    u = norm.to_unit_array(a)
+    nan_mask = np.isnan(u)
+    # Same rounding as the scalar `int(u * 255 + 0.5)`: values are
+    # >= 0 after clipping, so trunc-toward-zero == floor.
+    idx = (np.where(nan_mask, 0.0, u) * 255.0 + 0.5).astype(np.int64)
+    rgb = np.frombuffer(bytes(lut), dtype=np.uint8).reshape(256, 3)[idx]
+    if nan_mask.any():
+        rgb[nan_mask] = absent_rgb
+    return rgb.tobytes(), downsampled
 
 
 # Used by long-form expansion for `linestyle=` and `alpha=` column splits.

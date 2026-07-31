@@ -43,6 +43,8 @@ The category scale picks up the implied split positions and inserts a
 gap between groups; ``_resolve_display`` (below) reorders the matrix at
 draw time to match the sector cat order.
 """
+import numpy as np
+
 from ..registry import ArtistSpec, add_artist
 from ..utils import (pack_opts, to_list_2d, to_list, all_numeric,
                      _data_has_column)
@@ -54,7 +56,8 @@ from ..draw import image_png
 from ..draw import colormap_lut, ContinuousNorm
 from ..draw import resolve_color
 from ..draw.colors import auto_label_color
-from ._shared import pool_target, pool_mean, pool_mode, pool_grid, rgb_buffer
+from ._shared import (pool_target, pool_mean, pool_mode, pool_grid,
+                      rgb_buffer, png_value_cells, minmax_grid)
 
 
 def _hex_to_rgb(h):
@@ -179,7 +182,8 @@ def _parse_heatmap_input(kw):
     return matrix, xs, [str(v) for v in values]
 
 
-def _png_for_blocks(ctx, matrix, cols, rows, bw, bh, pool, rgb_of):
+def _png_for_blocks(ctx, matrix, cols, rows, bw, bh, pool, rgb_of,
+                    fast=None):
     """Emit one `<image>` per (row-block × col-block) cell-flush region.
 
     Reads block boundaries straight off the shared scales — this is the
@@ -188,21 +192,35 @@ def _png_for_blocks(ctx, matrix, cols, rows, bw, bh, pool, rgb_of):
     order. `_splits.block_bboxes_2d` yields a single full-range block
     when no splits are set, so this is also the no-split fallback — one
     PNG covering all cells. Each block pools independently against its
-    own pixel extent. Returns `(elements, downsampled)`.
+    own pixel extent. `fast` is the value-mode `(norm, lut, absent_rgb)`
+    for the vectorized pass (see `_png_fallback`). Returns
+    `(elements, downsampled)`.
     """
     out = []
     downsampled = False
+    a = None
+    if fast is not None and fast[0].kind != "log":
+        a = np.asarray(matrix, dtype=np.float64)    # None cells → NaN
     for r0, r1, c0, c1, sy_t, sy_b, sx_l, sx_r in _splits.block_bboxes_2d(
             ctx, rows, cols, bw, bh,
             ctx.y_scale.splits, ctx.x_scale.splits):
-        grid = [[matrix[r][c] for c in range(c0, c1)] for r in range(r0, r1)]
         out_w = pool_target(c1 - c0, sx_r - sx_l)
         out_h = pool_target(r1 - r0, sy_b - sy_t)
-        if (out_w, out_h) != (c1 - c0, r1 - r0):
-            grid = pool_grid(grid, out_h, out_w, pool)
-            downsampled = True
+        cells = None
+        if a is not None:
+            cells = png_value_cells(a[r0:r1, c0:c1], out_h, out_w, *fast)
+        if cells is not None:
+            buf, block_pooled = cells
+        else:
+            grid = [[matrix[r][c] for c in range(c0, c1)]
+                    for r in range(r0, r1)]
+            block_pooled = (out_w, out_h) != (c1 - c0, r1 - r0)
+            if block_pooled:
+                grid = pool_grid(grid, out_h, out_w, pool)
+            buf = rgb_buffer(grid, rgb_of)
+        downsampled = downsampled or block_pooled
         out.append(image_png(sx_l, sy_t, sx_r - sx_l, sy_b - sy_t,
-                             rgb_buffer(grid, rgb_of), out_w, out_h))
+                             buf, out_w, out_h))
     return out, downsampled
 
 
@@ -345,13 +363,15 @@ def _value_range(matrix, norm, vmin, vmax):
     if vmin is not None and vmax is not None:
         return vmin, vmax
     if norm_kind == "log":
-        flat = [v for row in matrix for v in row if v is not None and v == v and v > 0]
+        flat = [v for row in matrix for v in row
+                if v is not None and v == v and v > 0]
+        found = bool(flat)
+        if found:
+            if vmin is None: vmin = min(flat)
+            if vmax is None: vmax = max(flat)
     else:
-        flat = [v for row in matrix for v in row if v is not None and v == v]
-    if flat:
-        if vmin is None: vmin = min(flat)
-        if vmax is None: vmax = max(flat)
-    else:
+        vmin, vmax, found = minmax_grid(matrix, vmin, vmax)
+    if not found:
         vmin, vmax = (1.0, 10.0) if norm_kind == "log" else (0.0, 1.0)
     return vmin, vmax
 
@@ -467,7 +487,8 @@ def _use_rects(a, ctx, nrows, ncols):
     return False
 
 
-def _png_fallback(ctx, matrix, xgeom, ygeom, xcats, ycats, pool, rgb_of):
+def _png_fallback(ctx, matrix, xgeom, ygeom, xcats, ycats, pool, rgb_of,
+                  fast=None):
     """Large-grid PNG path. Fully categorical → `_png_for_blocks` (honours
     sector splits). A continuous x → one uniform `<image>` spanning the
     cell bbox, mirroring imshow; rows/cols are walked in pixel order so a
@@ -476,24 +497,37 @@ def _png_fallback(ctx, matrix, xgeom, ygeom, xcats, ycats, pool, rgb_of):
     Cells past `raster_oversample` per display pixel are pooled (`pool`
     is mean for value cells, mode for palette cells) before colorizing —
     the viewer can't show them, and its nearest-neighbour downscale would
-    drop cells where pooling summarizes them. Returns
+    drop cells where pooling summarizes them. Value-mode callers pass
+    `fast=(norm, lut, absent_rgb)` to run the pool + colormap pass
+    vectorized (`png_value_cells`, byte-identical to the scalar walk);
+    the palette mode and norm='log' stay scalar. Returns
     `(elements, downsampled)`."""
     if xcats is not None:
         return _png_for_blocks(ctx, matrix, xcats, ycats,
-                               xgeom[0][1], ygeom[0][1], pool, rgb_of)
+                               xgeom[0][1], ygeom[0][1], pool, rgb_of,
+                               fast=fast)
     ncols = len(xgeom); nrows = len(ygeom)
     col_order = sorted(range(ncols), key=lambda c: xgeom[c][0])
     row_order = sorted(range(nrows), key=lambda r: ygeom[r][0])
     sx_l = min(g[0] for g in xgeom); sx_r = max(g[0] + g[1] for g in xgeom)
     sy_t = min(g[0] for g in ygeom); sy_b = max(g[0] + g[1] for g in ygeom)
-    grid = [[matrix[r][c] for c in col_order] for r in row_order]
     out_w = pool_target(ncols, sx_r - sx_l)
     out_h = pool_target(nrows, sy_b - sy_t)
-    downsampled = (out_w, out_h) != (ncols, nrows)
-    if downsampled:
-        grid = pool_grid(grid, out_h, out_w, pool)
+    cells = None
+    if fast is not None and fast[0].kind != "log":
+        a = np.asarray(matrix, dtype=np.float64)    # None cells → NaN
+        cells = png_value_cells(a[np.ix_(row_order, col_order)],
+                                out_h, out_w, *fast)
+    if cells is not None:
+        buf, downsampled = cells
+    else:
+        grid = [[matrix[r][c] for c in col_order] for r in row_order]
+        downsampled = (out_w, out_h) != (ncols, nrows)
+        if downsampled:
+            grid = pool_grid(grid, out_h, out_w, pool)
+        buf = rgb_buffer(grid, rgb_of)
     return [image_png(sx_l, sy_t, sx_r - sx_l, sy_b - sy_t,
-                      rgb_buffer(grid, rgb_of), out_w, out_h)], downsampled
+                      buf, out_w, out_h)], downsampled
 
 
 def _heatmap_annot(a, ctx, matrix, annot_arg, xgeom, ygeom, txt_col_at, fmt):
@@ -628,7 +662,8 @@ def _heatmap_draw(a, ctx):
             i = int(norm.to_unit(v) * 255 + 0.5) * 3
             return lut[i], lut[i + 1], lut[i + 2]
         elems, a["_downsampled"] = _png_fallback(
-            ctx, matrix, xgeom, ygeom, xcats, ycats, pool_mean, rgb_of)
+            ctx, matrix, xgeom, ygeom, xcats, ycats, pool_mean, rgb_of,
+            fast=(norm, lut, absent_rgb))
         out.extend(elems)
 
     def txt_col_at(r, c):

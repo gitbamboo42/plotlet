@@ -22,7 +22,8 @@ from ..draw import rect, text_path
 from ..draw import image_png
 from ..draw import colormap_lut, ContinuousNorm
 from ..draw.colors import auto_label_color
-from ._shared import pool_target, pool_mean, pool_grid, rgb_buffer
+from ._shared import (pool_target, pool_mean, pool_grid, rgb_buffer,
+                      png_value_cells, minmax_grid)
 
 
 def _artist_imshow(a, xs_, ys_, col):
@@ -105,15 +106,20 @@ def _png_pass(rows, norm, lut, sx_l, sy_t, pw, ph, ncols, nrows):
     mean-pooled to that cap first: the viewer can't show the extra cells,
     and its nearest-neighbour downscale would drop them where the pooled
     mean summarizes them — so the pooled image is both smaller and more
-    faithful. Returns `(elements, downsampled)`."""
+    faithful. The pool + colormap pass runs vectorized
+    (`png_value_cells`) with the scalar walk as the norm='log' fallback;
+    both produce identical bytes. Returns `(elements, downsampled)`."""
     out_w = pool_target(ncols, pw)
     out_h = pool_target(nrows, ph)
-    downsampled = (out_w, out_h) != (ncols, nrows)
-    if downsampled:
-        rows = pool_grid(rows, out_h, out_w, pool_mean)
-        ncols, nrows = out_w, out_h
-    buf = rgb_buffer(rows, lambda v: _cell_rgb(v, norm, lut) or (0, 0, 0))
-    return [image_png(sx_l, sy_t, pw, ph, buf, ncols, nrows)], downsampled
+    fast = png_value_cells(rows, out_h, out_w, norm, lut, (0, 0, 0))
+    if fast is not None:
+        buf, downsampled = fast
+    else:
+        downsampled = (out_w, out_h) != (ncols, nrows)
+        if downsampled:
+            rows = pool_grid(rows, out_h, out_w, pool_mean)
+        buf = rgb_buffer(rows, lambda v: _cell_rgb(v, norm, lut) or (0, 0, 0))
+    return [image_png(sx_l, sy_t, pw, ph, buf, out_w, out_h)], downsampled
 
 
 def _annot_pass(a, rows_in_render_order, row_indices, norm, lut,
@@ -212,12 +218,13 @@ def _imshow_record(matrix,
     if lo is None or hi is None:
         if norm_val == "log":
             flat = [v for row in d for v in row if v == v and v > 0]
+            found = bool(flat)
+            if found:
+                if lo is None: lo = min(flat)
+                if hi is None: hi = max(flat)
         else:
-            flat = [v for row in d for v in row if v == v]
-        if flat:
-            if lo is None: lo = min(flat)
-            if hi is None: hi = max(flat)
-        else:
+            lo, hi, found = minmax_grid(d, lo, hi)
+        if not found:
             lo, hi = (1.0, 10.0) if norm_val == "log" else (0.0, 1.0)
     opts = pack_opts(cmap=cmap, vmin=vmin, vmax=vmax, norm=norm, center=center,
                      origin=origin, extent=extent, annot=annot, fmt=fmt,

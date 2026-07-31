@@ -14,6 +14,8 @@ from __future__ import annotations
 import math
 from typing import Callable
 
+import numpy as np
+
 from ._cm_data import LUTS
 
 # User-registered colormaps, keyed like LUTS. Per-process and explicit —
@@ -207,6 +209,30 @@ class ContinuousNorm:
         if t < 0.0: return 0.0
         if t > 1.0: return 1.0
         return t
+
+    def to_unit_array(self, arr):
+        """Vectorized `to_unit` over a float ndarray — the same formulas
+        in the same operation order, elementwise only, so every cell's
+        bits match the scalar path exactly (elementwise IEEE arithmetic
+        is pinned; that's what keeps SVG byte-identical across machines
+        and numpy versions). Returns None for norm='log': np.log10's
+        SIMD implementations carry no such pin, so log stays on the
+        scalar walk. NaN passes through as NaN."""
+        if self.kind == "log":
+            return None
+        with np.errstate(invalid="ignore", divide="ignore"):
+            if self.center is not None:
+                c = self.center
+                lo = (np.zeros_like(arr) if c == self.vmin
+                      else 0.5 * (arr - self.vmin) / (c - self.vmin))
+                hi = (np.ones_like(arr) if self.vmax == c
+                      else 0.5 + 0.5 * (arr - c) / (self.vmax - c))
+                t = np.where(arr <= c, lo, hi)
+                t = np.where(np.isnan(arr), np.nan, t)
+            else:
+                span = (self.vmax - self.vmin) or 1.0
+                t = (arr - self.vmin) / span
+        return np.clip(t, 0.0, 1.0)
 
     def ticks(self, n: int = 8) -> list[float]:
         from ..scales import _LogScale, _nice_ticks

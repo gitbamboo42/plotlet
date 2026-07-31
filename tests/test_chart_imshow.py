@@ -173,6 +173,54 @@ def test_imshow_png_full_resolution_when_it_fits():
     assert _png_dims(_embedded_png(svg)) == (150, 150)
 
 
+def test_vectorized_png_matches_scalar_bytes():
+    # The vectorized pool + colormap pass must produce byte-identical
+    # output to the scalar walk — that equality is what keeps SVG
+    # byte-identical across machines and numpy versions. Exercised with
+    # uneven pooling bins (37x23 -> 10x7), NaN and None cells, and both
+    # vectorizable norms (linear, center).
+    from plotlet.artists._shared import (png_value_cells, pool_grid,
+                                         pool_mean, rgb_buffer)
+    from plotlet.draw import colormap_lut, ContinuousNorm
+    from plotlet.artists.imshow import _cell_rgb
+
+    rows = [[math.sin(r * 1.7 + c * 0.9) * 10 for c in range(23)]
+            for r in range(37)]
+    rows[3][4] = float("nan")
+    rows[20][22] = None
+    rows[36][0] = float("nan")
+    absent = (7, 8, 9)
+    lut = colormap_lut("viridis")
+
+    def scalar_rgb(v, norm):
+        if v is None or v != v:
+            return absent
+        return _cell_rgb(v, norm, lut)
+
+    for norm in (ContinuousNorm(-8.0, 9.0),
+                 ContinuousNorm(-8.0, 9.0, center=0.5)):
+        for out_h, out_w in ((10, 7), (37, 23)):
+            fast, pooled = png_value_cells(rows, out_h, out_w,
+                                           norm, lut, absent)
+            assert pooled == ((out_h, out_w) != (37, 23))
+            grid = rows if not pooled \
+                else pool_grid(rows, out_h, out_w, pool_mean)
+            slow = rgb_buffer(grid, lambda v: scalar_rgb(v, norm))
+            assert fast == bytes(slow)
+
+
+def test_imshow_log_norm_dense_falls_back_and_pools():
+    # norm="log" has no vector form (np.log10 isn't bit-pinned across
+    # machines) — the PNG path must fall back to the scalar walk and
+    # still pool to display resolution.
+    data = [[10 ** (0.001 * (r + c)) for c in range(150)] for r in range(150)]
+    c = pt.chart(data_width=40, data_height=40)
+    c.add_imshow(data, norm="log")
+    svg = c.to_svg()
+    assert 'downsampled="true"' in svg
+    assert _png_dims(_embedded_png(svg)) == (80, 80)
+
+
 def test_pool_helpers():
     nan = float("nan")
     # Mean pooling ignores NaN within a bin.
