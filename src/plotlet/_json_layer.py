@@ -11,11 +11,13 @@ journal's JSON form (`record/journal.py`), the FigureIR wire format
 (`tests/test_import_boundary.py`). It also keeps JSON support out of
 `journal.py` itself — the journal stays a plain event log.
 
-DataFrame-shaped and numpy inputs never reach this layer: they're
-normalized to `DataFrameLite` / plain lists at the recorder boundary
-in `record/chart.py` (via `utils._normalize_data`). So the JSON layer is
-data-library-neutral by construction — it never imports pandas or
-numpy, never grows a branch per data library.
+DataFrame-shaped inputs never reach this layer: they're normalized to
+`DataFrameLite` / plain lists at the recorder boundary in
+`record/chart.py` (via `utils._normalize_data`), so it never imports
+pandas or grows a branch per data library. numpy is the one exception:
+a matrix artist's data rides through record as a 2-D ndarray (numpy is
+a guaranteed dependency, via scipy), and `json_safe` lowers it to
+nested lists — the JSON wire format itself carries no array types.
 
 Envelope keys used here:
     $dataframe    utils.DataFrameLite (canonical DataFrame form)
@@ -35,6 +37,8 @@ facet expansion) and it resolves only against shared vocabulary.
 """
 from __future__ import annotations
 from typing import Any
+
+import numpy as np
 
 from .utils import DataFrameLite, all_primitive
 
@@ -68,6 +72,12 @@ def json_safe(value: Any) -> Any:
         # values that never passed through the journal emitter, e.g. a
         # resolved-IR state dict.
         return {"$sectors": json_safe(value._to_dict())}
+    if isinstance(value, np.ndarray):
+        # A matrix artist's data section entry. The wire format stays
+        # plain nested lists — identical JSON whether the matrix came
+        # in as an array or as lists. Recursing catches the rare
+        # object-dtype cell.
+        return json_safe(value.tolist())
     if isinstance(value, tuple):
         return {"$tuple": [json_safe(v) for v in value]}
     if isinstance(value, (set, frozenset)):

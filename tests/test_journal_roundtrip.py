@@ -154,8 +154,11 @@ def test_almost_primitive_rows_still_take_the_slow_path():
 def test_grid_artists_intern_their_matrix_in_the_data_section():
     """A matrix artist's input (`ArtistSpec.data_input="matrix"`) is
     payload, not call structure: it lands in the data section once
-    and the entry carries a `$data` ref — at any size, exactly like
-    tables. Both round-trip paths reproduce the SVG byte-for-byte."""
+    (as a float64 ndarray — numeric matrices keep their array form
+    end-to-end) and the entry carries a `$data` ref — at any size,
+    exactly like tables. Both round-trip paths reproduce the SVG
+    byte-for-byte."""
+    import numpy as np
     big = [[float(r * 100 + c) for c in range(100)] for r in range(100)]
     c = pt.chart()
     c.add_imshow(big)
@@ -164,7 +167,9 @@ def test_grid_artists_intern_their_matrix_in_the_data_section():
     j = pt.to_journal(c)
     entry = next(e for e in j.entries if e["op"] == "imshow")
     ref = entry["args"][0]
-    assert set(ref) == {"$data"} and j.data[ref["$data"]] == big
+    assert set(ref) == {"$data"}
+    stored = j.data[ref["$data"]]
+    assert isinstance(stored, np.ndarray) and stored.tolist() == big
     assert pt.from_journal(j).to_svg() == svg_original
     assert pt.from_json(json.loads(json.dumps(pt.to_json(c)))).to_svg() \
         == svg_original

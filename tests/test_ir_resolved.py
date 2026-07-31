@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import math
 
+import numpy as np
 import pytest
 
 import plotlet as pt
@@ -88,6 +89,11 @@ def _nan_eq(a, b):
         return a == b
     if type(a) is not type(b):
         return False
+    if isinstance(a, np.ndarray):
+        # A matrix artist's `_data` — elementwise, NaN-tolerant.
+        if a.dtype.kind == "f":
+            return np.array_equal(a, b, equal_nan=True)
+        return np.array_equal(a, b)
     if isinstance(a, dict):
         return a.keys() == b.keys() and all(_nan_eq(a[k], b[k]) for k in a)
     if isinstance(a, (list, tuple)):

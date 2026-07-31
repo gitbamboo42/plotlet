@@ -21,6 +21,7 @@ import math
 import numbers
 import re
 
+import numpy as np
 from scipy.stats import t as _t_dist
 
 from .registry import get_artist
@@ -214,11 +215,7 @@ def _normalize_data(data):
             index=[str(i) for i in data.index],
         )
     # numpy scalar → Python scalar. `np.generic` covers int64/float64/etc.
-    try:
-        import numpy as np
-    except ImportError:
-        np = None
-    if np is not None and isinstance(data, np.generic):
+    if isinstance(data, np.generic):
         return data.item()
     # numpy array / pandas Series / anything with .tolist()
     if hasattr(data, "tolist"):
@@ -238,6 +235,49 @@ def _normalize_data(data):
             return data
         return tuple(_normalize_data(v) for v in data)
     return data
+
+
+def _normalize_matrix(obj):
+    """Boundary normalization for a matrix artist's positional matrix
+    (`data_input="matrix"`): numeric 2-D input becomes one ndarray
+    instead of nested Python lists, so the raster pipeline can run
+    vectorized without ever converting back. Narrower float dtypes
+    widen to float64 — the same values `.tolist()` used to produce, so
+    rendered bytes don't depend on the input's storage dtype. `None`
+    cells become NaN. Anything non-numeric (strings, ragged rows,
+    dates) falls back to `_normalize_data`'s plain-list form."""
+    if hasattr(obj, "values") and not hasattr(obj, "tolist"):
+        obj = obj.values                    # DataFrame → its ndarray
+    try:
+        a = np.asarray(obj)
+    except (TypeError, ValueError):
+        return _normalize_data(obj)
+    if a.ndim == 2:
+        if a.dtype == np.float64 or a.dtype.kind in "iub":
+            return a
+        if a.dtype.kind == "f":
+            return a.astype(np.float64)
+        if a.dtype == object:
+            try:
+                return np.asarray(a, dtype=np.float64)   # None → NaN
+            except (TypeError, ValueError):
+                pass
+    return _normalize_data(obj)
+
+
+def to_matrix(obj):
+    """Record-side matrix ingest: pass a numeric 2-D ndarray through
+    (widening narrow floats to float64, same as `_normalize_matrix` —
+    an array can also arrive here unnormalized, e.g. passed by
+    keyword), convert everything else to nested lists via `to_list_2d`.
+    Artists whose draw side is vectorized (imshow) call this instead of
+    `to_list_2d` so the array survives end-to-end."""
+    if isinstance(obj, np.ndarray) and obj.ndim == 2:
+        if obj.dtype == np.float64 or obj.dtype.kind in "iub":
+            return obj
+        if obj.dtype.kind == "f":
+            return obj.astype(np.float64)
+    return to_list_2d(obj)
 
 
 def to_list_2d(obj):
@@ -689,7 +729,7 @@ def ci_bounds(cells, est_fn, estimator, ci, level, n_boot, rng):
     return los, his
 
 
-__all__ = ["to_list", "to_list_2d", "broadcast", "quantile",
+__all__ = ["to_list", "to_list_2d", "to_matrix", "broadcast", "quantile",
            "hist_bin_edges", "hist_bin_counts", "hist_transform",
            "resolve_aes", "palette_color", "group_color",
            "dodge_positions", "dodge_slot",

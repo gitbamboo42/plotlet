@@ -9,6 +9,8 @@ import datetime
 import math
 import random
 
+import numpy as np
+
 import plotlet as pt
 import pytest
 
@@ -207,6 +209,50 @@ def test_vectorized_png_matches_scalar_bytes():
                 else pool_grid(rows, out_h, out_w, pool_mean)
             slow = rgb_buffer(grid, lambda v: scalar_rgb(v, norm))
             assert fast == bytes(slow)
+
+
+def test_numpy_input_renders_byte_identical_to_lists():
+    """Numeric matrices keep their ndarray form from record to render
+    (no `.tolist()` ingest copy). The bytes must not depend on whether
+    the matrix arrived as nested lists or as an array — nor on its
+    storage dtype: narrow floats widen to float64 (the values
+    `.tolist()` used to produce), and int cells still format like
+    plain ints under annot."""
+    data = [[math.sin(r * 0.4) * math.cos(c * 0.3) * 5 for c in range(40)]
+            for r in range(30)]
+
+    def render(m, **kw):
+        c = pt.chart(title="t", data_width=60, data_height=60)
+        c.add_imshow(m, cmap="viridis", **kw)
+        return c.to_svg()
+
+    ref = render(data)                                   # rect path
+    assert render(np.array(data)) == ref
+    f32 = np.array(data, dtype=np.float32)
+    assert render(f32) == render(f32.astype(np.float64))
+    assert render(np.array(data), origin="upper") \
+        == render(data, origin="upper")
+
+    # int matrix: annot labels format like plain ints (np.int64 cells)
+    ints = [[(r + c) % 9 for c in range(8)] for r in range(6)]
+    assert render(np.array(ints), annot=True, fmt=".1f") \
+        == render(ints, annot=True, fmt=".1f")
+
+    # None cells become NaN at ingest — same render as float("nan")
+    assert render([[1.0, None], [2.0, 3.0]]) \
+        == render([[1.0, float("nan")], [2.0, 3.0]])
+
+    # dense grids: vectorized pooled-PNG path, and the norm='log'
+    # scalar fallback, both walk the same values either way
+    dense = [[math.sin(r * 0.4) + math.cos(c * 0.3) for c in range(150)]
+             for r in range(150)]
+    pos = [[10 ** (0.01 * (r + c)) for c in range(150)] for r in range(150)]
+    for grid, kw in ((dense, {}), (pos, {"norm": "log"})):
+        c1 = pt.chart(data_width=40, data_height=40)
+        c1.add_imshow(grid, **kw)
+        c2 = pt.chart(data_width=40, data_height=40)
+        c2.add_imshow(np.array(grid), **kw)
+        assert c1.to_svg() == c2.to_svg()
 
 
 def test_imshow_log_norm_dense_falls_back_and_pools():

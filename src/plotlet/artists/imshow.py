@@ -15,8 +15,12 @@ lands next to row 0.
 Color mapping goes through `ContinuousNorm`, which supports `norm="log"`
 and `center=` on top of the default linear range.
 """
+import numbers
+
+import numpy as np
+
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list_2d, pack_opts
+from ..utils import to_matrix, to_list_2d, pack_opts
 from .._spec import _D
 from ..draw import rect, text_path
 from ..draw import image_png
@@ -58,7 +62,12 @@ def _artist_imshow(a, xs_, ys_, col):
     # origin="upper": row 0 belongs at the top — natural data order.
     row_indices = list(range(nrows)) if origin == "upper" \
                   else [nrows - 1 - r for r in range(nrows)]
-    rows_in_render_order = [data[i] for i in row_indices]
+    if isinstance(data, np.ndarray):
+        # Flipping an array is a stride view, not a row gather — the
+        # vectorized PNG pass consumes it without a copy.
+        rows_in_render_order = data if origin == "upper" else data[::-1]
+    else:
+        rows_in_render_order = [data[i] for i in row_indices]
 
     use_rects = nrows * ncols <= _D["imshow_max_rects"]
     cw = pw / ncols; ch = ph / nrows
@@ -115,6 +124,10 @@ def _png_pass(rows, norm, lut, sx_l, sy_t, pw, ph, ncols, nrows):
     if fast is not None:
         buf, downsampled = fast
     else:
+        # norm='log' scalar fallback — walk plain lists (per-cell
+        # indexing into an ndarray is slower than into lists).
+        if isinstance(rows, np.ndarray):
+            rows = rows.tolist()
         downsampled = (out_w, out_h) != (ncols, nrows)
         if downsampled:
             rows = pool_grid(rows, out_h, out_w, pool_mean)
@@ -132,10 +145,13 @@ def _annot_pass(a, rows_in_render_order, row_indices, norm, lut,
     opts = a["opts"]
     annot = opts.get("annot", False)
     label_source = a["_data"] if annot is True else to_list_2d(annot)
-    if len(label_source) != nrows or (label_source and len(label_source[0]) != ncols):
+    # `len(...)`-based checks, not truthiness — label_source may be an
+    # ndarray, whose bool() is ambiguous.
+    n_lab = len(label_source)
+    if n_lab != nrows or (n_lab and len(label_source[0]) != ncols):
         raise ValueError(
-            f"imshow: annot array shape ({len(label_source)}x"
-            f"{len(label_source[0]) if label_source else 0}) "
+            f"imshow: annot array shape ({n_lab}x"
+            f"{len(label_source[0]) if n_lab else 0}) "
             f"doesn't match data ({nrows}x{ncols})"
         )
     labels_in_render_order = [label_source[i] for i in row_indices]
@@ -150,7 +166,9 @@ def _annot_pass(a, rows_in_render_order, row_indices, norm, lut,
             label = label_row[c]
             if label is None or (isinstance(label, float) and label != label):
                 continue
-            txt = format(label, fmt) if isinstance(label, (int, float)) \
+            # numbers.Real, not (int, float): a numpy int64 cell must
+            # format like a plain int, and it isn't an int subclass.
+            txt = format(label, fmt) if isinstance(label, numbers.Real) \
                   else str(label)
             if color_opt == "auto":
                 rgb = _cell_rgb(data_row[c], norm, lut)
@@ -207,21 +225,31 @@ def _imshow_record(matrix,
                    origin=None, extent=None,
                    annot=None, fmt=None, annot_color=None, annot_fontsize=None,
                    legend=None):
-    d = to_list_2d(matrix)
+    d = to_matrix(matrix)
     nrows = len(d)
-    ncols = len(d[0]) if d else 0
+    ncols = len(d[0]) if nrows else 0
     norm_val = norm if norm is not None else "linear"
     # For log norm, autoscale ignores non-positive values (they can't be
     # log-mapped). User-supplied vmin/vmax are still trusted as-is; the
     # ContinuousNorm constructor will raise if they're non-positive.
+    # (min/max selection is order-independent, so vectorizing it is
+    # bit-safe even though log's color mapping itself is not.)
     lo, hi = vmin, vmax
     if lo is None or hi is None:
         if norm_val == "log":
-            flat = [v for row in d for v in row if v == v and v > 0]
-            found = bool(flat)
-            if found:
-                if lo is None: lo = min(flat)
-                if hi is None: hi = max(flat)
+            if isinstance(d, np.ndarray):
+                with np.errstate(invalid="ignore"):
+                    pos = d[d > 0]
+                found = pos.size > 0
+                if found:
+                    if lo is None: lo = float(pos.min())
+                    if hi is None: hi = float(pos.max())
+            else:
+                flat = [v for row in d for v in row if v == v and v > 0]
+                found = bool(flat)
+                if found:
+                    if lo is None: lo = min(flat)
+                    if hi is None: hi = max(flat)
         else:
             lo, hi, found = minmax_grid(d, lo, hi)
         if not found:

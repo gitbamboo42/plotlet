@@ -59,6 +59,8 @@ import itertools
 from dataclasses import dataclass, field
 from typing import Any
 
+import numpy as np
+
 
 @dataclass
 class Journal:
@@ -73,8 +75,9 @@ class Journal:
     inner-coord chart or attachment may follow the root's `new_*`).
 
     `data` is the data table: data id → normalized bulk data — a table
-    (DataFrameLite or dict of columns) or a matrix (list of scalar rows,
-    e.g. imshow's input). Entries reference it as `{"$data": id}`.
+    (DataFrameLite or dict of columns) or a matrix (a 2-D numpy array,
+    or nested lists when the input isn't numeric — e.g. imshow's
+    input). Entries reference it as `{"$data": id}`.
     """
     entries: list[dict] = field(default_factory=list)
     root_nid: int | None = None
@@ -393,7 +396,8 @@ def to_journal(root) -> Journal:
             args[0] = _intern(args[0])
         spec = get_artist(name)
         if (spec is not None and spec.data_input == "matrix"
-                and args and type(args[0]) is list):
+                and args and (type(args[0]) is list
+                              or isinstance(args[0], np.ndarray))):
             args[0] = _intern(args[0])
         if isinstance(kwargs.get("data"), (DataFrameLite, dict)):
             kwargs["data"] = _intern(kwargs["data"])

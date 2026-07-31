@@ -46,7 +46,8 @@ import resvg_py
 
 from .._spec import _SIZESPEC, _MARGIN_FLOOR
 from .._tree import compute_share_classes, normalize_share_mode
-from ..utils import _to_px, _normalize_data, _data_has_column, Aes
+from ..utils import _to_px, _normalize_data, _normalize_matrix, \
+    _data_has_column, Aes
 from ..registry import get_artist, all_artist_names
 
 
@@ -632,7 +633,15 @@ class Chart(_Renderable):
                     # normalized value regardless of position.
                     if "data" in kwargs:
                         kwargs["data"] = _normalize_data(kwargs["data"])
-                    args = tuple(_normalize_data(a) for a in args)
+                    # A matrix artist's positional matrix keeps its
+                    # numeric-array form (2-D ndarray) instead of
+                    # lowering to nested lists, so the vectorized
+                    # raster pass never converts back.
+                    if spec.data_input == "matrix" and args:
+                        args = (_normalize_matrix(args[0]),
+                                *(_normalize_data(a) for a in args[1:]))
+                    else:
+                        args = tuple(_normalize_data(a) for a in args)
                     # Data injection — a call that maps columns via
                     # aes(...) draws from the chart-level table. A call
                     # that brings its own data overrides it, whether the
