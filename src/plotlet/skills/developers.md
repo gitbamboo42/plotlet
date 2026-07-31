@@ -104,6 +104,10 @@ There is no `figsize`, no `dpi`, no inches-by-default.
   `c.coordinate(pt.CircularCoordinate(data_diameter=360))`. Default 320;
   the set diameter is exactly what renders, chrome grows the canvas
   outward.
+- **Images don't force square pixels.** Unlike matplotlib's `imshow`,
+  the data region stays the size you set — a 200×50 matrix in a square
+  region renders stretched. Lock true proportions with
+  `c.aspect("equal")` (or `c.aspect(r)` for a fixed ratio).
 
 ## Debugging rendered output
 

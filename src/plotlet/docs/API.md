@@ -79,8 +79,10 @@ around the data area.
 
 `c.aspect("equal")` or `c.aspect(r)` locks the data-space aspect ratio
 (matplotlib `set_aspect`, ggplot `coord_fixed`): one y data unit renders
-at `r`× the pixel length of one x data unit. The lock survives share
-classes and `.fit()`.
+at `r`× the pixel length of one x data unit. `data_width` is the base:
+it stays as declared and `data_height` is rederived from the ratio
+(under `share_y` the roles flip — height is forced, width rederives).
+The lock survives share classes and `.fit()`.
 
 ### Coordinates
 
