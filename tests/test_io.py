@@ -1,5 +1,5 @@
 """Output-method tests: save_svg / to_html / save_html / save_pdf.
-PNG render baselines live in test_chart_imshow.py; the PNG output
+PNG render baselines live in test_chart_image_cmap.py; the PNG output
 methods (save_png / repr_mimebundle) are exercised here."""
 import pytest
 

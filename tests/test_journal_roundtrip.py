@@ -161,11 +161,11 @@ def test_grid_artists_intern_their_matrix_in_the_data_section():
     import numpy as np
     big = [[float(r * 100 + c) for c in range(100)] for r in range(100)]
     c = pt.chart()
-    c.add_imshow(big)
+    c.add_image_cmap(big)
     svg_original = c.to_svg()
 
     j = pt.to_journal(c)
-    entry = next(e for e in j.entries if e["op"] == "imshow")
+    entry = next(e for e in j.entries if e["op"] == "image_cmap")
     ref = entry["args"][0]
     assert set(ref) == {"$data"}
     stored = j.data[ref["$data"]]
@@ -176,9 +176,9 @@ def test_grid_artists_intern_their_matrix_in_the_data_section():
 
     # No size floor: a tiny matrix is still data, like a tiny table.
     c2 = pt.chart()
-    c2.add_imshow([[1.0, 2.0], [3.0, 4.0]])
+    c2.add_image_cmap([[1.0, 2.0], [3.0, 4.0]])
     j2 = pt.to_journal(c2)
-    entry2 = next(e for e in j2.entries if e["op"] == "imshow")
+    entry2 = next(e for e in j2.entries if e["op"] == "image_cmap")
     assert entry2["args"][0] == {"$data": "d1"}
     assert pt.from_journal(j2).to_svg() == c2.to_svg()
 

@@ -30,7 +30,7 @@ The root's first child is the figure-background `<rect>`; it carries no
 | `data-plotlet-xlabel` / `-ylabel` | `"date"` / `"USD"` | omitted if empty |
 | `data-plotlet-xscale` / `-yscale` | `"linear"` / `"log"` / `"category"` | |
 | `data-plotlet-xlim` / `-ylim` | `"0,42"` / `"-1.5,1.5"` | resolved limits post-autoscale; omitted on categorical axes |
-| `data-plotlet-yflip`     | `"true"`               | present only when y is rendered inverted (e.g. `imshow(origin="upper")`) |
+| `data-plotlet-yflip`     | `"true"`               | present only when y is rendered inverted (e.g. `image_cmap(origin="upper")`, image_rgba's default) |
 | `data-plotlet-panel-bbox`| `"0,0,560,348"`        | `"x,y,w,h"` of the full panel rect in figure-SVG coords |
 | `data-plotlet-data-area` | `"60,24,500,300"`      | `"x,y,w,h"` of the data region in *panel-local* coords; add the bbox's `(x,y)` for figure-SVG coords |
 
@@ -69,7 +69,7 @@ Common attrs (always emitted):
 
 | Attribute              | Example         |
 |------------------------|-----------------|
-| `data-plotlet-type`    | `"line"`, `"bar"`, `"hist"`, `"imshow"`, … |
+| `data-plotlet-type`    | `"line"`, `"bar"`, `"hist"`, `"image_cmap"`, … |
 | `data-plotlet-index`   | `"0"`, `"1"`, … |
 | `data-plotlet-label`   | `"actual"` (only if user passed `label=`) |
 | `data-plotlet-color`   | `"#1f77b4"` (resolved hex) |
@@ -92,7 +92,8 @@ Type-specific attrs:
 | `hlines` / `vlines` | `n`, `x-min`, `x-max`, `y-min`, `y-max`                                  |
 | `text`          | `n`, `x-min`, `x-max`, `y-min`, `y-max`                                      |
 | `annotate`      | `x`, `y` (annotated point), `tx`, `ty` (text position), `text`               |
-| `imshow`        | `rows`, `cols`, `vmin`, `vmax`, `cmap`, `extent`, `data-encoding` (`"rects"` below ~10000 cells, `"png-embedded"` above); `downsampled="true"` when the embedded PNG was mean-pooled below one pixel per cell; when non-default: `origin`, `norm`, `center`, `annot` (`"values"`/`"custom"`) |
+| `image_cmap`    | `rows`, `cols`, `vmin`, `vmax`, `cmap`, `extent`, `data-encoding` (`"rects"` below ~10000 cells, `"png-embedded"` above); `downsampled="true"` when the embedded PNG was mean-pooled below one pixel per cell; when non-default: `origin`, `norm`, `center`, `annot` (`"values"`/`"custom"`) |
+| `image_rgba`    | `rows`, `cols`, `channels` (3 or 4; fully-opaque RGBA canonicalizes to 3), `extent`, `data-encoding`, `downsampled` as above; `origin` only when non-default (`"lower"`) |
 | `heatmap`       | `rows`, `cols`, `data-encoding` plus either `vmin`, `vmax`, `cmap` (value mode) or `mode="categorical"`, `categories` (palette mode); `downsampled="true"` when the embedded PNG was pooled below one pixel per cell; numeric-`x` charts add `x-axis="continuous"`, `x-extent`; when non-default: `norm`, `center`, `annot` |
 | `hist2d`        | `n` (raw obs), `bins-x`, `bins-y`, `count-max`                               |
 | `dendrogram`    | `orientation`, `n-leaves`, `max-height`, `leaves` (concatenated scipy leaf order) |

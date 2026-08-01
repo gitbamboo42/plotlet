@@ -7,7 +7,7 @@ import plotlet as pt
 
 
 def test_list_datasets():
-    assert pt.list_datasets() == ["anscombe", "flights", "penguins", "tips"]
+    assert pt.list_datasets() == ["anscombe", "earth", "flights", "penguins", "tips"]
 
 
 def test_unknown_dataset():
@@ -51,3 +51,9 @@ def test_tips():
     assert df["total_bill"][0] == 16.99
     assert all(isinstance(v, int) for v in df["size"])
     assert set(df["time"]) == {"Lunch", "Dinner"}
+
+
+def test_earth():
+    img = pt.load_dataset("earth")
+    assert img.shape == (256, 256, 3)
+    assert img.dtype.name == "uint8"

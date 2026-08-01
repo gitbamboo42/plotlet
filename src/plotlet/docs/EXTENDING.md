@@ -170,7 +170,7 @@ behavior. What each opt-in is *for*:
 
 | Field | When you need it |
 |---|---|
-| `data_input` | What kind of data the artist reads, and how the caller may hand it in. `"table"` (default): the artist reads a table, and the caller may pass it either with the `data` keyword or as the bare first argument — both mean the same thing. Only a value shaped like a table (dict / DataFrame) is read that way; any other bare value falls through to your record fn, so a wrong-shaped input hits your own error (`heatmap` rejecting a bare matrix). `"matrix"`: the artist reads a matrix of numbers instead of a table, passed as the bare first argument (`imshow`, `contour`, `dendrogram`) — the journal stores it in its data section like a table. Numeric input reaches your record fn as a 2-D numpy array, non-numeric input as nested lists; `utils.to_matrix` (keeps the array) and `utils.to_list_2d` (plain lists) both accept either. `"none"`: the artist reads no data at all — its arguments are plain settings, and nothing ever reinterprets them (`axhline`, `annotate`, `rect`). |
+| `data_input` | What kind of data the artist reads, and how the caller may hand it in. `"table"` (default): the artist reads a table, and the caller may pass it either with the `data` keyword or as the bare first argument — both mean the same thing. Only a value shaped like a table (dict / DataFrame) is read that way; any other bare value falls through to your record fn, so a wrong-shaped input hits your own error (`heatmap` rejecting a bare matrix). `"matrix"`: the artist reads a matrix of numbers instead of a table, passed as the bare first argument (`image_cmap`, `contour`, `dendrogram`) — the journal stores it in its data section like a table. Numeric input reaches your record fn as a 2-D numpy array, non-numeric input as nested lists; `utils.to_matrix` (keeps the array) and `utils.to_list_2d` (plain lists) both accept either. `"none"`: the artist reads no data at all — its arguments are plain settings, and nothing ever reinterprets them (`axhline`, `annotate`, `rect`). |
 | `xdomain` / `ydomain` | Your artist's data should drive axis limits. Return `None` for decorative artists (axhline, axvline). |
 | `xdomain_log` / `ydomain_log` | Domain contribution under a **log** scale when it must differ from the plain hook — e.g. a CI band whose non-positive bounds would poison a log domain. `None` (default) → the plain hook serves every scale kind. |
 | `layer` | `"background"` for fills (drawn first), `"foreground"` for reference lines (drawn last). Default `"data"`. |
@@ -178,7 +178,7 @@ behavior. What each opt-in is *for*:
 | `legend_entries` | Return the legend entries this artist contributes (zero or more). Each entry is `{"label": str, "color": str}` plus optional `"alpha"`, `"group"` (clusters entries under one header), and `"paint"` — `paint(a, ctx, x0, y_mid) -> svg_fragment` overrides the default rect swatch. Most one-series-per-call artists return zero or one entry depending on whether `label=` was set. |
 | `legend_gradient` | For artists with a continuous color mapping. Returns `{"kind": "continuous", "cmap": ..., "vmin": ..., "vmax": ...}`. |
 | `data_attrs` | AI-readable type-specific attrs. Keys land on the artist's `<g>` as `data-plotlet-<key>`. Common attrs (type, index, label, color) are automatic — see [`AI_ATTRS.md`](AI_ATTRS.md). |
-| `flips_y_axis` | Return `True` when this artist needs the y-axis inverted (top → bottom). Used by `imshow` / `heatmap` so row 0 sits at the top. |
+| `flips_y_axis` | Return `True` when this artist needs the y-axis inverted (top → bottom). Used by `image_cmap` / `image_rgba` / `heatmap` so row 0 sits at the top. |
 | `tight_domain` | When `True`, the artist's `xdomain` / `ydomain` are used as-is — no `expand` padding added. For artists whose extents are exact (image bounds, raster cell edges). |
 | `force_zero_x` / `force_zero_y` | Anchor that axis to zero: if the artist contributes to autoscaling and data lo > 0, push lo down to 0 (and suppress that side's expand). Built-in `bar` and `hist` set `force_zero_y=True`. May be a callable `(a) -> bool` so e.g. a bar with `orientation='h'` forces zero on x instead. |
 | `axis_order` | Contribute a canonical order for a categorical axis. Returns `{"x": [...]}` / `{"y": [...]}`. Use when ordering is load-bearing (dendrogram leaves). User's explicit `xscale("category", order=...)` still wins. |
@@ -198,7 +198,7 @@ render state so call sites stay short.
 |---|---|
 | `x_scale`, `y_scale` | `scale(value) -> pixel`. On a categorical axis, returns the band *center*; `.bandwidth` is also available (bars subtract `bandwidth/2` for the rect's left edge). |
 | `iw`, `ih` | Inner figure width / height in pixels (after margins). |
-| `color` | The resolved color for this artist. `None` if `uses_color_cycle=False` and no `default_color` (e.g. `imshow`). |
+| `color` | The resolved color for this artist. `None` if `uses_color_cycle=False` and no `default_color` (e.g. `image_cmap`). |
 | `defaults` | The `spec.json` defaults dict (`linewidth`, `markersize`, `scatter_s`, …). Use these instead of literals. |
 | `dash` | Linestyle codes → SVG `stroke-dasharray` strings. The `draw.*` helpers already accept the codes directly via `dash=`. |
 | `project` | Set by `c.coordinate(...)` for non-affine coords; `None` for Cartesian and affine coords. `project(t, r) -> (px, py)` maps data-space directly to canvas pixels — use it when you want to draw straight in the target coord (e.g. radial line from `r=0` to `r=1` at angle `t`). |
@@ -219,7 +219,7 @@ and is passed to `xdomain` / `ydomain` / `draw` as `a`. Two conventions:
   there.
 
 Keys starting with `_` (e.g. `_bins`, `_data`, `_color`) are conventionally
-"computed during render, used during draw" — see how `imshow` and `hist`
+"computed during render, used during draw" — see how `image_cmap` and `hist`
 stash pre-processed data in [`artists/`](../artists/).
 
 Respect deferred rendering: `record` runs early, `draw` runs at `to_svg()`

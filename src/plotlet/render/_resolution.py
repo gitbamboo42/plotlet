@@ -804,7 +804,7 @@ def _normalize_expand(args):
 
 def _resolve_expand(st_value, tight, axis):
     """Effective `(lo, hi)` expand fractions for an axis.
-    None state → spec default for non-tight axes, zero for tight (so imshow
+    None state → spec default for non-tight axes, zero for tight (so image_cmap
     stays tight by default). Explicit user value wins in all cases."""
     if st_value is not None:
         return st_value

@@ -244,7 +244,8 @@ def _normalize_matrix(obj):
     vectorized without ever converting back. Narrower float dtypes
     widen to float64 — the same values `.tolist()` used to produce, so
     rendered bytes don't depend on the input's storage dtype. `None`
-    cells become NaN. Anything non-numeric (strings, ragged rows,
+    cells become NaN. 3-D numeric input (image_rgba's pixel array) gets
+    the same treatment. Anything non-numeric (strings, ragged rows,
     dates) falls back to `_normalize_data`'s plain-list form."""
     if hasattr(obj, "values") and not hasattr(obj, "tolist"):
         obj = obj.values                    # DataFrame → its ndarray
@@ -252,7 +253,7 @@ def _normalize_matrix(obj):
         a = np.asarray(obj)
     except (TypeError, ValueError):
         return _normalize_data(obj)
-    if a.ndim == 2:
+    if a.ndim in (2, 3):
         if a.dtype == np.float64 or a.dtype.kind in "iub":
             return a
         if a.dtype.kind == "f":
@@ -270,7 +271,7 @@ def to_matrix(obj):
     (widening narrow floats to float64, same as `_normalize_matrix` —
     an array can also arrive here unnormalized, e.g. passed by
     keyword), convert everything else to nested lists via `to_list_2d`.
-    Artists whose draw side is vectorized (imshow) call this instead of
+    Artists whose draw side is vectorized (image_cmap) call this instead of
     `to_list_2d` so the array survives end-to-end."""
     if isinstance(obj, np.ndarray) and obj.ndim == 2:
         if obj.dtype == np.float64 or obj.dtype.kind in "iub":
@@ -291,7 +292,7 @@ def to_list_2d(obj):
     if not out:
         return out
     if not isinstance(out[0], list):
-        raise ValueError("imshow data must be 2-D")
+        raise ValueError("matrix data must be 2-D")
     return out
 
 

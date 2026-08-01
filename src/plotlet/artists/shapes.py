@@ -62,7 +62,7 @@ def _artist_rect(a, xs_, ys_, col, warp=None):
     """Scale-aware axis-aligned rectangles. `xs`, `ys`, `ws`, `hs` are
     pre-broadcast to a common length in `record`. Each rect spans
     `(x, y) -> (x + w, y + h)` in data coords; pixel-space sign is fixed
-    up so flipped y-axes (imshow origin='upper') still render correctly."""
+    up so flipped y-axes (image_rgba's default origin='upper') still render correctly."""
     params = _fill_stroke_params(a, col)
     out = []
     for x, y, w, h in zip(a["xs"], a["ys"], a["ws"], a["hs"]):

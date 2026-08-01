@@ -559,7 +559,7 @@ def _emit_inline_legend(env, iw, ih, ctx_for):
     """Legend placement + body — gather entries from every artist's
     legend_entries(a) and gradient descriptors from legend_gradient(a).
     Multi-entry artists (sankey, mosaic, ...) contribute one row per
-    category; continuous artists (imshow, hexbin, ...) contribute a
+    category; continuous artists (image_cmap, hexbin, ...) contribute a
     vertical gradient strip with ticks (inline colorbar)."""
     leg = env.leg
     lw = leg["lw"]

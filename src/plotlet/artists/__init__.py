@@ -5,7 +5,7 @@ group mirror pairs or shared-machinery siblings — consolidation only
 where the related artists share enough structure to earn it.
 
 Single-artist files (one plot type each):
-  scatter, line, bar, hist, imshow, heatmap, dendrogram, errorbar
+  scatter, line, bar, hist, image_cmap, image_rgba, heatmap, dendrogram, errorbar
   boxplot, violin, swarm, strip
   pointplot, ecdf, rug, density_1d, regression, kde_2d, hexbin, hist2d
   freqpoly, contour, ridge, qq, numeric_bar, annotation_strip
@@ -26,7 +26,8 @@ from . import scatter      # noqa: F401
 from . import line         # noqa: F401
 from . import bar          # noqa: F401
 from . import hist         # noqa: F401
-from . import imshow       # noqa: F401
+from . import image_cmap   # noqa: F401
+from . import image_rgba   # noqa: F401
 from . import heatmap      # noqa: F401
 from . import dendrogram   # noqa: F401
 from . import errorbar     # noqa: F401

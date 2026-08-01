@@ -1,6 +1,6 @@
 """Minimal PNG encoder — RGB only, stdlib-only.
 
-Used by the raster fallbacks (`imshow`, large heatmaps) to embed images
+Used by the raster fallbacks (`image_cmap`, `image_rgba`, large heatmaps) to embed images
 as a single base64 data URI rather than thousands of `<rect>` elements.
 Hand-rolled to avoid a Pillow dep.
 
@@ -105,14 +105,17 @@ def image_png(x, y, w, h, pixels, width, height):
             f'href="data:image/png;base64,{b64}"/>')
 
 
-def image_png_rgba(x, y, w, h, pixels, width, height):
+def image_png_rgba(x, y, w, h, pixels, width, height, *, pixelated=False):
     """One `<image>` element with a packed RGBA buffer as a base64 PNG.
-    Unlike `image_png`, this scales *smoothly* (no `image-rendering:
-    pixelated`) — the point-cloud raster is supersampled and looks better
-    downsampled with interpolation than pixel-doubled."""
+    By default this scales *smoothly* (no `image-rendering: pixelated`) —
+    the point-cloud raster is supersampled and looks better downsampled
+    with interpolation than pixel-doubled. Cell-faithful users
+    (image_rgba's transparent-pixel path) pass `pixelated=True` for the
+    same nearest-neighbour scaling as `image_png`."""
     png = encode_rgba(bytes(pixels), width, height)
     b64 = base64.b64encode(png).decode("ascii")
+    rendering = 'image-rendering="pixelated" ' if pixelated else ""
     return (f'<image x="{x:.3f}" y="{y:.3f}" '
             f'width="{w:.3f}" height="{h:.3f}" '
-            f'preserveAspectRatio="none" '
+            f'preserveAspectRatio="none" {rendering}'
             f'href="data:image/png;base64,{b64}"/>')

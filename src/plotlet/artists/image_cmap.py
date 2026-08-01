@@ -1,6 +1,12 @@
-"""2-D array → colored grid. Branches between many <rect>s and one PNG.
+"""2-D value matrix → colored grid via a colormap. One scalar per cell.
 
-The threshold (`imshow_max_rects` in spec.json) trades vector cleanliness
+For real pixel data — an (H, W, 3|4) RGB(A) array where each cell already
+IS a color — use `add_image_rgba` instead; every mapping kwarg here
+(cmap, vmin/vmax, norm, center, the colorbar legend) assumes scalar
+cells and has no meaning for pixel data.
+
+Rendering branches between many <rect>s and one PNG. The threshold
+(`image_max_rects` in spec.json) trades vector cleanliness
 for SVG file size. Below the threshold, each cell is its own <rect> — sharp
 at any zoom. Above, the whole image is encoded as base64 PNG. A grid
 denser than `raster_oversample` cells per display pixel is mean-pooled
@@ -30,7 +36,7 @@ from ._shared import (pool_target, pool_mean, pool_grid, rgb_buffer,
                       png_value_cells, minmax_grid)
 
 
-def _artist_imshow(a, xs_, ys_, col):
+def _artist_image_cmap(a, xs_, ys_, col):
     nrows = a["_nrows"]; ncols = a["_ncols"]
     if nrows == 0 or ncols == 0:
         return ""
@@ -69,7 +75,7 @@ def _artist_imshow(a, xs_, ys_, col):
     else:
         rows_in_render_order = [data[i] for i in row_indices]
 
-    use_rects = nrows * ncols <= _D["imshow_max_rects"]
+    use_rects = nrows * ncols <= _D["image_max_rects"]
     cw = pw / ncols; ch = ph / nrows
     if use_rects:
         out = _rects_pass(rows_in_render_order, norm, lut,
@@ -150,7 +156,7 @@ def _annot_pass(a, rows_in_render_order, row_indices, norm, lut,
     n_lab = len(label_source)
     if n_lab != nrows or (n_lab and len(label_source[0]) != ncols):
         raise ValueError(
-            f"imshow: annot array shape ({n_lab}x"
+            f"image_cmap: annot array shape ({n_lab}x"
             f"{len(label_source[0]) if n_lab else 0}) "
             f"doesn't match data ({nrows}x{ncols})"
         )
@@ -181,18 +187,18 @@ def _annot_pass(a, rows_in_render_order, row_indices, norm, lut,
     return out
 
 
-def _imshow_data_attrs(a):
+def _image_cmap_data_attrs(a):
     out = {
         "rows": a["_nrows"],
         "cols": a["_ncols"],
         "vmin": a["_vmin"],
         "vmax": a["_vmax"],
         "cmap": a["opts"].get("cmap", _D["default_cmap"]),
-        # imshow is always raster (PNG-embedded above the rect threshold,
+        # image_cmap is always raster (PNG-embedded above the rect threshold,
         # individual <rect>s below). The flag is here so AI tools know
         # which decoding strategy they're looking at.
         "data-encoding": "png-embedded" if (a["_nrows"] * a["_ncols"]
-                                              > _D["imshow_max_rects"]) else "rects",
+                                              > _D["image_max_rects"]) else "rects",
     }
     # Stashed by the draw pass — tells AI readers the embedded PNG is a
     # pooled summary, not one pixel per matrix cell.
@@ -216,18 +222,28 @@ def _imshow_data_attrs(a):
     return out
 
 
-# imshow needs a preprocessing step (2-D-ify, autocompute vmin/vmax) before
+# image_cmap needs a preprocessing step (2-D-ify, autocompute vmin/vmax) before
 # domain can be computed. We do that in record() rather than draw().
-def _imshow_record(matrix,
+def _image_cmap_record(matrix,
                    # vmin/vmax/norm drive autoscale here and also ride in
                    # opts (norm read at draw; vmin/vmax by the legend)
                    cmap=None, vmin=None, vmax=None, norm=None, center=None,
                    origin=None, extent=None,
                    annot=None, fmt=None, annot_color=None, annot_fontsize=None,
                    legend=None):
+    if isinstance(matrix, np.ndarray) and matrix.ndim == 3:
+        raise TypeError(
+            "image_cmap takes a 2-D value matrix (one scalar per cell); "
+            "for (H, W, 3|4) RGB(A) pixel data use add_image_rgba."
+        )
     d = to_matrix(matrix)
     nrows = len(d)
     ncols = len(d[0]) if nrows else 0
+    if nrows and ncols and isinstance(d, list) and isinstance(d[0][0], list):
+        raise TypeError(
+            "image_cmap takes a 2-D value matrix (one scalar per cell); "
+            "for (H, W, 3|4) RGB(A) pixel data use add_image_rgba."
+        )
     norm_val = norm if norm is not None else "linear"
     # For log norm, autoscale ignores non-positive values (they can't be
     # log-mapped). User-supplied vmin/vmax are still trusted as-is; the
@@ -258,26 +274,26 @@ def _imshow_record(matrix,
                      origin=origin, extent=extent, annot=annot, fmt=fmt,
                      annot_color=annot_color, annot_fontsize=annot_fontsize,
                      legend=legend)
-    return {"type": "imshow", "_data": d, "_nrows": nrows, "_ncols": ncols,
+    return {"type": "image_cmap", "_data": d, "_nrows": nrows, "_ncols": ncols,
             "_vmin": lo, "_vmax": hi, "opts": opts}
 
 
-def _imshow_xdomain(a):
+def _image_cmap_xdomain(a):
     ext = a["opts"].get("extent")
     if ext is None:
         return [0, a["_ncols"]]
     return [ext[0], ext[1]]
 
 
-def _imshow_ydomain(a):
+def _image_cmap_ydomain(a):
     ext = a["opts"].get("extent")
     if ext is None:
         return [0, a["_nrows"]]
     return [ext[2], ext[3]]
 
 
-def _imshow_legend_gradient(a):
-    """Describe imshow's continuous mapping (cmap + range + user overrides) for legend rendering."""
+def _image_cmap_legend_gradient(a):
+    """Describe image_cmap's continuous mapping (cmap + range + user overrides) for legend rendering."""
     legend_opts = a["opts"].get("legend") or {}
     return {
         "kind": "continuous",
@@ -292,15 +308,15 @@ def _imshow_legend_gradient(a):
 
 
 add_artist(ArtistSpec(
-    name="imshow",
+    name="image_cmap",
     data_input="matrix",
-    record=_imshow_record,
-    xdomain=_imshow_xdomain,
-    ydomain=_imshow_ydomain,
-    draw=lambda a, ctx: _artist_imshow(a, ctx.x_scale, ctx.y_scale, None),
-    legend_gradient=_imshow_legend_gradient,
+    record=_image_cmap_record,
+    xdomain=_image_cmap_xdomain,
+    ydomain=_image_cmap_ydomain,
+    draw=lambda a, ctx: _artist_image_cmap(a, ctx.x_scale, ctx.y_scale, None),
+    legend_gradient=_image_cmap_legend_gradient,
     uses_color_cycle=False,
-    data_attrs=_imshow_data_attrs,
+    data_attrs=_image_cmap_data_attrs,
     flips_y_axis=lambda a: a["opts"].get("origin", "lower") == "upper",
     tight_domain=True,
 ))

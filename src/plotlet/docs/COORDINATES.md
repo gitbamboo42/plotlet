@@ -26,7 +26,7 @@ renders through the new coord.
   the renderer falls back to Cartesian rendering for any hook the coord
   doesn't implement.
 - **Artists opt in per coord.** Not every artist renders correctly under
-  every coord — e.g. `imshow` (Cartesian-pixel raster) doesn't belong on
+  every coord — e.g. `image_cmap` (Cartesian-pixel raster) doesn't belong on
   a ring. Each coord lists its supported artists via
   `declare_coord_support`; the renderer raises if you mix a coord with
   an artist not in that list.
@@ -101,7 +101,7 @@ of the standard vocabulary, including the reference and shape primitives,
 subdivision: segments become arcs, rects become annular sectors (a bar →
 a wedge, a box → an annular box), polygons curve along the ring; point
 marks re-anchor but keep their glyph shape. Not supported: 2-D field
-marks (`imshow`, `hexbin`, `kde_2d`, `contour`) and the stacked-baseline
+marks (`image_cmap`, `hexbin`, `kde_2d`, `contour`) and the stacked-baseline
 `ridge` don't map to a 1-D-over-angle canvas.
 
 **Per-artist coord knobs.** A few artists expose a kwarg that only

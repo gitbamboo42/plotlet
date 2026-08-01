@@ -169,7 +169,7 @@ def chart_heatmap_continuous_uneven():
 
 def chart_heatmap_continuous_nan():
     # NaN/None on a continuous-position grid still routes to absent_fill,
-    # never the imshow black.
+    # never the image_cmap black.
     matrix = [
         [1.0, float("nan"), 3.0, None],
         [None, 2.0, 5.0, 4.0],
@@ -320,7 +320,7 @@ def test_heatmap_numpy_scalar_x_is_continuous():
 
 
 def test_heatmap_large_grid_encoding_matches_markup():
-    # Plain large grid (>imshow_max_rects) → one PNG, attr says so.
+    # Plain large grid (>image_max_rects) → one PNG, attr says so.
     svg = _big_continuous_heatmap(with_y_sectors=False)
     assert svg.count("<image") == 1
     assert 'data-encoding="png-embedded"' in svg

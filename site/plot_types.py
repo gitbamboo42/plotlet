@@ -220,13 +220,19 @@ c = pt.chart()
 c.add_heatmap(data=data, mapping=aes(x="col"),
               values=[f"r{r}" for r in range(5)], cmap="viridis")
 """),
-    ("Gridded & matrix", "imshow", """\
+    ("Gridded & matrix", "image_cmap", """\
 import math
 grid = [[math.sin(r * 0.15) + math.cos(col * 0.1) for col in range(80)]
         for r in range(60)]
 
 c = pt.chart(xlabel="col", ylabel="row")
-c.add_imshow(grid, cmap="magma")
+c.add_image_cmap(grid, cmap="magma")
+"""),
+    ("Gridded & matrix", "image_rgba", """\
+earth = pt.load_dataset("earth")   # (256, 256, 3) uint8 — Apollo 17, NASA
+
+c = pt.chart(data_width=256, data_height=256)
+c.add_image_rgba(earth)
 """),
     ("Gridded & matrix", "contour", """\
 import math

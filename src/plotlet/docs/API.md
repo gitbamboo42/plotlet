@@ -11,7 +11,7 @@ only `aes(...)` refers to a column — no sniffing. Data and mapping set
 on `pt.chart(df, aes(...))` propagate to every mark, so per-call
 values are optional once set at chart level. `heatmap` is also
 table-shaped (`df, aes(x=), values=`, see below). The remaining shape
-marks (`imshow`, `contour`, `dendrogram`, `rect` / `polygon` /
+marks (`image_cmap`, `image_rgba`, `contour`, `dendrogram`, `rect` / `polygon` /
 `polyline`, the reference lines and spans, `annotate`) take their
 natural positional input — there's no `aes(...)` version for a 2-D
 matrix or a single y-value. All methods return `self`, so they chain.
@@ -39,7 +39,7 @@ translucent background for readability over plot marks. `ncols=N`
 (also on `pt.legend(...)`) wraps discrete entries into N columns,
 filled down-then-across; `"top"` / `"bottom"` default to one
 horizontal row until `ncols=` switches them to the grid. A
-gradient-only chart (imshow / heatmap / hexbin) on `"top"` /
+gradient-only chart (image_cmap / heatmap / hexbin) on `"top"` /
 `"bottom"` gets a horizontal colorbar — strip running vmin-left →
 vmax-right, ticks below. `reverse=True` (also on `pt.legend(...)`)
 flips the discrete entry order; `entries=[{"label": ..., "color":
@@ -347,7 +347,8 @@ universal and not repeated.
 
 | call | options |
 | --- | --- |
-| `.add_imshow(data, **opts)` | `cmap` (~180 vendored, default `"viridis"`), `vmin`, `vmax`, `extent`, `annot`, `fmt`, `annot_color`, `annot_fontsize` |
+| `.add_image_cmap(data, **opts)` | 2-D scalar matrix through a colormap: `cmap` (~180 vendored, default `"viridis"`), `vmin`, `vmax`, `extent`, `annot`, `fmt`, `annot_color`, `annot_fontsize` |
+| `.add_image_rgba(image, **opts)` | (H, W, 3\|4) pixel array, no colormap — decoded image data (float 0..1 or int 0..255 channels). `origin` (default `"upper"`: row 0 at top, photo as-seen), `extent` |
 | `.add_heatmap(df, aes(x=, sector=), values=, **opts)` | Tidy input: each table row → a heatmap column (x-position from the `aes(x=)` column — numeric → continuous axis, string → categorical), each value column → a track row (`values=` selects/orders them by name, default = all columns not mapped to `x`/`sector`). A numeric `x` is auto-sorted (row order carries no meaning); duplicate or NaN positions raise. Opts: `cmap`, `vmin`, `vmax`, `norm`, `center`, `palette`, `absent_fill`, `legend`, `annot`, `fmt`, `annot_color`, `annot_fontsize`, `linewidth`, `linecolor`, `border`. `aes(sector=)` + `c.sectors(...)` draws gaps; for categorical-x clusters call `c.sectors({cluster: [members]}, axis=...)` — see [Sectors](#sectors). A bare matrix is not accepted; reshape it into a table first. |
 | `.add_dendrogram(data, **opts)` | `orientation="top"\|"left"\|"right"\|"bottom"`, `labels`, `method="single"\|"complete"\|"average"\|"ward"\|...` (scipy), `metric`, `linkage_matrix=<Z>` (raw scipy Z, skip clustering math), `tree=<SplitTree>` (skip clustering entirely), `clusters=[...]` (parallel grouping vector for two-level cluster), `parent=True\|<frac>` (render centroid tree above per-block trees). Visual gap whitespace lives on the panel as `c.sectors(...)` — see [Sectors](#sectors). |
 | `.add_axhline(y, **opts)` / `.add_axvline(x, **opts)` | `color`, `linewidth`, `linestyle`, `alpha`, axes-fraction span limits (`xmin`/`xmax` on axhline, `ymin`/`ymax` on axvline) |
@@ -364,7 +365,7 @@ universal and not repeated.
 - When `aes(color=)` and `aes(linestyle=)` (or `aes(alpha=)`) map the *same* column, the existing color legend swatches inherit the dash / opacity — the canonical pattern for colorblind-safe or B&W-print redundancy.
 - Reference lines / spans default to black, are drawn outside the data color cycle, and don't participate in autoscaling.
 - On `scatter`, `aes(size=)` maps a numeric column to per-point radius (px, rescaled into `sizes=(min, max)` — default `(2, 7)`); `aes(style=)` cycles markers per unique value (`o`, `s`, `^`, `v`, `x`, `+`). `color`, `group`, `size`, `style`, `alpha` all compose.
-- `.add_imshow` emits one `<rect>` per cell for small grids (≤10000 cells, vector-clean at any zoom) and a base64 PNG above that. On `.add_heatmap`, a numeric `x` gives a continuous axis that `share_x`-aligns with a scatter/line; a string `x` gives categorical bands so a top/left dendrogram pairs cleanly via `share_x` / `share_y` (or `attach_above` / `attach_left`, which auto-share).
+- `.add_image_cmap` and `.add_image_rgba` emit one `<rect>` per cell for small grids (≤10000 cells, vector-clean at any zoom) and a base64 PNG above that. On `.add_heatmap`, a numeric `x` gives a continuous axis that `share_x`-aligns with a scatter/line; a string `x` gives categorical bands so a top/left dendrogram pairs cleanly via `share_x` / `share_y` (or `attach_above` / `attach_left`, which auto-share).
 - On both, `annot=True` overlays each cell's value as a text label (correlation / confusion matrices). `annot=<2D array>` uses custom labels — numbers formatted via `fmt`, strings verbatim — so labels independent of cell values (e.g. significance asterisks over a correlation cmap) are a string-array away. `fmt=".2g"` is the format spec (passed to `format(value, fmt)`); palette-mode heatmap labels skip `fmt` and render verbatim (identifiers/counts, not measurements). `annot_color="auto"` picks black or white per cell via luminance; pass any CSS color for uniform text.
 - **Cluster gaps.** Heatmap row/column clusters are declared via `c.sectors({cluster: [members]}, axis="x" | "y")` on the panel — the category scale picks up the implied split positions and inserts a 6-px (default) gap at every block boundary, and the heatmap reorders cells at draw time to match the sector cat order. Pass the *same* grouping info as a parallel list to `.add_dendrogram(clusters=[...])` and it runs scipy *per block* for within-block leaf order plus once more on the per-block centroids for between-block order — a two-level cluster. The dendrogram exposes the resulting leaf order via `axis_order`, so the heatmap follows automatically when both share a category axis (`attach_above` / `attach_left`). `parent=True` on the dendrogram also renders the centroid tree above the per-block trees in the same panel. See [`plotlet-cookbook/heatmaps/`](https://github.com/gitbamboo42/plotlet-cookbook/tree/main/heatmaps) for the worked examples.
 

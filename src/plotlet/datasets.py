@@ -1,9 +1,11 @@
 """Bundled example datasets — `pt.load_dataset("penguins")` and friends.
 
-Datasets ship as CSV files under `_datasets/` and are loaded into a
-dict-of-lists (`{col: [values, ...]}`) — the same shape `pt.chart()`
-accepts directly. Numeric columns are converted to float; missing
-values become `float('nan')`. Categorical columns stay strings.
+Tabular datasets ship as CSV files under `_datasets/` and are loaded
+into a dict-of-lists (`{col: [values, ...]}`) — the same shape
+`pt.chart()` accepts directly. Numeric columns are converted to float;
+missing values become `float('nan')`. Categorical columns stay strings.
+Image datasets ship as compressed `.npz` and load as a uint8 numpy
+array ready for `c.add_image_rgba(...)`.
 
 Available datasets:
 
@@ -19,6 +21,9 @@ Available datasets:
   - "tips" — restaurant tipping records (Bryant & Smith 1995). 244 rows
     × 7 columns: total_bill, tip, sex, smoker, day, time, size.
     Categorical workflows: bar, box, violin, swarm.
+  - "earth" — "The Blue Marble", Earth from Apollo 17 (NASA, Dec 7
+    1972; public domain, via Wikimedia Commons). (256, 256, 3) uint8
+    RGB array — image_rgba demos.
 
 Example:
 
@@ -74,7 +79,8 @@ def _coerce(value, kind):
 
 
 def load_dataset(name):
-    """Load a bundled example dataset as a `dict[col, list]`.
+    """Load a bundled example dataset — a `dict[col, list]` for tabular
+    datasets, a uint8 numpy array for image datasets.
 
     Pass directly to `pt.chart(...)`:
 
@@ -83,6 +89,11 @@ def load_dataset(name):
 
     See `pt.list_datasets()` for what's available.
     """
+    npz = _DATA_DIR / f"{name}.npz"
+    if npz.exists():
+        import numpy as np
+        with np.load(npz) as z:
+            return z["image"]
     path = _DATA_DIR / f"{name}.csv"
     if not path.exists():
         avail = list_datasets()
@@ -104,4 +115,5 @@ def list_datasets():
     """Return the names of bundled datasets."""
     if not _DATA_DIR.is_dir():
         return []
-    return sorted(p.stem for p in _DATA_DIR.glob("*.csv"))
+    return sorted(p.stem for p in _DATA_DIR.iterdir()
+                  if p.suffix in (".csv", ".npz"))

@@ -31,7 +31,7 @@ Chart methods chain. Charts compose with `|` (horizontal), `/`
 `.share_x()` / `.share_y()`, `pt.legend()`.
 
 Legends are automatic: a discrete `aes` mapping, a `label=`, or a
-gradient (heatmap / imshow) draws its key or colorbar without any call.
+gradient (heatmap / image_cmap) draws its key or colorbar without any call.
 `c.legend(False)` hides it, a single layer opts out with
 `c.add_<name>(..., legend=False)`, `c.legend(position=...)` moves it,
 and a `pt.legend(...)` panel in a composition takes over (per-panel
@@ -62,7 +62,7 @@ c.add_scatter()   # same mapping, no repetition
 
 Advanced cases — a layer with its own table/columns, opting out of an
 inherited aesthetic (`inherit_aes=False`), and artists that need explicit
-`data=` (heatmap, imshow, contour, dendrogram, text, annotate, reference
+`data=` (heatmap, image_cmap, image_rgba, contour, dendrogram, text, annotate, reference
 lines) — see `help(c.add_<name>)` and the shipped examples (below); in
 a clone of the plotlet repo, `tests/test_aes.py` has focused fixtures.
 

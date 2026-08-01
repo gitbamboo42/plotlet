@@ -76,7 +76,7 @@ class Journal:
 
     `data` is the data table: data id → normalized bulk data — a table
     (DataFrameLite or dict of columns) or a matrix (a 2-D numpy array,
-    or nested lists when the input isn't numeric — e.g. imshow's
+    or nested lists when the input isn't numeric — e.g. image_cmap's
     input). Entries reference it as `{"$data": id}`.
     """
     entries: list[dict] = field(default_factory=list)
@@ -383,7 +383,7 @@ def to_journal(root) -> Journal:
         bulk data: `data=` kwargs, an artist's positional table (the
         only ops whose first positional is a dict / DataFrameLite are
         artist calls with `data_input="table"`), and the positional
-        matrix of a matrix artist (`data_input="matrix"` — imshow, contour).
+        matrix of a matrix artist (`data_input="matrix"` — image_cmap, contour).
         `Aes` is a dict subclass but a column mapping, not a table — it
         must reach `_encode` and wire as `$aes`, or a JSON round-trip
         would degrade it to a plain dict that replay mistakes for

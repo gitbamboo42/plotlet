@@ -48,7 +48,7 @@ def test_data_input_declarations_match_signatures():
     # `data` parameter; "none" artists must not — a mismatch means the
     # declaration lies about the artist. ("matrix" is unchecked: the
     # bare matrix binds to whatever the record fn names its first
-    # parameter — imshow's `matrix`, dendrogram's `data`.)
+    # parameter — image_cmap's `matrix`, dendrogram's `data`.)
     from plotlet.registry import _REGISTRY
     for name, spec in _REGISTRY.items():
         if spec.record.__kwarg_names__ is None:

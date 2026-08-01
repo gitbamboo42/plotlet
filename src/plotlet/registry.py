@@ -34,7 +34,7 @@ A spec bundles everything the pipeline needs to know about a plot type:
 
   - `uses_color_cycle`: bool
         Whether this artist consumes the next tab10 color (True for
-        plot/scatter/bar/etc, False for axhline/axvline/imshow).
+        plot/scatter/bar/etc, False for axhline/axvline/image_cmap).
 
   - `data_attrs(artist) -> dict | None` (optional, 0.3.0+)
         Type-specific structural attrs for the AI-readable schema. Returned
@@ -91,7 +91,7 @@ class ArtistSpec:
     #       like a table (dict / DataFrame) is read that way; any other
     #       bare value falls through to the record fn's own handling.
     #   "matrix" — the artist reads a matrix of numbers instead of a
-    #       table, passed as the bare first argument (imshow, contour,
+    #       table, passed as the bare first argument (image_cmap, contour,
     #       dendrogram).
     #   "none" — the artist reads no data at all — its arguments are
     #       plain settings, and nothing ever reinterprets them
@@ -184,7 +184,7 @@ def _record_kwarg_names(fn):
     record function. A `**kw` catch-all (e.g. `step` forwarding to
     `line`) accepts anything, so `None` disables the filter — the
     forwarded-to function validates. Otherwise it's every parameter with
-    a default; the required positionals (rect's x/y/w/h, imshow's
+    a default; the required positionals (rect's x/y/w/h, image_cmap's
     matrix) are geometry an injected keyword must not collide with."""
     params = inspect.signature(fn).parameters.values()
     if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params):

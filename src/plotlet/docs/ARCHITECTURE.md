@@ -67,7 +67,7 @@ IRNode(nid, kind, init, ops, insets)
 - `data` — the data section: data id (`"d1"`, `"d2"`, … in
   first-encounter order) → normalized bulk data, shared verbatim with
   the journal (`Journal.data`): a table (`DataFrameLite` or dict of
-  columns) or a matrix artist's positional matrix (imshow, contour —
+  columns) or a matrix artist's positional matrix (image_cmap, contour —
   declared via `ArtistSpec.data_input="matrix"`). Every bulk value sits
   here exactly once; init and op values reference it with the `$data`
   envelope (below). A table shared by a chart and its artists is one

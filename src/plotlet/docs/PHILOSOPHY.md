@@ -27,7 +27,7 @@ making the per-extension cost low.
   color=/fill=)` column mapping; bare kwargs stay literal) for
   table-shaped marks across the standard vocabulary — a data frame
   plus `aes(...)` is the primary entry point. Matrix and shape marks
-  (imshow, contour, dendrogram, refline/refspan, rect/polygon) take
+  (image_cmap, image_rgba, contour, dendrogram, refline/refspan, rect/polygon) take
   their natural positional input.
 - The standard plotting vocabulary:
   - **xy:** scatter, line, regression
@@ -35,7 +35,7 @@ making the per-extension cost low.
   - **1-D distributions:** hist, density_1d, ecdf, rug, freqpoly, qq
   - **2-D distributions:** hexbin, hist2d, kde_2d, contour, ridge
   - **bars & areas:** bar (stack/dodge/fill), fill_between, area (stack), errorbar
-  - **images & matrices:** imshow, heatmap, dendrogram
+  - **images & matrices:** image_cmap, image_rgba, heatmap, dendrogram
   - **reference lines / shapes / text:** axhline/vline/span, axline, hlines/vlines, rect, polygon, text, annotate
 - Text-as-paths rendering for cross-machine reproducibility
 - The locked visual contract (`spec.json`) and theming layer

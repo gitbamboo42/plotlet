@@ -169,7 +169,7 @@ def register_colormap(name: str, colors, stops=None) -> None:
 #                              c..vmax maps to [0.5, 1]. Symmetric around c
 #                              even when |vmin - c| != |vmax - c|.
 #
-# Used by imshow for cell coloring and by the layout-level legend for
+# Used by image_cmap for cell coloring and by the layout-level legend for
 # tick positioning on the gradient strip.
 # ---------------------------------------------------------------------------
 

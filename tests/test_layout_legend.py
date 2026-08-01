@@ -9,7 +9,7 @@ The in-frame overlay (`chart.legend(True)` / `legend=True`) is exercised
 incidentally across the `tests/test_chart_*` suites. This file is dedicated to the
 layout-level renderer in `plotlet/legend.py` — `pt.legend()` panel form,
 grouping by source `title`, continuous
-gradient strips for sources with `legend_gradient` (today: `imshow`),
+gradient strips for sources with `legend_gradient` (today: `image_cmap`),
 and content-driven sizing.
 
 Each plot below bundles several features so the suite isn't dominated by
@@ -19,8 +19,8 @@ near-duplicate baselines:
                         auto-harvest, default grouping with chart `title`
                         headers, content-driven auto-sizing.
   legend_continuous   — pt.legend(hm) panel form with a continuous source;
-                        per-imshow legend={"label", "ticks"} override.
-  legend_mixed        — pt.legend() panel form harvesting both an imshow
+                        per-image_cmap legend={"label", "ticks"} override.
+  legend_mixed        — pt.legend() panel form harvesting both an image_cmap
                         (gradient strip) and a labeled line panel (swatch
                         row) — continuous stacks above discrete in-section.
   legend_overrides    — three sources with names={a: "Custom", b: None}
@@ -81,7 +81,7 @@ def legend_auto_grouped():
 
 def legend_continuous():
     hm = pt.chart(title="heat", data_width=320, data_height=180)
-    hm.add_imshow(_matrix(), cmap="viridis",
+    hm.add_image_cmap(_matrix(), cmap="viridis",
               legend={"label": "intensity", "ticks": [0.0, 0.5, 1.0]})
     return hm | pt.legend(hm)
 
@@ -90,14 +90,14 @@ def legend_colorbar_bottom():
     # Gradient-only + position="bottom" → horizontal colorbar under the
     # data area (vmin left, ticks below the strip).
     hm = pt.chart(title="heat", data_width=320, data_height=180)
-    hm.add_imshow(_matrix(), cmap="viridis", legend={"label": "intensity"})
+    hm.add_image_cmap(_matrix(), cmap="viridis", legend={"label": "intensity"})
     hm.legend(True, position="bottom")
     return hm
 
 
 def legend_colorbar_top():
     hm = pt.chart(title="heat", data_width=320, data_height=180)
-    hm.add_imshow(_matrix(), cmap="plasma")
+    hm.add_image_cmap(_matrix(), cmap="plasma")
     hm.legend(True, position="top")
     return hm
 
@@ -105,7 +105,7 @@ def legend_colorbar_top():
 def legend_mixed():
     xs = _xs()
     im = pt.chart(title="heat", data_width=180, data_height=140)
-    im.add_imshow(_matrix(), cmap="plasma")
+    im.add_image_cmap(_matrix(), cmap="plasma")
     df = {"x": xs, "y": [math.sin(x) for x in xs]}
 
     lines = pt.chart(title="trace", data_width=180, data_height=140)
@@ -222,7 +222,7 @@ def legend_joined_grid():
     # the right of main with legend_gap (6 px) — distinct from the
     # share-pair joint.
     main = pt.chart(title="main", data_width=320, data_height=180)
-    main.add_imshow(_matrix(), cmap="viridis", legend={"label": "value"})
+    main.add_image_cmap(_matrix(), cmap="viridis", legend={"label": "value"})
     df = {"x": [0, 1, 2, 3, 4, 5, 6, 7], "y": [3, 1, 2, 4, 1, 2, 3, 1]}
 
     top  = pt.chart(df, aes(x="x", y="y"), title="top",  data_width=320, data_height=24)
@@ -242,7 +242,7 @@ def legend_gap_override():
     # between legend and source. Here we widen it to 24 — the legend sits
     # well clear of `hm`, distinct from a share-pair joint (which would be 0).
     hm = pt.chart(title="hm", data_width=240, data_height=140)
-    hm.add_imshow(_matrix(), cmap="viridis")
+    hm.add_image_cmap(_matrix(), cmap="viridis")
     return hm | pt.legend(hm, gap=24)
 
 

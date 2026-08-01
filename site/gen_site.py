@@ -89,7 +89,8 @@ EMBED_EXAMPLE = {
     "violin": "violin", "heatmap": "heatmap", "ecdf": "ecdf",
     "boxplot": "box-strip", "strip": "box-strip", "swarm": "swarm",
     "pointplot": "pointplot", "ridge": "ridge", "qq": "qq",
-    "hexbin": "hexbin", "kde_2d": "kde-2d", "imshow": "imshow",
+    "hexbin": "hexbin", "kde_2d": "kde-2d", "image_cmap": "image-cmap",
+    "image_rgba": "image-rgba",
 }
 
 # Artist name -> cookbook recipe that features it.

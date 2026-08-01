@@ -84,7 +84,7 @@
     "refspan_color": "#000000",
     "refspan_alpha": 0.2,
     "default_cmap": "viridis",
-    "imshow_max_rects": 10000,
+    "image_max_rects": 10000,
     "raster_oversample": 2,
     "dendrogram_color": "#1a1a1a",
     "dendrogram_linewidth": 0.95,

@@ -1,7 +1,7 @@
-"""Baseline SVG regression tests for the imshow artist/topic.
+"""Baseline SVG regression tests for the image_cmap artist/topic.
 
-    pytest tests/test_chart_imshow.py
-    pytest tests/test_chart_imshow.py --update
+    pytest tests/test_chart_image_cmap.py
+    pytest tests/test_chart_image_cmap.py --update
 """
 from __future__ import annotations
 
@@ -18,159 +18,159 @@ from _chart_helpers import _embedded_png, _png_dims
 from plotlet.artists._shared import pool_grid, pool_mean, pool_mode, pool_target
 
 
-def chart_imshow_rect():
+def chart_image_cmap_rect():
     data = [[math.sin(r * 0.4) * math.cos(c * 0.3) for c in range(20)]
             for r in range(15)]
-    c = pt.chart(title="imshow (rect path)", xlabel="col", ylabel="row")
-    c.add_imshow(data, cmap="viridis")
+    c = pt.chart(title="image_cmap (rect path)", xlabel="col", ylabel="row")
+    c.add_image_cmap(data, cmap="viridis")
     c.legend()
     return c
 
 
-def chart_imshow_png():
+def chart_image_cmap_png():
     data = [[math.sin(r * 0.07) + math.cos(c * 0.05) for c in range(160)]
             for r in range(120)]
-    c = pt.chart(title="imshow (PNG path, magma)", xlabel="col", ylabel="row")
-    c.add_imshow(data, cmap="magma")
+    c = pt.chart(title="image_cmap (PNG path, magma)", xlabel="col", ylabel="row")
+    c.add_image_cmap(data, cmap="magma")
     c.legend()
     return c
 
 
-def chart_imshow_diverging():
+def chart_image_cmap_diverging():
     data = [[(r - 7) * (c - 7) for c in range(15)] for r in range(15)]
-    c = pt.chart(title="imshow (bwr, extent, vmin/vmax)",
+    c = pt.chart(title="image_cmap (bwr, extent, vmin/vmax)",
                  xlabel="x", ylabel="y")
-    c.add_imshow(data, cmap="bwr", extent=(-1.5, 1.5, -1.5, 1.5),
+    c.add_image_cmap(data, cmap="bwr", extent=(-1.5, 1.5, -1.5, 1.5),
              vmin=-49, vmax=49)
     c.legend()
     return c
 
 
-def chart_imshow_origin_upper():
+def chart_image_cmap_origin_upper():
     # origin="upper" opts into matrix-style display (row 0 at top). The
     # panel's y-axis auto-inverts so tick "0" lands at the top next to
     # row 0 — labels and image rows stay aligned.
     # Asymmetric ramp makes the flip vs. the default ("lower") obvious.
     data = [[r + 0.4 * c for c in range(20)] for r in range(15)]
-    c = pt.chart(title="imshow origin='upper'", xlabel="x", ylabel="y")
-    c.add_imshow(data, cmap="viridis", origin="upper",
+    c = pt.chart(title="image_cmap origin='upper'", xlabel="x", ylabel="y")
+    c.add_image_cmap(data, cmap="viridis", origin="upper",
              extent=(0, 20, 0, 15))
     c.legend()
     return c
 
 
-def chart_imshow_diverging_center():
+def chart_image_cmap_diverging_center():
     # Asymmetric range (-2 to 8) with center=0 — colorbar shows zero
     # pinned to the middle of the strip even though zero is far from
     # the geometric midpoint of [-2, 8]. Explicit position="left" also
     # exercises the inline-colorbar left-side tick rendering.
     data = [[(r - 4) * 0.5 + (c - 4) * 0.7 for c in range(12)] for r in range(10)]
-    c = pt.chart(title="imshow center=0", xlabel="x", ylabel="y")
-    c.add_imshow(data, cmap="RdBu_r", center=0, vmin=-2, vmax=8,
+    c = pt.chart(title="image_cmap center=0", xlabel="x", ylabel="y")
+    c.add_image_cmap(data, cmap="RdBu_r", center=0, vmin=-2, vmax=8,
              legend={"label": "value"})
     c.legend(True, position="left")
     return c
 
 
-def chart_imshow_user_cmap():
-    # register_colormap flows through both the imshow cell path and the
+def chart_image_cmap_user_cmap():
+    # register_colormap flows through both the image_cmap cell path and the
     # gradient legend; center=0 pins the white anchor to zero on the
     # asymmetric range, so anchoring stays the norm's job.
     pt.register_colormap("bwr2_demo", ["#2166ac", "#f7f7f7", "#b2182b"])
     data = [[(r - 4) * 0.5 + (c - 4) * 0.7 for c in range(12)] for r in range(10)]
     c = pt.chart(title="user colormap (bwr2_demo)", xlabel="x", ylabel="y")
-    c.add_imshow(data, cmap="bwr2_demo", center=0, legend={"label": "value"})
+    c.add_image_cmap(data, cmap="bwr2_demo", center=0, legend={"label": "value"})
     c.legend()
     return c
 
 
-def chart_imshow_log_norm():
+def chart_image_cmap_log_norm():
     # Multi-decade dynamic range — without log, all but the brightest
     # cells render near-black; with log, structure across decades shows.
     # Legend ticks are powers of 10.
     data = [[10 ** (0.05 * r + 0.05 * c) for c in range(20)] for r in range(15)]
-    c = pt.chart(title="imshow norm='log'", xlabel="x", ylabel="y")
-    c.add_imshow(data, cmap="magma", norm="log",
+    c = pt.chart(title="image_cmap norm='log'", xlabel="x", ylabel="y")
+    c.add_image_cmap(data, cmap="magma", norm="log",
              legend={"label": "intensity"})
     c.legend(True)
     return c
 
 
-def chart_imshow_annot_custom():
+def chart_image_cmap_annot_custom():
     # annot=<2D array> for independent labels; annot_color fixed.
     # Mixes numbers (formatted via fmt) and strings (verbatim).
     data = [[i + j for j in range(4)] for i in range(3)]
     annot = [["a", "b", "c", "d"],
              [1.0, 2.5, 3.75, 4.125],
              ["x", "y", "z", "w"]]
-    c = pt.chart(title="imshow (custom annot, fixed color)")
-    c.add_imshow(data, cmap="viridis", origin="upper",
+    c = pt.chart(title="image_cmap (custom annot, fixed color)")
+    c.add_image_cmap(data, cmap="viridis", origin="upper",
              annot=annot, fmt=".1f", annot_color="#222222", annot_fontsize=12)
     c.legend()
     return c
 
 
-def chart_imshow_annot_auto():
+def chart_image_cmap_annot_auto():
     # annot=True labels each cell with its own value; annot_color="auto"
     # flips black/white by cell luminance. The NaN cell renders black
     # and gets no label.
     data = [[0.5, 2.0, 4.5],
             [6.0, float("nan"), 8.0],
             [9.5, 7.5, 1.0]]
-    c = pt.chart(title="imshow (annot=True, auto color)")
-    c.add_imshow(data, cmap="viridis", annot=True, fmt=".1f")
+    c = pt.chart(title="image_cmap (annot=True, auto color)")
+    c.add_image_cmap(data, cmap="viridis", annot=True, fmt=".1f")
     return c
 
 
-def chart_imshow_png_pooled():
+def chart_image_cmap_png_pooled():
     # 150x150 grid in a 40x40-px data region — far past what the display
     # can resolve. The PNG path mean-pools down to `raster_oversample`
     # pixels per display pixel (an 80x80 image), which both bounds the
     # SVG and shows bin means instead of a nearest-neighbour subsample.
     data = [[math.sin(r * 0.4) + math.cos(c * 0.3) for c in range(150)]
             for r in range(150)]
-    c = pt.chart(title="imshow (pooled PNG)", data_width=40, data_height=40)
-    c.add_imshow(data, cmap="viridis")
+    c = pt.chart(title="image_cmap (pooled PNG)", data_width=40, data_height=40)
+    c.add_image_cmap(data, cmap="viridis")
     return c
 
 
 PLOTS = {
-    "imshow_rect": chart_imshow_rect,
-    "imshow_png": chart_imshow_png,
-    "imshow_png_pooled": chart_imshow_png_pooled,
-    "imshow_diverging": chart_imshow_diverging,
-    "imshow_origin_upper": chart_imshow_origin_upper,
-    "imshow_center": chart_imshow_diverging_center,
-    "imshow_user_cmap": chart_imshow_user_cmap,
-    "imshow_log": chart_imshow_log_norm,
-    "imshow_annot_custom": chart_imshow_annot_custom,
-    "imshow_annot_auto": chart_imshow_annot_auto,
+    "image_cmap_rect": chart_image_cmap_rect,
+    "image_cmap_png": chart_image_cmap_png,
+    "image_cmap_png_pooled": chart_image_cmap_png_pooled,
+    "image_cmap_diverging": chart_image_cmap_diverging,
+    "image_cmap_origin_upper": chart_image_cmap_origin_upper,
+    "image_cmap_center": chart_image_cmap_diverging_center,
+    "image_cmap_user_cmap": chart_image_cmap_user_cmap,
+    "image_cmap_log": chart_image_cmap_log_norm,
+    "image_cmap_annot_custom": chart_image_cmap_annot_custom,
+    "image_cmap_annot_auto": chart_image_cmap_annot_auto,
 }
 
 
 @pytest.mark.parametrize("name,fn", list(PLOTS.items()), ids=list(PLOTS.keys()))
-def test_chart_imshow_baseline(name, fn, baseline_compare):
-    baseline_compare("chart_imshow", name, fn().to_svg())
+def test_chart_image_cmap_baseline(name, fn, baseline_compare):
+    baseline_compare("chart_image_cmap", name, fn().to_svg())
 
 
-def _dense_imshow(data_width, data_height):
+def _dense_image_cmap(data_width, data_height):
     data = [[(r + c) % 7 for c in range(150)] for r in range(150)]
     c = pt.chart(data_width=data_width, data_height=data_height)
-    c.add_imshow(data)
+    c.add_image_cmap(data)
     return c.to_svg()
 
 
-def test_imshow_png_downsamples_to_display_resolution():
+def test_image_cmap_png_downsamples_to_display_resolution():
     # 150x150 cells in 40x40 px → pooled to ceil(40 * raster_oversample)
     # = 80 per axis, and the markup says so.
-    svg = _dense_imshow(40, 40)
+    svg = _dense_image_cmap(40, 40)
     assert 'downsampled="true"' in svg
     assert _png_dims(_embedded_png(svg)) == (80, 80)
 
 
-def test_imshow_png_full_resolution_when_it_fits():
+def test_image_cmap_png_full_resolution_when_it_fits():
     # Same grid with room to show every cell → untouched, no attr.
-    svg = _dense_imshow(400, 400)
+    svg = _dense_image_cmap(400, 400)
     assert "downsampled" not in svg
     assert _png_dims(_embedded_png(svg)) == (150, 150)
 
@@ -184,7 +184,7 @@ def test_vectorized_png_matches_scalar_bytes():
     from plotlet.artists._shared import (png_value_cells, pool_grid,
                                          pool_mean, rgb_buffer)
     from plotlet.draw import colormap_lut, ContinuousNorm
-    from plotlet.artists.imshow import _cell_rgb
+    from plotlet.artists.image_cmap import _cell_rgb
 
     rows = [[math.sin(r * 1.7 + c * 0.9) * 10 for c in range(23)]
             for r in range(37)]
@@ -223,7 +223,7 @@ def test_numpy_input_renders_byte_identical_to_lists():
 
     def render(m, **kw):
         c = pt.chart(title="t", data_width=60, data_height=60)
-        c.add_imshow(m, cmap="viridis", **kw)
+        c.add_image_cmap(m, cmap="viridis", **kw)
         return c.to_svg()
 
     ref = render(data)                                   # rect path
@@ -249,19 +249,19 @@ def test_numpy_input_renders_byte_identical_to_lists():
     pos = [[10 ** (0.01 * (r + c)) for c in range(150)] for r in range(150)]
     for grid, kw in ((dense, {}), (pos, {"norm": "log"})):
         c1 = pt.chart(data_width=40, data_height=40)
-        c1.add_imshow(grid, **kw)
+        c1.add_image_cmap(grid, **kw)
         c2 = pt.chart(data_width=40, data_height=40)
-        c2.add_imshow(np.array(grid), **kw)
+        c2.add_image_cmap(np.array(grid), **kw)
         assert c1.to_svg() == c2.to_svg()
 
 
-def test_imshow_log_norm_dense_falls_back_and_pools():
+def test_image_cmap_log_norm_dense_falls_back_and_pools():
     # norm="log" has no vector form (np.log10 isn't bit-pinned across
     # machines) — the PNG path must fall back to the scalar walk and
     # still pool to display resolution.
     data = [[10 ** (0.001 * (r + c)) for c in range(150)] for r in range(150)]
     c = pt.chart(data_width=40, data_height=40)
-    c.add_imshow(data, norm="log")
+    c.add_image_cmap(data, norm="log")
     svg = c.to_svg()
     assert 'downsampled="true"' in svg
     assert _png_dims(_embedded_png(svg)) == (80, 80)

@@ -84,7 +84,7 @@ c.add_scatter()   # same mapping, no repetition
 
 Advanced cases — a layer with its own table/columns, opting out of an
 inherited aesthetic (`inherit_aes=False`), and artists that need explicit
-`data=` (heatmap, imshow, contour, dendrogram, text, annotate, reference
+`data=` (heatmap, image_cmap, image_rgba, contour, dendrogram, text, annotate, reference
 lines) — see `tests/test_aes.py` and `help(c.add_<name>)`.
 
 ## Sizing: pixels and a data region, not inches and figsize

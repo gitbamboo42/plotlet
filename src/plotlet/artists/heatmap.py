@@ -21,16 +21,16 @@ panel-level ``c.sectors(Sectors(...), axis="x", column=...)``. The
 framework's sector remap tags each column's x into its sector, and cell
 edges are grouped per sector so gaps fall between sector groups.
 
-`c.add_imshow(matrix, ...)` stays separate — a pure image blitter (uniform
+`c.add_image_cmap(matrix, ...)` stays separate — a pure image blitter (uniform
 pixels, no per-cell styling, no warp, no labels) for real image /
 dense-array data. Reach for heatmap when you need labels, missing-value
-handling, borders, or a non-affine coordinate; imshow when you just want
+handling, borders, or a non-affine coordinate; image_cmap when you just want
 pixels from a matrix.
 
-Rendering branches on size: below `imshow_max_rects` we emit one `<rect>`
+Rendering branches on size: below `image_max_rects` we emit one `<rect>`
 per cell (vector-clean, zoomable). Above the threshold we encode the grid
 as a base64 PNG inside one `<image>` — `_png_for_blocks` for a categorical
-x (honours sector splits), a single imshow-style image for a continuous x
+x (honours sector splits), a single image_cmap-style image for a continuous x
 — except when a flat image can't represent the geometry (a warp, uneven
 or sector-tagged continuous cells, y sector splits): `_use_rects` then
 keeps the per-cell rects at any size. Either PNG path pools cells denser
@@ -472,7 +472,7 @@ def _use_rects(a, ctx, nrows, ncols):
     continuous-x grid can't use the single stretched image — uneven
     cells, sector-tagged edges, or y sector splits (the uniform image
     would paint over the pixel gaps and shift rows off their bands)."""
-    if nrows * ncols <= _D["imshow_max_rects"]:
+    if nrows * ncols <= _D["image_max_rects"]:
         return True
     if ctx.warp is not None:
         return True
@@ -491,7 +491,7 @@ def _png_fallback(ctx, matrix, xgeom, ygeom, xcats, ycats, pool, rgb_of,
                   fast=None):
     """Large-grid PNG path. Fully categorical → `_png_for_blocks` (honours
     sector splits). A continuous x → one uniform `<image>` spanning the
-    cell bbox, mirroring imshow; rows/cols are walked in pixel order so a
+    cell bbox, mirroring image_cmap; rows/cols are walked in pixel order so a
     reversed or descending axis still lands right.
 
     Cells past `raster_oversample` per display pixel are pooled (`pool`
@@ -724,7 +724,7 @@ def _heatmap_encoding(a):
     if stashed is not None:
         return stashed
     return "png-embedded" if (a["_nrows"] * a["_ncols"]
-                              > _D["imshow_max_rects"]) else "rects"
+                              > _D["image_max_rects"]) else "rects"
 
 
 def _heatmap_data_attrs(a):

@@ -441,7 +441,7 @@ def ring_text_annotate():
 def ring_heatmap():
     # Continuous-x heatmap under Circular → each cell rect warps into an
     # annular sector. Numeric `x` column wraps around the ring; the track
-    # rows stack as concentric bands. imshow can't do this (no warp).
+    # rows stack as concentric bands. image_cmap can't do this (no warp).
     tracks = ["a", "b", "c"]
     df = {"pos": [float(i) for i in range(24)]}
     for row, name in enumerate(tracks):

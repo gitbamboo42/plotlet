@@ -716,7 +716,7 @@ class Chart(_Renderable):
         self._calls.append((name, list(args), dict(kwargs)))
         return self
 
-    # Reflines, imshow, and any user-registered artist forward through
+    # Reflines, image_cmap, and any user-registered artist forward through
     # __getattr__ above — long-form (`data=`, `x=`, etc.) and aes
     # inheritance are handled inside each artist's `record()` plus the
     # generic recorder closure in `__getattr__`.

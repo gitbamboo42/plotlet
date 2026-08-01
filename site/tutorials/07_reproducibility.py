@@ -78,7 +78,7 @@ generate plotlet code on your behalf.""",
             code="""\
 names = sorted({row["name"] for row in pt.artist_table()
                 if row["origin"] == "core"})
-assert len(names) == 43
+assert len(names) == 44
 # help(c.add_scatter)  ->  the scatter artist's full docstring
 """,
         ),

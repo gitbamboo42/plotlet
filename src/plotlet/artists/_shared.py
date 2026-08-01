@@ -5,7 +5,7 @@ the legend dispatch in `_render_inner` can stay generic — no type-string match
 Paint logic is a nested closure; there are no shared swatch helpers.
 
 The `pool_*` / `rgb_buffer` helpers back the PNG-embedded raster paths of
-imshow and heatmap: a grid denser than the display can show is box-pooled
+image_cmap / image_rgba and heatmap: a grid denser than the display can show is box-pooled
 down before encoding. All pooling rules are deterministic (fixed bin
 edges, fixed iteration order, first-seen tie-breaks), so the
 byte-identical-SVG guarantee holds.

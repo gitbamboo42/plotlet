@@ -115,7 +115,7 @@ def _lut_hex(lut, i):
 def auto_label_color(r, g, b):
     """Black or white cell-label text, whichever contrasts with an
     (r, g, b) 0–255 background — the shared `annot=` rule for heatmap
-    and imshow. Perceived luminance (ITU-R BT.601 weights) with a 0.55
+    and image_cmap. Perceived luminance (ITU-R BT.601 weights) with a 0.55
     cutoff: slightly above 0.5 so mid-tones prefer white text, which
     reads better on saturated colormap mids."""
     lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255
