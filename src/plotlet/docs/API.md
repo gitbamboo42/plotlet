@@ -329,6 +329,7 @@ universal and not repeated.
 | call | options |
 | --- | --- |
 | `.add_bar(aes(x=, y=, fill=), position=, **opts)` | `color` (stroke), `palette`, `position="stack"\|"dodge"\|"fill"` for multi-series, `orientation`, `bottom`, `width`, `gap`; `yerr=`/`xerr=` (same specs as errorbar) draw whiskers at bar/slot centers with `ecolor`, `capsize` — defaults `position` to `"dodge"` and requires one row per (category, group). `stat="count"` (drop the `y` mapping; seaborn countplot) or `stat="mean"` (mean per cell + CI error bars: `ci="t"\|"boot"\|None`, `level`, `n_boot`, `seed`; seaborn barplot) aggregate raw rows |
+| `.add_numeric_bar(aes(x=, y=), **opts)` | bars anchored at *numeric* x positions (genome coordinates, numeric time axes) with a fixed data-unit `width=` — sibling of `bar`, which places categories on a band scale and takes bandwidth from it; `color`, `alpha`, `label` |
 | `.add_area(aes(x=, y=, fill=), **opts)` | multi-series stacks when given a list-of-series or `aes(fill=)`; `palette`, `base`, `curve`, `alpha` |
 | `.add_fill_between(aes(x=, y1=, y2=), **opts)` | `fill` (interior color — not `color=`), `alpha`, `curve`, `label` |
 | `.add_errorbar(aes(x=, y=, yerr=, xerr=), **opts)` | bare `yerr=`/`xerr=` take a scalar, sequence, or `(lower, upper)` tuple for asymmetric bars; `aes(yerr=)` names a column. `aes(ymin=, ymax=)` (and `xmin=`/`xmax=`) map columns for absolute bounds, mutually exclusive with the matching `*err=`; `aes(color=)` → grouped series (`palette=`), dodged on a categorical axis with bar-matching `width`/`gap` defaults |
@@ -357,6 +358,14 @@ universal and not repeated.
 | `.add_hlines(ys, xmins, xmaxs, **opts)` / `.add_vlines(xs, ymins, ymaxs, **opts)` | data-coordinate segments (scalars broadcast against sequences); unlike `axhline`/`axvline` they participate in autoscaling; `color`, `linewidth`, `linestyle`, `alpha`, `label` |
 | `.add_rect(x, y, w, h, **opts)` / `.add_polygon(xs, ys, **opts)` / `.add_polyline(xs, ys, **opts)` | data-coord shapes — `polygon` is closed-and-fillable, `polyline` is open stroke-only. `rect`/`polygon` follow the bar convention: `fill=` fill color (`"none"` for unfilled), `color=` outline stroke |
 | `.add_text(df, aes(x=, y=, label=), **opts)` / `.add_annotate(text, xy=, xytext=, **opts)` | `ha`, `va`, `fontsize`, `arrow=True/False` |
+
+### Tracks & chords
+
+| call | options |
+| --- | --- |
+| `.add_annotation_strip(aes(position=, value=), **opts)` | a row of cells, one value per position (`mode="band"`) or per run of equal values (`mode="block"`); horizontal by default, `orientation="y"` for a column. Position axis: a categorical column, a numeric column + `width=` (data units), or intervals via `aes(x1=, x2=)`. Cell fill: `palette={...}` (categorical), `cmap` (continuous, band mode only), or a literal `fill=`; `text=True` / `aes(text=)` writes labels (`side`, `rotation`, `fontsize`, `text_color`, `text_pad`); `cell_border=`. Built to align with a host panel via `share_x` / `attach_above` — group bars over a heatmap, regime tags over a time series |
+| `.add_chord_links(aes(x1=, x2=, color=), **opts)` | pairwise arcs between two x positions. In Cartesian: half-ellipse arcs above `y=0` — an arc diagram (pair with `c.yticks([])`). In a `CircularCoordinate` `inner=` slot: Circos-style links through the central disc. `palette`, `width` (line width), `alpha`, `height`; cross-sector links map per-endpoint tags via `aes(x1_sector=, x2_sector=)` |
+| `.add_chord_ribbon(aes(x1_start=, x1_end=, x2_start=, x2_end=, color=), **opts)` | filled ribbons between two x *ranges* — one row per ribbon, the matrix-chord-diagram visual (ribbon width ∝ M[i, j]). `palette`, `alpha`, `edge_color`, `edge_width`, `tension=0.5` (Bezier pull toward the center, d3's convention); circular ribbons in the inner disc, a linear bow shape in flat panels; sector tags as in `chord_links` |
 
 ### Notes
 
