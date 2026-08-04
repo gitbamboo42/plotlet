@@ -511,10 +511,24 @@ def _record_artist(state, spec, args, kw):
     if state["x_sectors"] is not None or state["y_sectors"] is not None:
         call_kw = _sector_remap_data(call_kw, state)
     result = spec.record(*call_args, **call_kw)
-    if isinstance(result, list):
-        state["artists"].extend(result)
-    else:
-        state["artists"].append(result)
+    records = result if isinstance(result, list) else [result]
+    # In aes(), a value is a column name — this check enforces that
+    # rule. A column name must be used up inside record(); one still
+    # sitting in opts means the artist can't take a column for that
+    # kwarg, and without this check the bare name would end up in the
+    # SVG (e.g. stroke="status") with no error. Every artist passes
+    # through here, so one check covers them all.
+    for rec in records:
+        for key, v in (rec.get("opts") or {}).items():
+            if isinstance(v, ColumnRef):
+                raise ValueError(
+                    f"{spec.name}: in aes(), a value is a column name "
+                    f"— aes({key}={str(v)!r}) means the {str(v)!r} "
+                    f"column. {spec.name} {key}= can't vary by a "
+                    f"column; it takes one fixed value. Move the "
+                    f"value outside aes(), or use inherit_aes=False."
+                )
+    state["artists"].extend(records)
 
 
 def _record_spines(state, kw):

@@ -26,7 +26,7 @@ def chart_fill_between():
     c = pt.chart(df, aes(x="x"), title="fill_between from table",
                  xlabel="x", ylabel="y", legend=True)
     c.add_fill_between(aes(y1="lo", y2="hi"), fill="C0", alpha=0.25, label="band")
-    c.add_line(aes(y="mean", label="mean"), color="C0")
+    c.add_line(aes(y="mean"), color="C0", label="mean")
     return c
 
 
@@ -59,7 +59,7 @@ def chart_area():
 
     c = pt.chart(df, aes(x="t"), title="area (base=0 and base=-0.5)",
                  xlabel="t", ylabel="y", legend=True)
-    c.add_area(aes(y="sin", label="sin"), color="C0", alpha=0.3)
+    c.add_area(aes(y="sin"), color="C0", alpha=0.3, label="sin")
     c.add_area(aes(y="cos_shifted"), base=-0.5,
            color="C3", alpha=0.4, label="cos shifted")
     return c

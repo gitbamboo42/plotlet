@@ -154,6 +154,44 @@ def test_enum_kwargs_reject_unknown_values(name, build, bad, good):
     assert build(good).to_svg()
 
 
+def test_chart_aes_column_in_fixed_value_kwarg_raises():
+    # In aes(), a value is a column name. hist can't vary color= by a
+    # column (it groups via fill=), so a chart-level aes(color=) used
+    # to slip through as the bare column name (stroke="status" in the
+    # SVG) with no error.
+    df = {"v": [1.0, 2.0, 2.0, 3.0], "status": ["a", "a", "b", "b"]}
+
+    c = pt.chart(df, aes(x="v", color="status"))
+    c.add_hist()
+    with pytest.raises(ValueError, match="aes\\(color='status'\\)"):
+        c.to_svg()
+
+
+def test_call_aes_column_in_fixed_value_kwarg_raises():
+    df = {"v": [1.0, 2.0, 2.0, 3.0], "status": ["a", "a", "b", "b"]}
+
+    c = pt.chart(df)
+    c.add_hist(aes(x="v", color="status"))
+    with pytest.raises(ValueError, match="aes\\(color='status'\\)"):
+        c.to_svg()
+
+
+def test_aes_column_where_artist_supports_it_still_works():
+    # The check must not break the supported routes: hist groups via
+    # fill=, scatter and line color by column.
+    df = {"v": [1.0, 2.0, 2.0, 3.0], "status": ["a", "a", "b", "b"]}
+
+    c = pt.chart(df, aes(x="v", fill="status"))
+    c.add_hist()
+    assert c.to_svg()
+
+    df2 = {"x": [1.0, 2.0], "y": [3.0, 4.0], "g": ["u", "v"]}
+    c = pt.chart(df2, aes(x="x", y="y", color="g"))
+    c.add_scatter()
+    c.add_line()
+    assert c.to_svg()
+
+
 def test_recorder_exposes_real_signature():
     # `c.add_bar?` / help(c.add_bar) reach the record function's parameter list.
     params = inspect.signature(pt.chart().add_bar).parameters

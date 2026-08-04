@@ -33,7 +33,10 @@ from plotlet.draw import segment, circle
 #    aes-tagged → column values, anything else → literal. Style kwargs
 #    the record doesn't consume go into `opts` via `pack_opts` (which
 #    drops the None defaults, so the draw side's `.get(k, default)` still
-#    falls through to your defaults).
+#    falls through to your defaults). In aes(), a value is a column
+#    name — use every column kwarg up here in record(). `opts` is for
+#    plain values only; a column name left in opts is an error at
+#    render time.
 def my_record(data=None, x=None, y=None, color=None, linewidth=None,
               label=None):
     if data is None or x is None or y is None:

@@ -112,9 +112,9 @@ def chart_heatmap_split_attached():
 
     df2 = {"col": col_labels, "group": col_groups}
 
-    strip = pt.chart(df2, aes(position="col", value="group", name="group"),
+    strip = pt.chart(df2, aes(position="col", value="group"),
                       data_height=14)
-    strip.add_annotation_strip(palette=palette)
+    strip.add_annotation_strip(palette=palette, name="group")
 
     hm = pt.chart(title="heatmap (split + attached)",
                   data_width=420, data_height=240)
