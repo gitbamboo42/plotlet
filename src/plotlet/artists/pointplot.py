@@ -30,7 +30,7 @@ import random
 
 from ..registry import ArtistSpec, add_artist
 from ..utils import (pack_opts, categorical_groups, resolve_aes, quantile,
-                     validate_ci, ci_bounds)
+                     validate_ci, ci_bounds, check_option)
 from ..draw import segment, circle, polyline, errorbar_v
 from ..utils import group_color
 
@@ -45,6 +45,7 @@ def _pointplot_record(data=None,
                       palette=None, label=None, legend=None):
     if data is None or x is None or y is None:
         raise TypeError("pointplot requires data=, x=, y=.")
+    check_option("pointplot", "estimator", estimator, ("mean", "median"))
     color_kind, color_value = resolve_aes(data, color)
     group_col = color if color_kind == "column" else None
     opts = pack_opts(size=size, capsize=capsize, linewidth=linewidth,

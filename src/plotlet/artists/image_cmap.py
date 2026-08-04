@@ -26,7 +26,7 @@ import numbers
 import numpy as np
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_matrix, to_list_2d, pack_opts
+from ..utils import to_matrix, to_list_2d, pack_opts, check_option
 from .._spec import _D
 from ..draw import rect, text_path
 from ..draw import image_png
@@ -236,6 +236,7 @@ def _image_cmap_record(matrix,
             "image_cmap takes a 2-D value matrix (one scalar per cell); "
             "for (H, W, 3|4) RGB(A) pixel data use add_image_rgba."
         )
+    check_option("image_cmap", "origin", origin, ("lower", "upper"))
     d = to_matrix(matrix)
     nrows = len(d)
     ncols = len(d[0]) if nrows else 0

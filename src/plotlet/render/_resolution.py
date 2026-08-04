@@ -33,7 +33,7 @@ from ..draw import resolve_color, TAB10
 from ..scales import (_nice_domain, _fmt_tick, _to_epoch,
                       _coerce_time_lim, _AxisDescriptor)
 from ..sectors import SectoredValue
-from ..utils import ColumnRef, DataFrameLite
+from ..utils import ColumnRef, DataFrameLite, check_option
 from ..draw import measure_text, text_block_height
 from . import _chrome_bands
 from ._chrome_visibility import resolve_axis_chrome
@@ -102,6 +102,9 @@ def _record_scale(state, axis, args, kw, *, from_default=False):
     instead of `<axis>_order`, so a peer artist's `axis_order` hook can
     win over an artist-suggested order while a user-explicit
     `c.xscale(order=...)` still wins over both."""
+    check_option(f"{axis}scale", "kind", args[0],
+                 ("linear", "log", "symlog", "power", "sqrt", "category",
+                  "time"))
     state[f"{axis}scale"] = args[0]
     if "order" in kw:
         target = f"{axis}_order_default" if from_default else f"{axis}_order"
@@ -157,7 +160,10 @@ def _record_ticks(state, axis, args, kw):
     if "fontstyle" in kw: state[f"{axis}_fontstyle"] = kw["fontstyle"]
     if "fontweight" in kw: state[f"{axis}_fontweight"] = kw["fontweight"]
     if "decoration" in kw: state[f"{axis}_decoration"] = kw["decoration"]
-    if "direction" in kw: state[f"{axis}_direction"] = kw["direction"]
+    if "direction" in kw:
+        check_option(f"{axis}ticks", "direction", kw["direction"],
+                     ("in", "out", "inout"))
+        state[f"{axis}_direction"] = kw["direction"]
     if "marks" in kw:     state[f"{axis}_marks"]     = bool(kw["marks"])
     if "format" in kw:    state[f"{axis}_format"]    = kw["format"]
     if "minor" in kw:     state[f"{axis}_minor"]     = kw["minor"]

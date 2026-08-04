@@ -36,7 +36,7 @@ Other styling kwargs:
 """
 from ..registry import ArtistSpec, add_artist
 from ..utils import (pack_opts, to_list, resolve_aes, dodge_slot,
-                     DODGE_WIDTH, DODGE_GAP)
+                     check_option, DODGE_WIDTH, DODGE_GAP)
 from ._shared import band_rect
 from ..draw import resolve_color
 from .._spec import _D, _LEGSPEC
@@ -163,6 +163,7 @@ def _hist_record(data=None,
             f"hist position={position!r} needs histtype='bar' — step "
             f"outlines can't stack or dodge."
         )
+    check_option("hist", "orientation", orientation, ("v", "h"))
     if bins is not None and not isinstance(bins, int):
         edges = [float(e) for e in to_list(bins)]
         if len(edges) < 2 or any(b <= a for a, b in zip(edges, edges[1:])):

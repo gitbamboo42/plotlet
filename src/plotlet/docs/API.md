@@ -307,10 +307,10 @@ universal and not repeated.
 | `.add_step(aes(x=, y=), where=, **opts)` | sugar over `line(curve=…)`; `where=` is `"pre"` / `"post"` (default) / `"mid"` |
 | `.add_scatter(aes(x=, y=, color=, group=, alpha=, size=, style=), **opts)` | `palette`, `alphas=(min, max)`, `label`, `marker`, `sizes=(min, max)`, `size_legend={"breaks": [...], "labels": [...]}`, `cmap`, `vmin`, `vmax`, `norm` — `aes(color=)` dispatches on dtype: numeric column → cmap, categorical → palette. Bare `size=`: number → fixed radius (px), list → per-point; `aes(size=)` → graded via `sizes=(lo, hi)` |
 | `.add_regression(aes(x=, y=, color=), **opts)` | `palette`, `level=0.95`, `alpha=0.2`, `linewidth=1.8` — OLS fit + Student-t band. `order=` fits a polynomial; `robust=True` a Huber IRLS fit with a bootstrap band (`n_boot=200`, `seed=0`); `lowess=True` a LOWESS smoother (`frac=2/3`, `it=3`), line only — no band |
-| `.add_hist(aes(x=, fill=, weights=), **opts)` | `color` (stroke), `palette`, `bins` (count or explicit edges), `binwidth`, `binrange=(lo, hi)`, `weights` (bare sequence or `aes(weights=)` column — sum per bin instead of count), `density`, `cumulative`, `position="overlay"\|"stack"\|"fill"\|"dodge"` (multi-group layout; `histtype="bar"` only), `histtype` (`"bar"` / `"step"` / `"stepfilled"`), `orientation` |
+| `.add_hist(aes(x=, fill=, weights=), **opts)` | `color` (stroke), `palette`, `bins` (count or explicit edges), `binwidth`, `binrange=(lo, hi)`, `weights` (bare sequence or `aes(weights=)` column — sum per bin instead of count), `density`, `cumulative`, `position="overlay"\|"stack"\|"fill"\|"dodge"` (multi-group layout; `histtype="bar"` only), `histtype` (`"bar"` / `"step"` / `"stepfilled"`), `orientation="v"\|"h"` |
 | `.add_density_1d(aes(x=, color=), **opts)` | `palette`, `bw`, `n_grid=200`, `fill=True/False`, `alpha` — Gaussian KDE |
 | `.add_ecdf(aes(x=, color=), **opts)` | `palette`, `complement=False` (survival), `linewidth` |
-| `.add_rug(aes(x=, color=), orientation="x", **opts)` | `palette`, `length=0.04`, `alpha` — tick marks at observations |
+| `.add_rug(aes(x=, color=), orientation="x"\|"y", **opts)` | `palette`, `length=0.04`, `alpha` — tick marks at observations |
 | `.add_freqpoly(aes(x=, color=), **opts)` | `palette`, `bins`, `density` — line version of hist |
 | `.add_qq(aes(sample=, color=), **opts)` | `dist=` accepts `"normal"`, any `scipy.stats` RV, or another sample; `aes(color=)` → one series + reference line per level (`palette=`) |
 
@@ -318,7 +318,7 @@ universal and not repeated.
 
 | call | options |
 | --- | --- |
-| `.add_boxplot(aes(x=, y=, fill=), **opts)` | `color` (stroke), `palette`, `orientation`, `notch`, `width`, `whis=1.5`, `flier_size` |
+| `.add_boxplot(aes(x=, y=, fill=), **opts)` | `color` (stroke), `palette`, `orientation="v"\|"h"`, `notch`, `width`, `whis=1.5`, `flier_size` |
 | `.add_violin(aes(x=, y=, fill=), **opts)` | `color` (stroke), `palette`, `inner="box"\|"quartile"\|None`, `trim`, `bw_adjust`, `fill_alpha` |
 | `.add_swarm(aes(x=, y=, fill=), **opts)` | `color` (outline), `palette`, `size`, `linewidth` — collision-resolved jitter |
 | `.add_strip(aes(x=, y=, fill=), **opts)` | `color` (outline), `palette`, `size`, `jitter` — raw jittered points |
@@ -328,7 +328,7 @@ universal and not repeated.
 
 | call | options |
 | --- | --- |
-| `.add_bar(aes(x=, y=, fill=), position=, **opts)` | `color` (stroke), `palette`, `position="stack"\|"dodge"\|"fill"` for multi-series, `orientation`, `bottom`, `width`, `gap`; `yerr=`/`xerr=` (same specs as errorbar) draw whiskers at bar/slot centers with `ecolor`, `capsize` — defaults `position` to `"dodge"` and requires one row per (category, group). `stat="count"` (drop the `y` mapping; seaborn countplot) or `stat="mean"` (mean per cell + CI error bars: `ci="t"\|"boot"\|None`, `level`, `n_boot`, `seed`; seaborn barplot) aggregate raw rows |
+| `.add_bar(aes(x=, y=, fill=), position=, **opts)` | `color` (stroke), `palette`, `position="stack"\|"dodge"\|"fill"` for multi-series, `orientation="v"\|"h"`, `bottom`, `width`, `gap`; `yerr=`/`xerr=` (same specs as errorbar) draw whiskers at bar/slot centers with `ecolor`, `capsize` — defaults `position` to `"dodge"` and requires one row per (category, group). `stat="count"` (drop the `y` mapping; seaborn countplot) or `stat="mean"` (mean per cell + CI error bars: `ci="t"\|"boot"\|None`, `level`, `n_boot`, `seed`; seaborn barplot) aggregate raw rows |
 | `.add_numeric_bar(aes(x=, y=), **opts)` | bars anchored at *numeric* x positions (genome coordinates, numeric time axes) with a fixed data-unit `width=` — sibling of `bar`, which places categories on a band scale and takes bandwidth from it; `color`, `alpha`, `label` |
 | `.add_area(aes(x=, y=, fill=), **opts)` | multi-series stacks when given a list-of-series or `aes(fill=)`; `palette`, `base`, `curve`, `alpha` |
 | `.add_fill_between(aes(x=, y1=, y2=), **opts)` | `fill` (interior color — not `color=`), `alpha`, `curve`, `label` |

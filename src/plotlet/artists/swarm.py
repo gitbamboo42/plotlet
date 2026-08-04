@@ -26,7 +26,7 @@ Other styling kwargs:
 from ..registry import ArtistSpec, add_artist
 from ..draw import circle
 from ..utils import (pack_opts, resolve_aes, dodge_positions,
-                     categorical_groups, _drop_nan,
+                     categorical_groups, _drop_nan, check_option,
                      group_color as _group_fill)
 from ..draw import resolve_color
 from ..draw import raster_declined, should_rasterize, splat_disks_by_color
@@ -54,6 +54,7 @@ def _swarm_record(data=None,
         raise TypeError(
             "swarm requires data=, x=, y= (fill= optional)."
         )
+    check_option("swarm", "orientation", orientation, ("v", "h"))
     fill_literal, group_col = _resolve_fill_kwarg(data, fill)
     cats, groups, vals = categorical_groups(data, x, y, group_col)
     opts = pack_opts(orientation=orientation, width=width, gap=gap,

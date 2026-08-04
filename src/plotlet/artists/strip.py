@@ -30,7 +30,8 @@ Other styling kwargs:
 """
 from ..registry import ArtistSpec, add_artist
 from ..utils import (pack_opts, resolve_aes, dodge_positions,
-                     categorical_groups, group_color as _group_fill)
+                     categorical_groups, check_option,
+                     group_color as _group_fill)
 from ..draw import resolve_color
 from ..draw import circle
 from ..draw import raster_declined, should_rasterize, splat_disks_by_color
@@ -74,6 +75,7 @@ def _strip_record(data=None,
         raise TypeError(
             "strip requires data=, x=, y= (fill= optional)."
         )
+    check_option("strip", "orientation", orientation, ("v", "h"))
     fill_literal, group_col = _resolve_fill_kwarg(data, fill)
     cats, groups, vals = categorical_groups(data, x, y, group_col)
     opts = pack_opts(orientation=orientation, width=width, gap=gap,

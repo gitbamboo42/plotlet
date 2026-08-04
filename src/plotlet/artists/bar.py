@@ -48,7 +48,8 @@ import random
 
 from ..registry import ArtistSpec, add_artist
 from ..utils import (UNSET, pack_opts, to_list, resolve_aes, dodge_positions,
-                     validate_ci, ci_bounds, DODGE_WIDTH, DODGE_GAP)
+                     validate_ci, ci_bounds, check_option,
+                     DODGE_WIDTH, DODGE_GAP)
 from ..draw import resolve_color
 from .._spec import _D, _LEGSPEC
 from ..draw import rect as draw_rect
@@ -243,6 +244,7 @@ def _bar_record(data=None,
                 color=None, alpha=None, linewidth=None, linestyle=None,
                 ecolor=None, capsize=None, palette=None,
                 label=None, legend=None):
+    check_option("bar", "orientation", orientation, ("v", "h"))
     ci = _resolve_stat_ci(stat, data, x, y, ci)
     # `fill` is a literal color when passed bare, a column when mapped
     # via aes. Column → drives grouping; literal → applied to every bar.

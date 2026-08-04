@@ -62,6 +62,11 @@ def _qq_record(data=None, sample=None, color=None, palette=None,
                rasterize=None):
     if data is None or sample is None:
         raise TypeError("qq requires data=, sample= (dist= optional).")
+    if isinstance(dist, str) and dist != "normal":
+        raise ValueError(
+            f"qq dist={dist!r} — must be 'normal', a scipy.stats "
+            f"distribution, or a reference sample."
+        )
     color_kind, color_value = resolve_aes(data, color)
     base = pack_opts(dist=dist, size=size, alpha=alpha,
                      label=label, legend=legend, rasterize=rasterize)

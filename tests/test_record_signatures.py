@@ -72,6 +72,88 @@ def test_chart_level_aes_skips_artists_without_that_parameter():
     assert c.to_svg()
 
 
+def _cat(add):
+    df = {"x": ["a", "a", "b", "b"], "y": [1.0, 2.0, 3.0, 4.0]}
+    c = pt.chart(df, aes(x="x", y="y"))
+    add(c)
+    return c
+
+
+def _num(add):
+    df = {"v": [1.0, 2.0, 2.0, 3.0]}
+    c = pt.chart(df, aes(x="v"))
+    add(c)
+    return c
+
+
+def _xy(add):
+    df = {"x": [1.0, 10.0, 100.0], "y": [1.0, 2.0, 3.0]}
+    c = pt.chart(df, aes(x="x", y="y"))
+    c.add_line()
+    add(c)
+    return c
+
+
+# Every enum-valued kwarg with a fixed vocabulary: a wrong value must
+# raise loudly (via `utils.check_option`), never silently behave like
+# the default.
+ENUM_CASES = [
+    ("bar-orientation",
+     lambda v: _cat(lambda c: c.add_bar(orientation=v)), "horizontal", "h"),
+    ("hist-orientation",
+     lambda v: _num(lambda c: c.add_hist(orientation=v)), "horizontal", "h"),
+    ("boxplot-orientation",
+     lambda v: _cat(lambda c: c.add_boxplot(orientation=v)), "horizontal", "h"),
+    ("violin-orientation",
+     lambda v: _cat(lambda c: c.add_violin(orientation=v)), "horizontal", "h"),
+    ("strip-orientation",
+     lambda v: _cat(lambda c: c.add_strip(orientation=v)), "horizontal", "h"),
+    ("swarm-orientation",
+     lambda v: _cat(lambda c: c.add_swarm(orientation=v)), "horizontal", "h"),
+    ("rug-orientation",
+     lambda v: _num(lambda c: c.add_rug(orientation=v)), "horizontal", "y"),
+    ("violin-inner",
+     lambda v: _cat(lambda c: c.add_violin(inner=v)), "quartiles", "quartile"),
+    ("pointplot-estimator",
+     lambda v: _cat(lambda c: c.add_pointplot(estimator=v)), "avg", "median"),
+    ("image_cmap-origin",
+     lambda v: _bare(lambda c: c.add_image_cmap([[1.0, 2.0], [3.0, 4.0]],
+                                                origin=v)), "top", "upper"),
+    ("image_rgba-origin",
+     lambda v: _bare(lambda c: c.add_image_rgba([[[0, 0, 0], [255, 0, 0]]],
+                                                origin=v)), "top", "lower"),
+    ("text-ha",
+     lambda v: _bare(lambda c: c.add_text(
+         data={"x": [1.0], "y": [1.0], "s": ["A"]},
+         mapping=aes(x="x", y="y", label="s"), ha=v)), "middle", "center"),
+    ("annotate-va",
+     lambda v: _bare(lambda c: c.add_annotate("hi", xy=(1, 1), va=v)),
+     "middle", "center"),
+    ("qq-dist",
+     lambda v: _bare(lambda c: c.add_qq(
+         data={"v": [1.0, 2.0, 3.0]}, mapping=aes(sample="v"), dist=v)),
+     "gaussian", "normal"),
+    ("xscale-kind",
+     lambda v: _xy(lambda c: c.xscale(v)), "logarithmic", "log"),
+    ("xticks-direction",
+     lambda v: _xy(lambda c: c.xticks(direction=v)), "outside", "out"),
+]
+
+
+def _bare(add):
+    c = pt.chart(xlim=(0, 2), ylim=(0, 2))
+    add(c)
+    return c
+
+
+@pytest.mark.parametrize("name,build,bad,good", ENUM_CASES,
+                         ids=[c[0] for c in ENUM_CASES])
+def test_enum_kwargs_reject_unknown_values(name, build, bad, good):
+    with pytest.raises(ValueError, match=repr(bad)):
+        build(bad).to_svg()
+    assert build(good).to_svg()
+
+
 def test_recorder_exposes_real_signature():
     # `c.add_bar?` / help(c.add_bar) reach the record function's parameter list.
     params = inspect.signature(pt.chart().add_bar).parameters

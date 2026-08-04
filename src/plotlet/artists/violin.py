@@ -32,7 +32,7 @@ Other styling kwargs:
 from ..registry import ArtistSpec, add_artist
 from ..utils import (UNSET, pack_opts, quantile, resolve_aes,
                      dodge_positions, categorical_groups,
-                     silverman_bw, kde_1d)
+                     silverman_bw, kde_1d, check_option)
 from ..utils import _drop_nan, group_color as _group_fill
 from ..draw import resolve_color
 from ..draw import polygon, rect, segment
@@ -63,6 +63,9 @@ def _violin_record(data=None,
         raise TypeError(
             "violin requires data=, x=, y= (fill= optional)."
         )
+    check_option("violin", "orientation", orientation, ("v", "h"))
+    if inner is not UNSET:
+        check_option("violin", "inner", inner, ("box", "quartile"))
     do_fill, fill_literal, group_col = _resolve_fill_kwarg(data, fill)
     cats, groups, vals = categorical_groups(data, x, y, group_col)
     opts = pack_opts(orientation=orientation, width=width, gap=gap,

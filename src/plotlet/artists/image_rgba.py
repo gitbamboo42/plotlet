@@ -24,7 +24,7 @@ byte-identical-SVG guarantee holds.
 import numpy as np
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import pack_opts
+from ..utils import pack_opts, check_option
 from .._spec import _D
 from ..draw import rect
 from ..draw import image_png, image_png_rgba
@@ -69,6 +69,7 @@ def _to_pixels(image):
 
 
 def _image_rgba_record(image, origin=None, extent=None):
+    check_option("image_rgba", "origin", origin, ("lower", "upper"))
     d = _to_pixels(image)
     opts = pack_opts(origin=origin, extent=extent)
     return {"type": "image_rgba", "_data": d,

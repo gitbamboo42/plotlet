@@ -34,7 +34,7 @@ import math
 
 from ..registry import ArtistSpec, add_artist
 from ..utils import (pack_opts, quantile, resolve_aes,
-                     dodge_positions, categorical_groups)
+                     dodge_positions, categorical_groups, check_option)
 from ..utils import _drop_nan, group_color as _group_fill
 from ..draw import resolve_color
 from ..draw import segment, rect, circle, errorbar_v, errorbar_h, polygon, marker
@@ -74,6 +74,7 @@ def _boxplot_record(data=None,
         raise TypeError(
             "boxplot requires data=, x=, y= (fill= optional)."
         )
+    check_option("boxplot", "orientation", orientation, ("v", "h"))
     do_fill, fill_literal, group_col = _resolve_fill_kwarg(data, fill)
     cats, groups, vals = categorical_groups(data, x, y, group_col)
     opts = pack_opts(orientation=orientation, width=width, gap=gap,

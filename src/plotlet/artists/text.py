@@ -10,7 +10,7 @@ font-independent.
 import math
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import to_list, pack_opts
+from ..utils import to_list, pack_opts, check_option
 from .._spec import _D
 from ..draw import text_path, segment, rect as draw_rect, polygon as draw_polygon
 from ..draw import coord, measure_text
@@ -216,6 +216,8 @@ def _text_record(data=None, x=None, y=None, label=None,
         raise TypeError(
             "text requires data=, x=, y=, label=."
         )
+    check_option("text", "ha", ha, ("left", "center", "right"))
+    check_option("text", "va", va, ("top", "center", "bottom", "baseline"))
     xs = to_list(data[x])
     ys = to_list(data[y])
     labels = [str(v) for v in to_list(data[label])]
@@ -259,6 +261,8 @@ def _annotate_record(text, xy=None, xytext=None,
                      fontstyle=None, fontweight=None, decoration=None):
     if xy is None:
         raise TypeError("annotate() requires xy=(x, y)")
+    check_option("annotate", "ha", ha, ("left", "center", "right"))
+    check_option("annotate", "va", va, ("top", "center", "bottom", "baseline"))
     xy = tuple(xy)
     xytext = xy if xytext is None else tuple(xytext)
     opts = pack_opts(arrow=arrow, arrow_head=arrow_head,

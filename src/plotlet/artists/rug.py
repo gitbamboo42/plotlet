@@ -23,7 +23,8 @@ import math
 
 from ..registry import ArtistSpec, add_artist
 from ..draw import segment
-from ..utils import to_list, long_form_1d, resolve_aes, pack_opts
+from ..utils import (to_list, long_form_1d, resolve_aes, pack_opts,
+                     check_option)
 from ..draw import resolve_color
 from ..draw import parse_rgb, raster_declined, should_rasterize, splat_ticks
 from ..utils import group_color
@@ -38,6 +39,7 @@ def _rug_record(data=None, x=None, color=None,
         raise TypeError(
             "rug requires data=, x= (color= optional)."
         )
+    check_option("rug", "orientation", orientation, ("x", "y"))
     color_kind, color_value = resolve_aes(data, color)
     group_col = color if color_kind == "column" else None
     groups, vals = long_form_1d(data, x, group_col)

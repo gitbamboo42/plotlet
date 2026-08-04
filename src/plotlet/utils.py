@@ -17,6 +17,7 @@ Example:
 The inverse-direction primitives (emit SVG strings) live in `plotlet.draw`.
 """
 import bisect
+import difflib
 import math
 import numbers
 import re
@@ -95,6 +96,26 @@ def pack_opts(**pairs):
     `opts.get(key, default)` reads still fall through to spec/theme
     defaults exactly as with the legacy leftover-kwargs bag."""
     return {k: v for k, v in pairs.items() if v is not None}
+
+
+def check_option(owner, name, value, allowed):
+    """Raise if an enum-valued kwarg is outside its vocabulary; None
+    (unset — the default applies) passes. A wrong value must error
+    loudly at the boundary, never silently behave like the default.
+    The message lists the vocabulary and suggests a close match for
+    near-miss typos."""
+    if value is None or value in allowed:
+        return
+    shown = [repr(a) for a in allowed]
+    listed = (" or ".join(shown) if len(shown) <= 2
+              else ", ".join(shown[:-1]) + f", or {shown[-1]}")
+    hint = ""
+    if isinstance(value, str):
+        close = difflib.get_close_matches(
+            value, [a for a in allowed if isinstance(a, str)], n=1)
+        if close:
+            hint = f" Did you mean {close[0]!r}?"
+    raise ValueError(f"{owner} {name}={value!r} — must be {listed}.{hint}")
 
 
 def to_list(obj):
