@@ -2,6 +2,8 @@
 warnings, and an engineered tick-label pile-up is detected. Guards the
 lint from regressing to always-empty (nothing else exercises it; the
 gallery lint report is a non-test script)."""
+import re
+
 import plotlet as pt
 from plotlet import aes
 from plotlet.lint import lint
@@ -100,3 +102,28 @@ def test_lint_rotated_labels_still_flag_when_truly_crammed():
     c.xticks(rotation=45)
     warnings = lint(c)
     assert any("tick-x ↔ tick-x" in str(w) for w in warnings)
+
+
+def test_lint_tall_legend_does_not_stretch_or_clip_panels():
+    # A pt.legend leaf taller than the chart row hands the charts more
+    # room than their canvas. The data region must stay the size the
+    # user set (slack goes into the margin, like _pad_canvases does
+    # between data siblings) — stretching it used to draw a denser
+    # tick set than the margins were measured for, clipping labels off
+    # the figure edge.
+    import math
+    xs = [i * 0.2 for i in range(50)]
+    df = {"x": xs, "y": [math.sin(x) for x in xs],
+          "mass": [1.0 + (i % 7) for i in range(50)]}
+
+    def chart(title):
+        c = pt.chart(df, aes(x="x", y="y", size="mass"), title=title,
+                     data_width=200, data_height=140)
+        c.add_scatter(sizes=(1, 5), label="signal")
+        return c
+
+    fig = (chart("a") | chart("b") | chart("c")) | pt.legend()
+    assert [w for w in lint(fig) if w.check == "edge_clip"] == []
+    # and the data regions render at exactly the set 200×140
+    areas = re.findall(r'data-plotlet-data-area="([^"]+)"', fig.to_svg())
+    assert all(a.endswith(",200,140") for a in areas)

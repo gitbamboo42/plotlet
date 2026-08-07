@@ -111,7 +111,12 @@ class IRPanel:
     data_height: float
     canvas_width: float
     canvas_height: float
-    margin: dict         # effective margin (M_eff) from the pre-pass
+    margin: dict         # effective margin (M_eff): what actually
+                         # renders — content reservation plus row/column
+                         # coordination maxes and absorbed layout slack
+                         # (e.g. a taller pt.legend sibling), so it can
+                         # differ for the same leaf in different
+                         # compositions
     margin_floor: dict   # the user/spec floor margin
     hide: dict           # {"left","right","top","bottom"} → bool
     suppress: dict       # {"left","right","top","bottom"} → bool (labels)

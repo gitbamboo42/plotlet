@@ -1240,8 +1240,57 @@ def _build_plan(root) -> RenderPlan:
     # content-driven size before measure runs.
     from ._legend import _size_legends
     _size_legends(root, states)
+    _absorb_allocation_slack(root, panel_opts)
     _resolve_coord_layouts(root)
     return RenderPlan(root, panel_opts, states)
+
+
+def _absorb_allocation_slack(root, panel_opts: dict) -> None:
+    """Keep every data region at its set size when allocation hands a
+    leaf more room than its canvas.
+
+    `_allocate` gives every child a row/column's full cross-extent, so
+    a taller non-data sibling — typically a many-entry `pt.legend`
+    leaf — hands its data neighbors a rect bigger than their canvas.
+    Rendering into the full rect would stretch the data region past
+    the user's `data_width`/`data_height` (and past the size the
+    margins were measured at, clipping tick labels).
+
+    `_pad_canvases` already sets the policy between data siblings: the
+    data region is never altered, slack goes into the bottom/right
+    margin. Legend leaves and nested layouts are excluded from that
+    coordination, so their slack only becomes visible at allocation —
+    absorb it here the same way. Run the same deterministic allocation
+    emit will run (it reads only canvases and hints, untouched here)
+    and pad each data leaf's margin by however much its rect outgrew
+    its canvas: the data region stays exactly the size the user set,
+    top-/left-aligned in the slot like any padded row cell.
+
+    Runs unconditionally — the extra measure+allocate is pure tree
+    arithmetic, dominated by text measurement and emission, and any
+    "could there be slack?" guard would have to mirror `_allocate`'s
+    real behavior; a predicate drifting from the pass it predicts is
+    exactly the divergence class this fixes."""
+    W, H = _measure(root)
+    placements: list = []
+    _allocate(root, 0, 0, int(round(W)), int(round(H)), placements)
+    for leaf, (_x, _y, w, h) in placements:
+        if leaf._is_parent or leaf._leaf_kind != "data":
+            continue
+        slack_w = w - leaf._canvas_width
+        slack_h = h - leaf._canvas_height
+        if slack_w <= 0.5 and slack_h <= 0.5:
+            continue
+        layout_opts = panel_opts[id(leaf)]
+        M = dict(layout_opts.M_eff)
+        if slack_w > 0.5:
+            M["right"] += slack_w
+        if slack_h > 0.5:
+            M["bottom"] += slack_h
+        layout_opts.M_eff = M
+        # Keep the attachment-placement cache in step so attached
+        # panels stay glued to the unmoved data area.
+        leaf._last_M_eff = dict(M)
 
 
 def _resolve_coord_layouts(node) -> None:
