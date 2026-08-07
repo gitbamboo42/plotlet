@@ -290,23 +290,27 @@ def _emit_x_axis(state, inp, iw, ih, *, coord_object, coord_project,
         # Normalize x tick positions to [0,1] t-space, mirroring draw_frame's
         # y_ticks_r convention. Works for any scale (linear, log, categorical).
         _x_ticks_t = [x_scale(t) / iw for t in x_ticks]
-        parts.append(coord_object.draw_x_frame(
-            coord_project, iw, ih,
-            _x_ticks_t, x_labels,
-            {
-                "spine_color":   _FRAME["color"],
-                "spine_width":   _FRAME["width"],
-                "tick_length":   _FRAME["tick_length"],
-                "tick_pad":      _FRAME["tick_pad"],
-                "x_fontsize":    x_size,
-                "font_color":    _FONTSPEC["color"],
-                "x_marks":       x_pol["draw_marks"],
-                "x_show_labels": x_pol["draw_labels"],
-                "x_fontstyle":   x_style,
-                "x_fontweight":  x_weight,
-                "x_decoration":  x_decor,
-            }
-        ))
+        # Coordinate-owned chrome draws inside the panel rect by design
+        # (angular tick labels sit inside the data ring) — mark its
+        # regions structural so overlap lint skips them.
+        with _regions.structural():
+            parts.append(coord_object.draw_x_frame(
+                coord_project, iw, ih,
+                _x_ticks_t, x_labels,
+                {
+                    "spine_color":   _FRAME["color"],
+                    "spine_width":   _FRAME["width"],
+                    "tick_length":   _FRAME["tick_length"],
+                    "tick_pad":      _FRAME["tick_pad"],
+                    "x_fontsize":    x_size,
+                    "font_color":    _FONTSPEC["color"],
+                    "x_marks":       x_pol["draw_marks"],
+                    "x_show_labels": x_pol["draw_labels"],
+                    "x_fontstyle":   x_style,
+                    "x_fontweight":  x_weight,
+                    "x_decoration":  x_decor,
+                }
+            ))
         return parts
 
     # x-ticks + labels — always Cartesian. Whole block flips wholesale
@@ -409,27 +413,30 @@ def _emit_x_sector_chrome(state, inp, iw, ih, x_sec, *,
         x_chrome_extent = radial_tick_chrome_extent(
             has_labels=_has_x_labels, max_label_w=_max_w,
             has_marks=x_pol["draw_marks"] and bool(x_ticks))
-        parts.append(coord_object.draw_x_sector_chrome(
-            coord_project, iw, ih,
-            [(lo / iw, hi / iw) for lo, hi in spans],
-            [x / iw for x in label_xs],
-            list(sec.names),
-            {
-                "divider_color":     sec_col,
-                "divider_width":     sec_w,
-                "divider_dash":      sec_dash,
-                "tick_pad":          _tp,
-                "label_pad":         sec_pad,
-                "x_chrome_extent":   x_chrome_extent,
-                "label_fontsize":    sec.fontsize if sec.fontsize is not None else _SECTORSPEC["label_size"],
-                "label_fontcolor":   _FONTSPEC["color"],
-                "label_fontstyle":   x_style,
-                "label_fontweight":  x_weight,
-                "label_decoration":  x_decor,
-                "draw_dividers":     x_pol["draw_sector_dividers"],
-                "draw_labels":       x_pol["draw_sector_labels"],
-            },
-        ))
+        # Coordinate-owned sector chrome lives inside the panel rect by
+        # design — mark structural so overlap lint skips it.
+        with _regions.structural():
+            parts.append(coord_object.draw_x_sector_chrome(
+                coord_project, iw, ih,
+                [(lo / iw, hi / iw) for lo, hi in spans],
+                [x / iw for x in label_xs],
+                list(sec.names),
+                {
+                    "divider_color":     sec_col,
+                    "divider_width":     sec_w,
+                    "divider_dash":      sec_dash,
+                    "tick_pad":          _tp,
+                    "label_pad":         sec_pad,
+                    "x_chrome_extent":   x_chrome_extent,
+                    "label_fontsize":    sec.fontsize if sec.fontsize is not None else _SECTORSPEC["label_size"],
+                    "label_fontcolor":   _FONTSPEC["color"],
+                    "label_fontstyle":   x_style,
+                    "label_fontweight":  x_weight,
+                    "label_decoration":  x_decor,
+                    "draw_dividers":     x_pol["draw_sector_dividers"],
+                    "draw_labels":       x_pol["draw_sector_labels"],
+                },
+            ))
         return parts
 
     if x_pol["draw_sector_dividers"]:
@@ -557,27 +564,30 @@ def _emit_y_axis(state, inp, iw, ih, *, coord_object, coord_project,
             _y_sector_ts = [(lo / iw, hi / iw)
                             for lo, hi in _sector_pixel_spans(inp.x_scale, x_sec)]
         spine_on = inp.chrome["spines"]
-        parts.append(coord_object.draw_frame(
-            coord_project, iw, ih,
-            _y_ticks_r, y_labels,
-            {
-                "spine_color":   _FRAME["color"],
-                "spine_width":   _FRAME["width"],
-                "tick_length":   _FRAME["tick_length"],
-                "tick_pad":      _FRAME["tick_pad"],
-                "y_fontsize":    y_size,
-                "font_color":    _FONTSPEC["color"],
-                "y_marks":       y_pol["draw_marks"],
-                "y_show_labels": y_pol["draw_labels"],
-                "y_fontstyle":   y_style,
-                "y_fontweight":  y_weight,
-                "y_decoration":  y_decor,
-                "y_side":        y_pol["side"],
-                "sector_ts":     _y_sector_ts,
-                "spine_top":     spine_on["top"],
-                "spine_bottom":  spine_on["bottom"],
-            }
-        ))
+        # Coordinate-owned chrome draws inside the panel rect by design
+        # — mark its regions structural so overlap lint skips them.
+        with _regions.structural():
+            parts.append(coord_object.draw_frame(
+                coord_project, iw, ih,
+                _y_ticks_r, y_labels,
+                {
+                    "spine_color":   _FRAME["color"],
+                    "spine_width":   _FRAME["width"],
+                    "tick_length":   _FRAME["tick_length"],
+                    "tick_pad":      _FRAME["tick_pad"],
+                    "y_fontsize":    y_size,
+                    "font_color":    _FONTSPEC["color"],
+                    "y_marks":       y_pol["draw_marks"],
+                    "y_show_labels": y_pol["draw_labels"],
+                    "y_fontstyle":   y_style,
+                    "y_fontweight":  y_weight,
+                    "y_decoration":  y_decor,
+                    "y_side":        y_pol["side"],
+                    "sector_ts":     _y_sector_ts,
+                    "spine_top":     spine_on["top"],
+                    "spine_bottom":  spine_on["bottom"],
+                }
+            ))
         return parts
 
     # y-ticks + labels — Cartesian. Like the x block, flip wholesale

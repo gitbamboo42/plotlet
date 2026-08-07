@@ -1,16 +1,36 @@
-"""Figure-quality lint — minimal. Two checks, one tiny whitelist for
-structural geometry.
+"""Figure-quality lint — minimal. Two checks, a small filter for
+structural geometry, and per-pair clustering so one crowded axis
+reads as one warning.
 
   edge_clip   any region with a vertex past the figure boundary
-  overlap     any two regions whose bboxes overlap, except name-pairs
-              in `ALLOWED_OVERLAP_PAIRS` (panel↔spine, spine↔spine —
-              unavoidable rendering geometry)
+  overlap     any two regions whose bboxes overlap, clustered by
+              name-pair: N labels piling up on one axis produce one
+              warning carrying the pair count and the worst pair's
+              labels, not O(N²) restatements.
+
+Overlaps that are rendering geometry rather than layout bugs are
+skipped:
+
+  * name-pairs in `ALLOWED_OVERLAP_PAIRS` (panel↔spine, spine↔spine —
+    stroke geometry);
+  * regions marked `structural` by the renderer (coordinate-owned
+    chrome like a circular chart's angular tick labels, an
+    inside-positioned legend) and sector walls/labels (`STRUCTURAL_NAMES`)
+    — all live inside the panel rect *by design*. Exception: two text
+    regions always report, because overlapping labels are unreadable
+    no matter whose design put them there;
+  * a panel fully inside another panel (insets, a circular chart's
+    inner panel).
 
 Hits are *warnings*, not errors. A flagged figure may still be
 intentional or acceptable; the lint surfaces candidates and the human
-reviewer judges. No name-based categorization, no ownership heuristics
-— the warning carries the name-pair (e.g., "tick-x ↔ tick-y") so the
-reviewer can tell at a glance whether it matters.
+reviewer judges. The warning carries the name-pair (e.g.,
+"tick-x ↔ tick-y") and the colliding label texts when the regions are
+text, so the reviewer can tell at a glance whether it matters.
+
+Scope note: regions capture *chrome only* — the lint cannot see an
+inside-positioned legend covering data marks, because data marks
+produce no regions.
 
 Usage:
 
@@ -39,6 +59,30 @@ ALLOWED_OVERLAP_PAIRS: frozenset[frozenset[str]] = frozenset({
     frozenset({"panel", "spine"}),
     frozenset({"spine"}),  # spine ↔ spine — single-element set covers same-name
 })
+
+# Chrome that spans the panel by design wherever it appears: sector
+# walls cross the data area, sector labels sit against it. Same
+# footing as regions the renderer marks `structural=True` in meta.
+STRUCTURAL_NAMES = frozenset({"sector-divider", "sector-label"})
+
+
+def _is_structural(r: dict) -> bool:
+    return (r["name"] in STRUCTURAL_NAMES
+            or bool(r.get("meta", {}).get("structural")))
+
+
+def _contains(outer: dict, inner: dict) -> bool:
+    ox, oy, ow, oh = outer["bbox"]
+    ix, iy, iw, ih = inner["bbox"]
+    return (ix >= ox and iy >= oy
+            and ix + iw <= ox + ow and iy + ih <= oy + oh)
+
+
+def _label(r: dict) -> str | None:
+    """The region's text, when it has one — for naming the colliding
+    labels in the warning message."""
+    t = r.get("meta", {}).get("text")
+    return str(t) if t not in (None, "") else None
 
 
 @dataclass
@@ -102,22 +146,41 @@ def edge_clip(regs, W, H) -> list[Warning]:
 
 
 def overlap(regs, W, H) -> list[Warning]:
-    """Brute-force: every pair of regions whose bboxes overlap, except
-    name-pairs in `ALLOWED_OVERLAP_PAIRS` (structural noise)."""
-    out = []
+    """Brute-force pairwise scan, then cluster the hits by name-pair —
+    one warning per pair kind, carrying the pair count and the worst
+    pair's geometry and labels. Structural chrome (see module
+    docstring) is skipped, except text-vs-text which always reports."""
+    hits: dict[frozenset, list] = {}
     for i, a in enumerate(regs):
         ax, ay, aw, ah = a["bbox"]
         for b in regs[i + 1:]:
             if frozenset({a["name"], b["name"]}) in ALLOWED_OVERLAP_PAIRS:
                 continue
+            both_text = a["kind"] == "text" and b["kind"] == "text"
+            if (_is_structural(a) or _is_structural(b)) and not both_text:
+                continue
+            if (a["name"] == b["name"] == "panel"
+                    and (_contains(a, b) or _contains(b, a))):
+                continue  # insets, a circular chart's inner panel
             bx, by, bw, bh = b["bbox"]
             ox = min(ax + aw, bx + bw) - max(ax, bx)
             oy = min(ay + ah, by + bh) - max(ay, by)
             if ox > 0 and oy > 0:
-                out.append(Warning(
-                    "overlap", f'{a["name"]} ↔ {b["name"]}',
-                    b["bbox"], f"overlap {coord(ox)}x{coord(oy)}px"
-                ))
+                key = frozenset({a["name"], b["name"]})
+                hits.setdefault(key, []).append((a, b, ox, oy))
+    out = []
+    for members in hits.values():  # insertion order — deterministic
+        a, b, ox, oy = max(members, key=lambda h: h[2] * h[3])
+        pair = f'{a["name"]} ↔ {b["name"]}'
+        labels = [l for l in (_label(a), _label(b)) if l is not None]
+        named = f" ({' ↔ '.join(repr(l) for l in labels)})" if labels else ""
+        if len(members) == 1:
+            msg = f"overlap {coord(ox)}x{coord(oy)}px{named}"
+        else:
+            n_regions = len({id(r) for m in members for r in m[:2]})
+            msg = (f"{len(members)} overlapping pairs among {n_regions} "
+                   f"regions; worst {coord(ox)}x{coord(oy)}px{named}")
+        out.append(Warning("overlap", pair, b["bbox"], msg))
     return out
 
 

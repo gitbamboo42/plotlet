@@ -138,7 +138,7 @@ matches the symptom and read the answer directly.
 | A series is missing / wrong color / `aes` looks ignored | `pt.to_journal(c).to_dict()["entries"]` | What was actually recorded — did the data / mapping land on that artist call? |
 | Autoscale clips the data, limits look wrong, `log`/`symlog` did nothing | `pt.to_ir(c).resolve().to_dict()` | What the renderer *decided*: trained scales, baked palette, effective limits and margins |
 | "Does the finished plot actually say what I meant?" | parse `data-plotlet-*` out of `c.to_svg()` (snippet below) | Plot type, axis labels, x/y scale, resolved `xlim`/`ylim`, and per-series label, color, range, point count |
-| Title / label / legend overlaps or is cut off | `from plotlet.lint import lint` then `lint(c)` | Automated edge-clip + overlap warnings, each naming the region pair; `str(w)` prints it |
+| Title / label / legend overlaps or is cut off | `from plotlet.lint import lint` then `lint(c)` | Automated edge-clip + overlap warnings — one per region pair (a crowded axis clusters into a single warning), naming the colliding labels; `str(w)` prints it |
 | Need the exact box of a chrome element (title, ticks, legend, panel) | `c.regions()` | `{"kind","bbox","name","meta"}` per element, outer-SVG coords; filter by `r["name"]` |
 | Panels misaligned, wrong grid, composition off | `pt.layout_diagram(c).show()` | A schematic render of the panel boxes and their nesting |
 

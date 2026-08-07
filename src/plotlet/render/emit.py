@@ -20,6 +20,7 @@ is about to make a decision of its own — put the decided flag in
 """
 from __future__ import annotations
 
+import contextlib
 import html
 import json
 from importlib.metadata import version as _pkg_version
@@ -605,8 +606,12 @@ def _emit_inline_legend(env, iw, ih, ctx_for):
     # The translate puts the body's panel-local coords onto the
     # sink so chrome bboxes tagged inside `_render_discrete_entry`
     # / `_render_continuous_entry` (and the sub-header text_path
-    # in the body) land at outer-SVG positions.
-    with _regions.translate(lx, ly):
+    # in the body) land at outer-SVG positions. An inside-positioned
+    # legend overlays the data area on purpose — mark its regions
+    # structural so overlap lint doesn't flag legend-vs-panel.
+    inside = (_regions.structural() if pos in _INSIDE_POSITIONS
+              else contextlib.nullcontext())
+    with _regions.translate(lx, ly), inside:
         parts.append(_emit_inline_legend_body(
             lw, lh, pos, cont, disc, horizontal, leg["gradient_h"],
             leg["ncols"], pad_x, pad_y, row_h, sw, _FONTSPEC["tick_size"],
@@ -645,8 +650,11 @@ def _emit_insets(state, iw, ih):
         if _regions.active():
             # Regions-only re-render at the now-known offset; rendering
             # is deterministic, so the emission matches `inset_svg` and
-            # is discarded. Only runs under `regions()` collection.
-            with _regions.translate(tx, ty):
+            # is discarded. Only runs under `regions()` collection. An
+            # inset's chrome lives inside the parent panel by design —
+            # structural, so overlap lint only reports its text-vs-text
+            # collisions.
+            with _regions.translate(tx, ty), _regions.structural():
                 _emit_plan(inset_chart._resolved_plan)
         # Opaque background covering the inset's data area only — tick
         # labels in the inset's margins stay transparent.

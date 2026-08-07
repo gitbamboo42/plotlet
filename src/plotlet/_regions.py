@@ -58,6 +58,11 @@ class _Sink:
     # offset to recorded bboxes so consumers receive outer-SVG coords
     # regardless of whether the chart is single- or multi-panel.
     translate_stack: list[tuple[float, float]] = field(default_factory=list)
+    # Depth of active `structural()` blocks — chrome recorded inside
+    # one lives inside the panel rect by design (coordinate-owned
+    # chrome, an inside-positioned legend), so overlap lint can tell
+    # it from misplaced chrome.
+    structural_depth: int = 0
 
     def _offset(self) -> tuple[float, float]:
         dx = dy = 0.0
@@ -75,6 +80,8 @@ class _Sink:
         # the bbox in outer-SVG coords.
         if "polygon" in meta:
             meta["polygon"] = [(px + dx, py + dy) for px, py in meta["polygon"]]
+        if self.structural_depth:
+            meta.setdefault("structural", True)
         self.regions.append(Region(kind=kind, bbox=(x + dx, y + dy, w, h),
                                    name=name, meta=meta))
 
@@ -126,6 +133,26 @@ def suppressed():
         yield
     finally:
         _CURRENT.reset(token)
+
+
+@contextmanager
+def structural():
+    """Mark every region recorded in the block as `structural=True` —
+    chrome that lives inside the panel rect *by design*, so its overlap
+    with the panel/spines is rendering geometry, not a layout bug.
+    Wrapped around coordinate-owned chrome emission (a circular chart's
+    angular tick labels and sector walls all sit inside the data ring)
+    and an inside-positioned legend's body. Overlap lint skips
+    structural-vs-container pairs. No-op when no sink is active."""
+    sink = _CURRENT.get()
+    if sink is None:
+        yield
+        return
+    sink.structural_depth += 1
+    try:
+        yield
+    finally:
+        sink.structural_depth -= 1
 
 
 @contextmanager
