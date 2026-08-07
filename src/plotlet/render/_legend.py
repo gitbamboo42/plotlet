@@ -17,9 +17,11 @@ nodes.
 """
 from __future__ import annotations
 
+from typing import NamedTuple
+
 from ..draw import colormap, ContinuousNorm, resolve_color
 from ..registry import RenderContext, get_artist
-from ..draw import cap_height, measure_text
+from ..draw import cap_height, descender, measure_text
 from ..draw import coord, rect, segment, text_path
 from .. import _regions
 from ..scales import _fmt_tick
@@ -286,6 +288,109 @@ def _render_discrete_entry(entry: dict, a: dict, ctx_for,
     return swatch + label
 
 
+def _thin_tick_labels(positions: list, half_extents: list) -> set:
+    """Indices of gradient ticks whose *labels* render. Labels keep
+    only while their boxes don't overlap — the same criterion the
+    overlap lint applies, so spacings lint accepted render unchanged.
+    The two endpoint labels (the mapped range's extremes — the most
+    informative values on a colorbar) get priority, like ggplot2's
+    `guide_axis(check.overlap)`; interior labels then thin greedily
+    against both neighbors, like Vega-Lite's `labelOverlap="greedy"`
+    (its gradient-legend default). `half_extents[i]` is half the
+    label's extent along the strip axis (half the line height
+    vertically, half the text width horizontally). Tick marks draw for
+    every tick regardless — only the text thins, so a colorbar with
+    explicit level ticks (contour's iso levels) stays fully marked
+    while close-together levels stop piling into unreadable label
+    stacks. A no-op for adequately spaced ticks."""
+    n = len(positions)
+    if n == 0:
+        return set()
+    order = sorted(range(n), key=lambda i: positions[i])
+    first, last = order[0], order[-1]
+    kept = {first}
+    run_edge = positions[first] + half_extents[first]
+    far_edge = positions[last] - half_extents[last]
+    keep_last = n > 1 and far_edge >= run_edge
+    if keep_last:
+        kept.add(last)
+    for i in order[1:-1]:
+        lo = positions[i] - half_extents[i]
+        hi = positions[i] + half_extents[i]
+        if lo >= run_edge and (not keep_last or hi <= far_edge):
+            kept.add(i)
+            run_edge = hi
+    return kept
+
+
+# Baseline offset that vertically centers a tick label on its mark —
+# the same +4 the axis tick labels use.
+_V_LABEL_BASELINE_DY = 4
+
+
+class _GradientTicks(NamedTuple):
+    """Resolved tick geometry for one gradient strip — what the painter
+    and every sizing path share so they can't drift apart. `pos` is
+    each tick's strip-local label-anchor position: identical to the
+    tick-mark position on the vertical strip (labels sit on their
+    marks), the slightly center-biased x on the horizontal strip (see
+    `_h_gradient_geometry`). `keep` indexes the labels that render
+    (`_thin_tick_labels`); `over_start`/`over_end` are the kept
+    labels' overhang past the strip's two ends (top/bottom on a
+    vertical strip, left/right on a horizontal one)."""
+    norm: ContinuousNorm
+    ticks: list
+    pos: list
+    keep: set
+    over_start: float
+    over_end: float
+
+
+def _v_gradient_geometry(entry: dict) -> _GradientTicks:
+    """Shared geometry for one vertical gradient strip. Every label
+    sits centered on its own tick mark — no inward shift, so a label
+    can never read as naming a neighboring mark. Edge labels overhang
+    the strip instead, and the overhang is reserved in the block
+    geometry (matplotlib and ggplot2 place colorbar labels the same
+    way; the horizontal strip here already did)."""
+    tick_size = _FONTSPEC["tick_size"]
+    strip_h = float(_LEGSPEC["gradient_height"])
+    norm = ContinuousNorm(entry["vmin"], entry["vmax"],
+                           kind=entry.get("norm", "linear"),
+                           center=entry.get("center"))
+    ticks = (list(entry["ticks"]) if entry.get("ticks") is not None
+             else norm.ticks(_adaptive_n_ticks(strip_h)))
+    pos = [(1.0 - norm.to_unit(t)) * strip_h for t in ticks]
+    half_line = (cap_height(tick_size) + descender(tick_size)) / 2.0
+    keep = _thin_tick_labels(pos, [half_line] * len(pos))
+    over_top = over_bottom = 0.0
+    for i in keep:
+        baseline = pos[i] + _V_LABEL_BASELINE_DY
+        over_top = max(over_top, cap_height(tick_size) - baseline)
+        over_bottom = max(over_bottom,
+                          baseline + descender(tick_size) - strip_h)
+    return _GradientTicks(norm, ticks, pos, keep, over_top, over_bottom)
+
+
+def _v_gradient_entry_height(entry: dict) -> float:
+    """Block height of one vertical gradient entry — above-strip label
+    band (if any) + top label overhang + strip + bottom overhang."""
+    tick_size = _FONTSPEC["tick_size"]
+    label_h = (tick_size + _LEGSPEC["gradient_label_pad"]
+               if entry.get("label") else 0)
+    g = _v_gradient_geometry(entry)
+    return (label_h + g.over_start + float(_LEGSPEC["gradient_height"])
+            + g.over_end)
+
+
+def _v_gradient_tick_width(entry: dict) -> float:
+    """Widest kept tick label — dropped labels don't consume width."""
+    tick_size = _FONTSPEC["tick_size"]
+    g = _v_gradient_geometry(entry)
+    return max((measure_text(_fmt_tick(g.ticks[i]), tick_size)
+                for i in g.keep), default=0.0)
+
+
 def _render_continuous_entry(entry: dict, x: float, y: float,
                               tick_side: str = "right") -> str:
     """One continuous entry: optional label above, then a gradient strip
@@ -313,7 +418,8 @@ def _render_continuous_entry(entry: dict, x: float, y: float,
                                 tick_size, anchor="start", color=text_color,
                                 tag="legend-header"))
 
-    strip_y = y + label_h
+    geo = _v_gradient_geometry(entry)
+    strip_y = y + label_h + geo.over_start
     strip_h = float(_LEGSPEC["gradient_height"])
     cm = colormap(entry["cmap"])
     n_bands = _LEGSPEC["gradient_n_stops"] + 1
@@ -337,12 +443,6 @@ def _render_continuous_entry(entry: dict, x: float, y: float,
                       stroke=_FRAME["color"], stroke_width=_FRAME["width"],
                       tag="legend-mark"))
 
-    norm = ContinuousNorm(entry["vmin"], entry["vmax"],
-                           kind=entry.get("norm", "linear"),
-                           center=entry.get("center"))
-    ticks = (list(entry["ticks"]) if entry.get("ticks") is not None
-             else norm.ticks(_adaptive_n_ticks(strip_h)))
-
     if tick_side == "right":
         tx0 = x + _LEGSPEC["gradient_width"]
         tx1 = tx0 + _FRAME["tick_length"]
@@ -353,28 +453,28 @@ def _render_continuous_entry(entry: dict, x: float, y: float,
         tx1 = x - _FRAME["tick_length"]
         label_x = tx1 - _FRAME["tick_pad"]
         label_anchor = "end"
-    # Bias each tick-label baseline toward the strip's vertical center —
-    # top tick shifts down so it doesn't crowd whatever sits above the
-    # strip (entry label / chart title), bottom tick shifts up by the
-    # same amount, middle ticks unchanged. The tick line still points
-    # at the exact value position; only the text shifts.
-    strip_mid = strip_y + strip_h / 2
-    for t in ticks:
-        ty = strip_y + (1.0 - norm.to_unit(t)) * strip_h
+    # Every label centers on its own mark — no inward bias, so a label
+    # can never read as naming a neighboring mark. Edge labels overhang
+    # the strip; `_v_gradient_geometry` reserved the room.
+    for i, t in enumerate(geo.ticks):
+        ty = strip_y + geo.pos[i]
         parts.append(segment(tx0, ty, tx1, ty,
                              color=_FRAME["color"], width=_FRAME["width"]))
-        bias = 4 * (strip_mid - ty) / (strip_h / 2) if strip_h > 0 else 0
-        parts.append(text_path(_fmt_tick(t), label_x, ty + 4 + bias,
-                                tick_size, anchor=label_anchor, color=text_color,
-                                tag="legend-text"))
+        if i in geo.keep:
+            parts.append(text_path(_fmt_tick(t), label_x,
+                                    ty + _V_LABEL_BASELINE_DY,
+                                    tick_size, anchor=label_anchor,
+                                    color=text_color, tag="legend-text"))
     return "".join(parts)
 
 
-def _h_gradient_geometry(entry: dict):
-    """Shared geometry for one horizontal gradient strip: the norm, tick
-    values, and how far the centered tick labels overhang past each strip
-    end (after the same inward baseline bias the vertical strip applies).
-    Sizing and painting both call this so they can't drift apart."""
+def _h_gradient_geometry(entry: dict) -> _GradientTicks:
+    """Shared geometry for one horizontal gradient strip. Unlike the
+    vertical strip, the small center-ward label bias survives here on
+    purpose: 4px is negligible against a ~25px text width (the label
+    still reads as naming its own mark) but was a large fraction of
+    the ~12px line height vertically — and it trims the edge-label
+    overhang that would otherwise widen the block."""
     tick_size = _FONTSPEC["tick_size"]
     length = float(_LEGSPEC["gradient_length"])
     norm = ContinuousNorm(entry["vmin"], entry["vmax"],
@@ -384,14 +484,19 @@ def _h_gradient_geometry(entry: dict):
     ticks = (list(entry["ticks"]) if entry.get("ticks") is not None
              else norm.ticks(n))
     mid = length / 2
-    over_l = over_r = 0.0
+    label_pos = []
+    halves = []
     for t in ticks:
         tx = norm.to_unit(t) * length
         bias = 4 * (mid - tx) / mid if mid > 0 else 0.0
-        half = measure_text(_fmt_tick(t), tick_size) / 2
-        over_l = max(over_l, half - (tx + bias))
-        over_r = max(over_r, tx + bias + half - length)
-    return norm, ticks, over_l, over_r
+        label_pos.append(tx + bias)
+        halves.append(measure_text(_fmt_tick(t), tick_size) / 2)
+    keep = _thin_tick_labels(label_pos, halves)
+    over_l = over_r = 0.0
+    for i in keep:
+        over_l = max(over_l, halves[i] - label_pos[i])
+        over_r = max(over_r, label_pos[i] + halves[i] - length)
+    return _GradientTicks(norm, ticks, label_pos, keep, over_l, over_r)
 
 
 def _render_continuous_entry_h(entry: dict, x: float, y: float) -> str:
@@ -405,8 +510,8 @@ def _render_continuous_entry_h(entry: dict, x: float, y: float) -> str:
     text_color = _FONTSPEC["color"]
     length = float(_LEGSPEC["gradient_length"])
     thick = _LEGSPEC["gradient_width"]
-    norm, ticks, over_l, _ = _h_gradient_geometry(entry)
-    x0 = x + over_l
+    geo = _h_gradient_geometry(entry)
+    x0 = x + geo.over_start
     label_text = entry.get("label")
     label_h = tick_size + _LEGSPEC["gradient_label_pad"] if label_text else 0
     if label_text:
@@ -432,15 +537,14 @@ def _render_continuous_entry_h(entry: dict, x: float, y: float) -> str:
     ty0 = strip_y + thick
     ty1 = ty0 + _FRAME["tick_length"]
     base_y = ty1 + _FRAME["tick_pad"] + cap_height(tick_size)
-    mid = length / 2
-    for t in ticks:
-        tx = x0 + norm.to_unit(t) * length
+    for i, t in enumerate(geo.ticks):
+        tx = x0 + geo.norm.to_unit(t) * length
         parts.append(segment(tx, ty0, tx, ty1,
                              color=_FRAME["color"], width=_FRAME["width"]))
-        bias = 4 * (x0 + mid - tx) / mid if mid > 0 else 0.0
-        parts.append(text_path(_fmt_tick(t), tx + bias, base_y,
-                                tick_size, anchor="middle", color=text_color,
-                                tag="legend-text"))
+        if i in geo.keep:
+            parts.append(text_path(_fmt_tick(t), x0 + geo.pos[i], base_y,
+                                    tick_size, anchor="middle",
+                                    color=text_color, tag="legend-text"))
     return "".join(parts)
 
 
@@ -464,7 +568,8 @@ def _inline_gradient_block_size_h(cont_entries: list[dict]) -> tuple[float, floa
     max_w = 0.0
     total_h = 0.0
     for i, entry in enumerate(cont_entries):
-        _, _, over_l, over_r = _h_gradient_geometry(entry)
+        g = _h_gradient_geometry(entry)
+        over_l, over_r = g.over_start, g.over_end
         label = entry.get("label")
         if label:
             max_w = max(max_w, over_l + measure_text(label, tick_size))
@@ -487,22 +592,16 @@ def _inline_gradient_block_size(cont_entries: list[dict]) -> tuple[float, float]
     if not cont_entries:
         return 0, 0
     tick_size = _FONTSPEC["tick_size"]
-    n_ticks = _adaptive_n_ticks(_LEGSPEC["gradient_height"])
     max_w = 0.0
     total_h = 0.0
     for i, entry in enumerate(cont_entries):
         label = entry.get("label")
         if label:
             max_w = max(max_w, measure_text(label, tick_size))
-            total_h += tick_size + _LEGSPEC["gradient_label_pad"]
-        ticks = (list(entry["ticks"]) if entry.get("ticks") is not None
-                 else ContinuousNorm(entry["vmin"], entry["vmax"],
-                                      kind=entry.get("norm", "linear"),
-                                      center=entry.get("center")).ticks(n_ticks))
-        max_tw = max((measure_text(_fmt_tick(t), tick_size) for t in ticks), default=0.0)
-        strip_col_w = _LEGSPEC["gradient_width"] + _FRAME["tick_length"] + _FRAME["tick_pad"] + max_tw
+        strip_col_w = (_LEGSPEC["gradient_width"] + _FRAME["tick_length"]
+                       + _FRAME["tick_pad"] + _v_gradient_tick_width(entry))
         max_w = max(max_w, strip_col_w)
-        total_h += _LEGSPEC["gradient_height"]
+        total_h += _v_gradient_entry_height(entry)
         if i < len(cont_entries) - 1:
             total_h += _LEGSPEC["section_gap"]
     return max_w, total_h
@@ -539,8 +638,6 @@ def _legend_content_size(leaf, sources: list,
     tick_size = _FONTSPEC["tick_size"]
     label_size = _FONTSPEC["label_size"]
     header_h = label_size + _LEGSPEC["header_pad"]
-    n_ticks = _adaptive_n_ticks(_LEGSPEC["gradient_height"])
-
     max_w = 0.0
     total_h = 2 * pad_y
     for gi, g in enumerate(groups):
@@ -551,15 +648,11 @@ def _legend_content_size(leaf, sources: list,
             label = entry.get("label")
             if label:
                 max_w = max(max_w, measure_text(label, tick_size))
-                total_h += tick_size + _LEGSPEC["gradient_label_pad"]
-            ticks = (list(entry["ticks"]) if entry.get("ticks") is not None
-                     else ContinuousNorm(entry["vmin"], entry["vmax"],
-                                          kind=entry.get("norm", "linear"),
-                                          center=entry.get("center")).ticks(n_ticks))
-            max_tw = max((measure_text(_fmt_tick(t), tick_size) for t in ticks), default=0.0)
-            strip_col_w = _LEGSPEC["gradient_width"] + _FRAME["tick_length"] + _FRAME["tick_pad"] + max_tw
+            strip_col_w = (_LEGSPEC["gradient_width"] + _FRAME["tick_length"]
+                           + _FRAME["tick_pad"]
+                           + _v_gradient_tick_width(entry))
             max_w = max(max_w, strip_col_w)
-            total_h += _LEGSPEC["gradient_height"]
+            total_h += _v_gradient_entry_height(entry)
         if g["cont"] and g["disc"]:
             total_h += _LEGSPEC["section_gap"]
         sub_groups = _partition_by_group(g["disc"], lambda e: e.get("group"))
@@ -666,9 +759,8 @@ def _emit_legend_body(groups, leaf, states, pad_x, pad_y, row_h,
                                     tag="legend-header"))
             cy += header_h
         for entry in g["cont"]:
-            entry_label_h = (tick_size + _LEGSPEC["gradient_label_pad"]) if entry.get("label") else 0
             parts.append(_render_continuous_entry(entry, pad_x, cy))
-            cy += entry_label_h + _LEGSPEC["gradient_height"]
+            cy += _v_gradient_entry_height(entry)
         if g["cont"] and g["disc"]:
             cy += _LEGSPEC["section_gap"]
         # Partition entries by their `group` field so an artist

@@ -418,3 +418,24 @@ def test_same_label_different_color_does_not_merge():
     c.add_line(label="x", color="red")
     c.add_scatter(label="x", color="blue")
     assert _legend_texts(c) == ["x", "x"]
+
+
+def test_gradient_crowded_explicit_ticks_thin_labels():
+    # contour passes its iso levels as colorbar ticks; levels close in
+    # value space (0.05, 0.1 at the bottom of the strip) must not pile
+    # labels on top of each other. Tick marks stay for every level —
+    # only the labels thin, by the same box-overlap criterion the lint
+    # applies.
+    grid = [[(i * j) / 81.0 for j in range(10)] for i in range(10)]
+    c = pt.chart(xlim=(0, 9), ylim=(0, 9))
+    c.add_contour(grid, levels=[0.05, 0.1, 0.2, 0.4, 0.6, 0.8],
+                  cmap="viridis", extent=(0, 9, 0, 9))
+    labels = [r["meta"]["text"] for r in c.regions()
+              if r["name"] == "legend-text"]
+    # Endpoint labels (the mapped range's extremes) get priority, like
+    # ggplot2's guide_axis(check.overlap); interior labels thin
+    # greedily, like Vega-Lite's labelOverlap="greedy".
+    assert "0.05" in labels and "0.8" in labels
+    assert len(labels) < 6           # the crowded bottom cluster thinned
+    from plotlet.lint import lint
+    assert [w for w in lint(c) if "legend-text" in w.region] == []

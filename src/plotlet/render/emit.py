@@ -467,7 +467,8 @@ def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal, gradient_h,
     `<g transform="translate(lx, ly)">` wrapper. Lives in its own
     function so the translate ctxmgr in `_emit_inline_legend` stays a
     2-liner instead of forcing 70 lines of indentation."""
-    from ._legend import _render_continuous_entry, _render_discrete_entry
+    from ._legend import (_render_continuous_entry, _render_discrete_entry,
+                          _v_gradient_entry_height)
     parts = []
     is_gradient_only = bool(cont) and not disc
     if not is_gradient_only and pos in _INSIDE_POSITIONS:
@@ -518,10 +519,8 @@ def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal, gradient_h,
         strip_x = pad_x
         cur_y = float(pad_y)
     for i, (_, desc) in enumerate(cont):
-        entry_h = (tick_size + _LEGSPEC["gradient_label_pad"] if desc.get("label") else 0) \
-                  + _LEGSPEC["gradient_height"]
         parts.append(_render_continuous_entry(desc, strip_x, cur_y, tick_side))
-        cur_y += entry_h
+        cur_y += _v_gradient_entry_height(desc)
         if i < len(cont) - 1:
             cur_y += _LEGSPEC["section_gap"]
     if cont and disc:
