@@ -36,7 +36,7 @@ _HEX_VERTICES = [
 ]
 from .font import (measure_text, _glyph_path_d, _decoration_y_offset,
                    cap_height, descender, line_height)
-from .linestyles import resolve_linestyle
+from .linestyles import check_dasharray, resolve_linestyle
 from .._regions import record as _record_region
 from .format import coord, degree, opacity, stroke_w
 
@@ -267,8 +267,14 @@ def marker(kind: str, x: float, y: float, size: float, color: str, alpha,
 def dash_attr(dash) -> str:
     if not dash:
         return ""
-    d = _DASH.get(resolve_linestyle(dash), dash)
-    return f' stroke-dasharray="{d}"' if d else ""
+    key = resolve_linestyle(dash)
+    if key in _DASH:
+        d = _DASH[key]
+        return f' stroke-dasharray="{d}"' if d else ""
+    if dash == "none":     # valid SVG: an explicit solid line
+        return ' stroke-dasharray="none"'
+    check_dasharray(dash)  # typo → loud error, not a silent solid line
+    return f' stroke-dasharray="{dash}"'
 
 
 def segment(x1: float, y1: float, x2: float, y2: float, *,

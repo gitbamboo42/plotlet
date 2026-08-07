@@ -137,6 +137,14 @@ ENUM_CASES = [
      lambda v: _xy(lambda c: c.xscale(v)), "logarithmic", "log"),
     ("xticks-direction",
      lambda v: _xy(lambda c: c.xticks(direction=v)), "outside", "out"),
+    # linestyle's vocabulary is open (raw dasharrays pass), but a value
+    # that is neither a registered code nor number-shaped must still
+    # raise — browsers ignore a bad stroke-dasharray, silently
+    # rendering solid.
+    ("line-linestyle",
+     lambda v: _bare(lambda c: c.add_line(
+         data={"x": [0.5, 1.5], "y": [0.5, 1.5]},
+         mapping=aes(x="x", y="y"), linestyle=v)), "dahsed", "dashed"),
 ]
 
 
@@ -229,6 +237,18 @@ def test_scatter_alpha_applies_on_colormap_path():
 # Ragged tables — rejected at the recording boundary, before anything
 # zip-truncates rows or the SVG data attrs misreport the row count.
 # ---------------------------------------------------------------------------
+
+
+def test_linestyle_raw_dasharray_and_hint():
+    def line(ls):
+        return _bare(lambda c: c.add_line(
+            data={"x": [0.5, 1.5], "y": [0.5, 1.5]},
+            mapping=aes(x="x", y="y"), linestyle=ls))
+    # Raw SVG dasharrays stay accepted — the vocabulary is open.
+    assert 'stroke-dasharray="6,3,1,3"' in line("6,3,1,3").to_svg()
+    # A near-miss typo gets a did-you-mean hint.
+    with pytest.raises(ValueError, match="Did you mean 'dashed'"):
+        line("dahsed").to_svg()
 
 
 def test_ragged_chart_data_raises_at_chart():
