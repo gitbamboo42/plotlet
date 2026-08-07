@@ -64,6 +64,56 @@ def _legend_source_artist(a: dict) -> dict:
     return {**a, "opts": {**a["opts"], **overrides}}
 
 
+def _entry_key(entry: dict) -> tuple:
+    """Merge key for discrete entries: two layers drawing the same
+    mapping level (line + scatter over the same color column) harvest
+    identical (group, label, color) keys — one legend key describes
+    both, so duplicates are noise (ggplot2 merges them too). The first
+    entry's swatch wins. Group is in the key so a color level and a
+    same-named size/linestyle guide row never merge."""
+    return (entry.get("group"), entry.get("label"), entry.get("color"))
+
+
+def _overlay_paint(base_entry: dict, extra_artist: dict, extra_entry: dict):
+    """Swatch painter for a merged key: the kept entry's glyph with the
+    duplicate layer's glyph drawn on top — ggplot2 draws one key
+    carrying every layer's glyph (a line *and* a dot for line +
+    scatter). Paints run in harvest order, so layers stack in the
+    swatch like they do in the plot. A `paint`-less entry contributes
+    its default rect swatch."""
+    def default_rect(entry):
+        def paint(_a, _ctx, x0, y_mid):
+            return rect(x0, y_mid - 5, _LEGSPEC["swatch_width"], 10,
+                        fill=entry["color"], alpha=entry.get("alpha", 1))
+        return paint
+
+    first = base_entry.get("paint") or default_rect(base_entry)
+    second = extra_entry.get("paint") or default_rect(extra_entry)
+
+    def paint(a, ctx, x0, y_mid):
+        return first(a, ctx, x0, y_mid) + second(extra_artist, ctx, x0, y_mid)
+
+    return paint
+
+
+def _dedup_entries(entries: list[dict]) -> list[dict]:
+    """Merge entries sharing an `_entry_key`, keeping first-seen order.
+    A duplicate isn't dropped outright — its glyph overlays the kept
+    entry's swatch via `_overlay_paint`."""
+    kept: dict[tuple, dict] = {}
+    out = []
+    for e in entries:
+        k = _entry_key(e)
+        prev = kept.get(k)
+        if prev is not None:
+            prev["paint"] = _overlay_paint(prev, e["_a"], e)
+            continue
+        e = dict(e)   # about to own/mutate `paint` — never alias input
+        kept[k] = e
+        out.append(e)
+    return out
+
+
 def _manual_entry(e: dict) -> dict:
     """A free-form `entries=` dict → the harvested-entry shape. The `_a`
     stub stands in for the source artist that manual entries don't have;
@@ -111,6 +161,7 @@ def _build_groups(sources: list, states: dict[int, dict],
                     entry = dict(entry)
                     entry.setdefault("_a", a)
                     disc.append(entry)
+        disc = _dedup_entries(disc)
         if not cont and not disc:
             continue
         if not group_by_chart:
@@ -124,10 +175,12 @@ def _build_groups(sources: list, states: dict[int, dict],
         raw.append({"header": header, "cont": cont, "disc": disc})
 
     if not group_by_chart and raw:
+        # Ungrouped sections merge into one — dedup again across the
+        # merged list (two charts can contribute the same level).
         raw = [{
             "header": None,
             "cont": [c for g in raw for c in g["cont"]],
-            "disc": [d for g in raw for d in g["disc"]],
+            "disc": _dedup_entries([d for g in raw for d in g["disc"]]),
         }]
     if manual:
         raw.append({"header": None, "cont": [],

@@ -1238,9 +1238,13 @@ def _legend_sources(state, env):
     from `spec.legend_entries`, `cont` (artist, descriptor) pairs from
     `spec.legend_gradient`, manual `entries=` rows appended last, and
     `reverse=` applied per section."""
-    from ._legend import _legend_source_artist, _manual_entry
+    from ._legend import (_entry_key, _legend_source_artist, _manual_entry,
+                          _overlay_paint)
     disc = []
     cont = []
+    seen = {}   # (group, label, color) → index in `disc`; same-level
+                # entries across layers (line + scatter over one
+                # mapping) merge into one key with overlaid glyphs
     for a in state["artists"]:
         spec = get_artist(a["type"])
         if spec is None:
@@ -1258,6 +1262,15 @@ def _legend_sources(state, env):
                 cont.append((a, desc))
         if spec.legend_entries is not None:
             for entry in spec.legend_entries(a):
+                k = _entry_key(entry)
+                i = seen.get(k)
+                if i is not None:
+                    kept_a, kept_e = disc[i]
+                    kept_e = dict(kept_e)
+                    kept_e["paint"] = _overlay_paint(kept_e, a, entry)
+                    disc[i] = (kept_a, kept_e)
+                    continue
+                seen[k] = len(disc)
                 disc.append((a, entry))
     manual = []
     for e in state.get("legend_manual") or []:

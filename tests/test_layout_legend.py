@@ -49,6 +49,7 @@ near-duplicate baselines:
 from __future__ import annotations
 
 import math
+import re
 import sys
 
 import plotlet as pt
@@ -350,3 +351,70 @@ def test_legend_glyph_unknown_raises():
     fig = c | pt.legend()
     with pytest.raises(ValueError, match="glyph"):
         fig.to_svg()
+
+
+# ---------------------------------------------------------------------------
+# Same-level entries merge across layers (ggplot2 semantics): line +
+# scatter over one color mapping harvest identical (group, label, color)
+# keys — one legend key describes both, its swatch overlaying every
+# merged layer's glyph (a line *and* a dot) in harvest order.
+# ---------------------------------------------------------------------------
+
+
+def _legend_texts(fig):
+    return [r["meta"]["text"] for r in fig.regions()
+            if r["name"] == "legend-text"]
+
+
+def test_two_layers_same_mapping_merge_in_inline_legend():
+    df = {"x": [1, 2, 3, 4], "y": [2.0, 4.0, 3.0, 5.0],
+          "g": ["a", "a", "b", "b"]}
+    c = pt.chart(df, aes(x="x", y="y", color="g"))
+    c.add_line()
+    c.add_scatter()
+    assert _legend_texts(c) == ["a", "b"]
+
+
+def test_two_layers_same_mapping_merge_in_legend_leaf():
+    df = {"x": [1, 2, 3, 4], "y": [2.0, 4.0, 3.0, 5.0],
+          "g": ["a", "a", "b", "b"]}
+    c = pt.chart(df, aes(x="x", y="y", color="g"))
+    c.add_line()
+    c.add_scatter()
+    c.legend(False)
+    fig = c | pt.legend(c)
+    assert _legend_texts(fig) == ["a", "b"]
+
+
+def test_merged_key_overlays_both_glyphs():
+    # The merged swatch carries every layer's glyph — line segment AND
+    # scatter dot per entry, not just the first layer's.
+    df = {"x": [1, 2, 3, 4], "y": [2.0, 4.0, 3.0, 5.0],
+          "g": ["a", "a", "b", "b"]}
+    c = pt.chart(df, aes(x="x", y="y", color="g"))
+    c.add_line()
+    c.add_scatter()
+    svg = c.to_svg()
+    # everything after the data-area </svg> is chrome + legend
+    tail = svg[svg.rindex("</svg>", 0, svg.rindex("</svg>")):]
+    lines = re.findall(r'<line [^>]*stroke="#(?:1f77b4|ff7f0e)"', tail)
+    dots = re.findall(r'<circle [^>]*fill="#(?:1f77b4|ff7f0e)"', tail)
+    assert len(lines) == 2 and len(dots) == 2
+
+
+def test_distinct_labels_do_not_merge():
+    df = {"x": [1, 2], "y": [1.0, 2.0]}
+    c = pt.chart(df, aes(x="x", y="y"))
+    c.add_line(label="model")
+    c.add_scatter(label="observed")
+    assert _legend_texts(c) == ["model", "observed"]
+
+
+def test_same_label_different_color_does_not_merge():
+    # Same label from two layers in different colors is a real
+    # distinction (or a real inconsistency) — keep both visible.
+    df = {"x": [1, 2], "y": [1.0, 2.0]}
+    c = pt.chart(df, aes(x="x", y="y"))
+    c.add_line(label="x", color="red")
+    c.add_scatter(label="x", color="blue")
+    assert _legend_texts(c) == ["x", "x"]
