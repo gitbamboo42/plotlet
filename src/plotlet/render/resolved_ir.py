@@ -54,6 +54,7 @@ colors and a rendered `ResolvedIR` stays field-equal to a fresh one.
 """
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 
 from .._spec import active_font, active_theme
@@ -178,7 +179,10 @@ class ResolvedIR:
         the journal → IR → resolved IR → SVG pipeline). Plain dicts and
         lists; non-JSON leaf values ride in the same `_json_layer`
         envelopes the journal uses (`$sectors`, …), coordinates as
-        their `IRCoord` {kind, params} dump.
+        their `IRCoord` {kind, params} dump. IR fields still at their
+        declared dataclass default are omitted — same rule the panel
+        `state` already follows, so a linear axis dumps `kind`/`lo`/`hi`
+        instead of twelve fields of symlog/sector/category `None`s.
 
         One-way on purpose: there is no `from_dict`, no version tag,
         no validator — this is a debug view, not a wire format. To
@@ -190,9 +194,20 @@ class ResolvedIR:
 def _to_plain(v):
     """Dataclass IR → plain dict/list for `to_dict()`. Recurses only
     through the IR containers; leaf values pass through untouched for
-    `json_safe` to envelope."""
+    `json_safe` to envelope. Fields equal to their declared default
+    (or default-factory value) are dropped — the view shows what was
+    decided, not the full schema."""
     if isinstance(v, (ResolvedIR, IRPanel, IRLayout, IRScale, IRCoord)):
-        return {k: _to_plain(getattr(v, k)) for k in v.__dataclass_fields__}
+        out = {}
+        for f in dataclasses.fields(v):
+            val = getattr(v, f.name)
+            if f.default is not dataclasses.MISSING and val == f.default:
+                continue
+            if (f.default_factory is not dataclasses.MISSING
+                    and val == f.default_factory()):
+                continue
+            out[f.name] = _to_plain(val)
+        return out
     if isinstance(v, dict):
         return {k: _to_plain(x) for k, x in v.items()}
     if isinstance(v, (list, tuple)):
