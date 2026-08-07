@@ -78,3 +78,25 @@ def test_lint_inset_chrome_is_structural():
     ins = c.inset((0.55, 0.55, 0.4, 0.4))
     ins.add_scatter(df, aes(x="x", y="y"))
     assert lint(c) == []
+
+
+def test_lint_rotated_labels_use_precise_polygons():
+    # 45°-rotated labels sit cleanly side by side — their AABBs overlap
+    # hugely but the actual rotated rectangles don't. Must not flag.
+    df = {"s": ["sample_alpha_2024", "sample_beta_2024", "sample_gamma_2024",
+                "sample_delta_2024", "sample_epsilon_2024"],
+          "n": [12, 7, 19, 14, 9]}
+    c = pt.chart(df, aes(x="s", y="n"), data_width=300, data_height=180)
+    c.add_bar()
+    c.xticks(rotation=45)
+    assert lint(c) == []
+
+
+def test_lint_rotated_labels_still_flag_when_truly_crammed():
+    df = {"s": [f"extremely_long_sample_label_{i}_2024" for i in range(10)],
+          "n": list(range(10))}
+    c = pt.chart(df, aes(x="s", y="n"), data_width=100, data_height=100)
+    c.add_bar()
+    c.xticks(rotation=45)
+    warnings = lint(c)
+    assert any("tick-x ↔ tick-x" in str(w) for w in warnings)

@@ -6,7 +6,10 @@ reads as one warning.
   overlap     any two regions whose bboxes overlap, clustered by
               name-pair: N labels piling up on one axis produce one
               warning carrying the pair count and the worst pair's
-              labels, not O(N²) restatements.
+              labels, not O(N²) restatements. Rotated text is tested
+              against its precise rotated corners, not the swollen
+              AABB — 45°-rotated tick labels sitting cleanly side by
+              side don't flag.
 
 Overlaps that are rendering geometry rather than layout bugs are
 skipped:
@@ -129,6 +132,25 @@ def _vertices(r: dict) -> list[tuple[float, float]]:
     return [(x, y), (x + w, y), (x + w, y + h), (x, y + h)]
 
 
+def _polys_overlap(pa: list, pb: list) -> bool:
+    """Separating-axis test for two convex polygons — True when they
+    intersect with positive area (merely touching edges don't count).
+    Needed because rotated tick labels' AABBs overlap hugely while the
+    actual rotated rectangles sit cleanly side by side — the standard
+    45°-rotation-to-avoid-crowding pattern must not be flagged."""
+    for poly in (pa, pb):
+        n = len(poly)
+        for i in range(n):
+            x1, y1 = poly[i]
+            x2, y2 = poly[(i + 1) % n]
+            nx, ny = y1 - y2, x2 - x1   # edge normal
+            a_proj = [nx * x + ny * y for x, y in pa]
+            b_proj = [nx * x + ny * y for x, y in pb]
+            if max(a_proj) <= min(b_proj) or max(b_proj) <= min(a_proj):
+                return False
+    return True
+
+
 def edge_clip(regs, W, H) -> list[Warning]:
     out = []
     for r in regs:
@@ -165,6 +187,15 @@ def overlap(regs, W, H) -> list[Warning]:
             ox = min(ax + aw, bx + bw) - max(ax, bx)
             oy = min(ay + ah, by + bh) - max(ay, by)
             if ox > 0 and oy > 0:
+                # AABB overlap is only a necessary condition when a
+                # region is rotated (carries a `polygon`) — confirm
+                # with the precise corners before flagging. The
+                # reported ox×oy stays the AABB overlap: an upper
+                # bound, but enough to rank severity.
+                if (("polygon" in a.get("meta", {})
+                     or "polygon" in b.get("meta", {}))
+                        and not _polys_overlap(_vertices(a), _vertices(b))):
+                    continue
                 key = frozenset({a["name"], b["name"]})
                 hits.setdefault(key, []).append((a, b, ox, oy))
     out = []
