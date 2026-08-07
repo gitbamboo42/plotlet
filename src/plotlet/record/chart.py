@@ -420,6 +420,37 @@ class Chart(_Renderable):
         # region, not its canvas.
         self._last_M_eff: dict | None = None
 
+    def __repr__(self) -> str:
+        """One-line state summary for the terminal REPL / print /
+        debugger (notebooks render via `_repr_mimebundle_` instead).
+        Built from recorded state only — never renders, so it works on
+        a child chart inside a layout too."""
+        if self._leaf_kind != "data":
+            # A legend leaf's 1×1 canvas is a placeholder until render
+            # sizes it — showing it would just mislead.
+            size = (f", {self._canvas_width}×{self._canvas_height}px"
+                    if (self._canvas_width, self._canvas_height) != (1, 1)
+                    else "")
+            return f"<Chart {self._leaf_kind} leaf{size}>"
+        parts = [f"{self._orig_data_width}×{self._orig_data_height}px"]
+        if self._data is not None:
+            cols = (list(self._data.columns)
+                    if hasattr(self._data, "columns") else list(self._data))
+            first = self._data[cols[0]] if cols else []
+            nrows = len(first) if hasattr(first, "__len__") else 1
+            parts.append(f"{nrows} rows × {len(cols)} cols")
+        if self._aes_map:
+            kv = ", ".join(f"{k}={v!r}" for k, v in self._aes_map.items())
+            parts.append(f"aes({kv})")
+        arts = [op for op, _a, _k in self._calls if get_artist(op) is not None]
+        if arts:
+            shown = ", ".join(arts[:6])
+            if len(arts) > 6:
+                shown += f", +{len(arts) - 6} more"
+            parts.append(f"artists: {shown}")
+        else:
+            parts.append("no artists")
+        return f"<Chart {' | '.join(parts)}>"
 
     # ---------- composition ----------
 
@@ -882,6 +913,13 @@ class Layout(_Renderable):
     # Override the base default. Lets tree-walking code in the layout
     # engine treat parents and leaves uniformly via `if x._is_parent:`.
     _is_parent: bool = True
+
+    def __repr__(self) -> str:
+        n = sum(1 for c in self._children if c is not None)
+        kind = self._layout_kind
+        if kind == "grid" and self._grid_rows is not None:
+            kind = f"grid {self._grid_rows}×{self._grid_cols}"
+        return f"<Layout {kind}, {n} child{'ren' if n != 1 else ''}>"
 
     def __init__(self, kind: str, children: list):
         self._layout_kind: str = kind          # "h" | "v" | "grid"

@@ -148,6 +148,14 @@ class FacetGrid:
         self._chart_opts = dict(chart_opts)
         self._calls: list[tuple[str, list, dict]] = []
 
+    def __repr__(self) -> str:
+        factors = [f"{k}={v!r}" for k, v in
+                   (("by", self._by), ("row", self._row), ("col", self._col))
+                   if v is not None]
+        n = len(self._calls)
+        return (f"<FacetGrid {', '.join(factors)}, "
+                f"{n} recorded call{'s' if n != 1 else ''}>")
+
     def __getattr__(self, name):
         if name.startswith("_"):
             raise AttributeError(name)
