@@ -121,7 +121,7 @@ call below returns structured data:
 | Wrong data/mapping recorded, artist got the wrong kwargs | journal (what was said) | `pt.to_journal(c).to_dict()["entries"]` (or `c._calls`) |
 | Autoscale / palette / limits wrong | resolved IR (what render decided) | `pt.to_ir(c).resolve().to_dict()` |
 | Finished plot's semantics (labels, scales, per-series range) | SVG schema layer | parse `data-plotlet-*` from `c.to_svg()` — schema in [docs/AI_ATTRS.md](src/plotlet/docs/AI_ATTRS.md) |
-| Title/label/legend overlap or clipping | lint (auto edge-clip + overlap) | `from plotlet.lint import lint; lint(c)` — imported from `plotlet.lint`, not `pt.lint` |
+| Title/label/legend overlap or clipping | lint (auto edge-clip + overlap) | `pt.lint(c)` |
 | Exact chrome geometry (title, ticks, spines, legend, panel bboxes) | regions sink | `c.regions()` → `{"kind","bbox","name","meta"}` |
 | Layout / grid / composition wrong | layout schematic | `pt.layout_diagram(c).show()` |
 

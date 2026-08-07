@@ -7,6 +7,12 @@ from plotlet import aes
 from plotlet.lint import lint
 
 
+def test_lint_is_exported_on_pt():
+    # `pt.lint(c)` is the documented spelling; the submodule import
+    # keeps working via sys.modules (os.path-style shadowing).
+    assert pt.lint is lint
+
+
 def test_lint_clean_chart_is_quiet():
     df = {"x": [1, 2, 3], "y": [1, 4, 9]}
     c = pt.chart(df)

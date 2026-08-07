@@ -34,8 +34,7 @@ produce no regions.
 
 Usage:
 
-    from plotlet.lint import lint
-    warnings = lint(chart)
+    warnings = pt.lint(chart)      # also: from plotlet.lint import lint
 """
 from __future__ import annotations
 import re
