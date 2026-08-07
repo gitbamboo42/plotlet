@@ -40,6 +40,7 @@ from .skill import skill
 # the os.path-style pattern: `pt.lint(c)` calls it, and
 # `from plotlet.lint import lint` still resolves via sys.modules.
 from .lint import lint
+from .describe import describe
 from . import draw, utils
 
 
@@ -69,7 +70,7 @@ __all__ = ["chart", "Chart", "Layout", "SPEC", "TAB10",
            "to_json", "from_json", "register_coord_codec",
            "to_journal", "from_journal", "JournalNode", "Journal",
            "to_ir", "from_ir", "FigureIR", "IRNode",
-           "skill", "lint",
+           "skill", "lint", "describe",
            "draw", "utils"]
 
 # Single source of truth: pyproject.toml. importlib.metadata reads it at

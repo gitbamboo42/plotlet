@@ -144,27 +144,27 @@ df = {"day": [1, 2, 3, 4], "usd": [10.5, 12.3, 11.0, 14.7]}
 c = pt.chart()
 c.title("Daily revenue").xlabel("day").ylabel("USD")
 c.add_line(df, aes(x="day", y="usd"), label="actual")
-print(c.to_svg())
+print(pt.describe(c))
 ```
 
-What an AI sees, semantically:
-
 ```
-SVG kind=layout plotlet=0.6.2 schema=2
-  PANEL title="Daily revenue" xlabel=day ylabel=USD
-        xscale=linear xlim=1.0,4.0  yscale=linear ylim=10.0,15.0
-    ARTIST 0 type=line label=actual color=#1f77b4
-           n=4 x-min=1 x-max=4 y-min=10.5 y-max=14.7
+SVG 700×405 plotlet=0.6.4 schema=2
+  PANEL 0 title="Daily revenue" xlabel="day" ylabel="USD"
+    xscale=linear xlim=0.85,4.15  yscale=linear ylim=10.29,14.91
+    ARTIST 0 line label="actual" color=#1f77b4 n=4 x-min=1 x-max=4 y-min=10.5 y-max=14.7
 ```
 
-All recoverable with one XML parse — no glyph-path OCR, no pixel→data
-inversion.
+`pt.describe` reads only these attrs, so its keys are the schema names
+above — a line greps straight back to the SVG. All of it recoverable
+with one XML parse: no glyph-path OCR, no pixel→data inversion.
 
 ---
 
-## Schema-only consumer: `pt.layout_diagram`
+## Schema-only consumers: `pt.describe` and `pt.layout_diagram`
 
-[`pt.layout_diagram(chart)`](../layout_diagram.py) is a debug
-visualizer that reads *only* `data-plotlet-*` attrs — no private imports.
-Treat its source as the canonical worked example for building your own
-schema consumer (layout linter, AI inspection script, etc.).
+[`pt.describe(chart)`](../describe.py) (text summary, above) and
+[`pt.layout_diagram(chart)`](../layout_diagram.py) (visual layout
+schematic) both read *only* `data-plotlet-*` attrs — no private
+imports. Treat their sources as the canonical worked examples for
+building your own schema consumer (layout linter, AI inspection
+script, etc.).
