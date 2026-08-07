@@ -30,7 +30,7 @@ from __future__ import annotations
 import math
 
 from .chart import Chart, chart, grid, _REPR_SCALE
-from ..utils import _normalize_data
+from ..utils import _check_table, _normalize_data
 
 
 def facet(data, *, by=None, row=None, col=None, col_wrap=None,
@@ -44,7 +44,7 @@ def facet(data, *, by=None, row=None, col=None, col_wrap=None,
         raise ValueError("pt.facet requires a data argument.")
     # Same recorder-boundary normalization as `pt.chart(data)` — the
     # journal (and JSON layer) never hold a library-specific object.
-    data = _normalize_data(data)
+    data = _check_table(_normalize_data(data), "pt.facet(data=)")
     if by is not None and (row is not None or col is not None):
         raise TypeError(
             "pt.facet: pass either by= (wrapped panels) or row=/col= "

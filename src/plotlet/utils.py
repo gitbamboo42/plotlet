@@ -258,6 +258,25 @@ def _normalize_data(data):
     return data
 
 
+def _check_table(data, where):
+    """Reject a ragged dict-of-columns table at the recording boundary.
+    Past this point nothing re-checks: zip-based draw code would
+    silently drop the extra rows and the SVG data attrs would report
+    the longer count. DataFrameLite is rectangular by construction, so
+    only dict input needs the check. Returns `data` unchanged so call
+    sites can wrap in place."""
+    if isinstance(data, dict):
+        lengths = {k: len(v) for k, v in data.items()
+                   if isinstance(v, (list, tuple))}
+        if len(set(lengths.values())) > 1:
+            detail = ", ".join(f"{k} has {n}" for k, n in lengths.items())
+            raise ValueError(
+                f"{where}: all columns must have the same number of "
+                f"values — {detail}."
+            )
+    return data
+
+
 def _normalize_matrix(obj):
     """Boundary normalization for a matrix artist's positional matrix
     (`data_input="matrix"`): numeric 2-D input becomes one ndarray
@@ -416,6 +435,14 @@ def quantile(xs, q, *, _skipna=True):
     lo = int(pos)
     hi = min(lo + 1, n - 1)
     return xs[lo] + (xs[hi] - xs[lo]) * (pos - lo)
+
+
+def _table_columns(data):
+    """Column names of a table (DataFrameLite or dict-of-columns) —
+    for error messages."""
+    if hasattr(data, "columns"):
+        return list(data.columns)
+    return list(data)
 
 
 def _data_has_column(data, name):

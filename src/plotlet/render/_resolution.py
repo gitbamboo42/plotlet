@@ -33,7 +33,8 @@ from ..draw import resolve_color, TAB10
 from ..scales import (_nice_domain, _fmt_tick, _to_epoch,
                       _coerce_time_lim, _AxisDescriptor)
 from ..sectors import SectoredValue
-from ..utils import ColumnRef, DataFrameLite, check_option
+from ..utils import (ColumnRef, DataFrameLite, check_option,
+                     _data_has_column, _table_columns)
 from ..draw import measure_text, text_block_height
 from . import _chrome_bands
 from ._chrome_visibility import resolve_axis_chrome
@@ -510,6 +511,19 @@ def _record_artist(state, spec, args, kw):
     # artists).
     if state["x_sectors"] is not None or state["y_sectors"] is not None:
         call_kw = _sector_remap_data(call_kw, state)
+    # In aes(), a value names a column of the bound data — check that
+    # here, at the doorway every artist passes through. Without this,
+    # the lookup fails deep inside the artist's record() as a bare
+    # KeyError with no artist, no aes slot, and no column list.
+    data = call_kw.get("data")
+    if data is not None:
+        for key, v in call_kw.items():
+            if isinstance(v, ColumnRef) and not _data_has_column(data, v):
+                cols = ", ".join(repr(c) for c in _table_columns(data))
+                raise ValueError(
+                    f"{spec.name}: aes({key}={str(v)!r}) — the data has "
+                    f"no column named {str(v)!r}. Columns: {cols}."
+                )
     result = spec.record(*call_args, **call_kw)
     records = result if isinstance(result, list) else [result]
     # In aes(), a value is a column name — this check enforces that

@@ -223,3 +223,31 @@ def test_scatter_alpha_applies_on_colormap_path():
     opaque = pt.chart(df, aes(x="x", y="y", color="z")); opaque.add_scatter()
     faded = pt.chart(df, aes(x="x", y="y", color="z")); faded.add_scatter(alpha=0.3)
     assert opaque.to_svg() != faded.to_svg()
+
+
+# ---------------------------------------------------------------------------
+# Ragged tables — rejected at the recording boundary, before anything
+# zip-truncates rows or the SVG data attrs misreport the row count.
+# ---------------------------------------------------------------------------
+
+
+def test_ragged_chart_data_raises_at_chart():
+    with pytest.raises(ValueError, match="x has 3, y has 2"):
+        pt.chart({"x": [1, 2, 3], "y": [2.0, 3.0]}, aes(x="x", y="y"))
+
+
+def test_ragged_artist_data_raises_at_call():
+    c = pt.chart()
+    with pytest.raises(ValueError, match=r"add_line\(data=\)"):
+        c.add_line(data={"x": [1, 2], "y": [1.0]}, mapping=aes(x="x", y="y"))
+
+
+def test_ragged_positional_table_raises_at_call():
+    c = pt.chart()
+    with pytest.raises(ValueError, match="same number of values"):
+        c.add_scatter({"x": [1, 2], "y": [1.0]}, aes(x="x", y="y"))
+
+
+def test_ragged_facet_data_raises_at_facet():
+    with pytest.raises(ValueError, match=r"pt\.facet\(data=\)"):
+        pt.facet({"x": [1, 2], "g": ["a"]}, by="g")

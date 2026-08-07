@@ -47,7 +47,7 @@ import resvg_py
 from .._spec import _SIZESPEC, _MARGIN_FLOOR
 from .._tree import compute_share_classes, normalize_share_mode
 from ..utils import _to_px, _normalize_data, _normalize_matrix, \
-    _data_has_column, Aes
+    _check_table, _data_has_column, Aes, DataFrameLite
 from ..registry import get_artist, all_artist_names
 
 
@@ -360,7 +360,7 @@ class Chart(_Renderable):
         # Normalize DataFrame-shaped and numpy inputs to plain Python at
         # the boundary. The journal never holds a library-specific object,
         # so JSON serialization has nothing to envelope.
-        self._data = _normalize_data(data)
+        self._data = _check_table(_normalize_data(data), "pt.chart(data=)")
         # Chart-level aesthetic defaults inherited by artist calls — set
         # once at chart construction, overridden by per-artist values.
         # Two pools: `_aes_map` holds column mappings from a chart-level
@@ -632,7 +632,9 @@ class Chart(_Renderable):
                     # passes df positionally, and the artist expects a
                     # normalized value regardless of position.
                     if "data" in kwargs:
-                        kwargs["data"] = _normalize_data(kwargs["data"])
+                        kwargs["data"] = _check_table(
+                            _normalize_data(kwargs["data"]),
+                            f"c.{name}(data=)")
                     # A matrix artist's positional matrix keeps its
                     # numeric-array form (2-D ndarray) instead of
                     # lowering to nested lists, so the vectorized
@@ -642,6 +644,10 @@ class Chart(_Renderable):
                                 *(_normalize_data(a) for a in args[1:]))
                     else:
                         args = tuple(_normalize_data(a) for a in args)
+                        # A table artist's positional table gets the
+                        # same ragged check as `data=`.
+                        if args and isinstance(args[0], (dict, DataFrameLite)):
+                            _check_table(args[0], f"c.{name}(...)")
                     # Data injection — a call that maps columns via
                     # aes(...) draws from the chart-level table. A call
                     # that brings its own data overrides it, whether the

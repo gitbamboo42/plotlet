@@ -57,10 +57,12 @@ def test_aes_missing_column_fails_loudly():
     c.add_scatter(aes(x="x", y="y", color="no_such_column"))
     try:
         c.to_svg()
-    except KeyError as e:
+    except ValueError as e:
         assert "no_such_column" in str(e)
+        assert "scatter" in str(e)     # names the artist
+        assert "purple" in str(e)      # lists the available columns
     else:
-        raise AssertionError("expected KeyError for unknown column")
+        raise AssertionError("expected ValueError for unknown column")
 
 
 def test_aes_rejects_non_string_values():
