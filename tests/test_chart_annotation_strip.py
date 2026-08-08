@@ -109,6 +109,7 @@ def chart_heatmap_split_attached():
 
     bar = pt.chart(df, aes(x="col", y="sum"), data_height=40, ylabel="sum")
     bar.add_bar(fill="#555")
+    bar.yticks([200, 400])
 
     df2 = {"col": col_labels, "group": col_groups}
 

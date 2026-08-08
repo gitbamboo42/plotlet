@@ -66,6 +66,7 @@ def sectors_multi_track_share_x():
 
     return (pt.grid([[t1], [t2]])
               .share_x("col")
+              .gap(y=14)
               .sectors(PHASES, column="phase"))
 
 
@@ -121,7 +122,7 @@ def sectors_continuous_x():
     c = pt.chart(df, aes(x="pos", y="v"),
                  title="continuous x-sectors with ticks",
                  data_width=440, data_height=180, ylabel="value")
-    c.sectors({"A": 100, "B": 60, "C": 80}, column="region", gap=12)
+    c.sectors({"A": 100, "B": 60, "C": 80}, column="region", gap=18)
     c.add_scatter()
     c.xticks([0, 50, 100], rotation=90)
     return c

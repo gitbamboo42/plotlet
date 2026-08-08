@@ -198,6 +198,7 @@ def width_hint_narrow_side():
     df2 = {"x": [1, 1, 1], "y": [1, 4, 9]}
     side = pt.chart(df2, aes(x="x", y="y"), title="side", data_width=24)
     side.add_line()
+    side.xticks([])
     return (main | side).share_y()
 
 
@@ -257,6 +258,7 @@ def complex_grid_shares():
     df2 = {"x": [1,2,3,4,5], "y": [1,1,3,1,1]}
     top  = pt.chart(df2, aes(x="x", y="y"), title="top",  data_width=400, data_height=24)
     top.add_line()
+    top.yticks([1, 3])
     df3 = {"x": [0,1,2], "y": [2,3,4]}
     tree = pt.chart(df3, aes(x="x", y="y"), title="tree", data_width=60,  data_height=240)
     tree.add_line()

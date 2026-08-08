@@ -44,6 +44,7 @@ def attach_four_sides_chained():
         c = pt.chart(df, aes(x="x", y="y"), data_width=44)
         c.yscale("category", order=rows, padding=0)
         c.add_line()
+        c.xticks([])
         return c
 
     def col_line(values):
@@ -51,6 +52,7 @@ def attach_four_sides_chained():
         c = pt.chart(df, aes(x="x", y="y"), data_height=34)
         c.xscale("category", order=cols, padding=0)
         c.add_line()
+        c.yticks([])
         return c
 
     host.attach_left(row_line([2, 4, 1, 3]), row_line([3, 1, 4, 2]))
@@ -71,6 +73,7 @@ def attach_with_peer_legend():
     df3 = {"x": [1, 2, 3, 4, 5], "y": [0.2, 0.7, 0.4, 0.6, 0.3]}
     top_track = pt.chart(df3, aes(x="x", y="y"), data_height=28)
     top_track.add_line()
+    top_track.yticks([0.5])
     host.attach_above(top_track)
     return host | pt.legend()
 

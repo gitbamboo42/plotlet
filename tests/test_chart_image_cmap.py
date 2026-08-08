@@ -129,7 +129,7 @@ def chart_image_cmap_png_pooled():
     # SVG and shows bin means instead of a nearest-neighbour subsample.
     data = [[math.sin(r * 0.4) + math.cos(c * 0.3) for c in range(150)]
             for r in range(150)]
-    c = pt.chart(title="image_cmap (pooled PNG)", data_width=40, data_height=40)
+    c = pt.chart(data_width=40, data_height=40)
     c.add_image_cmap(data, cmap="viridis")
     return c
 
