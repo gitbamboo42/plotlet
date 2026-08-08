@@ -1258,7 +1258,11 @@ def _legend_sources(state, env):
             if env is not None:
                 a = {**a, "_env": env}
             desc = spec.legend_gradient(a)
-            if desc is not None:
+            # A descriptor identical to one already harvested is the
+            # same continuous scale seen through a second layer — one
+            # colorbar describes both (mirrors _dedup_gradients on the
+            # pt.legend leaf path).
+            if desc is not None and all(desc != d for _, d in cont):
                 cont.append((a, desc))
         if spec.legend_entries is not None:
             for entry in spec.legend_entries(a):

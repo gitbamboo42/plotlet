@@ -439,3 +439,63 @@ def test_gradient_crowded_explicit_ticks_thin_labels():
     assert len(labels) < 6           # the crowded bottom cluster thinned
     from plotlet.lint import lint
     assert [w for w in lint(c) if "legend-text" in w.region] == []
+
+
+# ---------------------------------------------------------------------------
+# Identical gradients merge across layers (the continuous counterpart of
+# the discrete merge above): two artists sharing one continuous mapping
+# harvest byte-identical descriptors — one colorbar describes both.
+# Descriptors differing in any field (range, cmap, label, ...) are
+# different scales and keep separate strips.
+# ---------------------------------------------------------------------------
+
+
+def _gradient_strips(fig):
+    return [r for r in fig.regions() if r["name"] == "legend-mark"]
+
+
+def test_two_layers_shared_cmap_one_colorbar_inline():
+    df = {"x": [1, 2, 3, 4], "y": [2.0, 4.0, 3.0, 5.0],
+          "v": [0.1, 0.3, 0.6, 0.9]}
+    c = pt.chart(df, aes(x="x", y="y", color="v"))
+    c.add_scatter(size=12, alpha=0.3)   # halo layer
+    c.add_scatter()                     # core layer, same mapping
+    assert len(_gradient_strips(c)) == 1
+
+
+def test_two_layers_shared_cmap_one_colorbar_legend_leaf():
+    df = {"x": [1, 2, 3, 4], "y": [2.0, 4.0, 3.0, 5.0],
+          "v": [0.1, 0.3, 0.6, 0.9]}
+    c = pt.chart(df, aes(x="x", y="y", color="v"))
+    c.add_scatter(size=12, alpha=0.3)
+    c.add_scatter()
+    c.legend(False)
+    fig = c | pt.legend(c)
+    assert len(_gradient_strips(fig)) == 1
+
+
+def test_shared_cmap_merges_across_charts_when_ungrouped():
+    # group_by_chart=False flattens sections into one — the same
+    # continuous scale contributed by two charts dedups there too.
+    df = {"x": [1, 2, 3, 4], "y": [2.0, 4.0, 3.0, 5.0],
+          "v": [0.1, 0.3, 0.6, 0.9]}
+    charts = []
+    for _ in range(2):
+        c = pt.chart(df, aes(x="x", y="y", color="v"))
+        c.add_scatter()
+        c.legend(False)
+        charts.append(c)
+    a, b = charts
+    fig = pt.grid([[a, b, pt.legend(a, b, group_by_chart=False)]])
+    assert len(_gradient_strips(fig)) == 1
+
+
+def test_distinct_gradient_ranges_keep_both_colorbars():
+    # Explicit vmin/vmax differing between the layers → genuinely
+    # different scales, both strips stay.
+    df = {"x": [1, 2, 3, 4], "y": [2.0, 4.0, 3.0, 5.0],
+          "v": [0.1, 0.3, 0.6, 0.9]}
+    c = pt.chart(df, aes(x="x", y="y", color="v"))
+    c.add_scatter(vmin=0, vmax=1)
+    c.add_scatter(vmin=0, vmax=2)
+    assert len(_gradient_strips(c)) == 2

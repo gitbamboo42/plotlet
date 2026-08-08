@@ -116,6 +116,23 @@ def _dedup_entries(entries: list[dict]) -> list[dict]:
     return out
 
 
+def _dedup_gradients(descs: list[dict]) -> list[dict]:
+    """Drop gradient descriptors identical to an earlier one, keeping
+    first-seen order — two layers sharing one continuous mapping (a
+    halo + core scatter over the same column) harvest byte-identical
+    {cmap, vmin, vmax, ...} descriptors, and one colorbar describes
+    both (ggplot2 draws one guide per scale). A descriptor differing
+    in any field — range, cmap, norm, label, explicit ticks — keeps
+    its own strip: that's a different scale, not noise. Unlike the
+    discrete merge there is no glyph to overlay; duplicates just
+    drop."""
+    out: list[dict] = []
+    for d in descs:
+        if not any(d == kept for kept in out):
+            out.append(d)
+    return out
+
+
 def _manual_entry(e: dict) -> dict:
     """A free-form `entries=` dict → the harvested-entry shape. The `_a`
     stub stands in for the source artist that manual entries don't have;
@@ -163,6 +180,7 @@ def _build_groups(sources: list, states: dict[int, dict],
                     entry = dict(entry)
                     entry.setdefault("_a", a)
                     disc.append(entry)
+        cont = _dedup_gradients(cont)
         disc = _dedup_entries(disc)
         if not cont and not disc:
             continue
@@ -181,7 +199,7 @@ def _build_groups(sources: list, states: dict[int, dict],
         # merged list (two charts can contribute the same level).
         raw = [{
             "header": None,
-            "cont": [c for g in raw for c in g["cont"]],
+            "cont": _dedup_gradients([c for g in raw for c in g["cont"]]),
             "disc": _dedup_entries([d for g in raw for d in g["disc"]]),
         }]
     if manual:
