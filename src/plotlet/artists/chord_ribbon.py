@@ -46,8 +46,10 @@ import math
 
 from ..registry import ArtistSpec, add_artist, declare_coord_support
 from ..utils import to_list, resolve_aes, palette_color, pack_opts
-from ..draw import path as draw_path, polygon, TAB10
+from ..draw import path as draw_path, polygon, rect, TAB10
 from ..draw import coord
+from .._spec import _LEGSPEC
+from ._shared import swatch_stroke
 
 
 _ARC_STEPS = 12     # polyline segments per disc-boundary cap
@@ -252,7 +254,18 @@ def _chord_ribbon_legend_entries(a):
     label = a["opts"].get("label")
     if not label:
         return []
-    return [{"label": label, "color": a.get("_color")}]
+    # Ribbons are translucent and optionally edged; the default rect
+    # swatch is opaque and unstroked, so paint the key ourselves.
+    def paint(_a, _ctx, x0, y_mid):
+        opts = _a["opts"]
+        edge_width = float(opts.get("edge_width", 0.0))
+        return rect(x0, y_mid - 5, _LEGSPEC["swatch_width"], 10,
+                    fill=_a["_color"],
+                    alpha=float(opts.get("alpha", 0.6)),
+                    stroke=opts.get("edge_color") if edge_width > 0 else None,
+                    stroke_width=(swatch_stroke(edge_width)
+                                  if edge_width > 0 else 1))
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 
 def _chord_ribbon_frame_defaults(args, kw):

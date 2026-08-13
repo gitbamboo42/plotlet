@@ -1656,9 +1656,12 @@ def _stamp_artist_colors(state) -> None:
         # literal (fill-defaulted artists, e.g. bar) as the artist's
         # user-set primary color — both should skip the cycle and supply
         # `_color` for the legend.
-        user_color = resolve_color(a["opts"].get("color")
-                                    or a["opts"].get("_color_literal")
-                                    or a["opts"].get("_fill_literal"))
+        # `_fill_literal` comes first: on a fill-defaulted artist `color=`
+        # is only the outline, so a filled shape with a contrasting
+        # border must not identify itself by its border.
+        user_color = resolve_color(a["opts"].get("_fill_literal")
+                                    or a["opts"].get("color")
+                                    or a["opts"].get("_color_literal"))
         if user_color is not None:
             a["_color"] = user_color
         elif "_j" in a:

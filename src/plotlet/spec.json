@@ -118,6 +118,8 @@
     "pad_y": 8,
     "swatch_width": 25,
     "swatch_label_gap": 6,
+    "max_swatch_radius": 9.5,
+    "max_swatch_stroke": 4,
     "header_pad": 4,
     "gradient_label_pad": 4,
     "background": "#ffffff",

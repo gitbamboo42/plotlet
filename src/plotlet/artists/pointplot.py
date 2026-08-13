@@ -33,6 +33,7 @@ from ..utils import (pack_opts, categorical_groups, resolve_aes, quantile,
                      validate_ci, ci_bounds, check_option)
 from ..draw import segment, circle, polyline, errorbar_v
 from ..utils import group_color
+from ._shared import swatch_radius, swatch_stroke
 
 
 def _pointplot_record(data=None,
@@ -112,22 +113,26 @@ def _pointplot_draw(a, ctx):
 def _pointplot_legend_entries(a):
     groups = a["groups"]
     opts = a["opts"]
+    # Same line width and dot radius the marks use, so a heavier or
+    # bigger pointplot reads the same in the key.
+    lw = swatch_stroke(opts.get("linewidth", 1.4))
+    r = swatch_radius(opts.get("size", 4))
     if groups == [None]:
         label = opts.get("label")
         if not label:
             return []
         def paint(_a, _ctx, _x0, _y_mid):
             col = _a.get("_color", _ctx.color)
-            return (segment(_x0, _y_mid, _x0 + 22, _y_mid, color=col, width=1.4)
-                    + circle(_x0 + 11, _y_mid, 3, fill=col))
+            return (segment(_x0, _y_mid, _x0 + 22, _y_mid, color=col, width=lw)
+                    + circle(_x0 + 11, _y_mid, r, fill=col))
         return [{"label": label, "color": None, "paint": paint}]
     palette = opts.get("palette")
     entries = []
     for j, g in enumerate(groups):
         col = group_color(groups, palette, j, a.get("_color"))
         def paint(_a, _ctx, x0, y_mid, _col=col):
-            return (segment(x0, y_mid, x0 + 22, y_mid, color=_col, width=1.4)
-                    + circle(x0 + 11, y_mid, 3, fill=_col))
+            return (segment(x0, y_mid, x0 + 22, y_mid, color=_col, width=lw)
+                    + circle(x0 + 11, y_mid, r, fill=_col))
         entries.append({"label": str(g), "color": col, "paint": paint})
     return entries
 

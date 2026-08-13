@@ -55,7 +55,7 @@ from .._spec import _D, _LEGSPEC
 from ..draw import rect as draw_rect
 from ..draw import errorbar_v, errorbar_h
 from .errorbar import _resolve_err
-from ._shared import band_rect
+from ._shared import band_rect, swatch_stroke
 from ..utils import group_color as _group_fill
 
 
@@ -465,20 +465,27 @@ def _bar_legend_entries(a):
     opts = a["opts"]
     alpha = opts.get("alpha", _D["bar_alpha"])
     sw = _LEGSPEC["swatch_width"]
+    # Outlined bars get an outlined key — `color=` strokes the bars, so a
+    # fill-only swatch would describe a different mark than the plot shows.
+    stroke = resolve_color(opts.get("color"))
+    lw = swatch_stroke(opts.get("linewidth", _D["linewidth"])) if stroke else 1
+    dash = opts.get("linestyle")
     if groups == [None]:
         label = opts.get("label")
         if not label:
             return []
         def paint(_a, _ctx, x0, y_mid):
             return draw_rect(x0, y_mid - 5, sw, 10,
-                             fill=_a["_color"], alpha=alpha)
+                             fill=_a["_color"], alpha=alpha,
+                             stroke=stroke, stroke_width=lw, dash=dash)
         return [{"label": label, "color": a.get("_color"), "paint": paint}]
     palette = opts.get("palette")
     entries = []
     for j, g in enumerate(groups):
         col = _group_fill(groups, palette, j, a.get("_color"))
         def paint(_a, _ctx, x0, y_mid, _col=col, _alpha=alpha):
-            return draw_rect(x0, y_mid - 5, sw, 10, fill=_col, alpha=_alpha)
+            return draw_rect(x0, y_mid - 5, sw, 10, fill=_col, alpha=_alpha,
+                             stroke=stroke, stroke_width=lw, dash=dash)
         entries.append({"label": str(g), "color": col, "paint": paint})
     return entries
 

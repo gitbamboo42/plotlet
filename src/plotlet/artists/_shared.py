@@ -2,7 +2,8 @@
 
 Each built-in artist registers one of the `*_legend_entries` functions so
 the legend dispatch in `_render_inner` can stay generic — no type-string matching.
-Paint logic is a nested closure; there are no shared swatch helpers.
+Paint logic is a nested closure; the only shared swatch helpers are the
+two size clamps (`swatch_radius` / `swatch_stroke`).
 
 The `pool_*` / `rgb_buffer` helpers back the PNG-embedded raster paths of
 image_cmap / image_rgba and heatmap: a grid denser than the display can show is box-pooled
@@ -18,6 +19,21 @@ from .._spec import _LEGSPEC, _D
 from ..draw import marker, segment, rect
 from ..draw import TAB10
 from ..utils import to_list, resolve_aes, palette_color
+
+
+def swatch_radius(r):
+    """Marker radius for a legend key: the plotted radius, capped so the
+    glyph stays inside its legend row. A key mirrors the mark's styling,
+    but a `size=40` dot would spill across the whole legend box and out
+    the other side — past the cap the exact radius stops carrying
+    information anyway."""
+    return min(float(r), _LEGSPEC["max_swatch_radius"])
+
+
+def swatch_stroke(w):
+    """Stroke width for a legend key, capped the same way — half of a
+    wide stroke sits outside the shape it outlines."""
+    return min(float(w), _LEGSPEC["max_swatch_stroke"])
 
 
 def pool_target(n_cells, px):
@@ -329,17 +345,6 @@ def _refline_legend_entries(a):
                        color=a["_color"],
                        width=a["opts"].get("linewidth", ctx.defaults["refline_width"]),
                        dash=a["opts"].get("linestyle"))
-    return [{"label": label, "color": a.get("_color"), "paint": paint}]
-
-
-def _bar_legend_entries(a):
-    label = a["opts"].get("label")
-    if not label:
-        return []
-    def paint(a, ctx, x0, y_mid):
-        sw = _LEGSPEC["swatch_width"]
-        return rect(x0, y_mid - 5, sw, 10, fill=a["_color"],
-                    alpha=a["opts"].get("alpha", 1))
     return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 

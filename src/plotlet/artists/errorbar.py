@@ -28,7 +28,7 @@ from ..utils import (UNSET, pack_opts, to_list, all_numeric, resolve_aes,
                      group_color, dodge_positions, DODGE_WIDTH, DODGE_GAP)
 from ..draw import marker, segment, errorbar_v, errorbar_h
 from .._spec import _D, _LEGSPEC
-from ._shared import _xy_minmax
+from ._shared import _xy_minmax, swatch_radius, swatch_stroke
 
 
 def _resolve_offset(data, spec, n):
@@ -227,13 +227,16 @@ def _errorbar_data_attrs(a):
 
 def _legend_paint(col):
     def paint(a, ctx, x0, y_mid):
-        msize = a["opts"].get("size", ctx.defaults["markersize"])
+        opts = a["opts"]
+        msize = swatch_radius(opts.get("size", ctx.defaults["markersize"]))
+        lw = swatch_stroke(opts.get("linewidth", _D["errorbar_linewidth"]))
+        alpha = opts.get("alpha", 1)
         cx = x0 + _LEGSPEC["swatch_width"] / 2
         out = segment(cx, y_mid - 5, cx, y_mid + 5,
-                      color=col, width=_D["errorbar_linewidth"])
-        mk = a["opts"].get("marker", "o")
+                      color=col, width=lw, alpha=alpha)
+        mk = opts.get("marker", "o")
         if mk:
-            out += marker(mk, cx, y_mid, msize, col, 1)
+            out += marker(mk, cx, y_mid, msize, col, alpha)
         return out
     return paint
 

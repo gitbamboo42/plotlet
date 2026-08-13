@@ -54,6 +54,7 @@ import sys
 
 import plotlet as pt
 from plotlet import aes
+from plotlet._spec import _LEGSPEC
 from _chart_helpers import _legend_position_chart
 
 
@@ -499,3 +500,81 @@ def test_distinct_gradient_ranges_keep_both_colorbars():
     c.add_scatter(vmin=0, vmax=1)
     c.add_scatter(vmin=0, vmax=2)
     assert len(_gradient_strips(c)) == 2
+
+
+# ---------------------------------------------------------------------------
+# A key describes its mark. Every artist that lets you outline, thin, or
+# resize a mark has to carry that styling into its legend swatch —
+# otherwise the key advertises a mark the plot never drew. These went
+# unnoticed for a while because no baseline combined styling with a
+# `label=`, so each case below pairs the two.
+# ---------------------------------------------------------------------------
+
+
+def _legend_tail(c):
+    """Everything after the data area — chrome plus the legend block."""
+    svg = c.to_svg()
+    return svg[svg.rindex("</svg>", 0, svg.rindex("</svg>")):]
+
+
+def test_scatter_key_carries_marker_outline():
+    df = {"x": [1, 2, 3, 4], "y": [2.0, 4.0, 3.0, 5.0]}
+    c = pt.chart(df, aes(x="x", y="y"))
+    c.add_scatter(edgecolor="#333333", linewidth=2, label="pts")
+    key = re.findall(r'<circle[^>]*>', _legend_tail(c))[-1]
+    assert 'stroke="#333333"' in key and 'stroke-width="2.00"' in key
+
+
+def test_bar_and_hist_keys_carry_the_bar_outline():
+    cats = {"x": ["a", "b"], "y": [1.0, 2.0]}
+    c = pt.chart(cats, aes(x="x", y="y"))
+    c.add_bar(color="#000000", linewidth=3, label="bars")
+    assert 'stroke="#000000"' in re.findall(r'<rect[^>]*>', _legend_tail(c))[-1]
+
+    vals = {"v": [0.1, 0.4, 0.5, 0.9, 1.3, 1.4]}
+    c = pt.chart(vals, aes(x="v"))
+    c.add_hist(color="#000000", linewidth=3, label="counts")
+    assert 'stroke="#000000"' in re.findall(r'<rect[^>]*>', _legend_tail(c))[-1]
+
+
+def test_unfilled_shape_key_is_unfilled():
+    # `fill="none"` draws an outline-only shape; a solid key would show
+    # the reader a block that appears nowhere in the plot.
+    df = {"x": [1, 2, 3, 4], "y": [2.0, 4.0, 3.0, 5.0]}
+    c = pt.chart(df, aes(x="x", y="y"))
+    c.add_rect(x=[1], y=[2], w=[2], h=[2], fill="none", color="#cc0000",
+               linewidth=2, label="region")
+    key = re.findall(r'<rect[^>]*>', _legend_tail(c))[-1]
+    assert 'fill="none"' in key and 'stroke="#cc0000"' in key
+
+
+def test_chord_ribbon_key_carries_alpha_and_edge():
+    df = {"a0": [0.0], "a1": [1.5], "b0": [6.0], "b1": [7.5]}
+    c = pt.chart(df, aes(x1_start="a0", x1_end="a1",
+                         x2_start="b0", x2_end="b1"))
+    c.add_chord_ribbon(color="#4C72B0", alpha=0.35, edge_color="#000",
+                       edge_width=2, label="flow")
+    key = re.findall(r'<rect[^>]*>', _legend_tail(c))[-1]
+    assert 'opacity="0.35"' in key and 'stroke="#000"' in key
+
+
+def test_point_keys_track_the_marker_size():
+    vals = {"x": ["a", "a", "b", "b"], "y": [1.0, 2.0, 3.0, 4.0]}
+    c = pt.chart(vals, aes(x="x", y="y"))
+    c.add_pointplot(size=8, label="mean")
+    assert 'r="8.00"' in re.findall(r'<circle[^>]*>', _legend_tail(c))[-1]
+
+    samp = {"s": [1.2, -0.3, 0.8, 2.1, -1.4, 0.2]}
+    c = pt.chart(samp, aes(x="s"))
+    c.add_qq(data=samp, sample="s", size=6, label="sample")
+    assert 'r="6.00"' in re.findall(r'<circle[^>]*>', _legend_tail(c))[-1]
+
+
+def test_oversized_marker_key_is_clamped_to_the_row():
+    # Mirroring the mark stops at the row edge — an r=40 dot would spill
+    # across the legend box and out the other side.
+    df = {"x": [1, 2, 3, 4], "y": [2.0, 4.0, 3.0, 5.0]}
+    c = pt.chart(df, aes(x="x", y="y"))
+    c.add_scatter(size=40, label="huge")
+    key = re.findall(r'<circle[^>]*>', _legend_tail(c))[-1]
+    assert f'r="{_LEGSPEC["max_swatch_radius"]:.2f}"' in key

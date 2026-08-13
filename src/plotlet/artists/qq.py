@@ -30,6 +30,7 @@ from scipy.stats import norm
 
 from ..registry import ArtistSpec, add_artist
 from ..draw import circle, segment
+from ._shared import swatch_radius
 from ..draw import parse_rgb, raster_declined, should_rasterize, splat_disks
 from ..utils import to_list, resolve_aes, long_form_1d, pack_opts
 from .._spec import _D
@@ -147,9 +148,10 @@ def _qq_legend_entries(a):
     if not label:
         return []
     alpha = a["opts"].get("alpha", 0.7)
+    r = swatch_radius(a["opts"].get("size", 2.5))
     def paint(_a, _ctx, x0, y_mid):
         col = _a.get("_color", _ctx.color)
-        return circle(x0 + 11, y_mid, 3, fill=col, alpha=alpha)
+        return circle(x0 + 11, y_mid, r, fill=col, alpha=alpha)
     return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
 

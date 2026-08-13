@@ -50,7 +50,8 @@ def _swatch_ctx(a: dict) -> RenderContext:
 # emission; the plot itself is untouched. `glyph` is not in this set —
 # it swaps the swatch drawing entirely and is handled at paint time in
 # `_render_discrete_entry`.
-_SWATCH_AES = ("alpha", "size", "marker", "markersize", "linewidth", "linestyle")
+_SWATCH_AES = ("alpha", "size", "marker", "markersize", "linewidth", "linestyle",
+               "edgecolor")
 
 
 def _legend_source_artist(a: dict) -> dict:

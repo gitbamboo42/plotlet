@@ -11,10 +11,10 @@ import math
 
 from ..registry import ArtistSpec, add_artist
 from ..utils import broadcast, pack_opts, to_list
-from .._spec import _D
+from .._spec import _D, _LEGSPEC
 from ..draw import rect as draw_rect, polygon as draw_polygon, polyline as draw_polyline
 from ..draw import resolve_color
-from ._shared import _xy_minmax, _bar_legend_entries
+from ._shared import _xy_minmax, swatch_stroke
 
 
 def _shape_opts(fill, color, linewidth, alpha, label, legend):
@@ -98,6 +98,22 @@ def _rect_data_attrs(a):
     return out
 
 
+def _shape_legend_entries(a):
+    """Key for rect / polygon: the same fill-and-stroke resolution the
+    marks use, so an outline-only shape (`fill="none"`) gets an
+    outline-only key instead of a solid block."""
+    label = a["opts"].get("label")
+    if not label:
+        return []
+    def paint(a, ctx, x0, y_mid):
+        p = _fill_stroke_params(a, ctx.color)
+        return draw_rect(x0, y_mid - 5, _LEGSPEC["swatch_width"], 10,
+                         fill=p["fill"], stroke=p["stroke"],
+                         stroke_width=swatch_stroke(p["stroke_width"]),
+                         alpha=p["alpha"])
+    return [{"label": label, "color": a.get("_color"), "paint": paint}]
+
+
 def _rect_record(x, y, w, h, fill=None, color=None, linewidth=None,
                  alpha=None, label=None, legend=None):
     xs, ys, ws, hs = broadcast(x, y, w, h)
@@ -120,7 +136,7 @@ add_artist(ArtistSpec(
     xdomain=_rect_xdomain,
     ydomain=_rect_ydomain,
     draw=lambda a, ctx: _artist_rect(a, ctx.x_scale, ctx.y_scale, ctx.color, ctx.warp),
-    legend_entries=_bar_legend_entries,
+    legend_entries=_shape_legend_entries,
     data_attrs=_rect_data_attrs,
 ))
 
@@ -148,7 +164,7 @@ add_artist(ArtistSpec(
     xdomain=lambda a: a["xs"],
     ydomain=lambda a: a["ys"],
     draw=lambda a, ctx: _artist_polygon(a, ctx.x_scale, ctx.y_scale, ctx.color, ctx.warp),
-    legend_entries=_bar_legend_entries,
+    legend_entries=_shape_legend_entries,
     data_attrs=_polygon_data_attrs,
 ))
 

@@ -37,7 +37,7 @@ Other styling kwargs:
 from ..registry import ArtistSpec, add_artist
 from ..utils import (pack_opts, to_list, resolve_aes, dodge_slot,
                      check_option, DODGE_WIDTH, DODGE_GAP)
-from ._shared import band_rect
+from ._shared import band_rect, swatch_stroke
 from ..draw import resolve_color
 from .._spec import _D, _LEGSPEC
 from ..draw import coord, path as draw_path, polygon as draw_polygon, rect as draw_rect
@@ -337,20 +337,27 @@ def _hist_legend_entries(a):
     opts = a["opts"]
     alpha = opts.get("alpha", _D["hist_alpha"])
     sw = _LEGSPEC["swatch_width"]
+    # Mirror the bar outline (`color=` / linewidth / linestyle) into the
+    # key — same reasoning as bar's legend entries.
+    stroke = resolve_color(opts.get("color"))
+    lw = swatch_stroke(opts.get("linewidth", _D["linewidth"])) if stroke else 1
+    dash = opts.get("linestyle")
     if groups == [None]:
         label = opts.get("label")
         if not label:
             return []
         def paint(_a, _ctx, x0, y_mid):
             return draw_rect(x0, y_mid - 5, sw, 10,
-                             fill=_a["_color"], alpha=alpha)
+                             fill=_a["_color"], alpha=alpha,
+                             stroke=stroke, stroke_width=lw, dash=dash)
         return [{"label": label, "color": a.get("_color"), "paint": paint}]
     palette = opts.get("palette")
     entries = []
     for j, g in enumerate(groups):
         col = _group_fill(groups, palette, j, a.get("_color"))
         def paint(_a, _ctx, x0, y_mid, _col=col):
-            return draw_rect(x0, y_mid - 5, sw, 10, fill=_col, alpha=alpha)
+            return draw_rect(x0, y_mid - 5, sw, 10, fill=_col, alpha=alpha,
+                             stroke=stroke, stroke_width=lw, dash=dash)
         entries.append({"label": str(g), "color": col, "paint": paint})
     return entries
 

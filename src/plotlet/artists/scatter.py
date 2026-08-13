@@ -35,7 +35,8 @@ from ..draw import parse_rgb, raster_declined, should_rasterize, splat_disks
 from ..draw import colormap_lut, ContinuousNorm
 from .._spec import _D, _LEGSPEC
 from ._shared import (_xy_minmax, expand_xy_long_form,
-                       DEFAULT_ALPHA_RANGE, _alpha_for_level)
+                       DEFAULT_ALPHA_RANGE, _alpha_for_level,
+                       swatch_radius, swatch_stroke)
 
 
 def _artist_scatter(a, xs_, ys_, col, xs, ys, warp=None):
@@ -420,8 +421,13 @@ def _scatter_legend_entries(a):
             mk_val = (raw_mk[0]
                       if isinstance(raw_mk, (list, tuple)) and raw_mk
                       else (raw_mk if not isinstance(raw_mk, (list, tuple)) else "o"))
-            return marker(mk_val, x0 + sw / 2, y_mid, float(size_val), _a["_color"],
-                          opts.get("alpha", _ctx.defaults["scatter_alpha"]))
+            edgewidth = opts.get("linewidth")
+            return marker(mk_val, x0 + sw / 2, y_mid, swatch_radius(size_val),
+                          _a["_color"],
+                          opts.get("alpha", _ctx.defaults["scatter_alpha"]),
+                          edgecolor=opts.get("edgecolor"),
+                          edgewidth=(swatch_stroke(edgewidth)
+                                     if edgewidth is not None else None))
         entries.append({"label": label, "color": a.get("_color"), "paint": paint})
     # Size aesthetic: emit a small grouped guide with representative
     # dots — present only on the record that carries `_size_legend`
@@ -478,9 +484,13 @@ def _scatter_size_entries(sl, opts):
             marker_kind = marker_kind[0] if marker_kind else "o"
         def paint(_a, _ctx, x0, y_mid, _r=radius, _mk=marker_kind):
             sw_ = _LEGSPEC["swatch_width"]
-            return marker(_mk, x0 + sw_ / 2, y_mid, _r,
+            edgewidth = opts.get("linewidth")
+            return marker(_mk, x0 + sw_ / 2, y_mid, swatch_radius(_r),
                           _a.get("_color") or _ctx.defaults["color"],
-                          opts.get("alpha", _ctx.defaults["scatter_alpha"]))
+                          opts.get("alpha", _ctx.defaults["scatter_alpha"]),
+                          edgecolor=opts.get("edgecolor"),
+                          edgewidth=(swatch_stroke(edgewidth)
+                                     if edgewidth is not None else None))
         out.append({"label": label, "color": "#333", "group": group,
                     "paint": paint})
     return out

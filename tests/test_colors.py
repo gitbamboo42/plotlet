@@ -247,3 +247,30 @@ def test_named_palette_flows_to_svg():
     svg = c.to_svg()
     assert palette("Set2")[0] in svg
     assert palette("Set2")[1] in svg
+
+
+def test_filled_shape_identifies_by_its_fill_not_its_border():
+    # `fill=` is the shape's color; `color=` only strokes the outline. A
+    # filled shape with a contrasting border used to stamp `_color` from
+    # the border, so a red rect outlined in white reported — and keyed —
+    # as white.
+    c = pt.chart()
+    c.add_rect(0, 0, 10, 1, fill="#c44e52", color="white", label=">= 10 Mb")
+    svg = c.to_svg()
+    assert 'data-plotlet-color="#c44e52"' in svg
+    assert "color=#c44e52" in pt.describe(c)
+
+
+def test_fill_defaulted_artists_all_identify_by_fill():
+    # The same precedence applies to every fill-defaulted artist, not
+    # just the shapes.
+    spread = {"g": ["a", "a", "a", "b", "b", "b"],
+              "y": [1.0, 2.0, 3.0, 2.0, 3.0, 4.0]}
+    for build in (
+        lambda c: c.add_bar(fill="#c44e52", color="white"),
+        lambda c: c.add_boxplot(fill="#c44e52", color="white"),
+        lambda c: c.add_violin(fill="#c44e52", color="white"),
+    ):
+        c = pt.chart(spread, aes(x="g", y="y"))
+        build(c)
+        assert 'data-plotlet-color="#c44e52"' in c.to_svg()
