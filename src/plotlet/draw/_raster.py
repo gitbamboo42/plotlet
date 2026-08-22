@@ -20,9 +20,12 @@ output stays byte-identical across machines -- reproducibility holds.
 
 Callers group marks by color and call the splatter once per color (one
 `<image>` per color; the count is bounded by the number of series, not
-the data size). Color must be a solid color the parser understands;
-anything fancier (per-point color ramp, outlines) stays on the vector
-path -- correctness over speed.
+the data size). A continuous color ramp splats once through
+`splat_disks_cmap` instead: the mapped value is aggregated per pixel
+and colormapped after, so overlap shows the color of the mean value.
+Color must be a solid color the parser understands; anything fancier
+(outlines, per-point sizes) stays on the vector path -- correctness
+over speed.
 """
 import math
 import warnings
@@ -124,6 +127,69 @@ def splat_disks(px, py, radius, rgb, alpha, iw, ih):
     cov = np.rint(fftconvolve(centers, kernel, mode="same")).astype(np.int64)
     cov[cov < 0] = 0
     return _compose(cov, rgb, alpha, iw, ih, W, H)
+
+
+def splat_disks_cmap(px, py, idx, lut, radius, alpha, iw, ih):
+    """Splat disk markers whose colors come from a colormap -> one
+    `<image>` (continuous-color scatter). `idx` holds each point's LUT
+    index (0-255), or -1 for a missing value (painted black); `lut` is
+    the 256 * 3 byte colormap table.
+
+    Follows datashader's rule for continuous data: aggregate the
+    value, then colormap the aggregate. Three planes go through the
+    same histogram + disk-kernel convolution as `splat_disks` -- total
+    coverage, valid coverage, LUT-index sum -- and each pixel takes
+    the color of its mean index. Every rendered color therefore sits
+    on the colormap ramp and reads truthfully against the colorbar;
+    averaging RGB instead would blend off-ramp colors that match no
+    colorbar value. Alpha is the usual `1 - (1 - a)**k` on total
+    coverage; pixels covered only by missing values paint black.
+    Order-independent: shuffling the rows never changes the image, and
+    a single-index cloud comes out identical to `splat_disks` on every
+    covered pixel. Indices live in normalized space, so under a
+    nonlinear norm (e.g. log) the mean is taken there, not on the raw
+    values.
+
+    Reproducibility: all three planes hold true integers, so rounding
+    the convolutions back to integers kills the FFT float noise; the
+    mean is then a division of exact integers, deterministic across
+    machines like the single-color path."""
+    ss = _supersample()
+    W = max(1, int(round(iw * ss)))
+    H = max(1, int(round(ih * ss)))
+    px = np.asarray(px, dtype=float) * ss
+    py = np.asarray(py, dtype=float) * ss
+    idx = np.asarray(idx, dtype=np.int64)
+    good = np.isfinite(px) & np.isfinite(py)
+    ix = np.round(px[good]).astype(np.int64)
+    iy = np.round(py[good]).astype(np.int64)
+    inb = (ix >= 0) & (ix < W) & (iy >= 0) & (iy < H)
+    flat = iy[inb] * W + ix[inb]
+    idx_in = idx[good][inb]
+    valid = idx_in >= 0
+
+    def plane(pos, weights=None):
+        counts = np.bincount(pos, weights=weights,
+                             minlength=W * H).reshape(H, W).astype(float)
+        out = np.rint(fftconvolve(counts, kernel, mode="same"))
+        out[out < 0] = 0
+        return out.astype(np.int64)
+
+    R = max(0.5, radius * ss)
+    rr = int(math.ceil(R))
+    dy, dx = np.ogrid[-rr:rr + 1, -rr:rr + 1]
+    kernel = ((dx * dx + dy * dy) <= R * R).astype(float)
+    cov = plane(flat)
+    n_valid = plane(flat[valid])
+    idx_sum = plane(flat[valid], weights=idx_in[valid].astype(float))
+    mean_idx = idx_sum / np.where(n_valid > 0, n_valid, 1)
+    mi = np.clip((mean_idx + 0.5).astype(np.int64), 0, 255)
+    colors = np.frombuffer(bytes(lut), dtype=np.uint8).reshape(256, 3)[mi]
+    rgba = np.zeros((H, W, 4), dtype=np.uint8)
+    rgba[..., :3] = np.where(n_valid[..., None] > 0, colors, 0)
+    a_out = np.where(cov > 0, 1.0 - (1.0 - alpha) ** cov, 0.0)
+    rgba[..., 3] = (a_out * 255 + 0.5).astype(np.uint8)
+    return image_png_rgba(0.0, 0.0, iw, ih, rgba.tobytes(), W, H)
 
 
 def splat_disks_by_color(marks, radius, alpha, iw, ih):

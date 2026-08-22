@@ -26,6 +26,11 @@ Two rules that won't come from your training data:
   reads from the data; a bare string is always a literal (`color="purple"`
   is the color, not a column). Set `aes` on the chart or per artist.
 
+Dense point clouds need no special handling: above ~20k marks a
+scatter (continuous colormaps included) rasterizes itself into one
+`<image>` inside the SVG, so don't downsample, split, or hand-rasterize
+for file-size reasons.
+
 Chart methods chain. Charts compose with `|` (horizontal), `/`
 (vertical), `pt.grid([[...]])`, `.attach_left/right/above/below(...)`,
 `.share_x()` / `.share_y()`, `pt.legend()`.

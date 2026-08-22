@@ -24,6 +24,13 @@ at the Chart layer — the artist itself always sees one series per record.
 `size`/`style` are computed per-point and stay inside a single record.
 Continuous color is single-record-only — `group`/`alpha` column splits
 are dropped on that path.
+
+Rasterized clouds (auto above the point threshold, or `rasterize=True`)
+become one `<image>`. Where markers overlap, a continuous-color cloud
+shows the color of the mean mapped value rather than last-drawn-on-top
+— every pixel stays on the colormap ramp and reads truthfully against
+the colorbar, and the result ignores row order, so re-sorting or
+shuffling the data never changes the figure.
 """
 import math
 
@@ -31,7 +38,8 @@ from ..registry import ArtistSpec, add_artist
 from ..utils import pack_opts, to_list, resolve_aes, palette_color
 from ..draw import marker
 from ..draw import TAB10
-from ..draw import parse_rgb, raster_declined, should_rasterize, splat_disks
+from ..draw import (parse_rgb, raster_declined, should_rasterize,
+                    splat_disks, splat_disks_cmap)
 from ..draw import colormap_lut, ContinuousNorm
 from .._spec import _D, _LEGSPEC
 from ._shared import (_xy_minmax, expand_xy_long_form,
@@ -52,17 +60,10 @@ def _artist_scatter(a, xs_, ys_, col, xs, ys, warp=None):
     markers = list(raw_mk)   if isinstance(raw_mk,   (list, tuple)) else [raw_mk]   * n
 
     if c_vals is not None:
-        cmap_name = opts.get("cmap", _D["default_cmap"])
-        lut = colormap_lut(cmap_name)
-        normalizer = ContinuousNorm(a["_vmin"], a["_vmax"],
-                                    kind=opts.get("norm", "linear"))
-        point_colors = []
-        for v in c_vals:
-            if not (isinstance(v, (int, float)) and v == v):
-                point_colors.append("rgb(0,0,0)")
-            else:
-                idx = int(normalizer.to_unit(v) * 255 + 0.5) * 3
-                point_colors.append(f"rgb({lut[idx]},{lut[idx+1]},{lut[idx+2]})")
+        lut = colormap_lut(opts.get("cmap", _D["default_cmap"]))
+        point_colors = ["rgb(0,0,0)" if i < 0 else
+                        f"rgb({lut[3*i]},{lut[3*i+1]},{lut[3*i+2]})"
+                        for i in _c_point_idx(a)]
     else:
         point_colors = [col] * n
 
@@ -78,15 +79,24 @@ def _artist_scatter(a, xs_, ys_, col, xs, ys, warp=None):
     return "".join(out)
 
 
+def _c_point_idx(a):
+    """Per-point colormap LUT index (0-255) for the continuous color
+    mapping (`c`), shared by the vector markers and the raster splat.
+    -1 for non-numeric / missing values (painted black)."""
+    opts = a["opts"]
+    normalizer = ContinuousNorm(a["_vmin"], a["_vmax"],
+                                kind=opts.get("norm", "linear"))
+    return [int(normalizer.to_unit(v) * 255 + 0.5)
+            if isinstance(v, (int, float)) and v == v else -1
+            for v in opts["c"]]
+
+
 def _raster_block_reason(a):
     """Why the raster fast-path can't take this record, or None if it
-    can. Only the plain dense-scatter case splats: one solid color, one
-    scalar marker radius, round marker, no edges, no per-point color
-    ramp. Anything fancier keeps the per-point vector markers
-    (correctness over speed)."""
+    can. Solid-color and continuous-color (`c`) clouds both splat, at
+    one scalar marker radius, round marker, no edges. Anything fancier
+    keeps the per-point vector markers (correctness over speed)."""
     opts = a["opts"]
-    if opts.get("c") is not None:
-        return "per-point colors (continuous color mapping) need one node per point"
     if isinstance(opts.get("size", _D["scatter_size"]), (list, tuple)):
         return "per-point sizes (size mapping) need one node per point"
     marker = opts.get("marker", "o")
@@ -363,8 +373,10 @@ def _scatter_draw(a, ctx):
     # rasterize=True), splat the whole cloud into one <image> instead of
     # N markers. The threshold reads the artist call's total mark count
     # (_fanout_n), so a grouped cloud rasterizes like an ungrouped one.
-    # rasterize=False forces the vector path; a style the splatter can't
-    # reproduce declines loudly via raster_declined before falling back.
+    # A continuous color mapping (`c`) splats too, through the
+    # mean-color variant. rasterize=False forces the vector path; a
+    # style the splatter can't reproduce declines loudly via
+    # raster_declined before falling back.
     opts = a["opts"]
     xs, ys = a["xs"], a["ys"]
     n = opts.get("_fanout_n", len(xs))
@@ -372,14 +384,21 @@ def _scatter_draw(a, ctx):
         reason = _raster_block_reason(a)
         if reason is None and ctx.warp is not None:
             reason = "the panel's coordinate system is not affine"
-        rgb = parse_rgb(ctx.color) if reason is None else None
-        if reason is None and rgb is None:
-            reason = f"color {ctx.color!r} is not a plain solid color"
+        per_point = opts.get("c") is not None
+        rgb = None
+        if reason is None and not per_point:
+            rgb = parse_rgb(ctx.color)
+            if rgb is None:
+                reason = f"color {ctx.color!r} is not a plain solid color"
         if reason is None:
             px = [ctx.x_scale(x) for x in xs]
             py = [ctx.y_scale(y) for y in ys]
             radius = float(opts.get("size", _D["scatter_size"]))
             alpha = float(opts.get("alpha", _D["scatter_alpha"]))
+            if per_point:
+                lut = colormap_lut(opts.get("cmap", _D["default_cmap"]))
+                return splat_disks_cmap(px, py, _c_point_idx(a), lut,
+                                        radius, alpha, ctx.iw, ctx.ih)
             return splat_disks(px, py, radius, rgb, alpha, ctx.iw, ctx.ih)
         raster_declined("scatter", n, reason, opts.get("rasterize"))
     return _artist_scatter(a, ctx.x_scale, ctx.y_scale, ctx.color,

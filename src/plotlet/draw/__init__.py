@@ -25,7 +25,8 @@ from .format import coord, stroke_w, opacity, degree
 from .linestyles import resolve_linestyle
 from ._png import encode_rgb, image_png, encode_rgba, image_png_rgba
 from ._raster import (parse_rgb, should_rasterize, raster_declined,
-                      splat_disks, splat_disks_by_color, splat_ticks)
+                      splat_disks, splat_disks_by_color,
+                      splat_disks_cmap, splat_ticks)
 from ._simplify import should_simplify, simplify_path_pts
 
 __all__ = [
@@ -42,6 +43,6 @@ __all__ = [
     "resolve_linestyle",
     "encode_rgb", "image_png", "encode_rgba", "image_png_rgba",
     "parse_rgb", "should_rasterize", "raster_declined", "splat_disks",
-    "splat_disks_by_color", "splat_ticks",
+    "splat_disks_by_color", "splat_disks_cmap", "splat_ticks",
     "should_simplify", "simplify_path_pts",
 ]

@@ -131,6 +131,25 @@ def chart_scatter_alpha_col():
     return c
 
 
+def chart_scatter_cmap_raster():
+    # Continuous color + rasterize=True: the whole cloud splats into one
+    # <image> through the mean-color path (per-point cmap colors,
+    # coverage-weighted mean where disks overlap).
+    rng = random.Random(7)
+    n = 600
+    df = {
+        "x": [rng.gauss(0, 1) for _ in range(n)],
+        "y": [rng.gauss(0, 1) for _ in range(n)],
+        "v": [rng.uniform(0, 100) for _ in range(n)],
+    }
+
+    c = pt.chart(df, aes(x="x", y="y", color="v"), data_width=280, data_height=200,
+                 title="scatter (cmap, rasterized)", xlabel="x", ylabel="y",
+                 legend=True)
+    c.add_scatter(alpha=0.7, rasterize=True)
+    return c
+
+
 PLOTS = {
     "scatter_color": chart_scatter_color,
     "clip_data_area": chart_clip_data_area,
@@ -138,9 +157,44 @@ PLOTS = {
     "scatter_size_style_color": chart_scatter_size_style_color,
     "scatter_long_color": chart_scatter_long_color,
     "scatter_alpha_col": chart_scatter_alpha_col,
+    "scatter_cmap_raster": chart_scatter_cmap_raster,
 }
 
 
 @pytest.mark.parametrize("name,fn", list(PLOTS.items()), ids=list(PLOTS.keys()))
 def test_chart_scatter_baseline(name, fn, baseline_compare):
     baseline_compare("chart_scatter", name, fn().to_svg())
+
+
+def test_scatter_cmap_rasterizes_to_one_image():
+    # Continuous color no longer blocks the raster fast-path: one
+    # <image>, no per-point nodes, no decline warning.
+    import warnings
+
+    rng = random.Random(11)
+    n = 500
+    df = {"x": [rng.random() for _ in range(n)],
+          "y": [rng.random() for _ in range(n)],
+          "v": [rng.random() for _ in range(n)]}
+    c = pt.chart(df, aes(x="x", y="y", color="v"))
+    c.add_scatter(rasterize=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        svg = c.to_svg()
+    assert svg.count("<image") == 1
+    assert "<circle" not in svg
+
+
+def test_scatter_cmap_size_mapping_still_declines():
+    # Per-point sizes still can't splat; rasterize=True must refuse
+    # loudly rather than silently fall back.
+    rng = random.Random(12)
+    n = 50
+    df = {"x": [rng.random() for _ in range(n)],
+          "y": [rng.random() for _ in range(n)],
+          "v": [rng.random() for _ in range(n)],
+          "m": [rng.random() for _ in range(n)]}
+    c = pt.chart(df, aes(x="x", y="y", color="v", size="m"))
+    c.add_scatter(rasterize=True)
+    with pytest.raises(ValueError, match="per-point sizes"):
+        c.to_svg()

@@ -146,12 +146,14 @@ limit, and the SVG itself balloons. If your artist draws one mark per row
 | `should_rasterize(n, opts.get("rasterize"))` | Decide vector vs raster — explicit `rasterize=` kwarg wins, else auto above `dense_threshold` (the one spec number for "too many marks for per-mark vector output", shared with line decimation). |
 | `splat_disks(px, py, radius, rgb, alpha, iw, ih)` | One solid-color disk cloud → one `<image>`. `px`/`py` are panel pixels; `rgb` from `parse_rgb(color)`. |
 | `splat_disks_by_color(marks, radius, alpha, iw, ih)` | `marks` = `(color, px, py)` tuples; splats one `<image>` per color (for category artists). |
+| `splat_disks_cmap(px, py, idx, lut, radius, alpha, iw, ih)` | Continuous ramps: per-point LUT indices (-1 = missing) → one `<image>`. Aggregates the value, colormaps the mean — pixels stay on the ramp, independent of row order. |
 | `splat_ticks(pos, lo, hi, width, rgb, alpha, iw, ih, *, vertical)` | Axis-aligned ticks (rug). |
 | `raster_declined(artist, n, reason, opts.get("rasterize"))` | Call when you decided to rasterize but can't — raises on explicit `rasterize=True`, warns in auto mode. Never decline silently. |
 
-Gate it on `ctx.warp is None` and a single-solid-color style; fall back to
-the vector loop otherwise (through `raster_declined`, so the user hears
-about it). Overlapping same-color marks composite exactly as stacked
+Gate it on `ctx.warp is None` and a style the splatters can express
+(solid or per-point disk colors — not outlines or per-point sizes);
+fall back to the vector loop otherwise (through `raster_declined`, so
+the user hears about it). Overlapping same-color marks composite exactly as stacked
 vector marks, and the output stays byte-identical. See
 [`draw/_raster.py`](../draw/_raster.py) for the full rationale.
 
