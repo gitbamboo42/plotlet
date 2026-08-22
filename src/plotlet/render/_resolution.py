@@ -33,7 +33,7 @@ from ..draw import resolve_color, TAB10
 from ..scales import (_nice_domain, _fmt_tick, _to_epoch,
                       _coerce_time_lim, _AxisDescriptor)
 from ..sectors import SectoredValue
-from ..utils import (ColumnRef, DataFrameLite, check_option,
+from ..utils import (UNSET, ColumnRef, DataFrameLite, check_option,
                      _data_has_column, _table_columns)
 from ..draw import measure_text, text_block_height
 from . import _chrome_bands
@@ -90,33 +90,43 @@ class _PanelOpts:
     M_eff:       dict | None = None
 
 
-def _record_scale(state, axis, args, kw, *, from_default=False):
+def _record_scale(state, axis, from_default, kind=None, *,
+                  order=UNSET, padding=UNSET, linthresh=UNSET,
+                  exponent=UNSET, reverse=UNSET, splits=UNSET,
+                  split_gap=UNSET, groups=UNSET):
     """Decode an xscale()/yscale() call into state.
 
-    `args[0]` is the scale kind ("linear", "log", "symlog", "sqrt",
-    "category"). Per-kind kwargs (`order`, `padding`, `linthresh`,
-    `exponent`, `reverse`) are stashed on the matching `<axis>_*`
-    keys when supplied; omitted kwargs leave defaults untouched.
+    Like every `_record_*` handler, the explicit signature is the
+    validation: the dispatcher unpacks the recorded call into it, so an
+    unknown kwarg or extra positional raises — the same rule artist
+    record functions follow. `UNSET` defaults distinguish "not passed"
+    (leave state alone) from an explicit None.
+
+    `kind`, when given, is the scale kind ("linear", "log", "symlog",
+    "sqrt", "category", ...); a kindless call (`c.xscale(order=[...])`)
+    keeps the current kind. Per-kind kwargs are stashed on the matching
+    `<axis>_*` keys when supplied.
 
     `from_default=True` (only set when the call was emitted by an
     artist's `frame_defaults`) routes `order=` to `<axis>_order_default`
     instead of `<axis>_order`, so a peer artist's `axis_order` hook can
     win over an artist-suggested order while a user-explicit
     `c.xscale(order=...)` still wins over both."""
-    check_option(f"{axis}scale", "kind", args[0],
-                 ("linear", "log", "symlog", "power", "sqrt", "category",
-                  "time"))
-    state[f"{axis}scale"] = args[0]
-    if "order" in kw:
+    if kind is not None:
+        check_option(f"{axis}scale", "kind", kind,
+                     ("linear", "log", "symlog", "power", "sqrt", "category",
+                      "time"))
+        state[f"{axis}scale"] = kind
+    if order is not UNSET:
         target = f"{axis}_order_default" if from_default else f"{axis}_order"
-        state[target] = list(kw["order"])
-    if "padding" in kw:   state[f"{axis}_padding"]   = kw["padding"]
-    if "linthresh" in kw: state[f"{axis}_linthresh"] = float(kw["linthresh"])
-    if "exponent" in kw:  state[f"{axis}_exponent"]  = float(kw["exponent"])
-    if "reverse" in kw:   state[f"{axis}_reverse"]   = bool(kw["reverse"])
-    if "splits" in kw:    state[f"{axis}_splits"]    = list(kw["splits"]) if kw["splits"] else None
-    if "split_gap" in kw: state[f"{axis}_split_gap"] = float(kw["split_gap"])
-    if "groups" in kw:    state[f"{axis}_groups"]    = dict(kw["groups"]) if kw["groups"] else None
+        state[target] = list(order)
+    if padding is not UNSET:   state[f"{axis}_padding"]   = padding
+    if linthresh is not UNSET: state[f"{axis}_linthresh"] = float(linthresh)
+    if exponent is not UNSET:  state[f"{axis}_exponent"]  = float(exponent)
+    if reverse is not UNSET:   state[f"{axis}_reverse"]   = bool(reverse)
+    if splits is not UNSET:    state[f"{axis}_splits"]    = list(splits) if splits else None
+    if split_gap is not UNSET: state[f"{axis}_split_gap"] = float(split_gap)
+    if groups is not UNSET:    state[f"{axis}_groups"]    = dict(groups) if groups else None
 
 
 # xticks()/yticks() kwargs that decide tick CONTENT — which ticks exist
@@ -129,25 +139,23 @@ def _record_scale(state, axis, args, kw, *, from_default=False):
 TICK_CONTENT_KW = frozenset({"ticks", "step", "count", "format", "minor"})
 
 
-def _record_ticks(state, axis, args, kw):
+def _record_ticks(state, axis, ticks=UNSET, labels=UNSET, *,
+                  rotation=UNSET, fontsize=UNSET, fontstyle=UNSET,
+                  fontweight=UNSET, decoration=UNSET, direction=UNSET,
+                  marks=UNSET, format=UNSET, minor=UNSET, step=UNSET,
+                  count=UNSET, side=UNSET):
     """Decode the xticks()/yticks() call into state.
 
-    Signature: xticks(ticks=None, labels=None, *, rotation=0, fontsize=None,
-    fontstyle=None, fontweight=None, ...).
-    Accepts the first arg positionally; pass `[]` to hide. Omitted
-    kwargs leave the corresponding state alone, so `c.xticks(rotation=45)`
-    rotates without disturbing auto positions.
+    The explicit signature is the validation (see `_record_scale`).
+    `ticks`/`labels` bind positionally or by name; pass `[]` to hide,
+    None to reset to auto. Omitted kwargs leave the corresponding state
+    alone, so `c.xticks(rotation=45)` rotates without disturbing auto
+    positions.
     """
-    if args:
-        state[f"{axis}_ticks"] = list(args[0]) if args[0] is not None else None
-        if len(args) > 1 and args[1] is not None:
-            state[f"{axis}_labels"] = list(args[1])
-    if "ticks" in kw:
-        v = kw["ticks"]
-        state[f"{axis}_ticks"] = list(v) if v is not None else None
-    if "labels" in kw:
-        v = kw["labels"]
-        if v is False:
+    if ticks is not UNSET:
+        state[f"{axis}_ticks"] = list(ticks) if ticks is not None else None
+    if labels is not UNSET:
+        if labels is False:
             # Symmetric counterpart to `marks=False` — keep auto tick
             # positions + tick marks, suppress the labels. Useful when
             # tick marks are meant as visual cues but their numeric
@@ -155,30 +163,30 @@ def _record_ticks(state, axis, args, kw):
             # as xlabel under per-sector tick marks).
             state[f"{axis}_show_labels"] = False
         else:
-            state[f"{axis}_labels"] = list(v) if v is not None else None
-    if "rotation" in kw:  state[f"{axis}_rotation"]  = kw["rotation"]
-    if "fontsize" in kw:  state[f"{axis}_fontsize"]  = kw["fontsize"]
-    if "fontstyle" in kw: state[f"{axis}_fontstyle"] = kw["fontstyle"]
-    if "fontweight" in kw: state[f"{axis}_fontweight"] = kw["fontweight"]
-    if "decoration" in kw: state[f"{axis}_decoration"] = kw["decoration"]
-    if "direction" in kw:
-        check_option(f"{axis}ticks", "direction", kw["direction"],
+            state[f"{axis}_labels"] = list(labels) if labels is not None else None
+    if rotation is not UNSET:   state[f"{axis}_rotation"]   = rotation
+    if fontsize is not UNSET:   state[f"{axis}_fontsize"]   = fontsize
+    if fontstyle is not UNSET:  state[f"{axis}_fontstyle"]  = fontstyle
+    if fontweight is not UNSET: state[f"{axis}_fontweight"] = fontweight
+    if decoration is not UNSET: state[f"{axis}_decoration"] = decoration
+    if direction is not UNSET:
+        check_option(f"{axis}ticks", "direction", direction,
                      ("in", "out", "inout"))
-        state[f"{axis}_direction"] = kw["direction"]
-    if "marks" in kw:     state[f"{axis}_marks"]     = bool(kw["marks"])
-    if "format" in kw:    state[f"{axis}_format"]    = kw["format"]
-    if "minor" in kw:     state[f"{axis}_minor"]     = kw["minor"]
-    if "step" in kw:      state[f"{axis}_step"]      = float(kw["step"])
-    if "count" in kw:     state[f"{axis}_count"]     = int(kw["count"])
+        state[f"{axis}_direction"] = direction
+    if marks is not UNSET:      state[f"{axis}_marks"]      = bool(marks)
+    if format is not UNSET:     state[f"{axis}_format"]     = format
+    if minor is not UNSET:      state[f"{axis}_minor"]      = minor
+    if step is not UNSET:       state[f"{axis}_step"]       = float(step)
+    if count is not UNSET:      state[f"{axis}_count"]      = int(count)
     # Primary axis placement. Matches plotly's `side`, ggplot2's `position`,
     # d3's axisTop/axisRight. Moves the spine, ticks, labels and the
     # xlabel/ylabel as a single block to the named edge.
-    if "side" in kw:
+    if side is not UNSET:
         valid = {"x": ("bottom", "top"), "y": ("left", "right")}[axis]
-        if kw["side"] not in valid:
+        if side not in valid:
             raise ValueError(f"{axis}ticks(side=...) must be one of {valid}, "
-                             f"got {kw['side']!r}")
-        state[f"{axis}_side"] = kw["side"]
+                             f"got {side!r}")
+        state[f"{axis}_side"] = side
 
 
 def _sector_remap_data(call_kw, state):
@@ -545,17 +553,20 @@ def _record_artist(state, spec, args, kw):
     state["artists"].extend(records)
 
 
-def _record_spines(state, kw):
+def _record_spines(state, *, color=UNSET, width=UNSET, linestyle=UNSET,
+                   top=UNSET, right=UNSET, bottom=UNSET, left=UNSET,
+                   walls=UNSET):
     """Top-level color/width/linestyle = base style, inherited by
     any side and by walls unless overridden. Per-target value
     (top=, walls=, etc.) is a bool (toggles visibility) or a
     dict ({color, width, linestyle, visible}, visible defaults
     True). "walls" is the inter-sector wall target."""
-    for k in ("color", "width", "linestyle"):
-        if k in kw: state[f"spine_base_{k}"] = kw[k]
-    for target in ("top", "right", "bottom", "left", "walls"):
-        if target not in kw: continue
-        v = kw[target]
+    for k, v in (("color", color), ("width", width),
+                 ("linestyle", linestyle)):
+        if v is not UNSET: state[f"spine_base_{k}"] = v
+    for target, v in (("top", top), ("right", right), ("bottom", bottom),
+                      ("left", left), ("walls", walls)):
+        if v is UNSET: continue
         if isinstance(v, dict):
             state[f"spine_{target}"] = bool(v.get("visible", True))
             for attr in ("color", "width", "linestyle"):
@@ -564,17 +575,16 @@ def _record_spines(state, kw):
             state[f"spine_{target}"] = bool(v)
 
 
-def _record_gridlines(state, args, kw):
+def _record_gridlines(state, on=True, *, which=UNSET):
     """c.gridlines() / c.gridlines(False) toggle; c.gridlines("both")
     or c.gridlines(which="minor") select which tick set draws lines."""
-    v = args[0] if args else True
-    if isinstance(v, str):
+    if isinstance(on, str):
         state["grid"] = True
-        state["grid_which"] = v
+        state["grid_which"] = on
     else:
-        state["grid"] = bool(v)
-    if "which" in kw:
-        state["grid_which"] = kw["which"]
+        state["grid"] = bool(on)
+    if which is not UNSET:
+        state["grid_which"] = which
     if state["grid_which"] not in ("major", "minor", "both"):
         raise ValueError(
             f"c.gridlines(which={state['grid_which']!r}) — pass "
@@ -582,54 +592,55 @@ def _record_gridlines(state, args, kw):
         )
 
 
-def _record_legend(state, args, kw):
-    state["legend"] = (args[0] if args else True)
-    if "position" in kw:
-        state["legend_position"] = kw["position"]
-    if "ncols" in kw:
-        state["legend_ncols"] = kw["ncols"]
-    if "reverse" in kw:
-        state["legend_reverse"] = kw["reverse"]
-    if "entries" in kw:
-        state["legend_manual"] = kw["entries"]
+def _record_legend(state, on=True, *, position=UNSET, ncols=UNSET,
+                   reverse=UNSET, entries=UNSET):
+    state["legend"] = on
+    if position is not UNSET:
+        state["legend_position"] = position
+    if ncols is not UNSET:
+        state["legend_ncols"] = ncols
+    if reverse is not UNSET:
+        state["legend_reverse"] = reverse
+    if entries is not UNSET:
+        state["legend_manual"] = entries
 
 
-def _record_aspect(state, args):
-    v = args[0] if args else 1.0
-    if v == "equal":
-        v = 1.0
-    if (isinstance(v, bool) or not isinstance(v, (int, float))
-            or v <= 0):
+def _record_aspect(state, ratio="equal"):
+    if ratio == "equal":
+        ratio = 1.0
+    if (isinstance(ratio, bool) or not isinstance(ratio, (int, float))
+            or ratio <= 0):
         raise ValueError(
-            f"c.aspect({v!r}) — pass \"equal\" or a positive "
+            f"c.aspect({ratio!r}) — pass \"equal\" or a positive "
             f"number (pixel length of one y unit per one x unit)."
         )
-    state["aspect"] = float(v)
+    state["aspect"] = float(ratio)
 
 
-def _record_coordinate(state, args):
-    state["coordinate"] = args[0]
+def _record_coordinate(state, coord):
+    state["coordinate"] = coord
     # Coord-supplied `y_ticks` default (Cartesian: no attribute →
     # skipped). `is None` check respects any user-set value
     # regardless of call order.
-    _cyt = getattr(args[0], "y_ticks", None)
+    _cyt = getattr(coord, "y_ticks", None)
     if _cyt is not None and state.get("y_ticks") is None:
         state["y_ticks"] = _cyt
 
 
-def _record_sectors(state, args, kw):
+def _record_sectors(state, spec, *, column=None, axis="x",
+                    divider=UNSET, label=UNSET, gap=UNSET):
     from ..sectors import Sectors
-    col  = kw.get("column")
-    axis = kw.get("axis", "x")
+    col = column
     # Forward only display kwargs the user explicitly set, so a
     # pre-built `pt.Sectors(...)` keeps its own settings unless
     # overridden — silent-drop would be a footgun.
-    extra = {k: kw[k] for k in ("divider", "label", "gap") if k in kw}
+    extra = {k: v for k, v in (("divider", divider), ("label", label),
+                               ("gap", gap)) if v is not UNSET}
     if axis not in ("x", "y"):
         raise ValueError(
             f"c.sectors(axis=): expected 'x' or 'y'; got {axis!r}"
         )
-    sec = Sectors.coerce(args[0], name_col=col, **extra)
+    sec = Sectors.coerce(spec, name_col=col, **extra)
     # `column=` is the default sector tag for single-position
     # artists (scatter, line, bar, …). Required even for
     # multi-position artists (chord_links) — those override per
@@ -650,11 +661,57 @@ def _record_sectors(state, args, kw):
     state[f"{axis}_sector_column"] = col
 
 
+def _record_text_field(state, key, text):
+    """title / subtitle / caption / xlabel / ylabel — one required
+    positional string."""
+    state[key] = text
+
+
+def _record_lim(state, axis, lo, hi=UNSET):
+    """xlim/ylim: two values, or one two-element sequence."""
+    if hi is UNSET:
+        if not (isinstance(lo, (list, tuple)) and len(lo) == 2):
+            raise TypeError(
+                f"c.{axis}lim() takes (lo, hi) — two values, or one "
+                f"two-element sequence; got {lo!r}."
+            )
+        lo, hi = lo
+    state[f"{axis}lim"] = (lo, hi)
+
+
+def _record_expand(state, axis, lo, hi=None):
+    """x_expand/y_expand fractions: one number (symmetric) or two."""
+    state[f"{axis}_expand"] = (float(lo), float(lo if hi is None else hi))
+
+
+def _record_clip(state, on=True):
+    state["clip"] = bool(on)
+
+
+def _record_facecolor(state, color=None):
+    state["facecolor"] = color
+
+
+def _record_theme(state, name=None):
+    # Applied outside replay (`_layout_engine` wraps each leaf's
+    # measurement and render in `_node_style(...)` — theme + font
+    # scoping), so there is no state to record; the handler exists so
+    # the call's shape still gets checked like every other frame op.
+    pass
+
+
+def _record_font(state, family=None):
+    # Same as _record_theme: consumed by `_stamp_style`, validated here.
+    pass
+
+
 def _replay(calls):
     """Walk a Chart's recorded calls into a state dict consumed by the
     renderer. Pure function of `calls` and the artist registry — same input
     + same registry → same output. One branch per op below; every branch
-    is a one-line state write or a delegate to its `_record_*` handler."""
+    unpacks the recorded call into its `_record_*` handler, whose explicit
+    signature rejects unknown kwargs and bad arity — the same validation
+    rule artist record functions follow."""
     state = _default_state()
     # Stable-sort sectors entries to the front. Sectors set the state
     # `_sector_remap_data` reads while processing artist calls; an
@@ -684,33 +741,29 @@ def _replay(calls):
         spec = get_artist(name)
         if spec is not None:
             _record_artist(state, spec, args, kw)
-        elif name == "title":  state["title"] = args[0]
-        elif name == "subtitle": state["subtitle"] = args[0]
-        elif name == "caption":  state["caption"] = args[0]
-        elif name == "xlabel": state["xlabel"] = args[0]
-        elif name == "ylabel": state["ylabel"] = args[0]
-        elif name == "xlim":   state["xlim"] = (args[0], args[1])
-        elif name == "ylim":   state["ylim"] = (args[0], args[1])
-        elif name == "xscale": _record_scale(state, "x", args, kw, from_default=from_default)
-        elif name == "yscale": _record_scale(state, "y", args, kw, from_default=from_default)
-        elif name == "xticks": _record_ticks(state, "x", args, kw)
-        elif name == "yticks": _record_ticks(state, "y", args, kw)
-        elif name == "x_expand": state["x_expand"] = _normalize_expand(args)
-        elif name == "y_expand": state["y_expand"] = _normalize_expand(args)
-        elif name == "spines":    _record_spines(state, kw)
-        elif name == "gridlines": _record_gridlines(state, args, kw)
-        elif name == "legend":    _record_legend(state, args, kw)
-        elif name == "clip":   state["clip"] = bool(args[0]) if args else True
-        elif name == "facecolor": state["facecolor"] = args[0] if args else None
-        elif name == "aspect":     _record_aspect(state, args)
-        elif name == "coordinate": _record_coordinate(state, args)
-        elif name == "sectors":    _record_sectors(state, args, kw)
-        elif name in ("theme", "font"):
-            # Applied outside replay (`_layout_engine` wraps each leaf's
-            # measurement and render in `_node_style(...)` — theme +
-            # font scoping) so the spec dicts are already on the right
-            # values by the time we get here. No state to record.
-            pass
+        elif name == "title":    _record_text_field(state, "title", *args, **kw)
+        elif name == "subtitle": _record_text_field(state, "subtitle", *args, **kw)
+        elif name == "caption":  _record_text_field(state, "caption", *args, **kw)
+        elif name == "xlabel":   _record_text_field(state, "xlabel", *args, **kw)
+        elif name == "ylabel":   _record_text_field(state, "ylabel", *args, **kw)
+        elif name == "xlim":     _record_lim(state, "x", *args, **kw)
+        elif name == "ylim":     _record_lim(state, "y", *args, **kw)
+        elif name == "xscale":   _record_scale(state, "x", from_default, *args, **kw)
+        elif name == "yscale":   _record_scale(state, "y", from_default, *args, **kw)
+        elif name == "xticks":   _record_ticks(state, "x", *args, **kw)
+        elif name == "yticks":   _record_ticks(state, "y", *args, **kw)
+        elif name == "x_expand": _record_expand(state, "x", *args, **kw)
+        elif name == "y_expand": _record_expand(state, "y", *args, **kw)
+        elif name == "spines":    _record_spines(state, *args, **kw)
+        elif name == "gridlines": _record_gridlines(state, *args, **kw)
+        elif name == "legend":    _record_legend(state, *args, **kw)
+        elif name == "clip":      _record_clip(state, *args, **kw)
+        elif name == "facecolor": _record_facecolor(state, *args, **kw)
+        elif name == "aspect":     _record_aspect(state, *args, **kw)
+        elif name == "coordinate": _record_coordinate(state, *args, **kw)
+        elif name == "sectors":    _record_sectors(state, *args, **kw)
+        elif name == "theme": _record_theme(state, *args, **kw)
+        elif name == "font":  _record_font(state, *args, **kw)
     # When continuous sectors are active and the user didn't supply an
     # explicit lim, span the full sector range so every partition is
     # visible. Categorical sectors land on a category scale where ``lim``
@@ -821,19 +874,6 @@ def _auto_major_ticks(scale, n, step, count):
     if count is not None:
         return scale.ticks(max(2, count))
     return scale.ticks(n)
-
-
-def _normalize_expand(args):
-    """Normalize x_expand/y_expand call args into `(lo, hi)` fractions.
-    Accepts a single number (symmetric) or two numbers (lo, hi)."""
-    if len(args) == 1:
-        v = float(args[0])
-        return (v, v)
-    if len(args) == 2:
-        return (float(args[0]), float(args[1]))
-    raise TypeError(
-        f"x_expand/y_expand expects 1 or 2 numbers, got {len(args)}"
-    )
 
 
 def _resolve_expand(st_value, tight, axis):

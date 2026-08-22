@@ -271,3 +271,46 @@ def test_ragged_positional_table_raises_at_call():
 def test_ragged_facet_data_raises_at_facet():
     with pytest.raises(ValueError, match=r"pt\.facet\(data=\)"):
         pt.facet({"x": [1, 2], "g": ["a"]}, by="g")
+
+
+# ---------------------------------------------------------------------------
+# Frame methods — same rule as artists: the `_record_*` handler's explicit
+# signature is the validation. A typo'd kwarg or wrong arity is recorded,
+# then raises at render when the dispatcher unpacks the call into the
+# handler — never silently dropped.
+# ---------------------------------------------------------------------------
+
+
+FRAME_TYPO_CASES = [
+    ("xlabel-fontsize", lambda c: c.xlabel("mass", fontsize=30), "fontsize"),
+    ("font-size",       lambda c: c.font(size=20), "size"),
+    ("yscale-nonpositive",
+     lambda c: c.yscale("log", nonpositive="clip"), "nonpositive"),
+    ("xticks-labelpad", lambda c: c.xticks(labelpad=3), "labelpad"),
+    ("title-arity",     lambda c: c.title(), "text"),
+    ("spines-positional", lambda c: c.spines(False), "positional"),
+]
+
+
+@pytest.mark.parametrize("name,call,needle", FRAME_TYPO_CASES,
+                         ids=[c[0] for c in FRAME_TYPO_CASES])
+def test_frame_bad_call_raises_at_render(name, call, needle):
+    with pytest.raises(TypeError, match=needle):
+        _xy(call).to_svg()
+
+
+def test_lim_accepts_pair_or_sequence():
+    two = _xy(lambda c: c.xlim(0, 5))
+    seq = _xy(lambda c: c.xlim([0, 5]))
+    assert two.to_svg() == seq.to_svg()
+    with pytest.raises(TypeError, match="two-element sequence"):
+        _xy(lambda c: c.xlim(5)).to_svg()
+
+
+def test_kindless_scale_call_keeps_kind():
+    # c.xscale(order=[...]) reorders the axis without naming a kind.
+    df = {"x": ["b", "a"], "y": [1.0, 2.0]}
+    c = pt.chart(df, aes(x="x", y="y"))
+    c.add_bar()
+    c.xscale(order=["a", "b"])
+    assert "xcategories=[a,b]" in pt.describe(c)
