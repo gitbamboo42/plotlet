@@ -21,7 +21,7 @@ import math
 from .._spec import SPEC, _FRAME, _FONTSPEC, _PADSPEC
 from ..draw import (resolve_color, text_path, segment,
                     measure_text, cap_height, descender, tick_band_height,
-                    text_block_height)
+                    text_block_height, extra_line_extent)
 from .. import _regions
 from ..scales import _LogScale
 from ._chrome_bands import (_axis_band_stack, _outward_mark_extent,
@@ -348,10 +348,14 @@ def _emit_x_axis(state, inp, iw, ih, *, coord_object, coord_project,
             # rect around the anchor pulls the top corner up by cap*cos),
             # and `-descender*cos` on top — mirror symmetry. Covers
             # rot=0 (full offset), rot=±90 (0), and intermediate angles.
+            # Bottom-side labels hang down from the band top, so extra
+            # lines need no shift; top-side labels hang up from their
+            # last line, so the first baseline lifts by the extra.
             if x_side == "bottom":
                 y_lbl = ih + x_label_dy + cap_height(x_size) * math.cos(math.radians(x_rot))
             else:
-                y_lbl = -x_label_dy - descender(x_size) * math.cos(math.radians(x_rot))
+                y_lbl = -x_label_dy - (descender(x_size)
+                                       + extra_line_extent(lbl, x_size)) * math.cos(math.radians(x_rot))
             parts.append(_tick_label(str(lbl), x, y_lbl,
                                      x_size, x_rot, axis="x", side=x_side,
                                      fontstyle=x_style, fontweight=x_weight,
@@ -475,7 +479,13 @@ def _emit_x_sector_chrome(state, inp, iw, ih, x_sec, *,
                             - descender(_sec_x_size)
                             * math.cos(math.radians(_sec_x_rot)))
         for name, cx in zip(sec.names, label_xs):
-            parts.append(_tick_label(str(name), cx, sec_baseline,
+            # Top-side names hang up from their last line (see the x
+            # tick-label note); bottom-side names grow downward from a
+            # fixed band top and need no shift.
+            _sec_y = (sec_baseline if x_pol["side"] == "bottom"
+                      else sec_baseline - extra_line_extent(name, _sec_x_size)
+                           * math.cos(math.radians(_sec_x_rot)))
+            parts.append(_tick_label(str(name), cx, _sec_y,
                                      _sec_x_size, _sec_x_rot, axis="x",
                                      side=x_pol["side"],
                                      fontstyle=x_style, fontweight=x_weight,
@@ -528,7 +538,8 @@ def _emit_y_sector_chrome(state, inp, iw, y_sec):
             y_label_x = iw + _sec_band
         for name, cy in zip(sec.names, label_ys):
             parts.append(_tick_label(str(name), y_label_x,
-                                     cy + cap_height(_sec_y_size) / 2,
+                                     cy + cap_height(_sec_y_size) / 2
+                                     - extra_line_extent(name, _sec_y_size) / 2,
                                      _sec_y_size, 0, axis="y",
                                      side=y_pol["side"],
                                      fontstyle=y_style, fontweight=y_weight,
@@ -614,7 +625,11 @@ def _emit_y_axis(state, inp, iw, ih, *, coord_object, coord_project,
         if y_pol["draw_labels"]:
             # `y + cap_height/2` places the baseline so the cap is vertically
             # centered on the tick line (cap top at y - cap/2, cap bottom at y + cap/2).
-            parts.append(_tick_label(str(lbl), y_label_x, y + cap_height(y_size) / 2,
+            # Multi-line labels lift by half their extra height, which
+            # centers the block instead of just its first line.
+            parts.append(_tick_label(str(lbl), y_label_x,
+                                     y + cap_height(y_size) / 2
+                                     - extra_line_extent(lbl, y_size) / 2,
                                      y_size, y_rot, axis="y", side=y_side,
                                      fontstyle=y_style, fontweight=y_weight,
                                      decoration=y_decor,

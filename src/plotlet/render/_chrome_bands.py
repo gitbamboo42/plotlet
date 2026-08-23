@@ -15,7 +15,8 @@ from __future__ import annotations
 
 from .._spec import SPEC, _FRAME, _FONTSPEC, _PADSPEC
 from ..draw import (measure_text, cap_height, descender, tick_band_height,
-                    rotated_label_bbox, text_block_height)
+                    rotated_label_bbox, text_block_height,
+                    extra_line_extent)
 
 _SECTORSPEC = SPEC["sectors"]
 
@@ -218,7 +219,11 @@ def _chrome_stack_extents(state, inp):
         _sec_x_rot  = x_sec.rotation if x_sec.rotation is not None else 0
         _max_sec_w  = max((measure_text(str(n), _sec_x_size, inp.x_style, inp.x_weight)
                            for n in x_sec.names), default=_sec_x_size)
-        _, _sec_h   = rotated_label_bbox(_max_sec_w, _sec_x_size, _sec_x_rot)
+        # Block height, not one line: a "\n" sector name hangs its extra
+        # lines below the band the same way a multi-line tick label does.
+        _max_sec_h  = max((text_block_height(str(n), _sec_x_size)
+                           for n in x_sec.names), default=_sec_x_size)
+        _, _sec_h   = rotated_label_bbox(_max_sec_w, _max_sec_h, _sec_x_rot)
     else:
         _sec_h = 0.0
     x_band = _axis_band_stack(
@@ -313,6 +318,9 @@ def label_band_sizes(state, inp, dw, dh):
 
     # y-axis cross-axis spillover (asymmetric for rot=0: cap/2 above,
     # cap/2 + descender below — rotated labels use the rotated AABB).
+    # A multi-line label centers its whole block on the tick, so half
+    # its extra height spills each way (0 for single-line — the
+    # asymmetric single-line offsets are untouched).
     has_ytl = y_pol["draw_labels"] and any(str(l) for l in inp.y_labels)
     if has_ytl:
         n_y = min(len(inp.y_ticks), len(inp.y_labels))
@@ -321,11 +329,13 @@ def label_band_sizes(state, inp, dw, dh):
             i_top = min(range(n_y), key=lambda i: y_tick_px[i])
             i_bot = max(range(n_y), key=lambda i: y_tick_px[i])
             if inp.y_rot == 0:
-                top_half_h    = cap_height(inp.y_size) / 2
-                bottom_half_h = cap_height(inp.y_size) / 2 + descender(inp.y_size)
+                top_half_h    = (cap_height(inp.y_size) / 2
+                                 + extra_line_extent(inp.y_labels[i_top], inp.y_size) / 2)
+                bottom_half_h = (cap_height(inp.y_size) / 2 + descender(inp.y_size)
+                                 + extra_line_extent(inp.y_labels[i_bot], inp.y_size) / 2)
             else:
-                _, top_h = rotated_label_bbox(measure_text(str(inp.y_labels[i_top]), inp.y_size, inp.y_style, inp.y_weight), inp.y_size, inp.y_rot)
-                _, bot_h = rotated_label_bbox(measure_text(str(inp.y_labels[i_bot]), inp.y_size, inp.y_style, inp.y_weight), inp.y_size, inp.y_rot)
+                _, top_h = rotated_label_bbox(measure_text(str(inp.y_labels[i_top]), inp.y_size, inp.y_style, inp.y_weight), text_block_height(str(inp.y_labels[i_top]), inp.y_size), inp.y_rot)
+                _, bot_h = rotated_label_bbox(measure_text(str(inp.y_labels[i_bot]), inp.y_size, inp.y_style, inp.y_weight), text_block_height(str(inp.y_labels[i_bot]), inp.y_size), inp.y_rot)
                 top_half_h    = top_h / 2
                 bottom_half_h = bot_h / 2
             top_inset    = y_tick_px[i_top]

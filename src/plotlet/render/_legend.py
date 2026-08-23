@@ -21,7 +21,8 @@ from typing import NamedTuple
 
 from ..draw import colormap, ContinuousNorm, resolve_color
 from ..registry import RenderContext, get_artist
-from ..draw import cap_height, descender, measure_text
+from ..draw import (cap_height, descender, measure_text,
+                    text_block_height, extra_line_extent)
 from ..draw import coord, rect, segment, text_path
 from .. import _regions
 from ..scales import _fmt_tick
@@ -301,10 +302,26 @@ def _render_discrete_entry(entry: dict, a: dict, ctx_for,
             alpha = legend_opts.get("alpha", alpha)
         swatch = rect(x, y_mid - 5, sw, 10,
                       fill=entry["color"], alpha=alpha)
-    label = text_path(entry["label"], x + sw + _LEGSPEC["swatch_label_gap"], y_mid + 4,
-                      _FONTSPEC["tick_size"], anchor="start",
+    # `+ 4` centers a single line on the row; a multi-line label lifts
+    # by half its extra height so the whole block centers instead.
+    _tick_size = _FONTSPEC["tick_size"]
+    label = text_path(entry["label"], x + sw + _LEGSPEC["swatch_label_gap"],
+                      y_mid + 4 - extra_line_extent(entry["label"], _tick_size) / 2,
+                      _tick_size, anchor="start",
                       color=_FONTSPEC["color"], tag="legend-text")
     return swatch + label
+
+
+def _discrete_row_height(entries, tick_size: float, floor: float) -> float:
+    """Row pitch for one block of discrete legend entries — the spec
+    row height, grown to the tallest label block in the block.
+
+    Rows in a block share one pitch (the column layout indexes by
+    `i * row_h`), so a single multi-line label spaces the whole block.
+    Single-line labels measure `tick_size`, well under the spec floor,
+    so ordinary legends keep the pitch they always had."""
+    return max([floor] + [text_block_height(str(e["label"]), tick_size)
+                          for e in entries])
 
 
 def _thin_tick_labels(positions: list, half_extents: list) -> set:
@@ -685,7 +702,8 @@ def _legend_content_size(leaf, sources: list,
                 for col in cols
             ) + (len(cols) - 1) * _LEGSPEC["column_gap"]
             max_w = max(max_w, block_w)
-            total_h += len(cols[0]) * row_h
+            total_h += len(cols[0]) * _discrete_row_height(sub_entries,
+                                                           tick_size, row_h)
             if si < len(sub_groups) - 1:
                 total_h += _LEGSPEC["section_gap"]
         if gi < len(groups) - 1:
@@ -795,15 +813,16 @@ def _emit_legend_body(groups, leaf, states, pad_x, pad_y, row_h,
                                        tag="legend-header"))
                 cy += header_h
             cols = _entry_columns(sub_entries, leaf._legend_ncols)
+            blk_row_h = _discrete_row_height(sub_entries, tick_size, row_h)
             cx = pad_x
             for col in cols:
                 for i, entry in enumerate(col):
-                    ry = cy + i * row_h + row_h / 2
+                    ry = cy + i * blk_row_h + blk_row_h / 2
                     parts.append(_render_discrete_entry(entry, entry["_a"],
                                                         _swatch_ctx, cx, ry))
                 cx += (max(sw + _LEGSPEC["swatch_label_gap"] + measure_text(e["label"], tick_size)
                            for e in col) + _LEGSPEC["column_gap"])
-            cy += len(cols[0]) * row_h
+            cy += len(cols[0]) * blk_row_h
             if si < len(sub_groups) - 1:
                 cy += _LEGSPEC["section_gap"]
         if gi < len(groups) - 1:

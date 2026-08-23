@@ -71,11 +71,27 @@ def chart_multiline_labels():
     return c
 
 
+def chart_multiline_ticks():
+    """`\\n` in tick, sector, and legend labels. Unlike title / xlabel,
+    these anchor off a single line's cap or baseline, so each one needs
+    its own room for the extra lines: x names hang below the band, y
+    names center on their tick, legend rows space to the tallest key."""
+    df = {"x": [1, 2, 3, 4], "y": [2, 4, 3, 5], "z": [1, 3, 2, 4]}
+
+    c = pt.chart(df, aes(x="x", y="y"), data_width=260, data_height=160)
+    c.add_line(label="north\nregion")
+    c.add_line(y="z", label="south\nregion")
+    c.xticks([1, 2, 3, 4], labels=["Q1\n2023", "Q2\n2023", "Q3\n2023", "Q4\n2023"])
+    c.yticks([2, 3, 4], labels=["low\n(<2)", "mid\n(2-4)", "high\n(>4)"])
+    return c
+
+
 PLOTS = {
     "long_title": chart_long_title,
     "long_ylabel": chart_long_ylabel,
     "subtitle_caption": chart_subtitle_caption,
     "multiline_labels": chart_multiline_labels,
+    "multiline_ticks": chart_multiline_ticks,
 }
 
 
@@ -134,3 +150,84 @@ def test_multiline_label_geometry():
     assert xy >= py + ph
     yx, yy, yw, yh = regs["ylabel"]["bbox"]
     assert yx + yw <= px
+
+def test_multiline_tick_labels_fit():
+    """Tick, sector, and legend labels reserve room for their extra
+    lines. Each anchors off one line (cap or baseline) rather than a
+    whole block, so `text_block_height` alone doesn't cover them — the
+    reservation and the anchor have to move together, on every side."""
+    df = {"x": [1, 2, 3, 4], "y": [2, 4, 3, 5]}
+
+    def clips(c):
+        c.to_svg()
+        return [w for w in pt.lint(c) if w.check == "edge_clip"]
+
+    # x ticks, both sides and rotated — top-side labels are anchored on
+    # their last line, so the extra lines have to lift the first one.
+    for kw in ({}, {"side": "top"}, {"rotation": 45}, {"rotation": 90}):
+        c = pt.chart(df, aes(x="x", y="y"), data_width=300, data_height=130)
+        c.add_line()
+        c.xticks([1, 2, 3, 4], labels=["one", "two\nB", "three", "four"], **kw)
+        assert clips(c) == [], f"x ticks {kw}: {clips(c)}"
+
+    for kw in ({}, {"side": "right"}):
+        c = pt.chart(df, aes(x="x", y="y"), data_width=300, data_height=200)
+        c.add_line()
+        c.yticks([2, 3, 4, 5], labels=["a\nA\nAA", "b\nB\nBB", "c\nC\nCC", "d\nD\nDD"], **kw)
+        assert clips(c) == [], f"y ticks {kw}: {clips(c)}"
+
+    # Sector names take the same band as x tick labels.
+    d = {"x": [1, 2, 3, 4], "y": [2, 4, 3, 5], "s": ["sec\nP"] * 2 + ["sec\nQ"] * 2}
+    c = pt.chart(d, aes(x="x", y="y"), data_width=300, data_height=200)
+    c.add_line()
+    c.sectors({"sec\nP": 2, "sec\nQ": 2}, column="s")
+    assert clips(c) == []
+
+    # Legend rows space to the tallest key instead of the spec pitch,
+    # so two-line entries can't overprint each other.
+    d2 = {"x": [1, 2, 3], "y": [1, 2, 3], "z": [2, 3, 4]}
+    c = pt.chart(d2, aes(x="x", y="y"), data_width=280, data_height=180)
+    c.add_line(label="north\nregion")
+    c.add_line(y="z", label="south\nregion")
+    c.to_svg()
+    assert [w for w in pt.lint(c) if w.check == "overlap"] == []
+
+
+def test_multiline_y_tick_centers_on_its_tick():
+    """A multi-line y tick label centers its whole block on the tick,
+    not just its first line — otherwise the tick appears to point at
+    the top line of a three-line label."""
+    df = {"x": [1, 2, 3, 4], "y": [2, 4, 3, 5]}
+
+    def block_centers(labels):
+        c = pt.chart(df, aes(x="x", y="y"), data_width=300, data_height=200)
+        c.add_line()
+        c.yticks([2, 3, 4, 5], labels=labels)
+        c.to_svg()
+        panel = next(r for r in c.regions()
+                     if r["kind"] == "rect" and r["name"] == "panel")
+        return sorted(r["bbox"][1] + r["bbox"][3] / 2 - panel["bbox"][1]
+                      for r in c.regions()
+                      if r["kind"] == "text" and r["name"] == "tick-y")
+
+    one = block_centers(["a", "b", "c", "d"])
+    three = block_centers(["a\nA\nAA", "b\nB\nBB", "c\nC\nCC", "d\nD\nDD"])
+    for a, b in zip(one, three):
+        assert abs(a - b) < 0.01
+
+
+def test_single_line_label_metrics_unchanged():
+    """The multi-line terms are additive and vanish for single-line
+    text — the guard that keeps every existing baseline byte-identical."""
+    from plotlet.draw import (cap_height, descender, extra_line_extent,
+                              line_height, tick_band_height)
+
+    assert extra_line_extent("plain", 13) == 0.0
+    assert extra_line_extent("two\nlines", 13) == line_height(13)
+    assert extra_line_extent(42, 13) == 0.0            # non-str labels
+
+    plain = ["one", "two", "three"]
+    assert (tick_band_height(plain, 13, 0)
+            == cap_height(13) + descender(13))
+    assert (tick_band_height(["one", "two\nB"], 13, 0)
+            == tick_band_height(plain, 13, 0) + line_height(13))

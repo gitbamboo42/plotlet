@@ -1362,7 +1362,8 @@ def _disc_grid_size(disc, ncols):
     (per-column widest entry, `legend.column_gap` apart), including
     sub-group headers — mirror of the paint geometry in
     `_emit_inline_legend_body`."""
-    from ._legend import _entry_columns, _partition_by_group
+    from ._legend import (_entry_columns, _partition_by_group,
+                          _discrete_row_height)
     row_h = _LEGSPEC["row_height"]
     sw    = _LEGSPEC["swatch_width"]
     tick_size = _FONTSPEC["tick_size"]
@@ -1381,7 +1382,8 @@ def _disc_grid_size(disc, ncols):
             for col in cols
         ) + (len(cols) - 1) * _LEGSPEC["column_gap"]
         disc_w = max(disc_w, block_w)
-        disc_h += len(cols[0]) * row_h
+        disc_h += len(cols[0]) * _discrete_row_height(
+            [e for _, e in items], tick_size, row_h)
     disc_h += max(0, len(sub_groups) - 1) * _LEGSPEC["section_gap"]
     return disc_w, disc_h
 
@@ -1404,8 +1406,9 @@ def _legend_block_size(disc, cont, gradient_h, horizontal, ncols):
         # Discrete-only horizontal row. Entries arranged left-to-right.
         entry_ws = [sw + _LEGSPEC["swatch_label_gap"] + measure_text(e["label"], tick_size) for _, e in disc]
         spacer = 2 * pad_x
+        from ._legend import _discrete_row_height
         lw = 2 * pad_x + sum(entry_ws) + (len(disc) - 1) * spacer
-        lh = row_h + 2 * pad_y
+        lh = _discrete_row_height([e for _, e in disc], tick_size, row_h) + 2 * pad_y
         return lw, lh
     if cont and not disc:
         # Gradient-only block: no background rect, no padding around the

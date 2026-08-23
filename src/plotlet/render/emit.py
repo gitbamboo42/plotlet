@@ -468,7 +468,7 @@ def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal, gradient_h,
     function so the translate ctxmgr in `_emit_inline_legend` stays a
     2-liner instead of forcing 70 lines of indentation."""
     from ._legend import (_render_continuous_entry, _render_discrete_entry,
-                          _v_gradient_entry_height)
+                          _v_gradient_entry_height, _discrete_row_height)
     parts = []
     is_gradient_only = bool(cont) and not disc
     if not is_gradient_only and pos in _INSIDE_POSITIONS:
@@ -495,7 +495,8 @@ def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal, gradient_h,
         # vertically centered. Spacer matches `_inline_legend_layout`.
         spacer = 2 * pad_x
         cx = pad_x
-        ry = pad_y + row_h / 2
+        ry = pad_y + _discrete_row_height([e for _, e in disc],
+                                          tick_size, row_h) / 2
         for a, entry in disc:
             parts.append(_render_discrete_entry(entry, a, ctx_for, cx, ry))
             cx += sw + _LEGSPEC["swatch_label_gap"] + measure_text(entry["label"], tick_size) + spacer
@@ -542,14 +543,16 @@ def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal, gradient_h,
                                    tag="legend-header"))
             cur_y += sub_header_h
         cols = _entry_columns(sub_items, ncols)
+        blk_row_h = _discrete_row_height([e for _, e in sub_items],
+                                         tick_size, row_h)
         cx = pad_x
         for col in cols:
             for i, (a, entry) in enumerate(col):
-                ry = cur_y + i * row_h + row_h / 2
+                ry = cur_y + i * blk_row_h + blk_row_h / 2
                 parts.append(_render_discrete_entry(entry, a, ctx_for, cx, ry))
             cx += (max(sw + _LEGSPEC["swatch_label_gap"] + measure_text(e["label"], tick_size)
                        for _, e in col) + _LEGSPEC["column_gap"])
-        cur_y += len(cols[0]) * row_h
+        cur_y += len(cols[0]) * blk_row_h
         if si < len(sub_groups) - 1:
             cur_y += _LEGSPEC["section_gap"]
     return ''.join(parts)

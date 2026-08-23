@@ -224,6 +224,18 @@ def text_block_height(s: str, size: float) -> float:
     return size + (s.count("\n")) * line_height(size)
 
 
+def extra_line_extent(s, size: float) -> float:
+    """Height a multi-line block adds *below* its first line — 0 for
+    single-line text, one `line_height` per `\\n`.
+
+    Tick, sector, and legend labels anchor off a single line's cap or
+    baseline (unlike titles and axis labels, which reserve a whole
+    block via `text_block_height`). Adding this term to those formulas
+    makes room for the extra lines while leaving single-line text at
+    exactly the pixels it had before."""
+    return str(s).count("\n") * line_height(size)
+
+
 def cap_height(size: float) -> float:
     """Cap height in px for the active font at `size`. Equals the distance
     from baseline up to the top of a capital letter — i.e. the conversion
@@ -263,6 +275,11 @@ def tick_band_height(labels, size, rotation,
     reservation and the sector-label stacking position — same formula in
     one home keeps them in lockstep.
 
+    A multi-line label extends further below the anchor, in the same
+    direction as the descender — so its extra lines ride the same
+    ``|cos|`` factor. The widest and the tallest label need not be the
+    same one, so both are maxed independently.
+
     Only the width measurement is variant-aware: cap/descender ratios
     are identical across all four faces of every bundled family, and a
     path-loaded font resolves every variant to its one file.
@@ -271,10 +288,11 @@ def tick_band_height(labels, size, rotation,
         return 0.0
     max_w = max((measure_text(str(l), size, fontstyle, fontweight)
                  for l in labels), default=0.0)
+    max_extra = max((extra_line_extent(l, size) for l in labels), default=0.0)
     rad = math.radians(abs(rotation))
     return (cap_height(size)
             + math.sin(rad) * max_w
-            + math.cos(rad) * descender(size))
+            + math.cos(rad) * (descender(size) + max_extra))
 
 
 _GLYPH_FLOAT_RE = re.compile(r"-?\d+\.\d+")

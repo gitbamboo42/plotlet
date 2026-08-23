@@ -20,7 +20,7 @@ from .colormaps import (colormap, colormap_lut, list_colormaps,
                         register_colormap, ContinuousNorm)
 from .font import (measure_text, cap_height, descender, tick_band_height,
                    rotated_label_bbox, line_height, text_block_height,
-                   svg_family)
+                   extra_line_extent, svg_family)
 from .format import coord, stroke_w, opacity, degree
 from .linestyles import resolve_linestyle
 from ._png import encode_rgb, image_png, encode_rgba, image_png_rgba
@@ -38,7 +38,7 @@ __all__ = [
     "ContinuousNorm",
     "measure_text", "cap_height", "descender", "tick_band_height",
     "rotated_label_bbox", "line_height", "text_block_height",
-    "svg_family",
+    "extra_line_extent", "svg_family",
     "coord", "stroke_w", "opacity", "degree",
     "resolve_linestyle",
     "encode_rgb", "image_png", "encode_rgba", "image_png_rgba",
