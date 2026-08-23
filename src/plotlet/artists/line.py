@@ -225,16 +225,6 @@ def _line_ydomain(a):
     return a["ys"]
 
 
-def _line_ydomain_log(a):
-    """Log-axis vote: the CI band's non-positive bounds are unplottable
-    on log and must not poison the domain — only the plottable part of
-    the band votes (mpl/seaborn clip the band at the axis instead)."""
-    if "_band_lo" in a:
-        return (list(a["ys"])
-                + [v for v in a["_band_lo"] + a["_band_hi"] if v > 0])
-    return a["ys"]
-
-
 def _line_data_attrs(a):
     xs, ys = a["xs"], a["ys"]
     out = {"n": len(xs)}
@@ -278,7 +268,6 @@ add_artist(ArtistSpec(
     record=_line_record,
     xdomain=_line_xdomain,
     ydomain=_line_ydomain,
-    ydomain_log=_line_ydomain_log,
     draw=_line_draw,
     legend_entries=_line_legend_entries,
     data_attrs=_line_data_attrs,
@@ -304,7 +293,6 @@ add_artist(ArtistSpec(
     record=_step_record,
     xdomain=_line_xdomain,
     ydomain=_line_ydomain,
-    ydomain_log=_line_ydomain_log,
     draw=_line_draw,
     legend_entries=_line_legend_entries,
     data_attrs=_line_data_attrs,

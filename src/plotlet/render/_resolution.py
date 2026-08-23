@@ -30,8 +30,8 @@ from .._spec import (
     _LAYOUTSPEC, _PADSPEC, _D,
 )
 from ..draw import resolve_color, TAB10
-from ..scales import (_nice_domain, _fmt_tick, _to_epoch,
-                      _coerce_time_lim, _AxisDescriptor)
+from ..scales import (_fmt_tick, _to_epoch,
+                      _coerce_time_lim, _AxisDescriptor, get_trans)
 from ..sectors import SectoredValue
 from ..utils import (UNSET, ColumnRef, DataFrameLite, check_option,
                      _data_has_column, _table_columns)
@@ -785,17 +785,15 @@ def _scan_domain(artists, axis, scale_kind="linear"):
 
     `datetime.date` / `datetime.datetime` values are coerced to POSIX seconds
     (UTC) so the rest of the autoscaling pipeline can stay numeric. On a log
-    scale, an artist's `*domain_log` hook (when set) replaces the plain one."""
+    scale, non-positive values can't map and are masked from the domain
+    vote — the draw path masks the same points to NaN, so a zero in the
+    data renders as a gap, not an error."""
     lo, hi = math.inf, -math.inf
     for a in artists:
         spec = get_artist(a["type"])
         if spec is None:
             continue
         fn = spec.xdomain if axis == "x" else spec.ydomain
-        if scale_kind == "log":
-            log_fn = spec.xdomain_log if axis == "x" else spec.ydomain_log
-            if log_fn is not None:
-                fn = log_fn
         vals = fn(a)
         if vals is None:
             continue
@@ -804,6 +802,7 @@ def _scan_domain(artists, axis, scale_kind="linear"):
             if isinstance(v, float) and math.isnan(v): continue
             if isinstance(v, (datetime.date, datetime.datetime)):
                 v = _to_epoch(v)
+            if scale_kind == "log" and v <= 0: continue
             if v < lo: lo = v
             if v > hi: hi = v
     return lo, hi
@@ -887,52 +886,38 @@ def _resolve_expand(st_value, tight, axis):
     return tuple(_D["x_expand" if axis == "x" else "y_expand"])
 
 
-def _resolve_domain(lo, hi, user_lim, scale_kind, force_zero=False, tight=False,
+def _resolve_domain(lo, hi, user_lim, trans, force_zero=False, tight=False,
                     expand=(0.0, 0.0)):
-    """Apply user override, log snapping, then either nice-rounding OR
-    expand padding (not both — they solve the same 'breathing room' problem
-    and stacking double-counts).
+    """Apply user override, then — in the scale's transformed space —
+    either nice-rounding OR expand padding (not both: they solve the same
+    'breathing room' problem and stacking double-counts).
 
-    `tight=True` skips the nice path. `expand=(lo, hi)` adds a precise
-    symmetric buffer in data space; `force_zero` with `lo==0` skips
-    `expand_lo` so bars stay sat on the y=0 baseline."""
+    All arithmetic runs through `trans` so a fraction of the axis means
+    the same visual amount on every scale (a decade snap is just "nice"
+    in log space). `tight=True` skips the nice path; `force_zero` with a
+    zero low bound skips `expand_lo` so bars stay sat on the y=0
+    baseline. A domain the transform can't map (log with a non-positive
+    bound) passes through untouched — scale construction rejects it
+    loudly."""
     if user_lim is not None:
         return user_lim
     if math.isinf(lo):
         return (0, 1)
     if force_zero and lo > 0:
         lo = 0
-    if lo == hi:
-        if scale_kind == "log" and lo > 0:
-            # linear ±0.5 padding can push the domain nonpositive for
-            # values < 0.5; a decade each way stays positive.
-            return (lo / 10, hi * 10)
-        return (lo - 0.5, hi + 0.5)
-    expand_lo, expand_hi = expand
-    has_expand = expand_lo != 0.0 or expand_hi != 0.0
-    if scale_kind == "log":
-        if lo > 0 and hi > 0:
-            if has_expand:
-                lo_n, hi_n = lo, hi
-            else:
-                lo_n = 10 ** math.floor(math.log10(lo))
-                hi_n = 10 ** math.ceil(math.log10(hi))
-            log_span = math.log10(hi_n) - math.log10(lo_n)
-            if log_span > 0:
-                if not (force_zero and lo_n <= 0):
-                    lo_n = lo_n / (10 ** (expand_lo * log_span))
-                hi_n = hi_n * (10 ** (expand_hi * log_span))
-            return (lo_n, hi_n)
+    lo_t, hi_t = trans.fwd(lo), trans.fwd(hi)
+    if not (math.isfinite(lo_t) and math.isfinite(hi_t)):
         return (lo, hi)
-    if tight or has_expand:
-        lo_n, hi_n = lo, hi
-    else:
-        lo_n, hi_n = _nice_domain(lo, hi)
-    span = hi_n - lo_n
-    if not (force_zero and lo_n == 0):
-        lo_n -= expand_lo * span
-    hi_n += expand_hi * span
-    return (lo_n, hi_n)
+    if lo_t == hi_t:
+        return (trans.inv(lo_t - 0.5), trans.inv(hi_t + 0.5))
+    expand_lo, expand_hi = expand
+    if not (tight or expand_lo != 0.0 or expand_hi != 0.0):
+        lo_t, hi_t = trans.nice(lo_t, hi_t)
+    span = hi_t - lo_t
+    if not (force_zero and lo_t == 0.0):
+        lo_t -= expand_lo * span
+    hi_t += expand_hi * span
+    return (trans.inv(lo_t), trans.inv(hi_t))
 
 
 def _enforce_floors(M):
@@ -1150,7 +1135,9 @@ def _axis_descriptor(states: list[dict], axis: str) -> _AxisDescriptor:
     lim = anchor[f"{axis}lim"]
     if is_time:
         lim = _coerce_time_lim(lim)
-    lo, hi = _resolve_domain(lo, hi, lim, scale_kind,
+    trans = get_trans(scale_kind, linthresh=anchor[f"{axis}_linthresh"],
+                      exponent=anchor[f"{axis}_exponent"])
+    lo, hi = _resolve_domain(lo, hi, lim, trans,
                              force_zero=force_zero,
                              tight=tight,
                              expand=_resolve_expand(anchor[f"{axis}_expand"], tight, axis))

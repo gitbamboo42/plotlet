@@ -23,7 +23,6 @@ from ..draw import (resolve_color, text_path, segment,
                     measure_text, cap_height, descender, tick_band_height,
                     text_block_height, extra_line_extent)
 from .. import _regions
-from ..scales import _LogScale
 from ._chrome_bands import (_axis_band_stack, _outward_mark_extent,
                             axis_label_band, radial_tick_chrome_extent,
                             sector_walls, _sector_pixel_spans,
@@ -103,9 +102,9 @@ def _auto_minor_ticks(scale, major_ticks):
     4 subdivisions between adjacent majors; log: integer multipliers
     (2..9) within each decade."""
     out = []
-    if isinstance(scale, _LogScale):
-        a = math.floor(scale.l0)
-        b = math.ceil(scale.l1)
+    if getattr(scale, "kind", None) == "log":
+        a = math.floor(scale.t0)
+        b = math.ceil(scale.t1)
         for k in range(int(a), int(b) + 1):
             decade = 10 ** k
             for m in range(2, 10):

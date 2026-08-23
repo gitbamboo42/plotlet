@@ -235,9 +235,9 @@ class ContinuousNorm:
         return np.clip(t, 0.0, 1.0)
 
     def ticks(self, n: int = 8) -> list[float]:
-        from ..scales import _LogScale, _nice_ticks
+        from ..scales import get_trans, _nice_ticks
         if self.kind == "log":
-            return _LogScale(self.vmin, self.vmax, 0, 1).ticks(n)
+            return get_trans("log").ticks(self.vmin, self.vmax, n)
         ticks = _nice_ticks(self.vmin, self.vmax, n)
         if self.center is not None and self.vmin <= self.center <= self.vmax:
             if not any(abs(t - self.center) < 1e-12 for t in ticks):

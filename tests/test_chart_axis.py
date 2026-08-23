@@ -471,3 +471,48 @@ def test_log_scale_single_point_domain():
     m = re.search(r'data-plotlet-xlim="([^"]*)"', c.to_svg())
     lo, hi = (float(v) for v in m.group(1).split(","))
     assert 0 < lo < 0.3 < hi
+
+
+def test_symlog_positive_data_stays_positive():
+    # Expand padding runs in the scale's transformed space, so 5% of a
+    # symlog axis is 5% visually. Padding in data space used to push the
+    # low bound of all-positive data below zero, and the tick generator
+    # then mirrored negative decades into the invented region.
+    import re
+    df = {"x": [1, 2, 3], "y": [2, 50, 100]}
+    c = pt.chart(df, aes(x="x", y="y"))
+    c.add_line()
+    c.yscale("symlog")
+    m = re.search(r'data-plotlet-ylim="([^"]*)"', c.to_svg())
+    lo, hi = (float(v) for v in m.group(1).split(","))
+    assert 0 < lo < 2 and hi > 100
+
+
+def test_log_scale_masks_nonpositive_values():
+    # A non-positive value on a log axis is masked — dropped from the
+    # domain vote and drawn as a gap — instead of poisoning the domain
+    # and raising. (Bars still raise: force-zero needs 0 in the domain,
+    # which log cannot map.)
+    import re
+    df = {"x": [1, 2, 3, 4], "y": [0, 10, 100, 1000]}
+    c = pt.chart(df, aes(x="x", y="y"))
+    c.add_scatter()
+    c.yscale("log")
+    m = re.search(r'data-plotlet-ylim="([^"]*)"', c.to_svg())
+    lo, hi = (float(v) for v in m.group(1).split(","))
+    assert 0 < lo < 10 and hi > 1000
+
+
+def test_symlog_nice_rounds_in_transformed_space():
+    # With expand disabled, the nice path rounds the transformed domain,
+    # not the data-space one — the resolved bounds are inv() of nice
+    # transformed values, so both stay on the data's side of zero.
+    import re
+    df = {"x": [1, 2, 3], "y": [2, 50, 100]}
+    c = pt.chart(df, aes(x="x", y="y"))
+    c.add_line()
+    c.yscale("symlog")
+    c.y_expand(0)
+    m = re.search(r'data-plotlet-ylim="([^"]*)"', c.to_svg())
+    lo, hi = (float(v) for v in m.group(1).split(","))
+    assert 0 < lo <= 2 and hi >= 100

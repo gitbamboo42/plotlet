@@ -168,117 +168,181 @@ class _SectoredLinearScale:
         return out
 
 
-class _LogScale:
-    def __init__(self, d0, d1, r0, r1):
+class _Trans:
+    """Identity transform. Base for one axis transform: monotone maps
+    between data space and transformed space, plus the kind's tick and
+    nice-rounding logic.
+
+    Resolution does all domain arithmetic (nice-rounding, expand
+    padding) in transformed space, so a fraction of the axis means the
+    same visual amount on every scale — in data space a 5% pad on a
+    symlog axis either invents negative decades (one-sided data) or
+    vanishes (wide two-sided data). `_TransScale` composes `fwd` with a
+    linear pixel map. A value `fwd` cannot map (log of a non-positive)
+    comes back -inf; the caller masks it or errors loudly."""
+    kind = "linear"
+
+    def fwd(self, x):
+        return float(x)
+
+    def inv(self, t):
+        return float(t)
+
+    def nice(self, lo_t, hi_t):
+        """Nice-round a transformed-space domain."""
+        return _nice_domain(lo_t, hi_t)
+
+    def ticks(self, d0, d1, n=8):
+        """Data-space tick positions for the data-space domain [d0, d1]."""
+        return _nice_ticks(d0, d1, n)
+
+
+class _LogTrans(_Trans):
+    kind = "log"
+
+    def fwd(self, x):
+        if x <= 0:
+            return -math.inf
+        return math.log10(x)
+
+    def inv(self, t):
+        return 10 ** t
+
+    def nice(self, lo_t, hi_t):
+        # Snap to whole decades — the log-axis reading of "nice".
+        return (float(math.floor(lo_t)), float(math.ceil(hi_t)))
+
+    def ticks(self, d0, d1, n=8):
         if d0 <= 0 or d1 <= 0:
             raise ValueError("log scale needs strictly positive domain")
-        self.d0, self.d1 = d0, d1
-        self.l0, self.l1 = math.log10(d0), math.log10(d1)
-        self.r0, self.r1 = r0, r1
-
-    def __call__(self, v):
-        if v <= 0:
-            return float("nan")
-        return self.r0 + (math.log10(v) - self.l0) * (self.r1 - self.r0) / (self.l1 - self.l0)
-
-    def ticks(self, n=8):
-        a, b = math.floor(self.l0), math.ceil(self.l1)
-        return [10 ** k for k in range(int(a), int(b) + 1) if self.d0 <= 10 ** k <= self.d1]
+        a = math.floor(math.log10(d0))
+        b = math.ceil(math.log10(d1))
+        return [10 ** k for k in range(int(a), int(b) + 1) if d0 <= 10 ** k <= d1]
 
 
-class _PowerScale:
-    """Power-transform scale: `t(x) = sign(x) * |x|**exponent`.
-
-    `exponent < 1` (typical 0.5 for square-root) compresses large values
-    and spreads small ones — useful for count data, areas, intensities.
-    Negative inputs are mapped through `sign * |x|**exponent` so the scale
-    works on both signs.
-    """
-
-    def __init__(self, d0, d1, r0, r1, exponent=0.5):
-        if exponent <= 0:
-            raise ValueError("power scale exponent must be > 0")
-        self.exponent = float(exponent)
-        self.d0, self.d1 = d0, d1
-        self.r0, self.r1 = r0, r1
-        self.t0 = self._fwd(d0)
-        self.t1 = self._fwd(d1)
-
-    def _fwd(self, x):
-        if x >= 0:
-            return x ** self.exponent
-        return -((-x) ** self.exponent)
-
-    def __call__(self, v):
-        t = self._fwd(v)
-        if self.t1 == self.t0:
-            return self.r0
-        return self.r0 + (t - self.t0) * (self.r1 - self.r0) / (self.t1 - self.t0)
-
-    def ticks(self, n=8):
-        """Ticks chosen via the linear nice-numbers algorithm on the data
-        domain — the algorithm picks human-readable values (0, 25, 100, …)
-        that happen to lie at non-uniform pixel positions on a sqrt axis."""
-        return _nice_ticks(self.d0, self.d1, n)
-
-
-class _SymlogScale:
+class _SymlogTrans(_Trans):
     """Symmetric log: linear inside [-linthresh, +linthresh], log outside.
 
-    The forward map is
-    `t(x) = sign(x) * (linthresh + log10(|x|/linthresh) * linthresh)` for
-    `|x| > linthresh`, and `x` itself inside the linear region. Useful for
-    signed axes where both signs matter and the range spans several
-    orders of magnitude.
-    """
+    `fwd(x) = sign(x) * (linthresh + log10(|x|/linthresh) * linthresh)`
+    for `|x| > linthresh`, and `x` itself inside the linear region.
+    Useful for signed axes where both signs matter and the range spans
+    several orders of magnitude."""
+    kind = "symlog"
 
-    def __init__(self, d0, d1, r0, r1, linthresh=1.0):
+    def __init__(self, linthresh=1.0):
         if linthresh <= 0:
             raise ValueError("symlog linthresh must be > 0")
         self.linthresh = float(linthresh)
-        self.d0, self.d1 = d0, d1
-        self.r0, self.r1 = r0, r1
-        self.t0 = self._fwd(d0)
-        self.t1 = self._fwd(d1)
 
-    def _fwd(self, x):
+    def fwd(self, x):
         a = abs(x)
         if a <= self.linthresh:
             return float(x)
         sign = 1.0 if x > 0 else -1.0
         return sign * (self.linthresh + math.log10(a / self.linthresh) * self.linthresh)
 
-    def __call__(self, v):
-        t = self._fwd(v)
-        if self.t1 == self.t0:
-            return self.r0
-        return self.r0 + (t - self.t0) * (self.r1 - self.r0) / (self.t1 - self.t0)
+    def inv(self, t):
+        a = abs(t)
+        if a <= self.linthresh:
+            return float(t)
+        sign = 1.0 if t > 0 else -1.0
+        return sign * (self.linthresh * 10 ** (a / self.linthresh - 1.0))
 
-    def ticks(self, n=8):
+    def ticks(self, d0, d1, n=8):
         """Ticks at decade boundaries on both sides plus 0 (and ±linthresh
         if outside the decade grid). Filtered to the domain."""
         thr = self.linthresh
         out = set([0.0])
         # Positive side decades: linthresh, 10*linthresh, 100*linthresh, ...
-        if self.d1 > thr:
+        if d1 > thr:
             k = 0
             while True:
                 v = thr * 10 ** k
-                if v > self.d1:
+                if v > d1:
                     break
                 out.add(v)
                 k += 1
         # Negative side mirrors.
-        if self.d0 < -thr:
+        if d0 < -thr:
             k = 0
             while True:
                 v = -thr * 10 ** k
-                if v < self.d0:
+                if v < d0:
                     break
                 out.add(v)
                 k += 1
-        ticks = sorted(t for t in out if self.d0 <= t <= self.d1)
-        return ticks
+        return sorted(t for t in out if d0 <= t <= d1)
+
+
+class _PowerTrans(_Trans):
+    """Power transform: `fwd(x) = sign(x) * |x|**exponent`.
+
+    `exponent < 1` (0.5 for square-root) compresses large values and
+    spreads small ones — useful for count data, areas, intensities.
+    Sign-preserving, so it works on both signs."""
+    kind = "power"
+
+    def __init__(self, exponent=0.5):
+        if exponent <= 0:
+            raise ValueError("power scale exponent must be > 0")
+        self.exponent = float(exponent)
+
+    def fwd(self, x):
+        if x >= 0:
+            return x ** self.exponent
+        return -((-x) ** self.exponent)
+
+    def inv(self, t):
+        if t >= 0:
+            return t ** (1.0 / self.exponent)
+        return -((-t) ** (1.0 / self.exponent))
+
+    def ticks(self, d0, d1, n=8):
+        """Linear nice-numbers on the data domain — the algorithm picks
+        human-readable values (0, 25, 100, …) that happen to lie at
+        non-uniform pixel positions on a sqrt axis."""
+        return _nice_ticks(d0, d1, n)
+
+
+def get_trans(kind, linthresh=1.0, exponent=1.0):
+    """The transform for a continuous scale kind. "sqrt" is power 0.5;
+    "time" and "linear" are identity (time values are epoch seconds by
+    the time any transform runs)."""
+    if kind == "log":
+        return _LogTrans()
+    if kind == "symlog":
+        return _SymlogTrans(linthresh)
+    if kind == "power":
+        return _PowerTrans(exponent)
+    if kind == "sqrt":
+        return _PowerTrans(0.5)
+    return _Trans()
+
+
+class _TransScale:
+    """Continuous nonlinear scale: linear pixel interpolation over the
+    transformed domain. One class serves log, symlog, power, and sqrt —
+    the kind-specific math lives entirely in `trans`."""
+
+    def __init__(self, trans, d0, d1, r0, r1):
+        self.trans = trans
+        self.kind = trans.kind
+        self.d0, self.d1 = d0, d1
+        self.r0, self.r1 = r0, r1
+        self.t0, self.t1 = trans.fwd(d0), trans.fwd(d1)
+        if not (math.isfinite(self.t0) and math.isfinite(self.t1)):
+            raise ValueError(f"{trans.kind} scale needs strictly positive domain")
+
+    def __call__(self, v):
+        t = self.trans.fwd(v)
+        if not math.isfinite(t):
+            return float("nan")
+        if self.t1 == self.t0:
+            return self.r0
+        return self.r0 + (t - self.t0) * (self.r1 - self.r0) / (self.t1 - self.t0)
+
+    def ticks(self, n=8):
+        return self.trans.ticks(self.d0, self.d1, n)
 
 
 class _CategoryScale:
@@ -555,18 +619,13 @@ class _AxisDescriptor:
     sector_gap_px: float = 0.0            # continuous only: px reserved between sectors
 
     def build(self, r0, r1):
-        if self.kind == "log":
-            return _LogScale(self.lo, self.hi, r0, r1)
+        if self.kind in ("log", "symlog", "power", "sqrt"):
+            return _TransScale(get_trans(self.kind, self.linthresh, self.exponent),
+                               self.lo, self.hi, r0, r1)
         if self.kind == "category":
             return _CategoryScale(self.cats or [], r0, r1, padding=self.padding,
                                   splits=self.splits, gap=self.split_gap,
                                   groups=self.groups)
-        if self.kind == "symlog":
-            return _SymlogScale(self.lo, self.hi, r0, r1, linthresh=self.linthresh)
-        if self.kind == "power":
-            return _PowerScale(self.lo, self.hi, r0, r1, exponent=self.exponent)
-        if self.kind == "sqrt":
-            return _PowerScale(self.lo, self.hi, r0, r1, exponent=0.5)
         if self.kind == "time":
             return _TimeScale(self.lo, self.hi, r0, r1)
         if self.sector_lengths and self.sector_gap_px > 0:

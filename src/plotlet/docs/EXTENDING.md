@@ -177,7 +177,6 @@ behavior. What each opt-in is *for*:
 |---|---|
 | `data_input` | What kind of data the artist reads, and how the caller may hand it in. `"table"` (default): the artist reads a table, and the caller may pass it either with the `data` keyword or as the bare first argument — both mean the same thing. Only a value shaped like a table (dict / DataFrame) is read that way; any other bare value falls through to your record fn, so a wrong-shaped input hits your own error (`heatmap` rejecting a bare matrix). `"matrix"`: the artist reads a matrix of numbers instead of a table, passed as the bare first argument (`image_cmap`, `contour`, `dendrogram`) — the journal stores it in its data section like a table. Numeric input reaches your record fn as a 2-D numpy array, non-numeric input as nested lists; `utils.to_matrix` (keeps the array) and `utils.to_list_2d` (plain lists) both accept either. `"none"`: the artist reads no data at all — its arguments are plain settings, and nothing ever reinterprets them (`axhline`, `annotate`, `rect`). |
 | `xdomain` / `ydomain` | Your artist's data should drive axis limits. Return `None` for decorative artists (axhline, axvline). |
-| `xdomain_log` / `ydomain_log` | Domain contribution under a **log** scale when it must differ from the plain hook — e.g. a CI band whose non-positive bounds would poison a log domain. `None` (default) → the plain hook serves every scale kind. |
 | `layer` | `"background"` for fills (drawn first), `"foreground"` for reference lines (drawn last). Default `"data"`. |
 | `uses_color_cycle` | Set `False` for artists that pick their own color (reflines, image artists). Set `default_color` for the fallback. |
 | `legend_entries` | Return the legend entries this artist contributes (zero or more). Each entry is `{"label": str, "color": str}` plus optional `"alpha"`, `"group"` (clusters entries under one header), and `"paint"` — `paint(a, ctx, x0, y_mid) -> svg_fragment` overrides the default rect swatch. Most one-series-per-call artists return zero or one entry depending on whether `label=` was set. |
@@ -191,6 +190,21 @@ behavior. What each opt-in is *for*:
 | `crosses_sectors` | Set `True` for artists whose geometry spans sector boundaries (chord_links, chord_ribbon). Suppresses the inter-sector divider walls while the artist is active — walls cutting through a cross-sector curve read as a layering bug. Sector labels still render. |
 
 Coord support lives with the coord — see the "Coordinate classes" section.
+
+## Nonlinear scales: map points, not arithmetic
+
+`ctx.x_scale(v)` / `ctx.y_scale(v)` place any single data value
+correctly on every scale kind (log, symlog, sqrt) — pointwise geometry
+needs no scale awareness. What does NOT carry over is *arithmetic
+between data values*: a width of `x + w/2`, a jitter of `y + dy`, a
+midpoint of `(a + b) / 2` are computed in data space, so on a log axis
+the two halves of that width render at different visual sizes. If your
+artist adds data-space offsets, know that it will look uneven on
+nonlinear axes — either accept that (most artists do) or compute the
+offset in pixel space after mapping.
+Non-positive values on a log axis are handled for you: they are masked
+from autoscaling and map to NaN, so drop NaN pixels rather than
+special-casing zeros yourself.
 
 ---
 
