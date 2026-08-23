@@ -33,7 +33,7 @@ from ..utils import (pack_opts, categorical_groups, resolve_aes, quantile,
                      validate_ci, ci_bounds, check_option)
 from ..draw import segment, circle, polyline, errorbar_v
 from ..utils import group_color
-from ._shared import swatch_radius, swatch_stroke
+from ._shared import edge_px, swatch_radius, swatch_stroke
 
 
 def _pointplot_record(data=None,
@@ -100,7 +100,8 @@ def _pointplot_draw(a, ctx):
             cx = ctx.x_scale(cat)
             py = ctx.y_scale(est)
             if lo == lo and hi == hi:
-                out.append(errorbar_v(cx, ctx.y_scale(lo), ctx.y_scale(hi),
+                out.append(errorbar_v(cx, edge_px(ctx.y_scale, lo),
+                                      edge_px(ctx.y_scale, hi),
                                       capsize=capsize, color=col, width=lw,
                                       project=ctx.warp))
             pts.append((cx, py))

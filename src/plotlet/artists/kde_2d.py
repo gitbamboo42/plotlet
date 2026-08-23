@@ -29,6 +29,7 @@ Styling kwargs:
 import math
 
 from ..registry import ArtistSpec, add_artist
+from ._shared import edge_px
 from ..draw import segment, rect
 from ..draw import colormap, ContinuousNorm
 from ..draw import TAB10
@@ -153,7 +154,8 @@ def _kde_2d_draw(a, ctx):
             g, n, n, levels, cmap_name=cmap_name,
             color=color_opt or ctx.color or TAB10[0], alpha=alpha,
             x0d=x0, y0d=y0, dxd=dxd, dyd=dyd,
-            x_scale=ctx.x_scale, y_scale=ctx.y_scale)
+            x_scale=lambda v: edge_px(ctx.x_scale, v),
+            y_scale=lambda v: edge_px(ctx.y_scale, v))
     out = []
     for lvl in levels:
         if cmap_name:
@@ -172,10 +174,10 @@ def _kde_2d_draw(a, ctx):
                 for (e1, e2) in _MS_CASES.get(code, []):
                     p1 = _edge_pt(e1, r, c, vtl, vtr, vbr, vbl, lvl)
                     p2 = _edge_pt(e2, r, c, vtl, vtr, vbr, vbl, lvl)
-                    px1 = ctx.x_scale(x0 + p1[0] * dxd)
-                    py1 = ctx.y_scale(y0 + p1[1] * dyd)
-                    px2 = ctx.x_scale(x0 + p2[0] * dxd)
-                    py2 = ctx.y_scale(y0 + p2[1] * dyd)
+                    px1 = edge_px(ctx.x_scale, x0 + p1[0] * dxd)
+                    py1 = edge_px(ctx.y_scale, y0 + p1[1] * dyd)
+                    px2 = edge_px(ctx.x_scale, x0 + p2[0] * dxd)
+                    py2 = edge_px(ctx.y_scale, y0 + p2[1] * dyd)
                     out.append(segment(px1, py1, px2, py2, color=col, width=lw))
     return "".join(out)
 

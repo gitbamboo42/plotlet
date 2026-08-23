@@ -21,6 +21,20 @@ from ..draw import TAB10
 from ..utils import to_list, resolve_aes, palette_color
 
 
+def edge_px(scale, v):
+    """Map `v` through `scale`, clamping an unmappable value to the
+    domain-lo panel edge. On a log axis a value at or below zero has no
+    pixel; connected geometry (bands, baselines, fitted lines, KDE
+    tails) draws it at the axis edge — where the panel clip cuts it
+    off — instead of printing a non-finite coordinate into the path.
+    Point markers should keep masking (skip the point): a clamped
+    marker would invent a datum at the edge."""
+    p = scale(v)
+    if math.isfinite(p):
+        return p
+    return scale.r0
+
+
 def point_outline(opts):
     """Outline (stroke, width) for a point-cloud artist (strip/swarm),
     per the `draw.marker` rule: `edgecolor=` turns the outline on,

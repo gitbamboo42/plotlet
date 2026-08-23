@@ -59,6 +59,7 @@ import random
 from scipy.stats import t as _t_dist
 
 from ..registry import ArtistSpec, add_artist
+from ._shared import edge_px
 from ..utils import long_form_xy, resolve_aes, quantile, pack_opts
 from ..draw import resolve_color
 from .._spec import _LEGSPEC
@@ -374,13 +375,13 @@ def _regression_draw(a, ctx):
                 continue
             col = _group_color(a["groups"], palette, j, fallback)
             if "lo" in fit:
-                pts_top = [(ctx.x_scale(x), ctx.y_scale(y))
+                pts_top = [(edge_px(ctx.x_scale, x), edge_px(ctx.y_scale, y))
                            for x, y in zip(fit["grid"], fit["hi"])]
-                pts_bot = [(ctx.x_scale(x), ctx.y_scale(y))
+                pts_bot = [(edge_px(ctx.x_scale, x), edge_px(ctx.y_scale, y))
                            for x, y in zip(fit["grid"], fit["lo"])]
                 out.append(polygon(pts_top + pts_bot[::-1], fill=col,
                                    alpha=fill_alpha, project=ctx.warp))
-            line_pts = [(ctx.x_scale(x), ctx.y_scale(y))
+            line_pts = [(edge_px(ctx.x_scale, x), edge_px(ctx.y_scale, y))
                         for x, y in zip(fit["grid"], fit["mid"])]
             out.append(polyline(line_pts, color=col, width=lw,
                                 project=ctx.warp))
@@ -400,11 +401,11 @@ def _regression_draw(a, ctx):
             upper.append((x, yhat + crit * se))
             lower.append((x, yhat - crit * se))
             mid.append((x, yhat))
-        pts_top = [(ctx.x_scale(x), ctx.y_scale(y)) for x, y in upper]
-        pts_bot = [(ctx.x_scale(x), ctx.y_scale(y)) for x, y in lower]
+        pts_top = [(edge_px(ctx.x_scale, x), edge_px(ctx.y_scale, y)) for x, y in upper]
+        pts_bot = [(edge_px(ctx.x_scale, x), edge_px(ctx.y_scale, y)) for x, y in lower]
         band = pts_top + pts_bot[::-1]
         out.append(polygon(band, fill=col, alpha=fill_alpha, project=ctx.warp))
-        line_pts = [(ctx.x_scale(x), ctx.y_scale(y)) for x, y in mid]
+        line_pts = [(edge_px(ctx.x_scale, x), edge_px(ctx.y_scale, y)) for x, y in mid]
         out.append(polyline(line_pts, color=col, width=lw, project=ctx.warp))
     return "".join(out)
 

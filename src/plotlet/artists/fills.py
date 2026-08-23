@@ -14,7 +14,7 @@ from ..utils import (pack_opts, to_list, resolve_aes,
 from ..draw import resolve_color
 from .._spec import _D, _LEGSPEC
 from ..draw import polygon as draw_polygon, rect as draw_rect
-from ._shared import (_xy_minmax, _line_legend_entries,
+from ._shared import (edge_px, _xy_minmax, _line_legend_entries,
                        _CURVE_VALUES, _step_coords)
 
 
@@ -176,8 +176,9 @@ def _area_draw(a, ctx):
             mode = curve[5:]
             up_x, up_y = _step_coords(xs, upper, mode)
             lo_x, lo_y = _step_coords(xs, lower, mode)
-        pts = [(ctx.x_scale(x), ctx.y_scale(y)) for x, y in zip(up_x, up_y)]
-        pts += [(ctx.x_scale(x), ctx.y_scale(y))
+        pts = [(edge_px(ctx.x_scale, x), edge_px(ctx.y_scale, y))
+               for x, y in zip(up_x, up_y)]
+        pts += [(edge_px(ctx.x_scale, x), edge_px(ctx.y_scale, y))
                 for x, y in zip(reversed(lo_x), reversed(lo_y))]
         col = _group_fill(groups, palette, j, fill_fallback) if multi else fill_fallback
         out.append(draw_polygon(pts, fill=col, alpha=alpha, project=ctx.warp))

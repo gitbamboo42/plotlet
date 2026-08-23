@@ -29,6 +29,7 @@ Styling kwargs:
   alpha=0.6      fill opacity
 """
 from ..registry import ArtistSpec, add_artist
+from ._shared import edge_px
 from ..draw import coord, path, rect, text_path
 from .._spec import _LEGSPEC
 from ..utils import pack_opts, silverman_bw, kde_1d, categorical_groups, resolve_aes
@@ -95,22 +96,22 @@ def _ridge_draw(a, ctx):
         dmax = (max(peaks) if peaks else 0) or 1.0
         baseline_y = n - 1 - i
         y_base = ctx.y_scale(baseline_y)
-        x_right = ctx.x_scale(grid[-1])
-        x_left = ctx.x_scale(grid[0])
+        x_right = edge_px(ctx.x_scale, grid[-1])
+        x_left = edge_px(ctx.x_scale, grid[0])
         for j, d in enumerate(dens):
             if d is None:
                 continue
             col = group_color(groups, palette, j, ctx.color)
             pts = []
             for gx, dy in zip(grid, d):
-                px = ctx.x_scale(gx)
+                px = edge_px(ctx.x_scale, gx)
                 py = ctx.y_scale(baseline_y + (dy / dmax) * overlap)
                 pts.append(f"{coord(px)},{coord(py)}")
             path_d = ("M" + " L".join(pts)
                       + f" L{coord(x_right)},{coord(y_base)} L{coord(x_left)},{coord(y_base)} Z")
             out.append(path(path_d, fill=col, stroke=col, stroke_width=1,
                             fill_alpha=fill_alpha, stroke_alpha=1))
-        out.append(text_path(label, ctx.x_scale(lo) + 4,
+        out.append(text_path(label, edge_px(ctx.x_scale, lo) + 4,
                              ctx.y_scale(baseline_y) - 3, 11, anchor="start"))
     return "".join(out)
 
