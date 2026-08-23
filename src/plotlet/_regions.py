@@ -80,6 +80,10 @@ class _Sink:
         # the bbox in outer-SVG coords.
         if "polygon" in meta:
             meta["polygon"] = [(px + dx, py + dy) for px, py in meta["polygon"]]
+        # Multi-line text ships one quad per inked line under `lines`.
+        if "lines" in meta:
+            meta["lines"] = [[(px + dx, py + dy) for px, py in quad]
+                             for quad in meta["lines"]]
         if self.structural_depth:
             meta.setdefault("structural", True)
         self.regions.append(Region(kind=kind, bbox=(x + dx, y + dy, w, h),

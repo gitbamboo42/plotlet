@@ -124,32 +124,62 @@ def text_path(s: str, x: float, y: float, size: float,
         # (axis-aligned hulls of 45°-rotated rectangles overlap even
         # when the rectangles themselves don't, so AABB alone is a
         # false-positive trap).
+        #
+        # A multi-line block is a worse trap still: its hull spans the
+        # widest line across every row, so a blank or short line claims
+        # pixels no glyph touches — two staggered "\n" labels read as
+        # colliding when their ink sits on different rows. `lines`
+        # carries one quad per non-empty line so lint can test the rows
+        # that actually carry ink. Recorded only for genuinely
+        # multi-line text; single-line regions keep the meta they had.
+        # SVG transform uses `-rotate` (CCW in user space); same sign
+        # here so the corner math matches the visible rendering.
+        theta = math.radians(-rotate)
+        cos_t, sin_t = math.cos(theta), math.sin(theta)
+
+        def _quad(qx, qy, qw, qh):
+            """A rect's four corners, rotated around the anchor (x, y)."""
+            pts = [(qx, qy), (qx + qw, qy), (qx + qw, qy + qh), (qx, qy + qh)]
+            if not rotate:
+                return pts
+            return [(x + (cx - x) * cos_t - (cy - y) * sin_t,
+                     y + (cx - x) * sin_t + (cy - y) * cos_t)
+                    for cx, cy in pts]
+
         w = measure_text(s, size, fontstyle, fontweight)
         rx = _anchor_left(w)
         ry = y - cap_height(size)
         rh = (cap_height(size) + descender(size)
               + (len(lines) - 1) * line_height(size))
+        line_quads = []
+        if len(lines) > 1:
+            # Each row spans cap-top to descender-bottom — the same
+            # convention as the block rect above, so a row box always
+            # nests inside it. (True ascenders run a hair above the cap
+            # line; that under-measure is the block's too, not new here.)
+            one_line_h = cap_height(size) + descender(size)
+            for i, line in enumerate(lines):
+                if not line:
+                    continue        # a blank row carries no ink
+                lw = measure_text(line, size, fontstyle, fontweight)
+                line_quads.append(_quad(
+                    _anchor_left(lw),
+                    y + i * line_height(size) - cap_height(size),
+                    lw, one_line_h))
+        per_line = {"lines": line_quads} if line_quads else {}
         if rotate:
-            # SVG transform uses `-rotate` (CCW in user space); same sign
-            # here so the corner math matches the visible rendering.
-            theta = math.radians(-rotate)
-            cos_t, sin_t = math.cos(theta), math.sin(theta)
-            corners = [(rx, ry), (rx + w, ry), (rx + w, ry + rh), (rx, ry + rh)]
-            rotated_pts = []
-            for cx, cy in corners:
-                dx_, dy_ = cx - x, cy - y
-                rotated_pts.append((x + dx_ * cos_t - dy_ * sin_t,
-                                    y + dx_ * sin_t + dy_ * cos_t))
+            rotated_pts = _quad(rx, ry, w, rh)
             xs = [p[0] for p in rotated_pts]
             ys = [p[1] for p in rotated_pts]
             rx_r, ry_r = min(xs), min(ys)
             _record_region("text",
                             (rx_r, ry_r, max(xs) - rx_r, max(ys) - ry_r),
                             name=tag, text=s, size=size, anchor=anchor,
-                            rotate=rotate, polygon=rotated_pts)
+                            rotate=rotate, polygon=rotated_pts, **per_line)
         else:
             _record_region("text", (rx, ry, w, rh), name=tag,
-                            text=s, size=size, anchor=anchor, rotate=0)
+                            text=s, size=size, anchor=anchor, rotate=0,
+                            **per_line)
     out = f'<path d="{d}" fill="{color}"/>'
     if decoration != "none":
         dy = _decoration_y_offset(decoration, size)

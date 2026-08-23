@@ -132,6 +132,18 @@ def _vertices(r: dict) -> list[tuple[float, float]]:
     return [(x, y), (x + w, y), (x + w, y + h), (x, y + h)]
 
 
+def _parts(r: dict) -> list[list[tuple[float, float]]]:
+    """The region's ink, as one convex quad per part. Multi-line text
+    ships one quad per non-empty line (`lines`); everything else is a
+    single part — its rotated `polygon` or its bbox. Lint tests parts,
+    so a blank or short line inside a multi-line label can't collide
+    with a neighbour its glyphs never reach."""
+    quads = r.get("meta", {}).get("lines")
+    if quads:
+        return [[(float(px), float(py)) for px, py in q] for q in quads]
+    return [_vertices(r)]
+
+
 def _polys_overlap(pa: list, pb: list) -> bool:
     """Separating-axis test for two convex polygons — True when they
     intersect with positive area (merely touching edges don't count).
@@ -151,10 +163,40 @@ def _polys_overlap(pa: list, pb: list) -> bool:
     return True
 
 
+def _part_overlap(a: dict, b: dict) -> tuple[float, float] | None:
+    """Worst per-part AABB overlap between two regions, or None when no
+    pair of parts actually intersects.
+
+    The block AABBs already overlap by the time this runs — necessary
+    but not sufficient once a region is rotated (swollen hull) or
+    multi-line (hull spans blank rows). Confirms with SAT when either
+    side is rotated, and reports the AABB overlap of the worst
+    surviving pair: an upper bound, but enough to rank severity. A
+    single-part axis-aligned pair returns exactly the block overlap."""
+    rotated = ("polygon" in a.get("meta", {})
+               or "polygon" in b.get("meta", {}))
+    best = None
+    for pa in _parts(a):
+        ax0, ax1 = min(p[0] for p in pa), max(p[0] for p in pa)
+        ay0, ay1 = min(p[1] for p in pa), max(p[1] for p in pa)
+        for pb in _parts(b):
+            bx0, bx1 = min(p[0] for p in pb), max(p[0] for p in pb)
+            by0, by1 = min(p[1] for p in pb), max(p[1] for p in pb)
+            ox = min(ax1, bx1) - max(ax0, bx0)
+            oy = min(ay1, by1) - max(ay0, by0)
+            if ox <= 0 or oy <= 0:
+                continue
+            if rotated and not _polys_overlap(pa, pb):
+                continue
+            if best is None or ox * oy > best[0] * best[1]:
+                best = (ox, oy)
+    return best
+
+
 def edge_clip(regs, W, H) -> list[Warning]:
     out = []
     for r in regs:
-        for vx, vy in _vertices(r):
+        for vx, vy in [v for part in _parts(r) for v in part]:
             if (vx < -EDGE_TOL or vy < -EDGE_TOL
                     or vx > W + EDGE_TOL or vy > H + EDGE_TOL):
                 out.append(Warning(
@@ -187,15 +229,13 @@ def overlap(regs, W, H) -> list[Warning]:
             ox = min(ax + aw, bx + bw) - max(ax, bx)
             oy = min(ay + ah, by + bh) - max(ay, by)
             if ox > 0 and oy > 0:
-                # AABB overlap is only a necessary condition when a
-                # region is rotated (carries a `polygon`) — confirm
-                # with the precise corners before flagging. The
-                # reported ox×oy stays the AABB overlap: an upper
-                # bound, but enough to rank severity.
-                if (("polygon" in a.get("meta", {})
-                     or "polygon" in b.get("meta", {}))
-                        and not _polys_overlap(_vertices(a), _vertices(b))):
+                # Block-AABB overlap is only a necessary condition once
+                # a region is rotated or multi-line — confirm against
+                # the parts that carry ink, and measure there too.
+                hit = _part_overlap(a, b)
+                if hit is None:
                     continue
+                ox, oy = hit
                 key = frozenset({a["name"], b["name"]})
                 hits.setdefault(key, []).append((a, b, ox, oy))
     out = []
