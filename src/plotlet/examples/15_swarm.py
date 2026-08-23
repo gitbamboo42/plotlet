@@ -7,7 +7,7 @@ from plotlet import aes
 
 df = pt.load_dataset("tips")
 
-c = pt.chart(df, aes(x="day", y="tip", fill="sex"),
+c = pt.chart(df, aes(x="day", y="tip", color="sex"),
              title="tips by day", ylabel="tip ($)",
              data_width=380, data_height=220)
 c.xscale("category", order=["Thur", "Fri", "Sat", "Sun"])

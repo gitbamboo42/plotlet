@@ -16,9 +16,25 @@ import math
 import numpy as np
 
 from .._spec import _LEGSPEC, _D
-from ..draw import marker, segment, rect
+from ..draw import marker, segment, rect, resolve_color
 from ..draw import TAB10
 from ..utils import to_list, resolve_aes, palette_color
+
+
+def point_outline(opts):
+    """Outline (stroke, width) for a point-cloud artist (strip/swarm),
+    per the `draw.marker` rule: `edgecolor=` turns the outline on,
+    `linewidth=` only sizes it (spec marker stroke width when omitted).
+    No edgecolor → no outline, whatever the width. Returns stroke None
+    when hidden."""
+    stroke = resolve_color(opts.get("edgecolor"))
+    if stroke is None:
+        return None, 0
+    lw = opts.get("linewidth")
+    lw = _D["marker_stroke_width"] if lw is None else float(lw)
+    if lw <= 0:
+        return None, 0
+    return stroke, lw
 
 
 def swatch_radius(r):

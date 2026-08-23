@@ -26,9 +26,9 @@ def chart_swarm():
                              "value": rng.gauss(mu, sd)})
     data = {k: [r[k] for r in rows] for k in rows[0]}
 
-    c = pt.chart(data, aes(x="group", y="value", fill="series"),
+    c = pt.chart(data, aes(x="group", y="value", color="series"),
                  data_width=360, data_height=220,
-                 title="swarm fill", xlabel="group", ylabel="value",
+                 title="swarm color", xlabel="group", ylabel="value",
                  legend=True)
     c.xscale("category", order=["A", "B", "C", "D"])
     c.add_swarm(palette={"a": "#3F97C5", "b": "#F99917"})

@@ -140,14 +140,14 @@ def ring_errorbar():
 # --- statistical / distribution artists on a categorical or numeric ring ---
 
 def ring_strip():
-    c = pt.chart(_CAT_DATA, aes(x="cat", y="val", fill="cat"), title="strip — ring")
+    c = pt.chart(_CAT_DATA, aes(x="cat", y="val", color="cat"), title="strip — ring")
     c.coordinate(pt.CircularCoordinate())
     c.add_strip(palette="Set2")
     return c
 
 
 def ring_swarm():
-    c = pt.chart(_CAT_DATA, aes(x="cat", y="val", fill="cat"), title="swarm — ring")
+    c = pt.chart(_CAT_DATA, aes(x="cat", y="val", color="cat"), title="swarm — ring")
     c.coordinate(pt.CircularCoordinate())
     c.add_swarm(palette="Set2")
     return c

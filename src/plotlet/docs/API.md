@@ -320,8 +320,8 @@ universal and not repeated.
 | --- | --- |
 | `.add_boxplot(aes(x=, y=, fill=), **opts)` | `color` (stroke), `palette`, `orientation="v"\|"h"`, `notch`, `width`, `whis=1.5`, `flier_size` |
 | `.add_violin(aes(x=, y=, fill=), **opts)` | `color` (stroke), `palette`, `inner="box"\|"quartile"\|None`, `trim`, `bw_adjust`, `fill_alpha` |
-| `.add_swarm(aes(x=, y=, fill=), **opts)` | `color` (outline), `palette`, `size`, `linewidth` — collision-resolved jitter |
-| `.add_strip(aes(x=, y=, fill=), **opts)` | `color` (outline), `palette`, `size`, `jitter` — raw jittered points |
+| `.add_swarm(aes(x=, y=, color=), **opts)` | `edgecolor` (outline), `palette`, `size`, `linewidth` — collision-resolved jitter |
+| `.add_strip(aes(x=, y=, color=), **opts)` | `edgecolor` (outline), `palette`, `size`, `jitter` — raw jittered points |
 | `.add_pointplot(aes(x=, y=, color=), **opts)` | `estimator="mean"`, `ci="t"\|"boot"\|None`, `level=0.95`; `aes(color=)` → one series per level (`palette=`) |
 
 ### Bars, areas, errorbars

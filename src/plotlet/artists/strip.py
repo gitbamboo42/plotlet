@@ -5,16 +5,16 @@ point's indices so the SVG is byte-identical across runs.
 
 Long-form only:
   c.add_strip(aes(x="cat", y="value"))
-  c.add_strip(aes(x="cat", y="value", fill="group"), palette={...})
+  c.add_strip(aes(x="cat", y="value", color="group"), palette={...})
 
-Mapping `aes(fill="col")` dodges sub-strips side-by-side within each cat and
-emits one legend entry per group level.
+Mapping `aes(color="col")` dodges sub-strips side-by-side within each cat
+and emits one legend entry per group level.
 
-Aesthetics:
-  fill=<literal>        bare literal point color (None = cycle default);
-                        aes(fill="col") → column-driven grouping
-  color=<literal>       point outline (defaults to frame color when used)
-  palette=              maps group levels → fills when fill is mapped in aes
+Aesthetics — scatter's vocabulary:
+  color=<literal>       point color (None = series cycle default);
+                        aes(color="col") → column-driven grouping
+  edgecolor=<literal>   outline color — setting it draws the outline
+  palette=              maps group levels → colors when color is mapped
 
 Other styling kwargs:
   orientation='v'   'h' for horizontal (cats on y axis)
@@ -24,7 +24,8 @@ Other styling kwargs:
                     (points land in ±jitter/2 * slot_w from the slot center)
   size=3            point radius in pixels
   alpha=0.7         point opacity
-  linewidth=0       outline stroke width (0 = no outline)
+  linewidth=None    outline width in px; only drawn when edgecolor= is
+                    set (defaults to the spec marker stroke width)
   rasterize=None    None = auto-raster to one <image> above the point
                     threshold; True/False forces it on/off
 """
@@ -32,10 +33,10 @@ from ..registry import ArtistSpec, add_artist
 from ..utils import (pack_opts, resolve_aes, dodge_positions,
                      categorical_groups, check_option,
                      group_color as _group_fill)
-from ..draw import resolve_color
 from ..draw import circle
 from ..draw import raster_declined, should_rasterize, splat_disks_by_color
 from .._spec import _FRAME
+from ._shared import point_outline
 
 
 _M64 = 0xFFFFFFFFFFFFFFFF
@@ -52,38 +53,38 @@ def _jitter_hash(*ints):
     return ((z & 0xFFFFFFFF) / 0xFFFFFFFF) - 0.5
 
 
-def _resolve_fill_kwarg(data, fill):
-    """For strip/swarm: `fill` is None, a bare literal color, or an
-    aes-mapped column. Returns `(fill_literal, group_col)`."""
-    if fill is None:
+def _resolve_color_kwarg(data, color):
+    """For strip/swarm: `color` is None, a bare literal color, or an
+    aes-mapped column (scatter's vocabulary). Returns
+    `(color_literal, group_col)`."""
+    if color is None:
         return None, None
-    kind, value = resolve_aes(data, fill)
+    kind, value = resolve_aes(data, color)
     if kind == "column":
-        return None, fill
+        return None, color
     return value, None
 
 
 def _strip_record(data=None,
                   # input & grouping — consumed here at record
-                  x=None, y=None, fill=None,
+                  x=None, y=None, color=None,
                   # style — packed into opts for the draw/legend side
                   orientation=None, width=None, gap=None,
-                  color=None, palette=None,
+                  edgecolor=None, palette=None,
                   jitter=None, size=None, alpha=None, linewidth=None,
                   label=None, legend=None, rasterize=None):
     if data is None or x is None or y is None:
         raise TypeError(
-            "strip requires data=, x=, y= (fill= optional)."
+            "strip requires data=, x=, y= (color= optional)."
         )
     check_option("strip", "orientation", orientation, ("v", "h"))
-    fill_literal, group_col = _resolve_fill_kwarg(data, fill)
+    color_literal, group_col = _resolve_color_kwarg(data, color)
     cats, groups, vals = categorical_groups(data, x, y, group_col)
     opts = pack_opts(orientation=orientation, width=width, gap=gap,
-                     color=color, palette=palette, jitter=jitter,
-                     size=size, alpha=alpha, linewidth=linewidth,
-                     label=label, legend=legend, rasterize=rasterize)
-    if fill_literal is not None:
-        opts["_fill_literal"] = fill_literal
+                     color=color_literal, edgecolor=edgecolor,
+                     palette=palette, jitter=jitter, size=size,
+                     alpha=alpha, linewidth=linewidth, label=label,
+                     legend=legend, rasterize=rasterize)
     if group_col is not None and group_col == x:
         opts["_redundant_grouping"] = True
     return {"type": "strip", "cats": cats, "groups": groups,
@@ -113,10 +114,7 @@ def _strip_draw(a, ctx):
     jitter    = opts.get("jitter", 0.2)
     r         = opts.get("size", 3)
     alpha     = opts.get("alpha", 0.7)
-    lw        = opts.get("linewidth", 0)
-    stroke    = resolve_color(opts.get("color")) or _FRAME["color"]
-    fill_literal = resolve_color(opts.get("_fill_literal"))
-    fill_fallback = fill_literal if fill_literal is not None else ctx.color
+    stroke, lw = point_outline(opts)
     horizontal = _strip_horizontal(a)
     cat_scale, val_scale = (ctx.y_scale, ctx.x_scale) if horizontal else (ctx.x_scale, ctx.y_scale)
     redundant = opts.get("_redundant_grouping", False)
@@ -126,7 +124,7 @@ def _strip_draw(a, ctx):
             vs = vals[i][j]
             if not vs:
                 continue
-            col = _group_fill(groups, palette, j, fill_fallback)
+            col = _group_fill(groups, palette, j, ctx.color)
             cp, slot_w = dodge_positions(cat_scale, cat,
                                          1 if redundant else n_groups,
                                          0 if redundant else j,
@@ -145,8 +143,8 @@ def _strip_draw(a, ctx):
         reason = None
         if ctx.warp is not None:
             reason = "the panel's coordinate system is not affine"
-        elif lw > 0:
-            reason = "point outlines (linewidth > 0) can't be splatted"
+        elif stroke is not None:
+            reason = "point outlines (edgecolor=) can't be splatted"
         if reason is None:
             img = splat_disks_by_color(marks, r, alpha, ctx.iw, ctx.ih)
             if img is not None:
@@ -154,8 +152,7 @@ def _strip_draw(a, ctx):
             reason = "a group color is not a plain solid color"
         raster_declined("strip", len(marks), reason, opts.get("rasterize"))
     out = [circle(cx, cy, r, fill=col, alpha=alpha,
-                  stroke=stroke if lw > 0 else None,
-                  stroke_width=lw, project=ctx.warp)
+                  stroke=stroke, stroke_width=lw, project=ctx.warp)
            for col, cx, cy in marks]
     return "".join(out)
 
@@ -168,15 +165,14 @@ def _strip_legend_entries(a):
     palette = opts.get("palette")
     r = opts.get("size", 3)
     alpha = opts.get("alpha", 0.7)
-    lw = opts.get("linewidth", 0)
-    stroke = resolve_color(opts.get("color")) or _FRAME["color"]
+    stroke, lw = point_outline(opts)
     entries = []
     for j, g in enumerate(groups):
         col = _group_fill(groups, palette, j, _FRAME["color"])
         def paint(_a, _ctx, _x0, _y_mid,
                   _col=col, _r=r, _al=alpha, _lw=lw, _ec=stroke):
             return circle(_x0 + 11, _y_mid, _r, fill=_col, alpha=_al,
-                          stroke=_ec if _lw > 0 else None, stroke_width=_lw)
+                          stroke=_ec, stroke_width=_lw)
         entries.append({"label": str(g), "color": col, "paint": paint})
     return entries
 
