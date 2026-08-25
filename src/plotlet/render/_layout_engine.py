@@ -1346,7 +1346,7 @@ def _render_coord_root(root, outer=None) -> str:
     # CSS `background` on the root element is ignored by non-browser
     # consumers (cairosvg).
     with _figure_style(root):
-        root_fs = _FIGSPEC["root_font_size"]
+        root_fs = _FIGSPEC["svg_root_font_size"]
         return (f'<svg xmlns="http://www.w3.org/2000/svg" '
                 f'width="{Wt}" height="{Ht}" viewBox="0 0 {Wt} {Ht}" '
                 f'font-family="{svg_family()}" font-size="{root_fs}"'
@@ -1381,7 +1381,7 @@ def _emit_plan(plan: RenderPlan, outer=None) -> str:
     # canvas. Multi-panel roots take neither, and each leaf's own
     # `_node_style` block below still owns its chrome.
     with _figure_style(root):
-        root_fs = _FIGSPEC["root_font_size"]
+        root_fs = _FIGSPEC["svg_root_font_size"]
         parts = [
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{Wt}" height="{Ht}" '
             f'viewBox="0 0 {Wt} {Ht}" font-family="{svg_family()}" font-size="{root_fs}"'

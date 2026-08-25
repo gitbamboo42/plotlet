@@ -124,7 +124,7 @@ def chart_image_cmap_annot_auto():
 
 def chart_image_cmap_png_pooled():
     # 150x150 grid in a 40x40-px data region — far past what the display
-    # can resolve. The PNG path mean-pools down to `raster_oversample`
+    # can resolve. The PNG path mean-pools down to `raster.oversample`
     # pixels per display pixel (an 80x80 image), which both bounds the
     # SVG and shows bin means instead of a nearest-neighbour subsample.
     data = [[math.sin(r * 0.4) + math.cos(c * 0.3) for c in range(150)]
@@ -161,7 +161,7 @@ def _dense_image_cmap(data_width, data_height):
 
 
 def test_image_cmap_png_downsamples_to_display_resolution():
-    # 150x150 cells in 40x40 px → pooled to ceil(40 * raster_oversample)
+    # 150x150 cells in 40x40 px → pooled to ceil(40 * raster.oversample)
     # = 80 per axis, and the markup says so.
     svg = _dense_image_cmap(40, 40)
     assert 'downsampled="true"' in svg
@@ -279,6 +279,6 @@ def test_pool_helpers():
     assert pool_mode(["a", "b", "b"]) == "b"
     assert pool_mode(["a", "b"]) == "a"
     assert pool_mode([nan, None, "z"]) is None
-    # Target: full resolution until raster_oversample cells/px, then capped.
+    # Target: full resolution until raster.oversample cells/px, then capped.
     assert pool_target(100, 100.0) == 100
     assert pool_target(300, 100.0) == 200

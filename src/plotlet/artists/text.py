@@ -11,7 +11,7 @@ import math
 
 from ..registry import ArtistSpec, add_artist
 from ..utils import to_list, pack_opts, check_option
-from .._spec import _D
+from .._spec import SPEC
 from ..draw import text_path, segment, rect as draw_rect, polygon as draw_polygon
 from ..draw import coord, measure_text
 from ._shared import _xy_minmax
@@ -23,12 +23,12 @@ _HA_TO_ANCHOR = {"left": "start", "center": "middle", "right": "end"}
 def _resolve_bbox(bbox):
     """Normalize a `bbox=` value into a dict (or None to skip).
     `True` → spec-default background; dict → used as-is with per-key
-    defaults from `spec.json:defaults.text_bbox`."""
+    defaults from `spec.json:text.bbox`."""
     if bbox is None or bbox is False:
         return None
     if bbox is True:
         bbox = {}
-    bb = _D["text_bbox"]
+    bb = SPEC["text"]["bbox"]
     return {
         "facecolor": bbox.get("facecolor", bb["facecolor"]),
         "edgecolor": bbox.get("edgecolor", bb["edgecolor"]),
@@ -70,10 +70,10 @@ def _artist_annotate(a, xs_, ys_, col, warp=None):
     (matplotlib's polar-annotate behavior).
     """
     opts = a["opts"]
-    fontsize = opts.get("fontsize", _D["text_size"])
+    fontsize = opts.get("fontsize", SPEC["text"]["size"])
     ha = opts.get("ha", "left")
     va = opts.get("va", "baseline")
-    color = opts.get("color") or col or _D["text_color"]
+    color = opts.get("color") or col or SPEC["text"]["color"]
     dx = opts.get("dx", 0)
     dy = opts.get("dy", 0)
     rotation = opts.get("rotation", 0)
@@ -103,7 +103,7 @@ def _artist_annotate(a, xs_, ys_, col, warp=None):
 
     out = []
     if opts.get("arrow", True):
-        arr = _D["annotate"]
+        arr = SPEC["annotate"]
         head_len = opts.get("arrow_head", arr["arrow_head"])
         line_w = opts.get("arrow_width", arr["arrow_width"])
         dx, dy = px_xy - px_tx, py_xy - py_tx
@@ -151,10 +151,10 @@ def _artist_text(a, xs_, ys_, col, warp=None):
     upright and `dx`/`dy` remain screen-space nudges (a `dy=-4` means
     screen-up, not radially-out)."""
     opts = a["opts"]
-    fontsize = opts.get("fontsize", _D["text_size"])
+    fontsize = opts.get("fontsize", SPEC["text"]["size"])
     ha = opts.get("ha", "left")
     va = opts.get("va", "baseline")
-    color = opts.get("color") or col or _D["text_color"]
+    color = opts.get("color") or col or SPEC["text"]["color"]
     dx = opts.get("dx", 0)
     dy = opts.get("dy", 0)
     rotation = opts.get("rotation", 0)
@@ -243,7 +243,7 @@ add_artist(ArtistSpec(
                                      ctx.warp),
     layer="foreground",
     uses_color_cycle=False,
-    default_color=_D["text_color"],
+    default_color=SPEC["text"]["color"],
     data_attrs=_text_data_attrs,
 ))
 
@@ -296,6 +296,6 @@ add_artist(ArtistSpec(
                                          ctx.warp),
     layer="foreground",
     uses_color_cycle=False,
-    default_color=_D["text_color"],
+    default_color=SPEC["text"]["color"],
     data_attrs=_annotate_data_attrs,
 ))

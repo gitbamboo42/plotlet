@@ -39,7 +39,7 @@ from ..utils import (pack_opts, to_list, resolve_aes, dodge_slot,
                      check_option, DODGE_WIDTH, DODGE_GAP)
 from ._shared import band_rect, swatch_stroke
 from ..draw import resolve_color
-from .._spec import _D, _LEGSPEC
+from .._spec import SPEC, _LEGSPEC
 from ..draw import coord, path as draw_path, polygon as draw_polygon, rect as draw_rect
 from ..utils import group_color as _group_fill
 
@@ -53,13 +53,13 @@ def _artist_hist(a, xs_, ys_, col, bins, warp=None):
     horizontal = opts.get("orientation") == "h"
     bin_scale, count_scale = (ys_, xs_) if horizontal else (xs_, ys_)
     base = count_scale(0)
-    alpha = opts.get("alpha", _D["hist_alpha"])
+    alpha = opts.get("alpha", SPEC["hist"]["alpha"])
     stroke = resolve_color(opts.get("color"))
-    lw = opts.get("linewidth", _D["linewidth"]) if stroke else 1
+    lw = opts.get("linewidth", SPEC["linewidth"]) if stroke else 1
     histtype = opts.get("histtype", "bar")
 
     if histtype == "bar":
-        half_gap = _D["hist_gap"] / 2
+        half_gap = SPEC["hist"]["gap"] / 2
         for b in bins:
             bp0 = bin_scale(b["x0"]); bp1 = bin_scale(b["x1"])
             bp_lo, bp_hi = min(bp0, bp1), max(bp0, bp1)
@@ -89,7 +89,7 @@ def _artist_hist(a, xs_, ys_, col, bins, warp=None):
     if horizontal:
         pts = [(p, q) for q, p in pts]
     edge = stroke or col
-    edge_w = lw if stroke else _D["linewidth"]
+    edge_w = lw if stroke else SPEC["linewidth"]
     fill = col if histtype == "stepfilled" else None
     if warp is None:
         d = "M" + " L".join(f"{coord(x)},{coord(y)}" for x, y in pts)
@@ -244,7 +244,7 @@ def _hist_ydomain(a):
 def _hist_rect_style(a):
     """Shared per-call styling for the positioned bar paths."""
     opts = a["opts"]
-    return dict(alpha=opts.get("alpha", _D["hist_alpha"]),
+    return dict(alpha=opts.get("alpha", SPEC["hist"]["alpha"]),
                 stroke=resolve_color(opts.get("color")),
                 dash=opts.get("linestyle"))
 
@@ -255,8 +255,8 @@ def _hist_draw_stacked(a, ctx, bin_groups, fills, *, normalize):
     bin_scale, count_scale = ((ctx.y_scale, ctx.x_scale) if horizontal
                               else (ctx.x_scale, ctx.y_scale))
     style = _hist_rect_style(a)
-    lw = opts.get("linewidth", _D["linewidth"]) if style["stroke"] else 1
-    half_gap = _D["hist_gap"] / 2
+    lw = opts.get("linewidth", SPEC["linewidth"]) if style["stroke"] else 1
+    half_gap = SPEC["hist"]["gap"] / 2
     n = len(bin_groups[0])
     totals = ([sum(g[i]["count"] for g in bin_groups) or 1 for i in range(n)]
               if normalize else None)
@@ -286,8 +286,8 @@ def _hist_draw_dodged(a, ctx, bin_groups, fills):
     bin_scale, count_scale = ((ctx.y_scale, ctx.x_scale) if horizontal
                               else (ctx.x_scale, ctx.y_scale))
     style = _hist_rect_style(a)
-    lw = opts.get("linewidth", _D["linewidth"]) if style["stroke"] else 1
-    half_gap = _D["hist_gap"] / 2
+    lw = opts.get("linewidth", SPEC["linewidth"]) if style["stroke"] else 1
+    half_gap = SPEC["hist"]["gap"] / 2
     base = count_scale(0)
     k = len(bin_groups)
     out = []
@@ -335,12 +335,12 @@ def _hist_draw(a, ctx):
 def _hist_legend_entries(a):
     groups = a["groups"]
     opts = a["opts"]
-    alpha = opts.get("alpha", _D["hist_alpha"])
+    alpha = opts.get("alpha", SPEC["hist"]["alpha"])
     sw = _LEGSPEC["swatch_width"]
     # Mirror the bar outline (`color=` / linewidth / linestyle) into the
     # key — same reasoning as bar's legend entries.
     stroke = resolve_color(opts.get("color"))
-    lw = swatch_stroke(opts.get("linewidth", _D["linewidth"])) if stroke else 1
+    lw = swatch_stroke(opts.get("linewidth", SPEC["linewidth"])) if stroke else 1
     dash = opts.get("linestyle")
     if groups == [None]:
         label = opts.get("label")

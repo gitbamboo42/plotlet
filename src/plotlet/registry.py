@@ -27,7 +27,7 @@ A spec bundles everything the pipeline needs to know about a plot type:
 
   - `draw(artist, ctx) -> str`
         Emit the SVG fragment for this artist. `ctx` carries everything the
-        artist might need: x_scale, y_scale, iw, ih, color, defaults.
+        artist might need: x_scale, y_scale, iw, ih, color, spec.
 
   - `layer`: one of "background" | "data" | "foreground"
         Render order. Spans are drawn first, normal data next, reflines last.
@@ -137,7 +137,7 @@ class RenderContext:
     iw: float
     ih: float
     color: str | None
-    defaults: dict
+    spec: dict
     dash: dict
     # Set by c.coordinate(...) for non-affine coords. None for Cartesian and
     # for affine coords (handled by svg_transform).

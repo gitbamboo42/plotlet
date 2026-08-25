@@ -31,7 +31,7 @@ from plotlet.draw import coord, stroke_w
 
 
 _ORIENTS = ("top", "bottom", "left", "right")
-_DEFAULTS = pt.SPEC["defaults"]   # public path to spec defaults
+_SPEC = pt.SPEC   # public path to the visual spec
 
 
 def _curved_record(data=None,
@@ -54,7 +54,7 @@ def _curved_record(data=None,
     blocks, offsets, final_labels = layout_tree(tree_obj)
     parent_block = None
     if parent and tree_obj.between_Z is not None:
-        parent_frac = (_DEFAULTS["tree_parent_height"] if parent is True
+        parent_frac = (_SPEC["dendrogram"]["parent_height"] if parent is True
                        else float(parent))
         if not (0.0 < parent_frac < 0.8):
             raise ValueError(
@@ -62,7 +62,7 @@ def _curved_record(data=None,
             )
         blocks, parent_block = fit_parent(
             blocks, layout_parent(tree_obj), parent_frac,
-            gap_frac=_DEFAULTS["tree_parent_gap"],
+            gap_frac=_SPEC["dendrogram"]["parent_gap"],
         )
     all_dc = [v for _, dc, _ in blocks for row in dc for v in row]
     if parent_block is not None:

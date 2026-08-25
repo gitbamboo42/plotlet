@@ -41,7 +41,7 @@ from ..draw import TAB10
 from ..draw import (parse_rgb, raster_declined, should_rasterize,
                     splat_disks, splat_disks_cmap)
 from ..draw import colormap_lut, ContinuousNorm
-from .._spec import _D, _LEGSPEC
+from .._spec import SPEC, _LEGSPEC
 from ._shared import (_xy_minmax, expand_xy_long_form,
                        DEFAULT_ALPHA_RANGE, _alpha_for_level,
                        swatch_radius, swatch_stroke)
@@ -49,9 +49,9 @@ from ._shared import (_xy_minmax, expand_xy_long_form,
 
 def _artist_scatter(a, xs_, ys_, col, xs, ys, warp=None):
     opts = a["opts"]
-    raw_size = opts.get("size", _D["scatter_size"])
+    raw_size = opts.get("size", SPEC["scatter"]["size"])
     raw_mk = opts.get("marker", "o")
-    alpha = opts.get("alpha", _D["scatter_alpha"])
+    alpha = opts.get("alpha", SPEC["scatter"]["alpha"])
     edgecolor = opts.get("edgecolor")
     linewidth = opts.get("linewidth")
     c_vals = opts.get("c")
@@ -60,7 +60,7 @@ def _artist_scatter(a, xs_, ys_, col, xs, ys, warp=None):
     markers = list(raw_mk)   if isinstance(raw_mk,   (list, tuple)) else [raw_mk]   * n
 
     if c_vals is not None:
-        lut = colormap_lut(opts.get("cmap", _D["default_cmap"]))
+        lut = colormap_lut(opts.get("cmap", SPEC["cmap"]))
         point_colors = ["rgb(0,0,0)" if i < 0 else
                         f"rgb({lut[3*i]},{lut[3*i+1]},{lut[3*i+2]})"
                         for i in _c_point_idx(a)]
@@ -97,7 +97,7 @@ def _raster_block_reason(a):
     one scalar marker radius, round marker, no edges. Anything fancier
     keeps the per-point vector markers (correctness over speed)."""
     opts = a["opts"]
-    if isinstance(opts.get("size", _D["scatter_size"]), (list, tuple)):
+    if isinstance(opts.get("size", SPEC["scatter"]["size"]), (list, tuple)):
         return "per-point sizes (size mapping) need one node per point"
     marker = opts.get("marker", "o")
     if isinstance(marker, (list, tuple)) or marker != "o":
@@ -393,10 +393,10 @@ def _scatter_draw(a, ctx):
         if reason is None:
             px = [ctx.x_scale(x) for x in xs]
             py = [ctx.y_scale(y) for y in ys]
-            radius = float(opts.get("size", _D["scatter_size"]))
-            alpha = float(opts.get("alpha", _D["scatter_alpha"]))
+            radius = float(opts.get("size", SPEC["scatter"]["size"]))
+            alpha = float(opts.get("alpha", SPEC["scatter"]["alpha"]))
             if per_point:
-                lut = colormap_lut(opts.get("cmap", _D["default_cmap"]))
+                lut = colormap_lut(opts.get("cmap", SPEC["cmap"]))
                 return splat_disks_cmap(px, py, _c_point_idx(a), lut,
                                         radius, alpha, ctx.iw, ctx.ih)
             return splat_disks(px, py, radius, rgb, alpha, ctx.iw, ctx.ih)
@@ -414,7 +414,7 @@ def _scatter_legend_gradient(a):
     legend_opts = a["opts"].get("legend") or {}
     return {
         "kind": "continuous",
-        "cmap": a["opts"].get("cmap", _D["default_cmap"]),
+        "cmap": a["opts"].get("cmap", SPEC["cmap"]),
         "vmin": a["_vmin"],
         "vmax": a["_vmax"],
         "norm": a["opts"].get("norm", "linear"),
@@ -431,19 +431,19 @@ def _scatter_legend_entries(a):
     label = opts.get("label")
     if label:
         def paint(_a, _ctx, x0, y_mid):
-            raw_size = opts.get("size", _ctx.defaults["scatter_size"])
+            raw_size = opts.get("size", _ctx.spec["scatter"]["size"])
             raw_mk = opts.get("marker", "o")
             size_val = (sorted(raw_size)[len(raw_size) // 2]
                         if isinstance(raw_size, (list, tuple)) and raw_size
                         else (raw_size if not isinstance(raw_size, (list, tuple))
-                              else _ctx.defaults["scatter_size"]))
+                              else _ctx.spec["scatter"]["size"]))
             mk_val = (raw_mk[0]
                       if isinstance(raw_mk, (list, tuple)) and raw_mk
                       else (raw_mk if not isinstance(raw_mk, (list, tuple)) else "o"))
             edgewidth = opts.get("linewidth")
             return marker(mk_val, x0 + sw / 2, y_mid, swatch_radius(size_val),
                           _a["_color"],
-                          opts.get("alpha", _ctx.defaults["scatter_alpha"]),
+                          opts.get("alpha", _ctx.spec["scatter"]["alpha"]),
                           edgecolor=opts.get("edgecolor"),
                           edgewidth=(swatch_stroke(edgewidth)
                                      if edgewidth is not None else None))
@@ -505,8 +505,8 @@ def _scatter_size_entries(sl, opts):
             sw_ = _LEGSPEC["swatch_width"]
             edgewidth = opts.get("linewidth")
             return marker(_mk, x0 + sw_ / 2, y_mid, swatch_radius(_r),
-                          _a.get("_color") or _ctx.defaults["color"],
-                          opts.get("alpha", _ctx.defaults["scatter_alpha"]),
+                          _a.get("_color") or TAB10[0],
+                          opts.get("alpha", _ctx.spec["scatter"]["alpha"]),
                           edgecolor=opts.get("edgecolor"),
                           edgewidth=(swatch_stroke(edgewidth)
                                      if edgewidth is not None else None))

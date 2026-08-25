@@ -34,7 +34,7 @@ x (honours sector splits), a single image_cmap-style image for a continuous x
 — except when a flat image can't represent the geometry (a warp, uneven
 or sector-tagged continuous cells, y sector splits): `_use_rects` then
 keeps the per-cell rects at any size. Either PNG path pools cells denser
-than `raster_oversample` per display pixel before encoding — mean for
+than `raster.oversample` cells per display pixel before encoding — mean for
 value cells, mode for palette cells (see `_png_fallback`).
 
 For categorical-x clustering with visual gaps and ordering, call
@@ -49,7 +49,7 @@ from ..registry import ArtistSpec, add_artist
 from ..utils import (pack_opts, to_list_2d, to_list, all_numeric,
                      _data_has_column)
 from ..sectors import SectoredValue
-from .._spec import _D
+from .._spec import SPEC, _RASTERSPEC
 from .. import _splits
 from ..draw import rect, text_path
 from ..draw import image_png
@@ -472,7 +472,7 @@ def _use_rects(a, ctx, nrows, ncols):
     continuous-x grid can't use the single stretched image — uneven
     cells, sector-tagged edges, or y sector splits (the uniform image
     would paint over the pixel gaps and shift rows off their bands)."""
-    if nrows * ncols <= _D["image_max_rects"]:
+    if nrows * ncols <= _RASTERSPEC["image_max_rects"]:
         return True
     if ctx.warp is not None:
         return True
@@ -494,7 +494,7 @@ def _png_fallback(ctx, matrix, xgeom, ygeom, xcats, ycats, pool, rgb_of,
     cell bbox, mirroring image_cmap; rows/cols are walked in pixel order so a
     reversed or descending axis still lands right.
 
-    Cells past `raster_oversample` per display pixel are pooled (`pool`
+    Cells past `raster.oversample` cells per display pixel are pooled (`pool`
     is mean for value cells, mode for palette cells) before colorizing —
     the viewer can't show them, and its nearest-neighbour downscale would
     drop cells where pooling summarizes them. Value-mode callers pass
@@ -548,7 +548,7 @@ def _heatmap_annot(a, ctx, matrix, annot_arg, xgeom, ygeom, txt_col_at, fmt):
             f"doesn't match data ({nrows}x{ncols})"
         )
     color_opt = opts.get("annot_color", "auto")
-    fontsize = opts.get("annot_fontsize", _D["annot_fontsize"])
+    fontsize = opts.get("annot_fontsize", SPEC["heatmap"]["annot_size"])
     out = []
     for r in range(nrows):
         y0, bh = ygeom[r]
@@ -577,7 +577,7 @@ def _heatmap_draw_categorical(a, ctx):
         return ""
     opts = a["opts"]
     palette = {k: resolve_color(v) for k, v in a["_palette"].items()}
-    absent_fill = resolve_color(opts.get("absent_fill", _D["heatmap_absent_fill"]))
+    absent_fill = resolve_color(opts.get("absent_fill", SPEC["heatmap"]["absent_fill"]))
     lw = opts.get("linewidth", 0)
     lc = resolve_color(opts.get("linecolor", "white")) if lw else None
     out = []
@@ -628,8 +628,8 @@ def _heatmap_draw(a, ctx):
     norm = ContinuousNorm(a["_vmin"], a["_vmax"],
                            kind=opts.get("norm", "linear"),
                            center=opts.get("center"))
-    lut = colormap_lut(opts.get("cmap", _D["default_cmap"]))
-    absent_fill = resolve_color(opts.get("absent_fill", _D["heatmap_absent_fill"]))
+    lut = colormap_lut(opts.get("cmap", SPEC["cmap"]))
+    absent_fill = resolve_color(opts.get("absent_fill", SPEC["heatmap"]["absent_fill"]))
     absent_rgb  = _hex_to_rgb(absent_fill)
     lw = opts.get("linewidth", 0)
     lc = resolve_color(opts.get("linecolor", "white")) if lw else None
@@ -693,7 +693,7 @@ def _heatmap_legend_gradient(a):
     legend_opts = a["opts"].get("legend") or {}
     return {
         "kind": "continuous",
-        "cmap": a["opts"].get("cmap", _D["default_cmap"]),
+        "cmap": a["opts"].get("cmap", SPEC["cmap"]),
         "vmin": a["_vmin"],
         "vmax": a["_vmax"],
         "norm": a["opts"].get("norm", "linear"),
@@ -724,7 +724,7 @@ def _heatmap_encoding(a):
     if stashed is not None:
         return stashed
     return "png-embedded" if (a["_nrows"] * a["_ncols"]
-                              > _D["image_max_rects"]) else "rects"
+                              > _RASTERSPEC["image_max_rects"]) else "rects"
 
 
 def _heatmap_data_attrs(a):
@@ -746,7 +746,7 @@ def _heatmap_data_attrs(a):
         "cols": a["_ncols"],
         "vmin": a["_vmin"],
         "vmax": a["_vmax"],
-        "cmap": a["opts"].get("cmap", _D["default_cmap"]),
+        "cmap": a["opts"].get("cmap", SPEC["cmap"]),
         "data-encoding": _heatmap_encoding(a),
         **_heatmap_axis_attrs(a),
     }

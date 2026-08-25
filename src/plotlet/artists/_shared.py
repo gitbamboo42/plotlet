@@ -15,7 +15,7 @@ import math
 
 import numpy as np
 
-from .._spec import _LEGSPEC, _D
+from .._spec import _LEGSPEC, SPEC, _RASTERSPEC
 from ..draw import marker, segment, rect, resolve_color
 from ..draw import TAB10
 from ..utils import to_list, resolve_aes, palette_color
@@ -45,7 +45,7 @@ def point_outline(opts):
     if stroke is None:
         return None, 0
     lw = opts.get("linewidth")
-    lw = _D["marker_stroke_width"] if lw is None else float(lw)
+    lw = SPEC["marker_stroke_width"] if lw is None else float(lw)
     if lw <= 0:
         return None, 0
     return stroke, lw
@@ -68,12 +68,12 @@ def swatch_stroke(w):
 
 def pool_target(n_cells, px):
     """Output-pixel count along one raster axis: full data resolution
-    until cells outnumber `raster_oversample` per display pixel, then
+    until cells outnumber `raster.oversample` cells per display pixel, then
     capped at that. The oversample headroom keeps hi-dpi rendering and
     moderate zoom sharp; past it the viewer can't show the extra cells
     anyway, and its nearest-neighbour downscale would *subsample* them
     (drop cells) where pooling summarizes them."""
-    cap = max(1, math.ceil(px * _D["raster_oversample"]))
+    cap = max(1, math.ceil(px * _RASTERSPEC["oversample"]))
     return n_cells if n_cells <= cap else cap
 
 
@@ -355,11 +355,11 @@ def _line_legend_entries(a):
         sw = _LEGSPEC["swatch_width"]
         out = segment(x0, y_mid, x0 + sw, y_mid,
                       color=a["_color"],
-                      width=a["opts"].get("linewidth", ctx.defaults["linewidth"]),
+                      width=a["opts"].get("linewidth", ctx.spec["linewidth"]),
                       dash=a["opts"].get("linestyle"))
         if a["opts"].get("marker"):
             out += marker(a["opts"]["marker"], x0 + sw / 2, y_mid,
-                          a["opts"].get("markersize", ctx.defaults["markersize"]),
+                          a["opts"].get("markersize", ctx.spec["marker_size"]),
                           a["_color"], 1)
         return out
     return [{"label": label, "color": a.get("_color"), "paint": paint}]
@@ -373,7 +373,7 @@ def _refline_legend_entries(a):
         sw = _LEGSPEC["swatch_width"]
         return segment(x0, y_mid, x0 + sw, y_mid,
                        color=a["_color"],
-                       width=a["opts"].get("linewidth", ctx.defaults["refline_width"]),
+                       width=a["opts"].get("linewidth", ctx.spec["refline"]["linewidth"]),
                        dash=a["opts"].get("linestyle"))
     return [{"label": label, "color": a.get("_color"), "paint": paint}]
 
@@ -385,5 +385,5 @@ def _refspan_legend_entries(a):
     def paint(a, ctx, x0, y_mid):
         sw = _LEGSPEC["swatch_width"]
         return rect(x0, y_mid - 5, sw, 10, fill=a["_color"],
-                    alpha=a["opts"].get("alpha", ctx.defaults["refspan_alpha"]))
+                    alpha=a["opts"].get("alpha", ctx.spec["refspan"]["alpha"]))
     return [{"label": label, "color": a.get("_color"), "paint": paint}]

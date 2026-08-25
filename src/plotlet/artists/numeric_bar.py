@@ -11,7 +11,7 @@ numeric x) with a fixed data-unit `width` you control directly.
 from ..registry import ArtistSpec, add_artist, declare_coord_support
 from ..utils import pack_opts, to_list
 from ..draw import rect
-from .._spec import _D
+from .._spec import SPEC
 
 
 def numeric_bar_record(data=None,
@@ -45,7 +45,7 @@ def numeric_bar_ydomain(a):
 def numeric_bar_draw(a, ctx):
     opts = a["opts"]
     w = opts.get("width", 0.8)
-    alpha = opts.get("alpha", _D["bar_alpha"])
+    alpha = opts.get("alpha", SPEC["bar"]["alpha"])
     col = ctx.color
     y0 = ctx.y_scale(0)
     out = []
@@ -68,7 +68,7 @@ def numeric_bar_legend_entries(a):
         return []
     def paint(a, ctx, x0, y_mid):
         col = a["_color"]
-        alpha = a["opts"].get("alpha", _D["bar_alpha"])
+        alpha = a["opts"].get("alpha", SPEC["bar"]["alpha"])
         return rect(x0, y_mid - 5, 22, 10, fill=col, alpha=alpha)
     return [{"label": label, "color": a.get("_color"), "paint": paint}]
 

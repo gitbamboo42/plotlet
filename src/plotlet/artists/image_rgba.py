@@ -17,7 +17,7 @@ default). Pass `origin="lower"` for row 0 at the bottom.
 
 Rendering branches like image_cmap: one <rect> per pixel below
 `image_max_rects` (sharp at any zoom), one base64 PNG above. An image
-denser than `raster_oversample` pixels per display pixel is mean-pooled
+denser than `raster.oversample` pixels per display pixel is mean-pooled
 per channel to that cap first — integer arithmetic end-to-end, so the
 byte-identical-SVG guarantee holds.
 """
@@ -25,7 +25,7 @@ import numpy as np
 
 from ..registry import ArtistSpec, add_artist
 from ..utils import pack_opts, check_option
-from .._spec import _D
+from .._spec import _RASTERSPEC
 from ..draw import rect
 from ..draw import image_png, image_png_rgba
 from ._shared import pool_target
@@ -148,7 +148,7 @@ def _artist_image_rgba(a, xs_, ys_):
     # view, no copy).
     pixels = data if origin == "upper" else data[::-1]
 
-    if nrows * ncols <= _D["image_max_rects"]:
+    if nrows * ncols <= _RASTERSPEC["image_max_rects"]:
         return "".join(_rects_pass(pixels, a["_channels"],
                                    sx_l, sy_t, pw / ncols, ph / nrows))
     out, a["_downsampled"] = _png_pass(pixels, a["_channels"],
@@ -173,7 +173,7 @@ def _rects_pass(pixels, channels, sx_l, sy_t, cw, ch):
 def _png_pass(pixels, channels, sx_l, sy_t, pw, ph, ncols, nrows):
     """Whole image as one base64 PNG — bounded SVG size for big arrays.
     Pools to display resolution first when denser than
-    `raster_oversample` pixels per display pixel (see `_pool_channels`).
+    `raster.oversample` pixels per display pixel (see `_pool_channels`).
     Returns `(element, downsampled)`."""
     out_w = pool_target(ncols, pw)
     out_h = pool_target(nrows, ph)
@@ -195,7 +195,7 @@ def _image_rgba_data_attrs(a):
         "cols": a["_ncols"],
         "channels": a["_channels"],
         "data-encoding": "png-embedded" if (a["_nrows"] * a["_ncols"]
-                                              > _D["image_max_rects"]) else "rects",
+                                              > _RASTERSPEC["image_max_rects"]) else "rects",
     }
     if a.get("_downsampled"):
         out["downsampled"] = "true"

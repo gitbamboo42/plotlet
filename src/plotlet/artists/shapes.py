@@ -11,7 +11,7 @@ import math
 
 from ..registry import ArtistSpec, add_artist
 from ..utils import broadcast, pack_opts, to_list
-from .._spec import _D, _LEGSPEC
+from .._spec import SPEC, _LEGSPEC
 from ..draw import rect as draw_rect, polygon as draw_polygon, polyline as draw_polyline
 from ..draw import resolve_color
 from ._shared import _xy_minmax, swatch_stroke
@@ -41,8 +41,8 @@ def _fill_stroke_params(a, ctx_color):
     opts = a["opts"]
     unfilled = opts.get("_unfilled", False)
     stroke = resolve_color(opts.get("color"))
-    lw = opts.get("linewidth", _D["linewidth"])
-    alpha = opts.get("alpha", _D["bar_alpha"])
+    lw = opts.get("linewidth", SPEC["linewidth"])
+    alpha = opts.get("alpha", SPEC["bar"]["alpha"])
     if unfilled and stroke is None:
         # No fill and no explicit stroke: draw the outline in the artist
         # color so an outline-only shape is still visible.
@@ -176,7 +176,7 @@ def _artist_polyline(a, xs_, ys_, col, warp=None):
     pts = [(xs_(x), ys_(y)) for x, y in zip(a["xs"], a["ys"])]
     pts = [(px, py) for px, py in pts if math.isfinite(px) and math.isfinite(py)]
     color = opts.get("color", col)
-    width = opts.get("linewidth", _D["linewidth"])
+    width = opts.get("linewidth", SPEC["linewidth"])
     dash = opts.get("linestyle")
     alpha = opts.get("alpha", 1)
     return draw_polyline(pts, color=resolve_color(color), width=width,

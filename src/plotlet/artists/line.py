@@ -45,7 +45,7 @@ import random
 
 from ..registry import ArtistSpec, add_artist
 from ..utils import UNSET, pack_opts, quantile, validate_ci, ci_bounds
-from .._spec import _D
+from .._spec import SPEC
 from ..draw import coord, dash_attr, marker, path as draw_path, polygon, polyline
 from ..draw import should_simplify, simplify_path_pts
 from ._shared import (_xy_minmax, _line_legend_entries, _CURVE_VALUES,
@@ -70,7 +70,7 @@ def _artist_line(a, xs_, ys_, col, xs, ys, warp=None):
     path_pts = [(px, py) if (math.isfinite(px) and math.isfinite(py)) else None
                 for px, py in path_pts]
     ls = opts.get("linestyle")
-    lw = opts.get("linewidth", _D["linewidth"])
+    lw = opts.get("linewidth", SPEC["linewidth"])
     # Dense-line decimation: above the vertex threshold (or simplify=True)
     # drop the vertices the stroke can't show — the series stays one
     # vector <path>, just with a sane d-string (draw/_simplify.py).
@@ -127,7 +127,7 @@ def _artist_line(a, xs_, ys_, col, xs, ys, warp=None):
             if run:
                 out.append(_emit(run))
     if opts.get("marker"):
-        sz = opts.get("size", _D["markersize"])
+        sz = opts.get("size", SPEC["marker_size"])
         for x, y in zip(xs, ys):
             px, py = xs_(x), ys_(y)
             if not (math.isfinite(px) and math.isfinite(py)):

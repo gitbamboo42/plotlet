@@ -34,7 +34,7 @@ import numpy as np
 from scipy.signal import fftconvolve
 
 from ._png import image_png_rgba
-from .._spec import _D
+from .._spec import _RASTERSPEC
 
 
 def parse_rgb(c):
@@ -70,7 +70,7 @@ def should_rasterize(n, rasterized_opt):
     with the line decimation in `draw/_simplify.py`."""
     if rasterized_opt is not None:
         return bool(rasterized_opt)
-    return n >= _D.get("dense_threshold", 20000)
+    return n >= _RASTERSPEC["dense_threshold"]
 
 
 def raster_declined(artist, n, reason, rasterize_opt):
@@ -90,7 +90,7 @@ def raster_declined(artist, n, reason, rasterize_opt):
 
 
 def _supersample():
-    return max(1, int(_D.get("dense_supersample", 3)))
+    return max(1, int(_RASTERSPEC["dense_supersample"]))
 
 
 def _compose(cov, rgb, alpha, iw, ih, W, H):

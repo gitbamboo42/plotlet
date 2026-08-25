@@ -16,7 +16,7 @@ import math
 from ..registry import ArtistSpec, add_artist
 from ..scales import _LinearScale
 from ..utils import broadcast, pack_opts
-from .._spec import _D
+from .._spec import SPEC
 from ..draw import segment, rect as draw_rect
 from ._shared import _refline_legend_entries, _refspan_legend_entries
 
@@ -30,7 +30,7 @@ def _artist_axhline(a, xs_, ys_, iw, ih, col, warp=None):
     x1 = iw * opts.get("xmax", 1.0)
     return segment(x0, y, x1, y,
                    color=col,
-                   width=opts.get("linewidth", _D["refline_width"]),
+                   width=opts.get("linewidth", SPEC["refline"]["linewidth"]),
                    dash=opts.get("linestyle"),
                    alpha=opts.get("alpha", 1),
                    project=warp)
@@ -45,7 +45,7 @@ def _artist_axvline(a, xs_, ys_, iw, ih, col, warp=None):
     y1 = ih * (1 - opts.get("ymin", 0.0))
     return segment(x, y0, x, y1,
                    color=col,
-                   width=opts.get("linewidth", _D["refline_width"]),
+                   width=opts.get("linewidth", SPEC["refline"]["linewidth"]),
                    dash=opts.get("linestyle"),
                    alpha=opts.get("alpha", 1),
                    project=warp)
@@ -96,7 +96,7 @@ def _artist_axline(a, ctx):
         return ""
     return segment(*seg,
                    color=ctx.color,
-                   width=opts.get("linewidth", _D["refline_width"]),
+                   width=opts.get("linewidth", SPEC["refline"]["linewidth"]),
                    dash=opts.get("linestyle"),
                    alpha=opts.get("alpha", 1),
                    project=ctx.warp)
@@ -104,7 +104,7 @@ def _artist_axline(a, ctx):
 
 def _artist_hlines(a, xs_, ys_, col, warp=None):
     opts = a["opts"]
-    lw = opts.get("linewidth", _D["refline_width"])
+    lw = opts.get("linewidth", SPEC["refline"]["linewidth"])
     ls = opts.get("linestyle")
     alpha = opts.get("alpha", 1)
     out = []
@@ -119,7 +119,7 @@ def _artist_hlines(a, xs_, ys_, col, warp=None):
 
 def _artist_vlines(a, xs_, ys_, col, warp=None):
     opts = a["opts"]
-    lw = opts.get("linewidth", _D["refline_width"])
+    lw = opts.get("linewidth", SPEC["refline"]["linewidth"])
     ls = opts.get("linestyle")
     alpha = opts.get("alpha", 1)
     out = []
@@ -142,7 +142,7 @@ def _artist_axhspan(a, xs_, ys_, iw, ih, col, warp=None):
     x0 = iw * opts.get("xmin", 0.0)
     x1 = iw * opts.get("xmax", 1.0)
     return draw_rect(x0, y0, x1 - x0, y1 - y0, fill=col,
-                     alpha=opts.get("alpha", _D["refspan_alpha"]),
+                     alpha=opts.get("alpha", SPEC["refspan"]["alpha"]),
                      project=warp)
 
 
@@ -156,7 +156,7 @@ def _artist_axvspan(a, xs_, ys_, iw, ih, col, warp=None):
     y0 = ih * (1 - opts.get("ymax", 1.0))
     y1 = ih * (1 - opts.get("ymin", 0.0))
     return draw_rect(x0, y0, x1 - x0, y1 - y0, fill=col,
-                     alpha=opts.get("alpha", _D["refspan_alpha"]),
+                     alpha=opts.get("alpha", SPEC["refspan"]["alpha"]),
                      project=warp)
 
 
@@ -181,7 +181,7 @@ add_artist(ArtistSpec(
     draw=lambda a, ctx: _artist_axhline(a, ctx.x_scale, ctx.y_scale, ctx.iw, ctx.ih, ctx.color, ctx.warp),
     layer="foreground",
     uses_color_cycle=False,
-    default_color=_D["refline_color"],
+    default_color=SPEC["refline"]["color"],
     legend_entries=_refline_legend_entries,
     data_attrs=_axhline_data_attrs,
 ))
@@ -208,7 +208,7 @@ add_artist(ArtistSpec(
     draw=lambda a, ctx: _artist_axvline(a, ctx.x_scale, ctx.y_scale, ctx.iw, ctx.ih, ctx.color, ctx.warp),
     layer="foreground",
     uses_color_cycle=False,
-    default_color=_D["refline_color"],
+    default_color=SPEC["refline"]["color"],
     legend_entries=_refline_legend_entries,
     data_attrs=_axvline_data_attrs,
 ))
@@ -249,7 +249,7 @@ add_artist(ArtistSpec(
     draw=_artist_axline,
     layer="foreground",
     uses_color_cycle=False,
-    default_color=_D["refline_color"],
+    default_color=SPEC["refline"]["color"],
     legend_entries=_refline_legend_entries,
     data_attrs=_axline_data_attrs,
 ))
@@ -275,7 +275,7 @@ add_artist(ArtistSpec(
     draw=lambda a, ctx: _artist_axhspan(a, ctx.x_scale, ctx.y_scale, ctx.iw, ctx.ih, ctx.color, ctx.warp),
     layer="background",
     uses_color_cycle=False,
-    default_color=_D["refspan_color"],
+    default_color=SPEC["refspan"]["color"],
     legend_entries=_refspan_legend_entries,
     data_attrs=_axhspan_data_attrs,
 ))
@@ -301,7 +301,7 @@ add_artist(ArtistSpec(
     draw=lambda a, ctx: _artist_axvspan(a, ctx.x_scale, ctx.y_scale, ctx.iw, ctx.ih, ctx.color, ctx.warp),
     layer="background",
     uses_color_cycle=False,
-    default_color=_D["refspan_color"],
+    default_color=SPEC["refspan"]["color"],
     legend_entries=_refspan_legend_entries,
     data_attrs=_axvspan_data_attrs,
 ))

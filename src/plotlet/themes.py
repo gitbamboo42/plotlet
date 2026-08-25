@@ -6,7 +6,7 @@ overrides values in `spec.json` — the locked default look. Loading
 resolved spec dict. `"classic"` is the name for *no override* — it just
 returns `spec.json` as-is. The active theme is applied per-chart at
 render time by `_spec.active_theme(name)` — a context manager that
-mutates the inner contents of the live spec dicts (`_D`, `_FRAME`, …) so
+mutates the inner contents of the live spec dicts (`_FRAME`, `_GRIDSPEC`, …) so
 modules importing them see the override transparently for the duration
 of one render.
 

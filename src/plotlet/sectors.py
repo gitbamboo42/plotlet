@@ -77,7 +77,7 @@ class Sectors:
 
     ``gap`` is the inter-sector pixel pad. For categorical sectors it
     becomes the ``_CategoryScale`` ``split_gap``. ``None`` means "use the
-    spec default" (``defaults.category_split_gap``).
+    spec default" (``scale.category_split_gap``).
 
     ``divider`` toggles the wall lines between sectors; ``label`` toggles
     the sector-name labels. Both False is the heatmap-clustering case

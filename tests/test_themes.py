@@ -72,7 +72,7 @@ def theme_dark_scatter():
                  xlabel="x", ylabel="y")
     c.theme("dark")
     c.add_scatter()
-    c.add_axhline(0)  # picks up refline_color from theme
+    c.add_axhline(0)  # picks up refline color from theme
     c.add_axvline(0)
     return c
 

@@ -19,7 +19,7 @@ import math
 import warnings
 from dataclasses import dataclass, field
 
-from ._spec import _D
+from ._spec import _SCALESPEC
 from .sectors import SectoredValue
 
 
@@ -608,7 +608,7 @@ class _AxisDescriptor:
     lo: float = 0.0
     hi: float = 1.0
     cats: list | None = None
-    padding: float = field(default_factory=lambda: _D["category_padding"])  # category only; 0 = contiguous bands
+    padding: float = field(default_factory=lambda: _SCALESPEC["category_padding"])  # category only; 0 = contiguous bands
     flip: bool = False
     linthresh: float = 1.0  # symlog only
     exponent: float = 1.0   # power only

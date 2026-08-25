@@ -3,7 +3,7 @@
 The spec is the locked visual contract: colors, fonts, sizes, default alphas,
 legend dimensions. Submodules read from here to avoid hardcoding literals.
 
-`SPEC` and the per-section handles (`_D`, `_FRAME`, …) are *live dicts*:
+`SPEC` and the per-section handles (`_FRAME`, `_GRIDSPEC`, …) are *live dicts*:
 when a chart's `theme=` is applied, [`active_theme(name)`](#active_theme)
 mutates the inner contents of these dicts so every module sees the
 override without an import-time refactor. The previous contents are
@@ -42,7 +42,7 @@ def _install(target, source) -> None:
     """Replace `target`'s contents with `source`'s, preserving identity of
     nested mutable containers (dicts AND lists). Used to swap themes
     without breaking references that other modules captured at import
-    time via `from ._spec import _D, _FRAME`. Nested dicts
+    time via `from ._spec import _FRAME`. Nested dicts
     and lists that exist on both sides are recursed into so their
     identity survives; mismatched-type or absent-on-target values are
     deep-copied wholesale.
@@ -65,13 +65,14 @@ def _install(target, source) -> None:
 
 
 # Initialize from the locked default theme. Every module that imports
-# `_D`, `_FRAME`, … gets a reference to one of these dicts; their
+# `_FRAME`, `_FONTSPEC`, … gets a reference to one of these dicts; their
 # contents change when `active_theme(name)` is in effect.
 SPEC: dict = {}
 _install(SPEC, load_theme("classic"))
 
 _DASH = SPEC["linestyles"]
-_D = SPEC["defaults"]
+_SCALESPEC = SPEC["scale"]
+_RASTERSPEC = SPEC["raster"]
 _FRAME = SPEC["frame"]
 _GRIDSPEC = SPEC["grid"]
 _FONTSPEC = SPEC["font"]
@@ -96,7 +97,7 @@ def _swap_to(name: str | None, overrides: dict | None = None) -> dict:
     any) into the live spec dicts; return the previous full SPEC
     snapshot for later restoration. `_install` recurses into nested
     dicts and lists, so module-level handles at any depth (`_FRAME`,
-    `_D`, `_MARGIN_FLOOR`, …) keep their identity. The merge never
+    `_MARGIN_FLOOR`, …) keep their identity. The merge never
     touches `load_theme`'s cache — `_deep_merge` copies its base."""
     global _CURRENT_THEME
     snapshot = copy.deepcopy(SPEC)
@@ -126,25 +127,33 @@ def _bad_key(key: str, candidates, where: str) -> ValueError:
 
 def validate_overrides(overrides: dict) -> None:
     """Check `c.spec(...)` overrides against the spec's shape: every
-    kwarg must be a spec section (`font`, `grid`, …) holding a dict,
-    and every key inside must exist in that section of the classic
-    spec — the deep merge would silently absorb a typo like
-    `titlesize` otherwise. Validation runs against the classic spec
-    (`load_theme("classic")`), never the live dicts above: those are mutated
-    mid-render by `active_theme`, while classic is the stable shape
-    authority. Values are not type-checked; the spec's leaves are too
+    kwarg must be a root spec key — a section/block (`font`, `grid`,
+    `scatter`, …) holding a dict, or one of the shared scalar keys
+    (`linewidth`, `cmap`, …) — and every key inside a dict must exist
+    at that path in the classic spec; the deep merge would silently
+    absorb a typo like `titlesize` otherwise. Validation runs against
+    the classic spec (`load_theme("classic")`), never the live dicts
+    above: those are mutated mid-render by `active_theme`, while
+    classic is the stable shape authority. Values are not type-checked
+    beyond the dict/scalar split; the spec's leaves are too
     heterogeneous for that to pay its way."""
     spec = load_theme("classic")
-    sections = {k for k, v in spec.items() if isinstance(v, dict)}
-    for section, value in overrides.items():
-        if section not in sections:
-            raise _bad_key(section, sections, "the spec")
-        if not isinstance(value, dict):
+    valid = {k: v for k, v in spec.items() if k != "version"}
+    for key, value in overrides.items():
+        if key not in valid:
+            raise _bad_key(key, valid, "the spec")
+        if isinstance(valid[key], dict):
+            if not isinstance(value, dict):
+                raise TypeError(
+                    f"spec override {key!r} must be a dict of "
+                    f"{key}.* keys, got {type(value).__name__}"
+                )
+            _validate_section(value, valid[key], key)
+        elif isinstance(value, dict):
             raise TypeError(
-                f"spec override {section!r} must be a dict of "
-                f"{section}.* keys, got {type(value).__name__}"
+                f"spec override {key!r} takes a single value, "
+                "got a dict"
             )
-        _validate_section(value, spec[section], section)
 
 
 def _validate_section(override: dict, base: dict, path: str) -> None:

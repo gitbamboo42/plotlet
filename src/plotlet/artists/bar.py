@@ -51,7 +51,7 @@ from ..utils import (UNSET, pack_opts, to_list, resolve_aes, dodge_positions,
                      validate_ci, ci_bounds, check_option,
                      DODGE_WIDTH, DODGE_GAP)
 from ..draw import resolve_color
-from .._spec import _D, _LEGSPEC
+from .._spec import SPEC, _LEGSPEC
 from ..draw import rect as draw_rect
 from ..draw import errorbar_v, errorbar_h
 from .errorbar import _resolve_err
@@ -352,14 +352,14 @@ def _draw_env(a, ctx):
         "cat_scale": cat_scale, "val_scale": val_scale, "band": band,
         "series": series, "multi": multi,
         "base_px": val_scale(opts.get("bottom", 0)),
-        "alpha": opts.get("alpha", _D["bar_alpha"]),
+        "alpha": opts.get("alpha", SPEC["bar"]["alpha"]),
         "stroke": stroke,
-        "lw": opts.get("linewidth", _D["linewidth"]) if stroke else 1,
+        "lw": opts.get("linewidth", SPEC["linewidth"]) if stroke else 1,
         "sr": "crispEdges" if getattr(cat_scale, "padding", 0.2) == 0 else None,
         "fill_fallback": fill_literal if fill_literal is not None else ctx.color,
         "err_lo": a.get("err_lo"), "err_hi": a.get("err_hi"),
-        "ecolor": resolve_color(opts.get("ecolor", _D["bar_ecolor"])),
-        "capsize": opts.get("capsize", _D["errorbar_capsize"]),
+        "ecolor": resolve_color(opts.get("ecolor", SPEC["errorbar"]["color"])),
+        "capsize": opts.get("capsize", SPEC["errorbar"]["capsize"]),
         "warp": ctx.warp,
     }
 
@@ -381,7 +381,7 @@ def _bar_whisker(env, cat_px, j, i, v):
     p0, p1 = env["val_scale"](v - lo), env["val_scale"](v + hi)
     whisker = errorbar_h if env["horizontal"] else errorbar_v
     return whisker(cat_px, p0, p1, capsize=env["capsize"],
-                   color=env["ecolor"], width=_D["errorbar_linewidth"],
+                   color=env["ecolor"], width=SPEC["errorbar"]["linewidth"],
                    project=env["warp"])
 
 
@@ -463,12 +463,12 @@ def _bar_draw(a, ctx):
 def _bar_legend_entries(a):
     groups = a["groups"]
     opts = a["opts"]
-    alpha = opts.get("alpha", _D["bar_alpha"])
+    alpha = opts.get("alpha", SPEC["bar"]["alpha"])
     sw = _LEGSPEC["swatch_width"]
     # Outlined bars get an outlined key — `color=` strokes the bars, so a
     # fill-only swatch would describe a different mark than the plot shows.
     stroke = resolve_color(opts.get("color"))
-    lw = swatch_stroke(opts.get("linewidth", _D["linewidth"])) if stroke else 1
+    lw = swatch_stroke(opts.get("linewidth", SPEC["linewidth"])) if stroke else 1
     dash = opts.get("linestyle")
     if groups == [None]:
         label = opts.get("label")

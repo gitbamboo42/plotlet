@@ -214,7 +214,7 @@ def _side_stroke(state, side):
     ``"walls"``. Resolution: per-target override > ``c.spines()`` base >
     ``_FRAME`` spec."""
     col = _pick(state[f"spine_{side}_color"], state["spine_base_color"], _FRAME["color"])
-    w   = _pick(state[f"spine_{side}_width"], state["spine_base_width"], _FRAME["width"])
+    w   = _pick(state[f"spine_{side}_width"], state["spine_base_width"], _FRAME["linewidth"])
     return resolve_color(col), w
 
 
@@ -298,7 +298,7 @@ def _emit_x_axis(state, inp, iw, ih, *, coord_object, coord_project,
                 _x_ticks_t, x_labels,
                 {
                     "spine_color":   _FRAME["color"],
-                    "spine_width":   _FRAME["width"],
+                    "spine_width":   _FRAME["linewidth"],
                     "tick_length":   _FRAME["tick_length"],
                     "tick_pad":      _FRAME["tick_pad"],
                     "x_fontsize":    x_size,
@@ -582,7 +582,7 @@ def _emit_y_axis(state, inp, iw, ih, *, coord_object, coord_project,
                 _y_ticks_r, y_labels,
                 {
                     "spine_color":   _FRAME["color"],
-                    "spine_width":   _FRAME["width"],
+                    "spine_width":   _FRAME["linewidth"],
                     "tick_length":   _FRAME["tick_length"],
                     "tick_pad":      _FRAME["tick_pad"],
                     "y_fontsize":    y_size,

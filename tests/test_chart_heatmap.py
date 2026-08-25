@@ -334,7 +334,7 @@ def test_heatmap_large_grid_encoding_matches_markup():
 
 def test_heatmap_png_downsamples_to_display_resolution():
     # 600 continuous-x columns in a 100-px-wide region → x pooled to
-    # ceil(100 * raster_oversample) = 200; the 20 tracks fit in 300 px
+    # ceil(100 * raster.oversample) = 200; the 20 tracks fit in 300 px
     # of height and stay at full resolution.
     tracks = [f"t{i}" for i in range(20)]
     data = {"x": [float(i) for i in range(600)]}

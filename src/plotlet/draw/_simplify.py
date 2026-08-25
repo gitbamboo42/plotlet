@@ -29,7 +29,7 @@ forces it.
 """
 import numpy as np
 
-from .._spec import _D
+from .._spec import _RASTERSPEC
 
 
 def should_simplify(n, simplify_opt, dashed):
@@ -41,7 +41,7 @@ def should_simplify(n, simplify_opt, dashed):
         return bool(simplify_opt)
     if dashed:
         return False
-    return n >= _D.get("dense_threshold", 20000)
+    return n >= _RASTERSPEC["dense_threshold"]
 
 
 def _m4(px, py):
@@ -80,7 +80,7 @@ def _simplify_run(pts):
     if np.all(dx >= 0) or np.all(dx <= 0):
         keep = _m4(px, py)
     else:
-        keep = _grid_dedup(px, py, float(_D.get("dense_tolerance", 0.5)))
+        keep = _grid_dedup(px, py, float(_RASTERSPEC["dense_tolerance"]))
     return [pts[i] for i in keep]
 
 

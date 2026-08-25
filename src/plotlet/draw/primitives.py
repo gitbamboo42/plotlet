@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import math
 
-from .._spec import _D, _DASH
+from .._spec import SPEC, _DASH
 
 # Pre-computed unit-radius vertices of a 5-point star (outer radius = 1,
 # inner radius = 0.382 ≈ 1/φ², the classic plotting look). Listed
@@ -234,7 +234,7 @@ def marker(kind: str, x: float, y: float, size: float, color: str, alpha,
     `edgecolor=` adds an outline to filled markers (`o`/`s`/`^`/`v`/`<`/`>`/`*`/`D`/`h`).
     `edgewidth=` overrides the stroke width for ALL markers (including the
     `x`/`+` outlines, which use `color` as their stroke); falls back to
-    `_D["marker_stroke_width"]`.
+    `SPEC["marker_stroke_width"]`.
 
     `project=` (Cartesian-pixel -> coord-pixel closure) shifts the marker's
     anchor through a non-affine coord. The glyph itself is NOT warped — a
@@ -242,7 +242,7 @@ def marker(kind: str, x: float, y: float, size: float, color: str, alpha,
     lands in the right place under the ring/polar."""
     if project is not None:
         x, y = project(x, y)
-    msw = edgewidth if edgewidth is not None else _D["marker_stroke_width"]
+    msw = edgewidth if edgewidth is not None else SPEC["marker_stroke_width"]
     _op = op(alpha)
     edge = f' stroke="{edgecolor}" stroke-width="{stroke_w(msw)}"' if edgecolor else ""
     if tag is not None:

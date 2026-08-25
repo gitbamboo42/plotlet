@@ -23,7 +23,7 @@ from ..registry import ArtistSpec, add_artist
 from ..draw import polygon
 from ..draw import colormap, ContinuousNorm
 from ..utils import to_list, pack_opts, UNSET
-from .._spec import _D
+from .._spec import SPEC
 
 
 def _hexbin_record(data=None, x=None, y=None,
@@ -99,7 +99,7 @@ def _hexbin_draw(a, ctx):
     dy_half = dy_px / 2
     bins = _hexbin_bins(a, ctx.x_scale, ctx.y_scale, ctx.iw)
 
-    cm = colormap(a["opts"].get("cmap", _D["default_cmap"]))
+    cm = colormap(a["opts"].get("cmap", SPEC["cmap"]))
     counts = list(bins.values())
     vmin = a["opts"].get("vmin", 0)
     vmax = a["opts"].get("vmax", max(counts))
@@ -131,7 +131,7 @@ def _hexbin_legend_gradient(a):
             # the record-time estimate is the best available.
             vmax = a["_rough_max"]
     return {"kind": "continuous",
-            "cmap": a["opts"].get("cmap", _D["default_cmap"]),
+            "cmap": a["opts"].get("cmap", SPEC["cmap"]),
             "vmin": a["opts"].get("vmin", 0),
             "vmax": vmax,
             "norm": "linear", "label": "count"}

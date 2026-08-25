@@ -55,7 +55,7 @@ def my_ydomain(a): return list(a["ys"]) + [0]   # always include 0 for stems
 
 
 # 3. draw(a, ctx) -> str
-#    Emit the SVG fragment. ctx carries scales, dimensions, color, defaults.
+#    Emit the SVG fragment. ctx carries scales, dimensions, color, spec.
 #    Read style back from opts with a default — an unset kwarg simply
 #    isn't in opts, so `.get(k, default)` supplies it.
 def my_draw(a, ctx):
@@ -143,7 +143,7 @@ limit, and the SVG itself balloons. If your artist draws one mark per row
 
 | Helper | Use |
 |---|---|
-| `should_rasterize(n, opts.get("rasterize"))` | Decide vector vs raster — explicit `rasterize=` kwarg wins, else auto above `dense_threshold` (the one spec number for "too many marks for per-mark vector output", shared with line decimation). |
+| `should_rasterize(n, opts.get("rasterize"))` | Decide vector vs raster — explicit `rasterize=` kwarg wins, else auto above `raster.dense_threshold` (the one spec number for "too many marks for per-mark vector output", shared with line decimation). |
 | `splat_disks(px, py, radius, rgb, alpha, iw, ih)` | One solid-color disk cloud → one `<image>`. `px`/`py` are panel pixels; `rgb` from `parse_rgb(color)`. |
 | `splat_disks_by_color(marks, radius, alpha, iw, ih)` | `marks` = `(color, px, py)` tuples; splats one `<image>` per color (for category artists). |
 | `splat_disks_cmap(px, py, idx, lut, radius, alpha, iw, ih)` | Continuous ramps: per-point LUT indices (-1 = missing) → one `<image>`. Aggregates the value, colormaps the mean — pixels stay on the ramp, independent of row order. |
@@ -218,7 +218,7 @@ render state so call sites stay short.
 | `x_scale`, `y_scale` | `scale(value) -> pixel`. On a categorical axis, returns the band *center*; `.bandwidth` is also available (bars subtract `bandwidth/2` for the rect's left edge). |
 | `iw`, `ih` | Inner figure width / height in pixels (after margins). |
 | `color` | The resolved color for this artist. `None` if `uses_color_cycle=False` and no `default_color` (e.g. `image_cmap`). |
-| `defaults` | The `spec.json` defaults dict (`linewidth`, `markersize`, `scatter_s`, …). Use these instead of literals. |
+| `spec` | The visual spec (`spec.json`): shared ink (`linewidth`, `marker_size`, …) and per-artist blocks (`scatter`, …). Use these instead of literals. |
 | `dash` | Linestyle codes → SVG `stroke-dasharray` strings. The `draw.*` helpers already accept the codes directly via `dash=`. |
 | `project` | Set by `c.coordinate(...)` for non-affine coords; `None` for Cartesian and affine coords. `project(t, r) -> (px, py)` maps data-space directly to canvas pixels — use it when you want to draw straight in the target coord (e.g. radial line from `r=0` to `r=1` at angle `t`). |
 | `warp` | Set by `c.coordinate(...)` for non-affine coords; `None` for Cartesian and affine coords. `warp(x_px, y_px) -> (px, py)` remaps a pre-warp Cartesian pixel through the coord. Artists opted-in via `declare_coord_support` pass this to `draw.*` helpers via `project=` so segments subdivide, polygons curve, and markers land correctly. |

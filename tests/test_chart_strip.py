@@ -77,10 +77,10 @@ def _dot_circles(**strip_kw):
 def test_edgecolor_alone_draws_outline():
     circles = _dot_circles(edgecolor="#000000")
     assert circles
-    from plotlet._spec import _D
+    from plotlet._spec import SPEC
     for tag in circles:
         assert 'stroke="#000000"' in tag
-        assert f'stroke-width="{_D["marker_stroke_width"]:.2f}"' in tag
+        assert f'stroke-width="{SPEC["marker_stroke_width"]:.2f}"' in tag
 
 
 def test_no_outline_without_edgecolor():

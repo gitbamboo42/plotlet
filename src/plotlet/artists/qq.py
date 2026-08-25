@@ -33,7 +33,7 @@ from ..draw import circle, segment
 from ._shared import edge_px, swatch_radius
 from ..draw import parse_rgb, raster_declined, should_rasterize, splat_disks
 from ..utils import to_list, resolve_aes, long_form_1d, pack_opts
-from .._spec import _D
+from .._spec import SPEC
 
 
 def _qq_build(values, kw):
@@ -135,7 +135,7 @@ def _qq_draw(a, ctx):
             pad = (x_hi - x_lo) * 0.05
             x0, x1e = x_lo - pad, x_hi + pad
             y0, y1e = intercept + slope * x0, intercept + slope * x1e
-            ref_col = col if a.get("groups") else _D["qq_ref_color"]
+            ref_col = col if a.get("groups") else SPEC["qq"]["refline_color"]
             out.append(segment(edge_px(ctx.x_scale, x0), edge_px(ctx.y_scale, y0),
                                edge_px(ctx.x_scale, x1e), edge_px(ctx.y_scale, y1e),
                                color=ref_col, width=1, dash="4,3",

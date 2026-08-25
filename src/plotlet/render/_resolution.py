@@ -27,7 +27,7 @@ from types import SimpleNamespace
 
 from .._spec import (
     _MARGIN_FLOOR, _FRAME, _GRIDSPEC, _FONTSPEC, _LEGSPEC,
-    _LAYOUTSPEC, _PADSPEC, _D,
+    _LAYOUTSPEC, _PADSPEC, _SCALESPEC,
 )
 from ..draw import resolve_color, TAB10
 from ..scales import (_fmt_tick, _to_epoch,
@@ -887,7 +887,7 @@ def _resolve_expand(st_value, tight, axis):
         return st_value
     if tight:
         return (0.0, 0.0)
-    return tuple(_D["x_expand" if axis == "x" else "y_expand"])
+    return tuple(_SCALESPEC["x_expand" if axis == "x" else "y_expand"])
 
 
 def _resolve_domain(lo, hi, user_lim, trans, force_zero=False, tight=False,
@@ -1060,7 +1060,7 @@ def _categorical_sector_extras(sec):
     can reorder cats and the splits still land where each group changes.
     """
     groups = sec.cat_to_group()
-    split_gap = (_D["category_split_gap"] if sec.gap is None else sec.gap)
+    split_gap = (_SCALESPEC["category_split_gap"] if sec.gap is None else sec.gap)
     return groups, split_gap
 
 
@@ -1220,7 +1220,7 @@ def _resolve_shared_padding(states: list[dict], key: str) -> float:
     others = [state[key] for state in states[1:] if state[key] is not None]
     if others:
         return min(others)
-    return _D["category_padding"]
+    return _SCALESPEC["category_padding"]
 
 
 def _inline_legend_layout(state, env=None):

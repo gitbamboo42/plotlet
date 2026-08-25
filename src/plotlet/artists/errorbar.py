@@ -27,7 +27,7 @@ from ..registry import ArtistSpec, add_artist
 from ..utils import (UNSET, pack_opts, to_list, all_numeric, resolve_aes,
                      group_color, dodge_positions, DODGE_WIDTH, DODGE_GAP)
 from ..draw import marker, segment, errorbar_v, errorbar_h
-from .._spec import _D, _LEGSPEC
+from .._spec import SPEC, _LEGSPEC
 from ._shared import _xy_minmax, swatch_radius, swatch_stroke
 
 
@@ -144,10 +144,10 @@ def _errorbar_rows(xs, ys, xlo, xhi, ylo, yhi, opts, xs_, ys_, col, warp,
             "errorbar: yerr/ymin/ymax requires a numeric y; "
             "got non-numeric values."
         )
-    capsize = opts.get("capsize", _D["errorbar_capsize"])
-    lw = opts.get("linewidth", _D["errorbar_linewidth"])
+    capsize = opts.get("capsize", SPEC["errorbar"]["capsize"])
+    lw = opts.get("linewidth", SPEC["errorbar"]["linewidth"])
     mk = opts.get("marker", "o")
-    msize = opts.get("size", _D["markersize"])
+    msize = opts.get("size", SPEC["marker_size"])
     alpha = opts.get("alpha", 1)
     out = []
     for x, y, dxl, dxh, dyl, dyh in zip(xs, ys, xlo, xhi, ylo, yhi):
@@ -228,8 +228,8 @@ def _errorbar_data_attrs(a):
 def _legend_paint(col):
     def paint(a, ctx, x0, y_mid):
         opts = a["opts"]
-        msize = swatch_radius(opts.get("size", ctx.defaults["markersize"]))
-        lw = swatch_stroke(opts.get("linewidth", _D["errorbar_linewidth"]))
+        msize = swatch_radius(opts.get("size", ctx.spec["marker_size"]))
+        lw = swatch_stroke(opts.get("linewidth", SPEC["errorbar"]["linewidth"]))
         alpha = opts.get("alpha", 1)
         cx = x0 + _LEGSPEC["swatch_width"] / 2
         out = segment(cx, y_mid - 5, cx, y_mid + 5,

@@ -29,25 +29,49 @@ touch:
   "figure":   { "background": "..." },
   "font":     { "family": "...", "color": "...",
                 "tick_size": ..., "label_size": ..., "title_size": ... },
-  "frame":    { "color": "...", "width": ..., "tick_length": ...,
+  "frame":    { "color": "...", "linewidth": ..., "tick_length": ...,
                 "tick_direction": "...", "tick_marks": true, "x_side": "...",
                 "spine_top": true, /* …one flag per side */ },
-  "grid":     { "color": "...", "width": ..., "dasharray": "2,3",
+  "grid":     { "color": "...", "linewidth": ..., "dasharray": "2,3",
                 "default_on": false },
-  "defaults": { "linewidth": ..., "markersize": ..., "fill_alpha": ...,
-                "refline_color": "...", /* …per-artist visual defaults */ },
-  "legend":   { "background": "...", "swatch_width": ..., /* … */ },
+  "linewidth": ...,  "marker_size": ...,  "cmap": "...",  /* shared ink */
+  "errorbar": { "color": "...", "capsize": ... },
+  "scatter":  { "size": ..., "alpha": ... },
+  /* …one block per artist, beside the chrome sections */
+  "legend":   { "label_size": ..., "header_size": ...,
+                "background": "...", "swatch_width": ..., /* … */ },
   "linestyles": { "--": "6,3", /* …dash specs */ }
 }
 ```
 
-The remaining sections (`size`, `pad`, `sectors`, `layout`) merge the
-same way — see the `size.data_width` warning below before touching
-geometry. `"dasharray": null` drops the dash (solid gridlines — how
-`minimal` gets its look). Unspecified keys fall through to `classic` —
-which is just `spec.json` with no overrides. The authoritative key set
-and the default values live in
+The remaining sections (`size`, `pad`, `sectors`, `scale`, `raster`,
+`layout`) merge the same way — see the `size.data_width` warning below
+before touching geometry. `"dasharray": null` drops the dash (solid
+gridlines — how `minimal` gets its look). Unspecified keys fall through
+to `classic` — which is just `spec.json` with no overrides. The
+authoritative key set and the default values live in
 [`src/plotlet/spec.json`](../spec.json).
+
+Text sizes: `font.*_size` covers axis chrome (ticks, labels, title,
+subtitle, caption); a component that draws its own text carries its own
+size key — `legend.label_size` / `legend.header_size`,
+`sectors.label_size`, the text artist's `text.size`, and the
+heatmap family's `heatmap.annot_size`. There is no single
+scale-everything knob. (Artist *kwargs* spell text size `fontsize=` /
+`annot_fontsize=`; spec keys always say `size` — two vocabularies by
+design, and a `spec()` typo in either direction gets a did-you-mean
+hint.)
+
+Artist ink sits at the spec root beside the chrome sections: bare
+scalar keys (`linewidth`, `marker_size`, `cmap`, …) are shared
+vocabulary any artist may read — `c.spec(linewidth=1.5)` — and each
+plot-type block (`scatter`, `errorbar`, …) is read only by its
+artist(s). Chrome keeps its own widths: `frame.linewidth` and
+`grid.linewidth` are separate from the root `linewidth`. A block with several readers (`errorbar`
+by both `errorbar` and `bar`'s whiskers, `heatmap` by `image_cmap`) is
+a deliberate consistency decision, declared in
+`tests/test_spec_ownership.py` — extend that map to share a block, or
+give a new artist its own.
 
 `font.family` doubles as the face selector: its first comma-separated
 segment takes a bundled name or a `.ttf`/`.otf` path (see

@@ -27,7 +27,7 @@ from importlib.metadata import version as _pkg_version
 from types import SimpleNamespace
 
 from .._spec import (
-    SPEC, _GRIDSPEC, _FONTSPEC, _LEGSPEC, _LAYOUTSPEC, _D, _DASH,
+    SPEC, _GRIDSPEC, _FONTSPEC, _LEGSPEC, _LAYOUTSPEC, _DASH,
 )
 from ..draw import resolve_color
 from ..draw import measure_text
@@ -337,7 +337,7 @@ def _artist_ctx(env, iw, ih):
             warp = _make_px_warp(proj, iw, ih)
         return RenderContext(
             x_scale=env.x_scale, y_scale=env.y_scale, iw=iw, ih=ih,
-            color=a["_color"], defaults=_D, dash=_DASH,
+            color=a["_color"], spec=SPEC, dash=_DASH,
             project=proj, warp=warp,
         )
     return ctx_for
@@ -359,7 +359,7 @@ def _emit_grid(state, env, iw, ih):
     # the user hasn't configured minor ticks the auto subdivisions
     # apply (ggplot behavior) — an explicit minor= list still wins.
     if which in ("minor", "both"):
-        mw = _GRIDSPEC["minor_width"]; md = _GRIDSPEC["minor_dasharray"]
+        mw = _GRIDSPEC["minor_linewidth"]; md = _GRIDSPEC["minor_dasharray"]
         if not env.x_is_cat:
             xm = state["x_minor"]
             for t in _chrome_emit._resolve_minor_ticks(
@@ -377,7 +377,7 @@ def _emit_grid(state, env, iw, ih):
                 parts.append(segment(0, y, iw, y,
                                      color=gcol, width=mw, dash=md))
     if which in ("major", "both"):
-        gw = _GRIDSPEC["width"]; gd = _GRIDSPEC["dasharray"]
+        gw = _GRIDSPEC["linewidth"]; gd = _GRIDSPEC["dasharray"]
         if not env.x_is_cat:
             for t in env.inp.x_ticks:
                 x = x_scale(t)
@@ -478,7 +478,7 @@ def _emit_inline_legend_body(lw, lh, pos, cont, disc, horizontal, gradient_h,
         # Outside positions skip the rect entirely.
         parts.append(rect(0, 0, lw, lh,
                           fill=_LEGSPEC["background"],
-                          alpha=_LEGSPEC["opacity"]))
+                          alpha=_LEGSPEC["alpha"]))
     if gradient_h:
         # Horizontal colorbar (gradient-only, outside top/bottom).
         from ._legend import (_h_gradient_entry_height,

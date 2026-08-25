@@ -12,7 +12,7 @@ from ..registry import ArtistSpec, add_artist
 from ..utils import (pack_opts, to_list, resolve_aes,
                      group_color as _group_fill)
 from ..draw import resolve_color
-from .._spec import _D, _LEGSPEC
+from .._spec import SPEC, _LEGSPEC
 from ..draw import polygon as draw_polygon, rect as draw_rect
 from ._shared import (edge_px, _xy_minmax, _line_legend_entries,
                        _CURVE_VALUES, _step_coords)
@@ -41,7 +41,7 @@ def _artist_fill_between(a, xs_, ys_, col, warp=None):
     lower = [(xs_(x), ys_(y)) for x, y in zip(lower_xs, lower_ys)]
     pts = upper + list(reversed(lower))
     return draw_polygon(pts, fill=col,
-                        alpha=opts.get("alpha", _D["fill_alpha"]),
+                        alpha=opts.get("alpha", SPEC["fill"]["alpha"]),
                         project=warp)
 
 
@@ -154,7 +154,7 @@ def _area_draw(a, ctx):
     opts = a["opts"]
     palette = opts.get("palette")
     base = a["base"]
-    alpha = opts.get("alpha", _D["fill_alpha"])
+    alpha = opts.get("alpha", SPEC["fill"]["alpha"])
     curve = opts.get("curve", "linear")
     if curve not in _CURVE_VALUES:
         raise ValueError(
@@ -189,7 +189,7 @@ def _area_draw(a, ctx):
 def _area_legend_entries(a):
     groups = a["groups"]
     opts = a["opts"]
-    alpha = opts.get("alpha", _D["fill_alpha"])
+    alpha = opts.get("alpha", SPEC["fill"]["alpha"])
     sw = _LEGSPEC["swatch_width"]
     if groups == [None]:
         label = opts.get("label")

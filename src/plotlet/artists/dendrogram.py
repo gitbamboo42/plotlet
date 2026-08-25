@@ -46,7 +46,7 @@ import math
 
 from ..registry import ArtistSpec, add_artist
 from ..utils import pack_opts
-from .._spec import _D
+from .._spec import SPEC
 from ..cluster import (layout_tree, layout_parent,
                        leaf_position, block_apex_centers, parent_leaf_px,
                        fit_parent, build_tree, tree_frame_defaults)
@@ -86,7 +86,7 @@ def _dendrogram_record(data=None,
 
     parent_block = None
     if parent and tree_obj.between_Z is not None:
-        parent_frac = (_D["tree_parent_height"] if parent is True
+        parent_frac = (SPEC["dendrogram"]["parent_height"] if parent is True
                        else float(parent))
         if not (0.0 < parent_frac < 0.8):
             raise ValueError(
@@ -94,7 +94,7 @@ def _dendrogram_record(data=None,
             )
         blocks, parent_block = fit_parent(
             blocks, layout_parent(tree_obj), parent_frac,
-            gap_frac=_D["tree_parent_gap"],
+            gap_frac=SPEC["dendrogram"]["parent_gap"],
         )
     # No user-supplied labels = numeric leaf axis. `linkage` /
     # `linkage_split` fabricate string indices in this case, but the
@@ -164,8 +164,8 @@ def _orient_xy(orient, ic, dc, max_h):
 
 
 def _dendrogram_draw(a, ctx):
-    col = resolve_color(a["opts"].get("color")) or ctx.color or _D["dendrogram_color"]
-    lw = a["opts"].get("linewidth", _D["dendrogram_linewidth"])
+    col = resolve_color(a["opts"].get("color")) or ctx.color or SPEC["dendrogram"]["color"]
+    lw = a["opts"].get("linewidth", SPEC["dendrogram"]["linewidth"])
     orient = a["orientation"]
     max_h = a["_max_h"]
     labels = a["_leaf_labels"]
@@ -268,7 +268,7 @@ add_artist(ArtistSpec(
     ydomain=_dendrogram_ydomain,
     draw=_dendrogram_draw,
     uses_color_cycle=False,
-    default_color=_D["dendrogram_color"],
+    default_color=SPEC["dendrogram"]["color"],
     data_attrs=_dendrogram_data_attrs,
     axis_order=_dendrogram_axis_order,
     frame_defaults=_dendrogram_frame_defaults,

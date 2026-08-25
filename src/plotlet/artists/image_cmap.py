@@ -9,7 +9,7 @@ Rendering branches between many <rect>s and one PNG. The threshold
 (`image_max_rects` in spec.json) trades vector cleanliness
 for SVG file size. Below the threshold, each cell is its own <rect> — sharp
 at any zoom. Above, the whole image is encoded as base64 PNG. A grid
-denser than `raster_oversample` cells per display pixel is mean-pooled
+denser than `raster.oversample` cells per display pixel is mean-pooled
 down to that cap before encoding (see `_png_pass`).
 
 `origin` controls vertical orientation. Default `"lower"` puts row 0 at
@@ -27,7 +27,7 @@ import numpy as np
 
 from ..registry import ArtistSpec, add_artist
 from ..utils import to_matrix, to_list_2d, pack_opts, check_option
-from .._spec import _D
+from .._spec import SPEC, _RASTERSPEC
 from ..draw import rect, text_path
 from ..draw import image_png
 from ..draw import colormap_lut, ContinuousNorm
@@ -45,7 +45,7 @@ def _artist_image_cmap(a, xs_, ys_, col):
     norm = ContinuousNorm(a["_vmin"], a["_vmax"],
                            kind=opts.get("norm", "linear"),
                            center=opts.get("center"))
-    lut = colormap_lut(opts.get("cmap", _D["default_cmap"]))
+    lut = colormap_lut(opts.get("cmap", SPEC["cmap"]))
     origin = opts.get("origin", "lower")
 
     extent = opts.get("extent")
@@ -75,7 +75,7 @@ def _artist_image_cmap(a, xs_, ys_, col):
     else:
         rows_in_render_order = [data[i] for i in row_indices]
 
-    use_rects = nrows * ncols <= _D["image_max_rects"]
+    use_rects = nrows * ncols <= _RASTERSPEC["image_max_rects"]
     cw = pw / ncols; ch = ph / nrows
     if use_rects:
         out = _rects_pass(rows_in_render_order, norm, lut,
@@ -117,7 +117,7 @@ def _rects_pass(rows, norm, lut, sx_l, sy_t, cw, ch, ncols):
 def _png_pass(rows, norm, lut, sx_l, sy_t, pw, ph, ncols, nrows):
     """Whole image as one base64 PNG — bounded SVG size for big arrays.
 
-    A grid denser than `raster_oversample` cells per display pixel is
+    A grid denser than `raster.oversample` cells per display pixel is
     mean-pooled to that cap first: the viewer can't show the extra cells,
     and its nearest-neighbour downscale would drop them where the pooled
     mean summarizes them — so the pooled image is both smaller and more
@@ -163,7 +163,7 @@ def _annot_pass(a, rows_in_render_order, row_indices, norm, lut,
     labels_in_render_order = [label_source[i] for i in row_indices]
     fmt = opts.get("fmt", ".2g")
     color_opt = opts.get("annot_color", "auto")
-    fontsize = opts.get("annot_fontsize", _D["annot_fontsize"])
+    fontsize = opts.get("annot_fontsize", SPEC["heatmap"]["annot_size"])
     out = []
     for r, label_row in enumerate(labels_in_render_order):
         cy = sy_t + (r + 0.5) * ch
@@ -193,12 +193,12 @@ def _image_cmap_data_attrs(a):
         "cols": a["_ncols"],
         "vmin": a["_vmin"],
         "vmax": a["_vmax"],
-        "cmap": a["opts"].get("cmap", _D["default_cmap"]),
+        "cmap": a["opts"].get("cmap", SPEC["cmap"]),
         # image_cmap is always raster (PNG-embedded above the rect threshold,
         # individual <rect>s below). The flag is here so AI tools know
         # which decoding strategy they're looking at.
         "data-encoding": "png-embedded" if (a["_nrows"] * a["_ncols"]
-                                              > _D["image_max_rects"]) else "rects",
+                                              > _RASTERSPEC["image_max_rects"]) else "rects",
     }
     # Stashed by the draw pass — tells AI readers the embedded PNG is a
     # pooled summary, not one pixel per matrix cell.
@@ -298,7 +298,7 @@ def _image_cmap_legend_gradient(a):
     legend_opts = a["opts"].get("legend") or {}
     return {
         "kind": "continuous",
-        "cmap": a["opts"].get("cmap", _D["default_cmap"]),
+        "cmap": a["opts"].get("cmap", SPEC["cmap"]),
         "vmin": a["_vmin"],
         "vmax": a["_vmax"],
         "norm": a["opts"].get("norm", "linear"),

@@ -27,7 +27,7 @@ from ..registry import ArtistSpec, add_artist
 from ..draw import rect
 from ..draw import colormap, ContinuousNorm
 from ..utils import UNSET, pack_opts, to_list, hist_bin_edges
-from .._spec import _D
+from .._spec import SPEC
 
 
 def _bins_per_axis(value):
@@ -132,7 +132,7 @@ def _hist2d_draw(a, ctx):
     xe, ye, counts = a["_xedges"], a["_yedges"], a["_counts"]
     if not counts:
         return ""
-    cm = colormap(a["opts"].get("cmap", _D["default_cmap"]))
+    cm = colormap(a["opts"].get("cmap", SPEC["cmap"]))
     vmin = a["opts"].get("vmin", 0)
     vmax = a["opts"].get("vmax", a["_vmax"])
     norm = ContinuousNorm(vmin, vmax, "linear")
@@ -155,7 +155,7 @@ def _hist2d_draw(a, ctx):
 
 def _hist2d_legend_gradient(a):
     return {"kind": "continuous",
-            "cmap": a["opts"].get("cmap", _D["default_cmap"]),
+            "cmap": a["opts"].get("cmap", SPEC["cmap"]),
             "vmin": a["opts"].get("vmin", 0),
             "vmax": a["opts"].get("vmax", a["_vmax"]),
             "norm": "linear", "label": "count"}
