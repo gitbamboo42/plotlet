@@ -100,14 +100,16 @@ xs = [i * 0.1 for i in range(64)]
 waves = {"t": xs, "sin": [math.sin(x) for x in xs],
          "cos": [math.cos(x) for x in xs]}
 
-a = pt.chart(waves, aes(x="t", y="sin"), theme="classic",
+a = pt.chart(waves, aes(x="t", y="sin"),
              title="classic", data_width=210, data_height=140,
              xlabel="t")
+a.theme("classic")
 a.add_line()
 a.add_line(aes(y="cos"), linestyle="--")
-b = pt.chart(waves, aes(x="t", y="sin"), theme="minimal",
+b = pt.chart(waves, aes(x="t", y="sin"),
              title="minimal", data_width=210, data_height=140,
              xlabel="t")
+b.theme("minimal")
 b.add_line()
 b.add_line(aes(y="cos"), linestyle="--")
 c = a | b

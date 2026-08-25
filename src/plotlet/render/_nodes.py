@@ -24,6 +24,7 @@ import re
 
 from .._spec import _MARGIN_FLOOR, _OUTER_MARGIN, _SIZESPEC, _LAYOUTSPEC
 from .._tree import compute_share_classes, normalize_share_mode
+from ..themes import _deep_merge
 from ..utils import _to_px
 
 
@@ -67,7 +68,7 @@ class RenderNode:
         self._is_attached = False
         self._last_M_eff: dict | None = None
         self._theme: str | None = None
-        self._font: str | None = None
+        self._spec: dict | None = None
 
 
 class RenderLayout:
@@ -78,6 +79,8 @@ class RenderLayout:
     def __init__(self, layout_kind: str, children: list):
         self._layout_kind = layout_kind
         self._children = list(children)
+        self._theme: str | None = None
+        self._spec: dict | None = None
         self._parent = None
         self._calls: list[tuple[str, list, dict]] = []
         self._gap = None
@@ -229,7 +232,7 @@ def hydrate(ir):
 # Derived state — re-derive wired fields from the recorded ops. The sole
 # writer of `_share_*`, `_attached_*`, `_coordinate`, `_gap*`,
 # `_virtual_grid_aligned`, `_had_state`, `_title_text`, `_theme`,
-# `_font` on the tree it's given. (The rehydrator in `resolved_ir.py` sets
+# `_spec` on the tree it's given. (The rehydrator in `resolved_ir.py` sets
 # the same fields directly from the projection — its trees never pass
 # through here.)
 # ---------------------------------------------------------------------------
@@ -242,6 +245,7 @@ def hydrate(ir):
 # coord's `resolve_layout` band split).
 _LAYOUT_MATERIALIZED = frozenset({
     "share_x", "share_y", "coordinate", "gap", "align_x", "align_y",
+    "theme", "spec",
 })
 _LAYOUT_PASSTHROUGH = frozenset({"sectors", "title", "heights"})
 
@@ -257,20 +261,56 @@ def _last_title(calls) -> str:
 
 
 def _stamp_style(leaf) -> None:
-    """Derive the explicit `_theme` / `_font` fields from the leaf's
-    journal, last call wins. `None` means never set — a passthrough for
-    `active_theme` / `active_font`. Emit reads only the fields
-    (`_node_style` in the layout engine), never the journal."""
+    """Derive the explicit `_theme` / `_spec` fields from the leaf's
+    journal. Two independent channels: `theme` ops set the
+    preset name (last call wins); `spec` ops deep-merge accumulatively
+    (later wins per key). `None` means never set — a passthrough for
+    `active_theme`, and the signal `_cascade_style` reads to inherit a
+    layout's default. Emit reads only the fields (`_node_style` in the
+    layout engine), never the journal."""
     theme = None
-    font = None
+    overrides = None
     for entry in leaf._calls:
         name, args, kw = entry[0], entry[1], entry[2]
         if name == "theme":
             theme = args[0] if args else None
-        elif name == "font":
-            font = args[0] if args else kw.get("family")
+        elif name == "spec" and kw:
+            overrides = _deep_merge(overrides or {}, kw)
     leaf._theme = theme
-    leaf._font = font
+    leaf._spec = overrides
+
+
+def _cascade_style(node, theme, overrides) -> None:
+    """Stamp every leaf's `_theme` / `_spec` from its journal
+    (`_stamp_style`), flowing the nearest ancestor layout's
+    style down — per channel, so preset and spec values compose
+    instead of colliding. Preset: a node without its own theme
+    inherits the ancestor's. Spec values: ancestor and node overrides
+    deep-merge, node wins per key. Each node ends up stamped with its
+    *effective* style (layouts included — the figure-title band styles
+    itself from these fields). Attachments and coord-embedded nodes
+    inherit the same default as their host's subtree. Insets don't —
+    they render from their own isolated plan."""
+    if not node._is_parent:
+        _stamp_style(node)
+    if node._theme is None:
+        node._theme = theme
+    if node._spec is None:
+        node._spec = overrides
+    elif overrides:
+        node._spec = _deep_merge(overrides, node._spec)
+    if node._is_parent:
+        coord = node._coordinate
+        if coord is not None and hasattr(coord, "_to_dict"):
+            for emb in _coord_param_nodes(coord._to_dict()):
+                _cascade_style(emb, node._theme, node._spec)
+        for child in node._children:
+            if child is not None:
+                _cascade_style(child, node._theme, node._spec)
+    else:
+        for atch in (*node._attached_left, *node._attached_right,
+                     *node._attached_above, *node._attached_below):
+            _cascade_style(atch, theme, overrides)
 
 
 def _coord_param_nodes(v):
@@ -394,6 +434,8 @@ def materialize(root):
         la._virtual_grid_aligned = False
         la._had_state = bool(la._calls)
         la._title_text = _last_title(la._calls)
+        la._theme = None
+        la._spec = None
     for ch in charts:
         ch._attached_left  = []
         ch._attached_right = []
@@ -452,19 +494,24 @@ def materialize(root):
                 la._virtual_grid_aligned = True
             elif name == "align_y":
                 la._virtual_grid_aligned = True
+            elif name == "theme":
+                la._theme = args[0] if args else None
+            elif name == "spec":
+                # Re-validated here because a journal loaded from JSON
+                # never passed through `Layout.spec()`'s check.
+                if kw:
+                    from .._spec import validate_overrides
+                    validate_overrides(kw)
+                    la._spec = _deep_merge(
+                        la._spec or {}, kw)
 
     # Style fields last, on a fresh walk: on a hydrated tree the attach
     # pass above is what makes attached charts reachable, and the
     # coordinate arm is what exposes coord-embedded nodes
-    # (`CircularCoordinate.inner`) — the first walk missed both.
-    for n in _walk_tree(root):
-        if n._is_parent:
-            coord = n._coordinate
-            if coord is not None and hasattr(coord, "_to_dict"):
-                for emb in _coord_param_nodes(coord._to_dict()):
-                    _stamp_style(emb)
-        else:
-            _stamp_style(n)
+    # (`CircularCoordinate.inner`) — the first walk missed both. The
+    # walk carries the nearest themed ancestor layout's style down as
+    # the default for leaves that didn't set their own.
+    _cascade_style(root, None, None)
 
     return root
 

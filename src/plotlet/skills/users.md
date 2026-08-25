@@ -64,6 +64,8 @@ c.add_scatter()   # same mapping, no repetition
 - **Data first, one blank line, then the chart.** Every table is a
   variable at the top; never build a dict inline in a plotting call
   (`pt.chart({"x": [1, 2], ...})`, `c.add_line(data={...})`).
+- **No method chaining.** Chaining works (every method returns its
+  object), but write one call per line.
 
 Advanced cases — a layer with its own table/columns, opting out of an
 inherited aesthetic (`inherit_aes=False`), and artists that need explicit
@@ -165,11 +167,32 @@ for line in svg.splitlines():
 
 Full attribute schema: [docs/AI_ATTRS.md](../docs/AI_ATTRS.md).
 
+## Styling: `spec()` + `theme()`
+
+`spec()` sets individual visual values; `theme()` applies a named
+preset — a bundled set of the same overrides. They compose in either
+order (spec values always win over the preset). `spec` kwargs are
+spec sections (`figure`, `font`, `frame`, `grid`, `legend`, …);
+unknown keys error with a did-you-mean hint. Presets: `classic`
+(default), `minimal`, `dark`, `void`.
+
+```python
+c.spec(font=dict(title_size=15))            # set individual values
+c.theme("dark")                             # apply a preset (either order)
+
+fig = a | b                                 # layouts style the whole figure:
+fig.theme("dark")                           # preset default for un-themed
+fig.spec(font=dict(title_size=15))          # leaves + canvas; a leaf's own
+                                            # theme()/spec() wins per channel
+```
+
+Details (all spec sections, custom themes): [docs/THEMES.md](../docs/THEMES.md).
+
 ## Constraints (won't change)
 
 - No interactivity (hover, zoom, pan, click, animation).
 - No twin y-axes. Use `|` or `/` for a second panel.
-- No global state. Themes are per-chart: `c.theme("dark")`.
+- No global state. Themes attach to a chart or layout, never the process.
 - One coordinate system per panel.
 - Not a matplotlib port. No `plt.subplots`, no `ax.set_xlim`, no
   `tight_layout`. Compose with `|` `/` `pt.grid`.

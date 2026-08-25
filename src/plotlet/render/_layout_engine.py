@@ -48,7 +48,7 @@ from graphlib import CycleError, TopologicalSorter
 from itertools import count
 
 from .._spec import (SPEC, _FIGSPEC, _LAYOUTSPEC, _FONTSPEC, _PADSPEC,
-                     active_font, active_theme)
+                     active_theme)
 from ._resolution import (
     _replay, _enforce_floors, _required_margin,
     _axis_descriptor,
@@ -78,26 +78,31 @@ def _funnel_leaf(root):
 
 @contextlib.contextmanager
 def _node_style(node):
-    """Theme + font scoping for one node's measurement/render. Every
-    site that measures or emits text enters this ONE helper, so
-    measurement can never disagree with render about the active face
-    (which would corrupt margin math). Font nests inside theme so a
-    `font` call overrides the theme's `font.family`. Reads the explicit
-    `_theme` / `_font` fields (stamped by `materialize`, or set
+    """Theme scoping for one node's measurement/render. Every site
+    that measures or emits text enters this ONE helper, so measurement
+    can never disagree with render about the active face (which would
+    corrupt margin math). Reads the explicit `_theme` /
+    `_spec` fields (stamped by `materialize`, or set
     directly by the rehydrator) — never the journal; `None` is a
-    passthrough for `active_theme` / `active_font`."""
-    with active_theme(node._theme):
-        with active_font(node._font):
-            yield
+    passthrough for `active_theme`."""
+    with active_theme(node._theme, node._spec):
+        yield
 
 
 @contextlib.contextmanager
 def _figure_style(root):
     """Theme + font scoping for the outer `<svg>` (figure background,
-    root font-family attr). A root that funnels to a single leaf takes
-    that leaf's style, so a lone dark chart gets a dark canvas; roots
-    with sibling panels take none — themes and fonts are per-chart, and
-    each leaf's own `_node_style` block scopes its chrome."""
+    figure title, root font-family attr). A root layout with its own
+    `layout.theme(...)` styles the canvas with it. Otherwise a root
+    that funnels to a single leaf takes that leaf's style, so a lone
+    dark chart gets a dark canvas; multi-leaf roots with no layout
+    theme take none — each leaf's own `_node_style` block scopes its
+    chrome."""
+    if root._is_parent and (root._theme is not None
+                            or root._spec is not None):
+        with active_theme(root._theme, root._spec):
+            yield
+        return
     leaf = _funnel_leaf(root)
     if leaf is None:
         yield
@@ -128,22 +133,29 @@ def _title_band_h(node) -> int:
     content — the panel-title block (`pad.title` gap + title glyph-block
     height, one line_height more per `\\n`), so composed and single-panel
     titles share one rhythm. Ceiled to an int: the band feeds the root
-    canvas width/height, which stay integer px."""
+    canvas width/height, which stay integer px. Scoped to the layout's
+    own theme so measurement agrees with `_emit_layout_title`."""
     title = _layout_title(node)
     if not title:
         return 0
-    return math.ceil(_PADSPEC["title"] + text_block_height(title, _FONTSPEC["title_size"]))
+    with active_theme(node._theme, node._spec):
+        return math.ceil(_PADSPEC["title"]
+                         + text_block_height(title, _FONTSPEC["title_size"]))
 
 
 def _emit_layout_title(node, x: float, y: float, w: float) -> str:
     """The band's text fragment: centered over the layout's width, cap
     top at the band top, `pad.title` clear of the content below. Same
-    text-as-paths emit as panel titles (`tag=` records the region)."""
-    size = _FONTSPEC["title_size"]
-    return text_path(_layout_title(node), x + w / 2,
-                     y + size - descender(size), size,
-                     anchor="middle", color=_FONTSPEC["color"],
-                     tag="title")
+    text-as-paths emit as panel titles (`tag=` records the region).
+    Scoped to the layout's own theme (`layout.theme(...)`, or the
+    effective theme the cascade stamped) so the title stays readable
+    on a themed canvas."""
+    with active_theme(node._theme, node._spec):
+        size = _FONTSPEC["title_size"]
+        return text_path(_layout_title(node), x + w / 2,
+                         y + size - descender(size), size,
+                         anchor="middle", color=_FONTSPEC["color"],
+                         tag="title")
 
 
 # Layout gaps stay captured — they're parent-level positional, not

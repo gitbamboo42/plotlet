@@ -53,7 +53,7 @@ site build.
 - Custom plot types → [docs/EXTENDING.md](src/plotlet/docs/EXTENDING.md)
 - Coordinate systems (Circular, custom projections) → [docs/COORDINATES.md](src/plotlet/docs/COORDINATES.md)
 - Multi-panel layouts, `share_x` / `share_y` → [docs/SUBPLOTS.md](src/plotlet/docs/SUBPLOTS.md)
-- Themes → [docs/THEMES.md](src/plotlet/docs/THEMES.md)
+- Themes (per-chart + per-layout `theme()` presets, `spec()` value overrides) → [docs/THEMES.md](src/plotlet/docs/THEMES.md)
 - AI-readable SVG attrs → [docs/AI_ATTRS.md](src/plotlet/docs/AI_ATTRS.md)
 
 ## Running tests
@@ -81,6 +81,8 @@ c.add_scatter()   # same mapping, no repetition
 - **Data first, one blank line, then the chart.** Every table is a
   variable at the top; never build a dict inline in a plotting call
   (`pt.chart({"x": [1, 2], ...})`, `c.add_line(data={...})`).
+- **No method chaining.** Chaining works (every method returns its
+  object), but write one call per line.
 
 Advanced cases — a layer with its own table/columns, opting out of an
 inherited aesthetic (`inherit_aes=False`), and artists that need explicit

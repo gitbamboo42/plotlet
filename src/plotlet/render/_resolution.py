@@ -354,7 +354,7 @@ def _expand_frame_defaults(calls):
 _FRAME_OPS = frozenset({
     "title", "subtitle", "caption", "xlabel", "ylabel", "xlim", "ylim",
     "xscale", "yscale", "gridlines", "legend",
-    "xticks", "yticks", "spines", "theme", "font",
+    "xticks", "yticks", "spines", "theme", "spec",
     "x_expand", "y_expand", "clip", "facecolor",
     "coordinate", "sectors", "aspect",
 })
@@ -381,7 +381,7 @@ def _default_state() -> _PanelState:
     """Fresh panel state with every key at its default — the one
     definition of the closed key set. Defaults that read `_FRAME` / spec
     values pick up the ambient theme, so callers wrap this in
-    `active_theme` / `active_font` for the panel they mean: replay does
+    `active_theme` for the panel they mean: replay does
     (via `_node_style`), and the resolved-IR projection and rehydration
     do the same so default-eliding stays symmetric."""
     return _PanelState({
@@ -694,15 +694,19 @@ def _record_facecolor(state, color=None):
 
 def _record_theme(state, name=None):
     # Applied outside replay (`_layout_engine` wraps each leaf's
-    # measurement and render in `_node_style(...)` — theme + font
-    # scoping), so there is no state to record; the handler exists so
-    # the call's shape still gets checked like every other frame op.
+    # measurement and render in `_node_style(...)`), so there is no
+    # state to record; the handler exists so the call's shape still
+    # gets checked like every other frame op.
     pass
 
 
-def _record_font(state, family=None):
-    # Same as _record_theme: consumed by `_stamp_style`, validated here.
-    pass
+def _record_spec(state, **overrides):
+    # Same as _record_theme: consumed by `_stamp_style`, not replay.
+    # Overrides are re-validated here because a journal loaded from
+    # JSON never passed through `Chart.spec()`'s record-time check.
+    if overrides:
+        from .._spec import validate_overrides
+        validate_overrides(overrides)
 
 
 def _replay(calls):
@@ -763,7 +767,7 @@ def _replay(calls):
         elif name == "coordinate": _record_coordinate(state, *args, **kw)
         elif name == "sectors":    _record_sectors(state, *args, **kw)
         elif name == "theme": _record_theme(state, *args, **kw)
-        elif name == "font":  _record_font(state, *args, **kw)
+        elif name == "spec":  _record_spec(state, *args, **kw)
     # When continuous sectors are active and the user didn't supply an
     # explicit lim, span the full sector range so every partition is
     # visible. Categorical sectors land on a category scale where ``lim``

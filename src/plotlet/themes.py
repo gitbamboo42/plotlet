@@ -16,6 +16,11 @@ Public API:
   - `list_themes()` — sorted list of theme names installed.
   - `register_theme(name, spec)` — register an in-memory theme (dict or
     path to a JSON file). User-defined themes never live in the package.
+
+`_deep_merge` is the one merge used everywhere spec dicts layer:
+resolving presets here, and applying `c.spec(...)` overrides in
+`_spec.active_theme` (which imports it — never the reverse, so the
+override *validator* lives in `_spec`, the spec's shape authority).
 """
 from __future__ import annotations
 

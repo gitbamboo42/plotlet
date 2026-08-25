@@ -127,7 +127,8 @@ def test_png_paints_figure_background():
 
     df2 = {"x": [1, 2, 3], "y": [1, 2, 3]}
 
-    d = pt.chart(df2, aes(x="x", y="y"), theme="dark", title="t")
+    d = pt.chart(df2, aes(x="x", y="y"), title="t")
+    d.theme("dark")
     d.add_line()
     assert corner_rgba(_svg_to_png(d.to_svg())) == (31, 31, 31, 255)
 

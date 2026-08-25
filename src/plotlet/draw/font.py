@@ -5,9 +5,9 @@ italic synthesis. `text_path` in `plotlet.draw` is a thin wrapper that
 adds the SVG `<path fill=...>` element around the path data produced here.
 
 The active face is resolved from `_FONTSPEC["family"]` at call time (first
-comma-separated segment), so per-chart `c.font(...)` and theme overrides
-flow through the same spec rail as every other visual constant — no
-parameter threading. plotlet only ever loads a font from a file it can
+comma-separated segment), so per-chart `c.spec(font=dict(family=...))`
+and theme presets flow through the same spec rail as every other visual
+constant — no parameter threading. plotlet only ever loads a font from a file it can
 name explicitly (a bundled face or a user-supplied `.ttf`/`.otf` path),
 never an OS font lookup — OS resolution would break byte-identical output
 across machines.
@@ -31,9 +31,9 @@ _FONT_DIR = Path(__file__).parent / "fonts"
 # Bundled families, keyed lowercase: (bold, italic) → face file. All
 # four RIBBI faces ship per family, so `fontstyle` / `fontweight` on a
 # bundled family always resolve to a real drawn face — never synthetic
-# styling. Only the roman face is selectable as a *family* (a `font=`
-# selector styles ALL text, ticks included; bold/italic are per-text
-# options, e.g. `c.xticks(fontweight="bold")`).
+# styling. Only the roman face is selectable as a *family* (the
+# `font.family` spec value styles ALL text, ticks included; bold/italic
+# are per-text options, e.g. `c.xticks(fontweight="bold")`).
 _BUNDLED = {
     "dejavu sans": {
         (False, False): "DejaVuSans.ttf",
@@ -151,7 +151,7 @@ def _resolve_face(fontstyle="normal", fontweight="normal") -> tuple[Font, bool]:
     drawn face file, so `synthetic_italic` is False for them. A
     path-loaded font is one file with no known siblings: italic falls
     back to the synthetic skew (`synthetic_italic=True`), and bold is a
-    loud error — pass the bold file's path as `font=` instead."""
+    loud error — pass the bold file's path as the family instead."""
     bold = _is_bold(fontweight)
     italic = _is_italic(fontstyle)
     sel = _FONTSPEC["family"].split(",")[0].strip()
@@ -160,7 +160,8 @@ def _resolve_face(fontstyle="normal", fontweight="normal") -> tuple[Font, bool]:
             raise ValueError(
                 f"fontweight='bold' with a path-loaded font ({sel!r}): "
                 "plotlet can't know which file holds the bold face — "
-                "pass the bold file's path as font= instead."
+                "pass the bold file's path as the family instead: "
+                "c.spec(font=dict(family='/path/to/Bold.ttf'))."
             )
         return _load_font(sel), italic
     key = _ALIASES.get(sel.lower(), sel.lower())
@@ -177,8 +178,8 @@ def _resolve_face(fontstyle="normal", fontweight="normal") -> tuple[Font, bool]:
 
 def _active_font() -> Font:
     """The roman face selected by the live spec — first comma-separated
-    segment of `font.family`. Resolved at call time so `active_theme` /
-    `active_font` scoping flows through without parameter threading."""
+    segment of `font.family`. Resolved at call time so `active_theme`
+    scoping flows through without parameter threading."""
     return _resolve_face()[0]
 
 

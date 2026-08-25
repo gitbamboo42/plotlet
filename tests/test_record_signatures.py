@@ -283,7 +283,6 @@ def test_ragged_facet_data_raises_at_facet():
 
 FRAME_TYPO_CASES = [
     ("xlabel-fontsize", lambda c: c.xlabel("mass", fontsize=30), "fontsize"),
-    ("font-size",       lambda c: c.font(size=20), "size"),
     ("yscale-nonpositive",
      lambda c: c.yscale("log", nonpositive="clip"), "nonpositive"),
     ("xticks-labelpad", lambda c: c.xticks(labelpad=3), "labelpad"),

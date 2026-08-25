@@ -93,6 +93,19 @@ Defaults come from `spec.json` (`layout.gap`, `layout.gap_x`, `layout.gap_y`). G
 pt.grid([[a, b], [c, d]]).title("Figure 2")
 ```
 
+## Figure theme
+
+`.theme(name)` and `.spec(...)` on a layout style the whole figure —
+the default for every leaf that didn't set its own (a leaf's own call
+wins, per channel) plus the outer canvas. Same arguments as the chart
+methods. See [THEMES.md](THEMES.md).
+
+```python
+fig = pt.grid([[a, b], [c, d]])
+fig.theme("dark")
+fig.spec(font=dict(title_size=20))
+```
+
 ## Legends
 
 One constructor for both discrete swatches and continuous gradients — geometry follows from the source's color mapping, not the constructor name. A "colorbar" is just `pt.legend(hm)` where `hm` has a continuous cmap; no separate `pt.colorbar()` call.

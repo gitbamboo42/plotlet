@@ -57,7 +57,7 @@ from ..registry import get_artist, all_artist_names
 _FRAME_METHODS = {
     "title", "subtitle", "caption", "xlabel", "ylabel", "xlim", "ylim",
     "xscale", "yscale", "gridlines", "legend",
-    "xticks", "yticks", "spines", "theme", "font",
+    "xticks", "yticks", "spines", "theme", "spec",
     "x_expand", "y_expand", "clip", "facecolor",
     "coordinate", "sectors", "aspect",
 }
@@ -577,6 +577,53 @@ class Chart(_Renderable):
             kw["entries"] = [dict(e) for e in entries]
         return self._record("legend", *args, **kw)
 
+    def theme(self, name: str | None = None, **overrides) -> "Chart":
+        """Apply a named theme preset — `classic`, `minimal`, `dark`,
+        `void`, or a `pt.register_theme` name. Presets only; individual
+        spec values go to `c.spec(...)`, and the two compose in either
+        order (spec values always win over the preset). Last call wins.
+        The name resolves lazily at render, so a user-registered theme
+        may be registered after this call.
+        """
+        if overrides:
+            raise TypeError(
+                f"c.theme() takes only a preset name; spec overrides "
+                f"go to c.spec(...): c.spec({', '.join(f'{k}=...' for k in overrides)})."
+            )
+        if name is not None and not isinstance(name, str):
+            raise TypeError(
+                f"c.theme(...) takes a theme name string, got "
+                f"{type(name).__name__}."
+            )
+        # Record directly — `theme` is in _FRAME_METHODS but this
+        # specialized method shadows __getattr__ (same as `legend`).
+        return self._record("theme", name)
+
+    def spec(self, *args, **overrides) -> "Chart":
+        """Override spec values for this chart. Kwargs are spec
+        sections (`figure`, `font`, `frame`, `grid`, `legend`, …), each
+        holding a partial dict of that section's keys — the same shape
+        as a `pt.register_theme` payload and the theme JSON files:
+
+            c.spec(font=dict(title_size=15), grid=dict(color="#ddd"))
+
+        Calls accumulate: repeated `spec` calls deep-merge, later wins
+        per key, and the merged values always apply on top of the
+        `c.theme(...)` preset regardless of call order. Unknown
+        sections or keys raise here, at record time.
+        """
+        if args:
+            raise TypeError(
+                f"c.spec() takes no positional arguments; theme presets "
+                f'go to c.theme("...") and spec values go as section '
+                f"kwargs: c.spec(font=dict(title_size=15))."
+            )
+        if not overrides:
+            return self
+        from .._spec import validate_overrides
+        validate_overrides(overrides)
+        return self._record("spec", **overrides)
+
     # ---------- recording (leaf only) ----------
 
     def __getattr__(self, name):
@@ -1043,6 +1090,52 @@ class Layout(_Renderable):
         self._calls.append(("title", [text], {}))
         return self
 
+    def theme(self, name: str | None = None, **overrides) -> "Layout":
+        """Apply a theme preset to the whole figure, exactly like
+        `Chart.theme`. It is the preset default for every leaf under
+        this layout that didn't set its own `c.theme(...)` — a leaf's
+        own choice always wins — and it styles the outer canvas
+        (figure background, figure title, the space between panels).
+        Nested layouts cascade the same way: the nearest themed
+        ancestor provides a leaf's default. Last call wins. Individual
+        spec values go to `layout.spec(...)`.
+        """
+        if overrides:
+            raise TypeError(
+                f"layout.theme() takes only a preset name; spec "
+                f"overrides go to layout.spec(...): "
+                f"layout.spec({', '.join(f'{k}=...' for k in overrides)})."
+            )
+        if name is not None and not isinstance(name, str):
+            raise TypeError(
+                f"layout.theme(...) takes a theme name string, got "
+                f"{type(name).__name__}."
+            )
+        self._calls.append(("theme", [name], {}))
+        return self
+
+    def spec(self, *args, **overrides) -> "Layout":
+        """Override spec values for the whole figure, exactly like
+        `Chart.spec` — accumulative section kwargs, validated at record
+        time. The values are figure-wide defaults: every leaf inherits
+        them, a leaf's own `c.spec(...)` deep-merges on top (leaf wins
+        per key), and they style the outer canvas. Independent of the
+        preset channel: they apply over whatever theme each leaf ends
+        up with, regardless of call order.
+        """
+        if args:
+            raise TypeError(
+                f"layout.spec() takes no positional arguments; theme "
+                f'presets go to layout.theme("...") and spec values go '
+                f"as section kwargs: layout.spec(font=dict(title_size=15))."
+            )
+        if not overrides:
+            return self
+        from .._spec import validate_overrides
+        validate_overrides(overrides)
+        self._calls.append(("spec", [], dict(overrides)))
+        return self
+
     def _iter_leaves(self):
         """Depth-first yield of every leaf Chart under this layout."""
         for child in self._children:
@@ -1199,7 +1292,7 @@ def chart(data=None, mapping=None, *,
           xlim=None, ylim=None, xscale=None, yscale=None,
           x_expand=None, y_expand=None,
           legend=None, gridlines=None, clip=None,
-          facecolor=None, theme=None, font=None) -> Chart:
+          facecolor=None) -> Chart:
     """Construct a table-bound Chart. Column mappings go in
     `mapping=aes(...)` — `pt.chart(df, mapping=aes(x="displ",
     y="hwy"))`, ggplot-style, positional also accepted — and are
@@ -1235,8 +1328,6 @@ def chart(data=None, mapping=None, *,
     if gridlines is not None: c.gridlines(gridlines)
     if clip      is not None: c.clip(clip)
     if facecolor is not None: c.facecolor(facecolor)
-    if theme     is not None: c.theme(theme)
-    if font      is not None: c.font(font)
     return c
 
 

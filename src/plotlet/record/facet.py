@@ -38,7 +38,7 @@ def facet(data, *, by=None, row=None, col=None, col_wrap=None,
     """Build a FacetGrid bound to `data`. `by=` wraps one variable's
     panels into a near-square grid (`col_wrap=` fixes the column count);
     `row=` / `col=` lay a two-factor grid, one factor per grid axis.
-    Forwarded `chart_opts` (e.g. `data_width`, `xlabel`, `theme`) apply
+    Forwarded `chart_opts` (e.g. `data_width`, `xlabel`) apply
     to every panel; the per-panel title defaults to the group label."""
     if data is None:
         raise ValueError("pt.facet requires a data argument.")

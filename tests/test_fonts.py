@@ -20,13 +20,19 @@ import pytest
 
 import plotlet as pt
 from plotlet import aes
-from plotlet._spec import _FONTSPEC, active_font
+from plotlet._spec import _FONTSPEC, active_theme
 from plotlet.draw.font import (_FONT_DIR, _load_font, _resolve_face,
                                _resolve_font)
 
 
 DEJAVU = str(_FONT_DIR / "DejaVuSans.ttf")
 ARIMO = str(_FONT_DIR / "Arimo-Regular.ttf")
+
+
+def _use_family(family: str):
+    """Scope `font.family` for a unit test — the same theme-override
+    path a chart-level `c.spec(font=dict(family=...))` takes."""
+    return active_theme(None, {"font": {"family": family}})
 
 
 def _df():
@@ -60,10 +66,9 @@ def test_metrics_differ_per_font():
     assert dj.cap_ratio != ar.cap_ratio
     assert dj.descender_ratio != ar.descender_ratio
     # Arimo is metrically narrower than DejaVu for typical labels.
-    from plotlet._spec import active_font
     from plotlet.draw.font import measure_text
     w_dejavu = measure_text("Hello 123", 13)
-    with active_font("Arimo"):
+    with _use_family("Arimo"):
         w_arimo = measure_text("Hello 123", 13)
     assert w_arimo != w_dejavu
 
@@ -81,8 +86,11 @@ def test_path_escape_hatch():
 def test_unknown_font_is_loud():
     with pytest.raises(ValueError, match="unknown font"):
         _resolve_font("Comic Sans")
+    c = pt.chart(_df(), aes(x="x", y="y"))
+    c.spec(font=dict(family="Comic Sans"))
+    c.add_line()
     with pytest.raises(ValueError, match="unknown font"):
-        pt.chart(_df(), aes(x="x", y="y"), font="Comic Sans").add_line().to_svg()
+        c.to_svg()
 
 
 def test_names_are_case_insensitive():
@@ -96,14 +104,14 @@ def test_names_are_case_insensitive():
 
 def test_resolve_face_variants_are_distinct_files():
     for family in ("DejaVu Sans", "Arimo"):
-        with active_font(family):
+        with _use_family(family):
             faces = {key: _resolve_face(*key)[0] for key in
                      [("normal", "normal"), ("italic", "normal"),
                       ("normal", "bold"), ("italic", "bold")]}
         assert len({f.path for f in faces.values()}) == 4
         # Bundled families always resolve to a real drawn face — never
         # the synthetic skew.
-        with active_font(family):
+        with _use_family(family):
             for style in ("normal", "italic"):
                 for weight in ("normal", "bold"):
                     assert _resolve_face(style, weight)[1] is False
@@ -111,7 +119,7 @@ def test_resolve_face_variants_are_distinct_files():
 
 def test_path_font_italic_is_synthetic_and_bold_is_loud():
     p = str(_FONT_DIR / "Arimo-Regular.ttf")
-    with active_font(p):
+    with _use_family(p):
         f, synthetic = _resolve_face("italic", "normal")
         assert synthetic is True
         assert f.path == p          # same file, skewed at render time
@@ -130,7 +138,7 @@ def test_bold_measures_wider():
     from plotlet.draw.font import measure_text
     s = "Hello 123"
     assert measure_text(s, 13, "normal", "bold") > measure_text(s, 13)
-    with active_font("Arimo"):
+    with _use_family("Arimo"):
         assert measure_text(s, 13, "normal", "bold") > measure_text(s, 13)
 
 
@@ -146,45 +154,64 @@ def test_bold_ticks_change_output():
 # Chart API + scoping
 # ---------------------------------------------------------------------------
 
-def test_font_kwarg_equals_method():
-    a = pt.chart(_df(), aes(x="x", y="y"), font="Arimo").add_line().to_svg()
+def test_family_via_spec_override():
     c = pt.chart(_df(), aes(x="x", y="y"))
-    c.font("Arimo")
-    assert c.add_line().to_svg() == a
+    c.spec(font=dict(family="Arimo"))
+    c.add_line()
+    assert 'font-family="Arimo"' in c.to_svg()
 
 
 def test_alias_renders_same_glyphs():
     # "Helvetica" maps to the Arimo file: identical output except the
     # root font-family attr, which carries the user's name verbatim.
     strip = lambda s: re.sub(r'font-family="[^"]*"', "", s)
-    a = pt.chart(_df(), aes(x="x", y="y"), font="Arimo").add_line().to_svg()
-    h = pt.chart(_df(), aes(x="x", y="y"), font="Helvetica").add_line().to_svg()
+    ar = pt.chart(_df(), aes(x="x", y="y"))
+    ar.spec(font=dict(family="Arimo"))
+    ar.add_line()
+    a = ar.to_svg()
+    hv = pt.chart(_df(), aes(x="x", y="y"))
+    hv.spec(font=dict(family="Helvetica"))
+    hv.add_line()
+    h = hv.to_svg()
     assert strip(a) == strip(h)
     assert 'font-family="Helvetica"' in h
 
 
+def _arimo_chart():
+    c = pt.chart(_df(), aes(x="x", y="y"), title="T")
+    c.spec(font=dict(family="Arimo"))
+    c.add_line()
+    return c
+
+
 def test_font_changes_output_and_is_deterministic():
-    base = pt.chart(_df(), aes(x="x", y="y"), title="T").add_line().to_svg()
-    ar1 = pt.chart(_df(), aes(x="x", y="y"), title="T", font="Arimo").add_line().to_svg()
-    ar2 = pt.chart(_df(), aes(x="x", y="y"), title="T", font="Arimo").add_line().to_svg()
-    assert ar1 != base
-    assert ar1 == ar2
+    base = pt.chart(_df(), aes(x="x", y="y"), title="T")
+    base.add_line()
+    assert _arimo_chart().to_svg() != base.to_svg()
+    assert _arimo_chart().to_svg() == _arimo_chart().to_svg()
 
 
 def test_no_spec_leak_across_renders():
     before = _FONTSPEC["family"]
-    pt.chart(_df(), aes(x="x", y="y"), font="Arimo").add_line().to_svg()
+    _arimo_chart().to_svg()
     assert _FONTSPEC["family"] == before
     # A font chart rendered earlier must not restyle a later default chart.
-    d1 = pt.chart(_df(), aes(x="x", y="y")).add_line().to_svg()
-    pt.chart(_df(), aes(x="x", y="y"), font="Arimo").add_line().to_svg()
-    d2 = pt.chart(_df(), aes(x="x", y="y")).add_line().to_svg()
+    p1 = pt.chart(_df(), aes(x="x", y="y"))
+    p1.add_line()
+    d1 = p1.to_svg()
+    _arimo_chart().to_svg()
+    p2 = pt.chart(_df(), aes(x="x", y="y"))
+    p2.add_line()
+    d2 = p2.to_svg()
     assert d1 == d2
 
 
 def test_path_selector_never_leaks_into_svg():
     bold = str(_FONT_DIR / "Arimo-Bold.ttf")
-    svg = pt.chart(_df(), aes(x="x", y="y"), font=bold).add_line().to_svg()
+    c = pt.chart(_df(), aes(x="x", y="y"))
+    c.spec(font=dict(family=bold))
+    c.add_line()
+    svg = c.to_svg()
     assert ".ttf" not in svg
     assert "fonts/" not in svg
     assert 'font-family="Arimo"' in svg    # name table stands in
@@ -236,10 +263,11 @@ def test_scientific_symbol_coverage():
 
 def _demo(font: str | None, title: str, theme: str | None = None) -> pt.Chart:
     xs = [i * 0.1 for i in range(64)]
-    kw = {"font": font} if font else {}
+    c = pt.chart(title=title, xlabel="t", ylabel="value", legend=True)
     if theme:
-        kw["theme"] = theme
-    c = pt.chart(title=title, xlabel="t", ylabel="value", legend=True, **kw)
+        c.theme(theme)
+    if font:
+        c.spec(font=dict(family=font))
     df = {"x": xs, "y": [math.sin(x) for x in xs]}
     c.add_line(df, aes(x="x", y="y"), label="sin(t)")
     df2 = {"x": xs, "y": [math.cos(x) for x in xs]}
@@ -252,7 +280,7 @@ def font_arimo():
 
 
 def font_arimo_dark():
-    # font=/theme= compose — the point of decoupling them.
+    # Preset and family override compose — separate channels, one spec rail.
     return _demo("Arimo", "font: Arimo + theme: dark", theme="dark")
 
 
@@ -269,9 +297,10 @@ def _variant_demo(font: str | None, title: str) -> pt.Chart:
     # wider, so the reservation must match the render).
     df = {"label": ["alpha", "beta", "gamma", "delta"],
           "rate": [0.42, 0.35, 0.28, 0.21]}
-    kw = {"font": font} if font else {}
     c = pt.chart(df, aes(x="label", y="rate"), data_width=320,
-                 data_height=200, title=title, ylabel="rate", **kw)
+                 data_height=200, title=title, ylabel="rate")
+    if font:
+        c.spec(font=dict(family=font))
     c.add_bar(fill="#5599aa")
     c.xticks(fontweight="bold")
     c.yticks(fontstyle="italic", fontweight="bold")
@@ -299,7 +328,8 @@ def font_mixed_layout():
 
     df2 = {"x": xs, "y": [math.cos(x) for x in xs]}
     right = pt.chart(df2, aes(x="x", y="y"), title="Arimo", xlabel="t",
-                      ylabel="cos", font="Arimo")
+                      ylabel="cos")
+    right.spec(font=dict(family="Arimo"))
     right.add_line()
     return left | right
 

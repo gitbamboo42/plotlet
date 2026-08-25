@@ -27,8 +27,12 @@ right-aligned text below the chart — ggplot's `labs(caption=)`),
 `c.gridlines(which="minor")` — minor lines use the axes' `minor=` tick
 positions, or auto subdivisions when none are set), `legend=True/False`,
 `clip=True/False`,
-`data_width`, `data_height`, `theme` (see [THEMES.md](THEMES.md)),
-`font` (see [Fonts](#fonts)).
+`data_width`, `data_height`.
+
+Styling is method-only, not a constructor kwarg: `c.theme("dark")`
+applies a preset, `c.spec(font=dict(...))` overrides individual spec
+values, the font family included — see [THEMES.md](THEMES.md) and
+[Fonts](#fonts).
 
 `c.legend(True, position=...)` places the in-frame legend. Outside
 tokens (reserve margin space beside the data area): `"right"` (default),
@@ -172,20 +176,21 @@ and viewers need no font installed. Three tiers:
 1. **Default — DejaVu Sans** (bundled). Zero config. It stays the
    default for coverage: Greek, Mathematical Operators, arrows, and
    super/subscripts all render without tofu.
-2. **Bundled families** — `font="Arimo"`, the journal look:
+2. **Bundled families** — `family="Arimo"`, the journal look:
    metric-compatible with Helvetica/Arial, and the aliases
    `"Helvetica"` / `"Arial"` select it. Arimo covers Greek and
    super/subscripts but few math operators or arrows; glyphs a face
    lacks render as `.notdef` boxes.
-3. **Escape hatch** — `font="/path/to/MyFont.ttf"` loads any TTF/OTF
+3. **Escape hatch** — `family="/path/to/MyFont.ttf"` loads any TTF/OTF
    on disk. Only the author needs the file at render time; the output
    stays self-contained and carries the font's family name, never the
    file path. ⚠️ Embedding a proprietary font's outlines in published
    SVGs may be restricted by its EULA — check before shipping.
 
-`font=` at construction or chained `c.font(...)`; per-chart like
-`theme=`, and the two compose (`theme="dark", font="Arimo"`). Unknown
-font names raise — no silent fallback, no OS resolution.
+The family is a spec value like any other, set through `spec()`:
+`c.spec(font=dict(family="Arimo"))` — it applies on top of any
+`c.theme(...)` preset. Unknown font names raise — no silent fallback,
+no OS resolution.
 
 Both bundled families ship all four faces (Regular / Bold / Italic /
 BoldItalic), so per-text `fontstyle="italic"` / `fontweight="bold"`
@@ -438,8 +443,10 @@ each subset, and lays the panels out in a shared-scale grid (`share_x` /
 grid (`col_wrap=` fixes the column count); `row=` / `col=` lay a
 two-factor grid instead (the seaborn names; ggplot's `facet_grid`) —
 pass one form or the other, not both. Panel titles default to the group
-label; forwarded chart opts (`theme=`, `data_width=`, `xlabel=`, …)
-apply to every panel. See `help(pt.facet)` for details.
+label; forwarded chart opts (`data_width=`, `xlabel=`, …) apply to
+every panel, and any `Chart` method called on the facet grid
+(`fg.theme("dark")`, `fg.spec(...)`) replays against every panel. See
+`help(pt.facet)` for details.
 
 ## Inset axes
 

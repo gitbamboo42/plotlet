@@ -88,7 +88,7 @@ def text_path(s: str, x: float, y: float, size: float,
     `fontstyle="italic"` / `fontweight="bold"` select the variant face —
     real drawn Italic/Bold/BoldItalic files for the bundled families. A
     path-loaded font falls back to a synthetic -12° oblique skew for
-    italic; bold raises (pass the bold file's path as `font=` instead).
+    italic; bold raises (pass the bold file's path as the family instead).
 
     `decoration="underline" | "overline" | "line-through"` appends a stroke
     line at the conventional offset for that decoration.

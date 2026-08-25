@@ -24,7 +24,7 @@ What resolution bakes into the projection:
   * effective margins (`margin` = `M_eff`), grown canvases, and the
     joined-edge `hide`/`suppress` annotations from the layout engine's
     measurement pre-pass
-  * `theme` / `font` made explicit (the recorder kept them as ops)
+  * `theme` / `spec` made explicit (the recorder kept them as ops)
   * cross-panel wiring by `pid`: share anchors and legend sources
   * insets resolved recursively — each inset panel carries its own
     trained scales and margins (they render from their plan at emit,
@@ -57,7 +57,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass, field
 
-from .._spec import active_font, active_theme
+from .._spec import active_theme
 from ..scales import _AxisDescriptor as IRScale
 from ._resolution import _default_state
 
@@ -122,7 +122,7 @@ class IRPanel:
     suppress: dict       # {"left","right","top","bottom"} → bool (labels)
     share: dict          # {"x": pid | None, "y": pid | None} anchor refs
     theme: str | None
-    font: str | None
+    spec: dict | None   # accumulated c.spec(...) overrides, post-cascade
     attachment_gap: float | None
     leaf_kind: str
     legend: dict | None = None       # legend-leaf config (sources by pid)
@@ -140,6 +140,13 @@ class IRLayout:
     gap: dict = field(default_factory=dict)      # {"gap","gap_x","gap_y"}
     coord: IRCoord | None = None
     title: str | None = None                     # figure-title band text
+    # The layout's effective style — kept for the outer canvas (figure
+    # background, figure title, inter-panel space). Its cascade into
+    # leaves is already baked: each `IRPanel.theme` / `.spec` is the
+    # effective post-cascade value, so rehydration never re-runs the
+    # cascade.
+    theme: str | None = None
+    spec: dict | None = None
     # True when the recorded layout carried any ops. Load-bearing at
     # emit: `_effective_children` absorbs op-less same-kind child
     # layouts, and the gap walk stops at op-carrying ancestors — the
@@ -322,6 +329,8 @@ def _layout_to_ir(layout, panel_opts, states, pids):
         gap=gap,
         coord=coord,
         title=layout._title_text or None,
+        theme=layout._theme,
+        spec=layout._spec,
         had_state=layout._had_state,
         coord_band=coord_plan.band if coord_plan is not None else None,
     )
@@ -367,13 +376,12 @@ def _is_default(v, d):
         return False
 
 
-def _project_state(state, theme, font):
+def _project_state(state, theme, spec):
     """The sparse `IRPanel.state`: drop lifted keys and keys still at
     their default. The baseline is `_default_state()` under the panel's
-    own theme/font — the same ambient context `_replay` ran in — so
-    eliding here and reseeding in `_rehydrate_panel` see identical
-    defaults."""
-    with active_theme(theme), active_font(font):
+    own theme — the same ambient context `_replay` ran in — so eliding
+    here and reseeding in `_rehydrate_panel` see identical defaults."""
+    with active_theme(theme, spec):
         base = dict(_default_state())
     return {k: v for k, v in state.items()
             if k not in _LIFTED_STATE_KEYS
@@ -404,7 +412,8 @@ def _chart_to_ir(chart, panel_opts, states, pids):
     ir_coord = (_coord_to_ir(coord_obj, panel_opts, states, pids)
                 if coord_obj else IRCoord(kind="cartesian"))
 
-    projected_state = _project_state(state, chart._theme, chart._font)
+    projected_state = _project_state(state, chart._theme,
+                                     chart._spec)
 
     attachments = {
         "left":   tuple(_chart_to_ir(a, panel_opts, states, pids)
@@ -452,7 +461,7 @@ def _chart_to_ir(chart, panel_opts, states, pids):
         suppress=suppress,
         share=share,
         theme=chart._theme,
-        font=chart._font,
+        spec=chart._spec,
         attachment_gap=getattr(chart, "_attachment_gap", None),
         leaf_kind=chart._leaf_kind,
     )
@@ -502,7 +511,7 @@ def _nondata_leaf_to_ir(chart, pids):
         suppress={s: False for s in ("left", "right", "top", "bottom")},
         share={"x": None, "y": None},
         theme=chart._theme,
-        font=chart._font,
+        spec=chart._spec,
         attachment_gap=getattr(chart, "_attachment_gap", None),
         leaf_kind=chart._leaf_kind,
         legend=legend,
@@ -551,7 +560,7 @@ def _coerce_param(v, panel_opts, states, pids):
 def _rehydrate(root: "IRLayout | IRPanel"):
     """Build a `RenderPlan` (tree + states + panel_opts) from the
     projection alone. Journals stay empty — emit reads only explicit
-    fields (`_theme` / `_font` / `_title_text` / `_had_state`), so the
+    fields (`_theme` / `_spec` / `_title_text` / `_had_state`), so the
     rehydrated tree carries no synthesized ops of any kind."""
     from ._layout_engine import RenderPlan
 
@@ -593,6 +602,8 @@ def _rehydrate_node(ir, ctx, *, parent):
         if ir.coord is not None:
             node._coordinate = _rehydrate_coord(ir.coord, ctx)
         node._title_text = ir.title or ""
+        node._theme = ir.theme
+        node._spec = ir.spec
         node._had_state = ir.had_state
         if (node._coordinate is not None
                 and hasattr(node._coordinate, "resolve_layout")):
@@ -621,7 +632,7 @@ def _rehydrate_panel(panel: "IRPanel", ctx, *, parent):
     node._margin = dict(panel.margin_floor)
     node._diagram_inner = panel.diagram_inner
     node._theme = panel.theme
-    node._font = panel.font
+    node._spec = panel.spec
     if panel.attachment_gap is not None:
         node._attachment_gap = panel.attachment_gap
 
@@ -652,10 +663,10 @@ def _rehydrate_panel(panel: "IRPanel", ctx, *, parent):
 
     # Data leaf: rebuild state + panel opts. The projection is sparse —
     # reseed every omitted key from `_default_state()` under the
-    # panel's own theme/font (the same ambient context `_replay` and
+    # panel's own theme (the same ambient context `_replay` and
     # `_project_state` used), then overlay the projected decisions.
     # The full key set also satisfies `_PanelState`'s closed-set checks.
-    with active_theme(panel.theme), active_font(panel.font):
+    with active_theme(panel.theme, panel.spec):
         base = _default_state()
     state = _PanelState({**base, **panel.state})
     if panel.coord.kind != "cartesian":

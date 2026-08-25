@@ -182,7 +182,8 @@ def test_themed_panel_round_trips_through_sparse_state():
     must match the direct render byte for byte."""
     df = {"x": [1.0, 2.0], "y": [3.0, 4.0]}
 
-    c = pt.chart(df, theme="minimal")
+    c = pt.chart(df)
+    c.theme("minimal")
     c.add_scatter(aes(x="x", y="y"))
     ir = pt.to_ir(c)
     assert ir.resolve().to_svg() == ir.to_svg()
