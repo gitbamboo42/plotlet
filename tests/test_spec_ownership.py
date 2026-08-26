@@ -59,7 +59,7 @@ _READ = re.compile(r'(?:(?<![A-Za-z_])SPEC|\.spec)\["([^"]+)"\]')
 
 
 def _spec() -> dict:
-    return json.loads((SRC / "spec.json").read_text())
+    return json.loads((SRC / "spec.json").read_text(encoding="utf-8"))
 
 
 def _reads() -> list[tuple[str, str]]:
@@ -68,7 +68,7 @@ def _reads() -> list[tuple[str, str]]:
     for py in SRC.rglob("*.py"):
         if py.name == "_spec.py":
             continue  # owns the handles, reads nothing
-        for m in _READ.finditer(py.read_text()):
+        for m in _READ.finditer(py.read_text(encoding="utf-8")):
             out.append((py.stem, m.group(1)))
     return out
 
