@@ -19,6 +19,7 @@ import importlib
 import json
 import pathlib
 
+import numpy as np
 import pytest
 
 import plotlet as pt
@@ -26,7 +27,8 @@ from plotlet import aes
 
 # Modules that consume this file's PLOTS rather than defining their own —
 # importing them here would be a cycle.
-_SKIP = {"test_journal_roundtrip", "test_ir", "test_ir_resolved"}
+_SKIP = {"test_journal_roundtrip", "test_ir", "test_ir_resolved",
+         "test_to_python"}
 
 
 def _collect_plots():
@@ -221,6 +223,94 @@ def test_data_section_ids_are_deterministic():
     assert j1.entries == j2.entries
     assert j1.data == j2.data
     assert list(j1.data) == ["d1", "d2"]
+
+
+def test_equal_tables_share_one_data_entry():
+    """The same user table feeds N charts → one data entry, not N.
+    Normalization at the recorder boundary copies per chart (snapshot
+    semantics), so identity alone can't collapse them — `_intern` also
+    dedups by content. Distinct content still gets its own id."""
+    df = {"x": [1, 2, 3], "y": [3, 1, 2]}
+
+    charts = [pt.chart(df, aes(x="x", y="y")) for _ in range(3)]
+    for c in charts:
+        c.add_line()
+    g = pt.grid([charts])
+
+    journal = pt.to_journal(g)
+    assert list(journal.data) == ["d1"]
+    for entry in journal.entries:
+        data = entry["kwargs"].get("data")
+        if data is not None:
+            assert data == {"$data": "d1"}
+
+    # A table with different content keeps its own entry.
+    df2 = {"x": [9], "y": [9]}
+    c1 = pt.chart(df, aes(x="x", y="y"))
+    c1.add_line()
+    c2 = pt.chart(df2, aes(x="x", y="y"))
+    c2.add_scatter()
+    journal2 = pt.to_journal(pt.grid([[c1, c2]]))
+    assert list(journal2.data) == ["d1", "d2"]
+
+
+def test_exotic_cells_never_content_merge():
+    """Two tables that differ only in exotic cells must keep separate
+    entries — an object's repr may not reflect its state, so content
+    keys refuse any table whose cells aren't exactly native types."""
+    class Tag:
+        def __init__(self, v):
+            self.v = v
+
+        def __repr__(self):
+            return "<Tag>"
+
+    df1 = {"x": [1, 2], "y": [3, 4], "tag": [Tag(1), Tag(2)]}
+    df2 = {"x": [1, 2], "y": [3, 4], "tag": [Tag(10), Tag(20)]}
+
+    c1 = pt.chart(df1, aes(x="x", y="y"))
+    c1.add_line()
+    c2 = pt.chart(df2, aes(x="x", y="y"))
+    c2.add_line()
+
+    journal = pt.to_journal(pt.grid([[c1, c2]]))
+    assert list(journal.data) == ["d1", "d2"]
+
+
+def test_native_subclass_cells_never_content_merge():
+    """An IntEnum column and an equal plain-int column dump to the same
+    JSON but str() differently — they must not share one entry."""
+    from enum import IntEnum
+
+    class Level(IntEnum):
+        LOW = 1
+        HIGH = 2
+
+    df1 = {"x": [1, 2], "y": [3, 4], "lv": [Level.LOW, Level.HIGH]}
+    df2 = {"x": [1, 2], "y": [3, 4], "lv": [1, 2]}
+
+    c1 = pt.chart(df1, aes(x="x", y="y"))
+    c1.add_line()
+    c2 = pt.chart(df2, aes(x="x", y="y"))
+    c2.add_line()
+
+    journal = pt.to_journal(pt.grid([[c1, c2]]))
+    assert list(journal.data) == ["d1", "d2"]
+
+
+def test_shared_matrix_shares_one_data_entry():
+    """The same numpy matrix in two panels interns once — matrices key
+    by (shape, dtype, bytes) rather than a JSON dump."""
+    m = np.arange(12.0).reshape(3, 4)
+
+    c1 = pt.chart()
+    c1.add_image_cmap(m)
+    c2 = pt.chart()
+    c2.add_image_cmap(m)
+    g = pt.grid([[c1, c2]])
+
+    journal = pt.to_journal(g)
+    assert list(journal.data) == ["d1"]
 
 
 def test_facet_journal_stores_one_table():

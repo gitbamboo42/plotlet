@@ -55,11 +55,53 @@ programmatic transformation (`to_ir` / `from_ir`).
 """
 from __future__ import annotations
 
+import hashlib
 import itertools
+import json
 from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
+
+
+def _exact_cells(value) -> bool:
+    """True when every leaf of a `json_safe`d table serializes without
+    losing type or state — exactly a native JSON type, or a numpy
+    scalar (whose repr carries the full value). A subclass of a native
+    type (IntEnum, a str subclass) dumps as its base value, and an
+    arbitrary object dumps as its repr, which may not reflect its
+    state — either would let two different tables share one key."""
+    t = type(value)
+    if t in (str, int, float, bool, type(None)):
+        return True
+    if t is dict:
+        return all(_exact_cells(v) for v in value.values())
+    if t is list:
+        return all(_exact_cells(v) for v in value)
+    return isinstance(value, np.generic)
+
+
+def _table_key(table):
+    """Content key for data-table dedup, or None when the table can't
+    be keyed by value (see `_exact_cells`) — such tables dedup by
+    identity only. Keys are fixed-size digests, not the serialized
+    data, so holding them doesn't retain a copy of a large table."""
+    if isinstance(table, np.ndarray):
+        # tobytes() is a memcpy — far cheaper than a JSON dump.
+        return (table.shape, table.dtype.str,
+                hashlib.sha256(table.tobytes()).digest())
+    # Late import: journal.py is imported by _json_layer's consumers.
+    from .._json_layer import json_safe
+    try:
+        safe = json_safe(table)
+        if not _exact_cells(safe):
+            return None
+        # default=repr only fires for numpy scalars here (value-exact
+        # reprs); everything else _exact_cells already vetted.
+        dump = json.dumps(safe, default=repr)
+    except (ValueError, RecursionError):    # circular reference
+        return None
+    return hashlib.sha256(dump.encode("utf-8")).digest()
 
 
 @dataclass
@@ -178,6 +220,8 @@ def to_journal(root) -> Journal:
     # journals of the same plot have identical nids and diffing is sane.
     nid_counter = itertools.count(1)
     data_ids: dict[int, str] = {}   # id(table) → data id
+    data_keys: dict = {}            # content key → data id (lazy, see _intern)
+    unkeyed: list = []              # first table, interned before keying starts
 
     def _nid_of(node) -> int:
         if id(node) not in nid_map:
@@ -186,15 +230,43 @@ def to_journal(root) -> Journal:
 
     def _intern(table) -> dict:
         """Store `table` once in `journal.data`, return its `{"$data": id}`
-        reference. Identity-keyed: the chart's `_data` object is the very
-        object the recorder injects into artist calls, so a chart and its
-        artists collapse to one table entry. Ids mint "d1", "d2", … in
-        first-encounter order — deterministic, like nids."""
+        reference. Two-level dedup: identity first (the chart's `_data`
+        object is the very object the recorder injects into artist calls,
+        so a chart and its artists hit this path), then content — the
+        same user table normalizes to a fresh object per chart at the
+        recorder boundary (snapshot-copy semantics), so N charts built on
+        one table would otherwise store N identical entries. Ids mint
+        "d1", "d2", … in first-encounter order — deterministic, like
+        nids.
+
+        Content keys are computed lazily: `to_journal` runs on every
+        render, and the common figure has one table — hashing it would
+        buy nothing, so the first table is stored unkeyed and only a
+        second distinct object triggers keying (of both). Equal-content
+        tables collapse to one *stored object* — a storage detail, not
+        a semantic link; the render half never writes into a table, but
+        an in-place edit of a shared `journal.data` / IR entry reaches
+        every chart whose table had equal content."""
         did = data_ids.get(id(table))
         if did is None:
-            did = f"d{len(data_ids) + 1}"
+            if not data_ids:
+                did = "d1"
+                journal.data[did] = table
+                unkeyed.append((did, table))
+            else:
+                while unkeyed:
+                    udid, utable = unkeyed.pop()
+                    ukey = _table_key(utable)
+                    if ukey is not None:
+                        data_keys[ukey] = udid
+                key = _table_key(table)
+                did = data_keys.get(key) if key is not None else None
+                if did is None:
+                    did = f"d{len(journal.data) + 1}"
+                    journal.data[did] = table
+                    if key is not None:
+                        data_keys[key] = did
             data_ids[id(table)] = did
-            journal.data[did] = table
         return {"$data": did}
 
     def _encode(value: Any) -> Any:
