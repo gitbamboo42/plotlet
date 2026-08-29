@@ -34,6 +34,7 @@ from .formatters import (register_formatter, list_formatters,
 from ._coord_registry import register_coord_codec
 from .record.journal import (to_journal, from_journal, to_json, from_json,
                        JournalNode, Journal)
+from .record.codegen import to_python
 from .record.figure_ir import to_ir, from_ir, FigureIR, IRNode
 from .skill import skill
 # Shadows the `plotlet.lint` submodule attribute with the function —
@@ -67,7 +68,7 @@ __all__ = ["chart", "Chart", "Layout", "SPEC", "TAB10",
            "linkage", "linkage_split", "SplitTree",
            "register_formatter", "list_formatters",
            "superscript", "subscript",
-           "to_json", "from_json", "register_coord_codec",
+           "to_json", "from_json", "to_python", "register_coord_codec",
            "to_journal", "from_journal", "JournalNode", "Journal",
            "to_ir", "from_ir", "FigureIR", "IRNode",
            "skill", "lint", "describe",

@@ -685,26 +685,6 @@ class Chart(_Renderable):
                             f"c.{name}(...): {sorted(clash)} passed both "
                             f"inside aes(...) and as a bare kwarg — pick one."
                         )
-                    # Chart-level aesthetic inheritance — fill in what the
-                    # call didn't set: column mappings from the chart's
-                    # aes(...), literal defaults from its bare kwargs. The
-                    # record signature declares the artist's kwarg names
-                    # (`__kwarg_names__`, stamped by `add_artist`); only
-                    # inject aes the artist can accept, since its
-                    # signature would otherwise reject an unknown name.
-                    known = getattr(spec.record, "__kwarg_names__", None)
-                    if inherit_aes:
-                        for k, v in self._aes_map.items():
-                            if (k not in aes_map and k not in kwargs
-                                    and (known is None or k in known)):
-                                aes_map[k] = v
-                        for k, v in self._aes.items():
-                            if (v is not None and k not in kwargs
-                                    and k not in aes_map
-                                    and (known is None or k in known)):
-                                kwargs[k] = v
-                    if aes_map:
-                        kwargs["mapping"] = dict(aes_map)
                     # Normalize any user-passed `data=`. Positional args
                     # get the same treatment — `c.add_heatmap(df, ...)`
                     # passes df positionally, and the artist expects a
@@ -726,21 +706,17 @@ class Chart(_Renderable):
                         # same ragged check as `data=`.
                         if args and isinstance(args[0], (dict, DataFrameLite)):
                             _check_table(args[0], f"c.{name}(...)")
-                    # Data injection — a call that maps columns via
-                    # aes(...) draws from the chart-level table. A call
-                    # that brings its own data overrides it, whether the
-                    # data came as `data=` (in kwargs) or positionally
-                    # (in args) — so inject only when the call gave none.
                     # After normalization on purpose: `self._data` is
                     # already normalized in __init__, and re-normalizing
                     # would copy a dict table — every artist must share
                     # the chart's table *object* so `to_journal` interns
                     # chart + artists as one data-table entry.
-                    if (self._data is not None and "data" not in kwargs
-                            and not args
-                            and (known is None or "data" in known)
-                            and aes_map):
-                        kwargs["data"] = self._data
+                    _inherit_chart_aes(
+                        aes_map, kwargs, args,
+                        self._aes_map, self._aes, self._data,
+                        getattr(spec.record, "__kwarg_names__", None),
+                        inherit_aes,
+                    )
                 # Only the user action is recorded — an artist's
                 # frame_defaults regenerate inside `_replay` on every
                 # render (see `_expand_frame_defaults` in render/_resolution.py).
@@ -813,20 +789,24 @@ class Chart(_Renderable):
         Chart configured to
         render at the requested pixel size — record artists on it normally.
         Render the parent leaf; the inset draws on top of the parent's
-        artists with its own scales and frame."""
+        artists with its own scales and frame. The data region defaults
+        to the rect's fraction of this leaf's; pass `data_width=` /
+        `data_height=` to size it explicitly instead."""
         x, y, w, h = rect
         if not (0 <= w <= 1 and 0 <= h <= 1):
             raise ValueError(
                 f"inset rect width/height must be in [0, 1]; got {rect}"
             )
-        dw = max(1, int(round(self._data_width  * w)))
-        dh = max(1, int(round(self._data_height * h)))
+        chart_opts.setdefault(
+            "data_width",  max(1, int(round(self._data_width  * w))))
+        chart_opts.setdefault(
+            "data_height", max(1, int(round(self._data_height * h))))
         # Inherits the global floor (zero by default) — content-fit
         # margins only, no pre-reserved breathing room. Small canvas: no
         # room for long axis labels unless the user sizes it bigger.
         # Route through the `chart()` factory so sugar kwargs (title,
         # xlim, ...) work here the same as at top level.
-        inset = chart(data_width=dw, data_height=dh, **chart_opts)
+        inset = chart(**chart_opts)
         self._attach_inset(rect, inset)
         return inset
 
@@ -1377,6 +1357,40 @@ def grid(cells: list[list], **kwargs) -> "Layout":
     parent._grid_rows = rows
     parent._grid_cols = cols
     return parent
+
+
+def _inherit_chart_aes(aes_map, kwargs, args, chart_aes_map, chart_aes,
+                       chart_data, known, inherit_aes) -> dict:
+    """Chart-level aesthetic inheritance — fill in what the call didn't
+    set: column mappings from the chart's aes(...), literal defaults
+    from its bare kwargs, and the chart's table when the call maps
+    columns but brought no data of its own (`data=` or positional).
+    `known` is the artist's kwarg-name set (`__kwarg_names__`, stamped
+    by `add_artist`); only inject what the artist can accept, since its
+    signature would otherwise reject an unknown name.
+
+    Mutates and returns `kwargs`. This is the single source of truth
+    for what recording an artist call stores — the live recorder above
+    and codegen's re-recording check (`record/codegen.py`) both call
+    it, so the two can't drift."""
+    if inherit_aes:
+        for k, v in chart_aes_map.items():
+            if (k not in aes_map and k not in kwargs
+                    and (known is None or k in known)):
+                aes_map[k] = v
+        for k, v in chart_aes.items():
+            if (v is not None and k not in kwargs
+                    and k not in aes_map
+                    and (known is None or k in known)):
+                kwargs[k] = v
+    if aes_map:
+        kwargs["mapping"] = dict(aes_map)
+    if (chart_data is not None and "data" not in kwargs
+            and not args
+            and (known is None or "data" in known)
+            and aes_map):
+        kwargs["data"] = chart_data
+    return kwargs
 
 
 def _scale_data_dims(node, s: float) -> None:
