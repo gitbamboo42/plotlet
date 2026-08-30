@@ -460,3 +460,30 @@ inset.add_line(df, aes(x="x", y="y"))
 of the parent's data area (origin at the bottom-left). It has its own
 scales, ticks, and frame; record artists on it normally. The parent's
 `to_svg` embeds the inset on top of the data layer.
+
+## Serialization
+
+A figure serializes losslessly at two levels; both round-trip to a
+byte-identical SVG.
+
+```python
+j = pt.to_journal(c)          # Journal — flat event list, the user's calls
+node = pt.from_journal(j)     # JournalNode; .to_svg() / .to_html()
+
+blob = pt.to_json(c)          # JSON-safe dict of the journal
+node = pt.from_json(blob)     # inverse; json.dumps(blob) is the file form
+
+print(pt.to_python(c))        # Python script that rebuilds the figure
+```
+
+`to_json` / `from_json` are the interchange format: a blob is inert
+data (no code execution), so tools and AI assistants can author one
+directly — format guide via `pt.skill("json")`, worked examples in
+`examples/json/`. `to_python` closes the loop by turning any figure —
+including one loaded from JSON — into an editable script in house
+style. `to_python` accepts a `Chart` / layout, a `Journal`, a
+`JournalNode`, or the JSON dict itself.
+
+`pt.to_ir(c)` / `pt.from_ir(...)` are the lower, per-node compiled
+level (the render contract) — for inspection and programmatic
+transformation, not authoring. See `docs/ARCHITECTURE.md`.

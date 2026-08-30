@@ -139,11 +139,8 @@ model-authored blob inert data rather than a file-read primitive.
 `pt.from_json` only decodes the blob — it checks the `version` field
 and nothing else, so a successful call proves little. The real check
 is rendering: call `.to_svg()` and read any error it raises. Unknown
-op names and dangling `$data` references fail there with a message
-that names the problem. Two mistakes fail less helpfully: an entry
-that targets a nid before its `new_*` entry raises a bare
-`KeyError: <nid>` (fix the entry order), and a `$node` envelope in a
-layout's `children` raises `TypeError: unhashable type: 'dict'` (use
-bare int nids there). After it renders, read the figure back instead
-of eyeballing pixels: `pt.lint(node)` for overlap/clipping,
+op names, dangling `$data` / nid references, out-of-order entries, and
+envelopes where bare nids belong all fail with a message that names
+the problem. After it renders, read the figure back instead of
+eyeballing pixels: `pt.lint(node)` for overlap/clipping,
 `pt.describe(node)` for what actually got plotted.

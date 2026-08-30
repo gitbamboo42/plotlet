@@ -226,6 +226,13 @@ def journal_to_ir(journal, root_nid: int | None = None) -> FigureIR:
             init = dict(entry["kwargs"])
             kind = init.pop("leaf_kind")
             nodes[nid] = IRNode(nid, kind, init)
+        elif nid not in nodes:
+            raise ValueError(
+                f"journal_to_ir: entry {{'op': {op!r}, 'nid': {nid!r}}} "
+                f"targets a node with no earlier create entry — a node's "
+                f"new_chart / new_leaf / new_layout entry must come before "
+                f"every entry that targets it."
+            )
         elif op == "_inset_add":
             kw = entry["kwargs"]
             nodes[nid].insets.append({
@@ -251,6 +258,12 @@ def journal_to_ir(journal, root_nid: int | None = None) -> FigureIR:
         if nid in seen:
             return
         seen.add(nid)
+        if nid not in nodes:
+            raise ValueError(
+                f"journal_to_ir: reference to nid {nid!r}, but the "
+                f"journal has no create entry (new_chart / new_leaf / "
+                f"new_layout) for it."
+            )
         node = nodes[nid]
         for ref in _node_refs(node):
             _visit(ref)
@@ -362,10 +375,31 @@ def _node_refs(node: IRNode) -> list[int]:
             for v in value:
                 _walk(v)
 
+    def _bare(field: str, values) -> None:
+        # These positional fields take bare int nids; catch the natural
+        # hand-authoring mistake of wrapping them in a $node envelope
+        # before it surfaces as an unhashable-dict TypeError downstream.
+        for v in values:
+            if v is None:
+                continue
+            if isinstance(v, int):
+                refs.append(v)
+            elif isinstance(v, dict) and "$node" in v:
+                raise ValueError(
+                    f"journal_to_ir: {field} takes bare int nids — write "
+                    f"{v['$node']!r}, not the envelope {v!r}."
+                )
+            else:
+                raise ValueError(
+                    f"journal_to_ir: {field} takes bare int nids, "
+                    f"got {v!r}."
+                )
+
     if node.kind == "layout":
-        refs.extend(c for c in node.init.get("children", []) if c is not None)
+        _bare("a layout's 'children'", node.init.get("children", []))
     if node.kind == "legend":
-        refs.extend(node.init.get("legend_sources", []))
+        _bare("a legend's 'legend_sources'",
+              node.init.get("legend_sources", []))
     _walk(node.init)
     for op in node.ops:
         _walk(op["args"])

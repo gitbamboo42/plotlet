@@ -324,3 +324,45 @@ def test_facet_journal_stores_one_table():
     journal = pt.to_journal(fg)
     assert list(journal.data) == ["d1"]
     assert journal.data["d1"] == df
+
+
+# ---------------------------------------------------------------------------
+# Hand-authored blob mistakes fail with a message that names the fix
+# ---------------------------------------------------------------------------
+
+_CHART_ENTRY = {"op": "new_chart", "nid": 2, "args": [],
+                "kwargs": {"data": {"$data": "d1"},
+                           "mapping": {"x": "x", "y": "y"}}}
+_LINE_ENTRY = {"op": "add_line", "nid": 2, "args": [],
+               "kwargs": {"mapping": {"x": "x", "y": "y"},
+                          "data": {"$data": "d1"}}}
+
+
+def _blob(entries, root_nid):
+    return {"version": 1, "root_nid": root_nid, "entries": entries,
+            "data": {"d1": {"x": [1, 2, 3], "y": [2, 4, 3]}}}
+
+
+def test_entry_before_create_names_the_ordering_rule():
+    blob = _blob([{"op": "title", "nid": 2, "args": ["Demo"], "kwargs": {}},
+                  _CHART_ENTRY, _LINE_ENTRY], root_nid=2)
+    with pytest.raises(ValueError, match="must come before"):
+        pt.from_json(blob).to_svg()
+
+
+def test_node_envelope_in_layout_children_names_the_bare_int_rule():
+    layout = {"op": "new_layout", "nid": 1, "args": [],
+              "kwargs": {"layout_kind": "h", "children": [{"$node": 2}],
+                         "grid_rows": None, "grid_cols": None}}
+    blob = _blob([_CHART_ENTRY, _LINE_ENTRY, layout], root_nid=1)
+    with pytest.raises(ValueError, match="bare int nids"):
+        pt.from_json(blob).to_svg()
+
+
+def test_dangling_child_nid_names_the_missing_create_entry():
+    layout = {"op": "new_layout", "nid": 1, "args": [],
+              "kwargs": {"layout_kind": "h", "children": [2, 7],
+                         "grid_rows": None, "grid_cols": None}}
+    blob = _blob([_CHART_ENTRY, _LINE_ENTRY, layout], root_nid=1)
+    with pytest.raises(ValueError, match="no create entry"):
+        pt.from_json(blob).to_svg()
