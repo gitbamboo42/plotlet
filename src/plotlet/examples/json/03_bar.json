@@ -1,0 +1,36 @@
+{
+ "version": 1,
+ "root_nid": 1,
+ "entries": [
+  {
+   "op": "new_chart",
+   "nid": 1,
+   "args": [],
+   "kwargs": {
+    "data": {"$data": "d1"},
+    "data_width": 300,
+    "data_height": 200,
+    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
+    "mapping": {"x": "day", "y": "rate", "fill": "day"}
+   }
+  },
+  {"op": "title", "nid": 1, "args": ["mean tip rate by day"], "kwargs": {}},
+  {"op": "ylabel", "nid": 1, "args": ["tip (% of bill)"], "kwargs": {}},
+  {
+   "op": "add_bar",
+   "nid": 1,
+   "args": [],
+   "kwargs": {
+    "legend": false,
+    "mapping": {"x": "day", "y": "rate", "fill": "day"},
+    "data": {"$data": "d1"}
+   }
+  }
+ ],
+ "data": {
+  "d1": {
+   "day": ["Thur", "Fri", "Sat", "Sun"],
+   "rate": [16.127563396664712, 16.991302873347887, 15.315171638777821, 16.689728635113465]
+  }
+ }
+}

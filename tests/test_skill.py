@@ -22,6 +22,12 @@ def test_skill_prints_developer_guide(capsys):
     assert "# plotlet developer guide" in out
 
 
+def test_skill_prints_json_guide(capsys):
+    pt.skill("json")
+    out = capsys.readouterr().out
+    assert "# plotlet JSON authoring guide" in out
+
+
 def test_skill_rejects_unknown_guide():
     with pytest.raises(ValueError, match="unknown guide"):
         pt.skill("designer")
@@ -30,6 +36,9 @@ def test_skill_rejects_unknown_guide():
 def test_guides_docs_and_examples_ship_in_the_package():
     assert (PKG / "skills" / "users.md").is_file()
     assert (PKG / "skills" / "developers.md").is_file()
+    assert (PKG / "skills" / "json.md").is_file()
     assert (PKG / "docs" / "AI_ATTRS.md").is_file()
     examples = list((PKG / "examples").glob("*.py"))
     assert len(examples) > 10
+    json_twins = list((PKG / "examples" / "json").glob("*.json"))
+    assert len(json_twins) > 10  # json.md points authors at these

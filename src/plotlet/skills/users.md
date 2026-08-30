@@ -107,6 +107,12 @@ There is no `figsize`, no `dpi`, no inches-by-default.
   import plotlet, pathlib
   print(pathlib.Path(plotlet.__file__).parent / "examples")
   ```
+- Almost every example also has a JSON twin in `examples/json/` — the
+  same calls as a `pt.to_json` journal blob, with the column tables
+  thinned to a small sample (the two large image examples ship
+  without one). To author a plot as JSON instead of Python (no
+  code execution; renders via `pt.from_json(blob).to_svg()`), read
+  `pt.skill("json")`.
 - [`plotlet-cookbook`](https://github.com/gitbamboo42/plotlet-cookbook) repo —
   worked multi-file recipes (annotated heatmaps, circular / ring plots, ...).
 - The website — https://gitbamboo42.github.io/plotlet/ — renders the

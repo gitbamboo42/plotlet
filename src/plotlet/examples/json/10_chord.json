@@ -1,0 +1,123 @@
+{
+ "version": 1,
+ "root_nid": 1,
+ "entries": [
+  {
+   "op": "new_chart",
+   "nid": 2,
+   "args": [],
+   "kwargs": {
+    "data": null,
+    "data_width": 524,
+    "data_height": 322,
+    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0}
+   }
+  },
+  {"op": "xlim", "nid": 2, "args": [0, 75.0], "kwargs": {}},
+  {"op": "ylim", "nid": 2, "args": [0, 1], "kwargs": {}},
+  {
+   "op": "sectors",
+   "nid": 2,
+   "args": [
+    {
+     "$sectors": {
+      "names": ["A", "B", "C"],
+      "lengths": [30, 25, 20],
+      "members": null,
+      "divider": true,
+      "label": true,
+      "gap": 4,
+      "fontsize": null,
+      "rotation": null
+     }
+    }
+   ],
+   "kwargs": {"column": "x"}
+  },
+  {
+   "op": "new_layout",
+   "nid": 1,
+   "args": [],
+   "kwargs": {"layout_kind": "grid", "children": [2], "grid_rows": 1, "grid_cols": 1}
+  },
+  {
+   "op": "new_chart",
+   "nid": 3,
+   "args": [],
+   "kwargs": {
+    "data": {"$data": "d1"},
+    "data_width": 524,
+    "data_height": 322,
+    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0}
+   }
+  },
+  {"op": "xlim", "nid": 3, "args": [0, 75.0], "kwargs": {}},
+  {
+   "op": "sectors",
+   "nid": 3,
+   "args": [
+    {
+     "$sectors": {
+      "names": ["A", "B", "C"],
+      "lengths": [30, 25, 20],
+      "members": null,
+      "divider": true,
+      "label": true,
+      "gap": 4,
+      "fontsize": null,
+      "rotation": null
+     }
+    }
+   ],
+   "kwargs": {"column": "src", "label": false}
+  },
+  {
+   "op": "add_chord_ribbon",
+   "nid": 3,
+   "args": [],
+   "kwargs": {
+    "alpha": 0.6,
+    "mapping": {
+     "x1_start": "x1a",
+     "x1_end": "x1b",
+     "x2_start": "x2a",
+     "x2_end": "x2b",
+     "x1_sector": "src",
+     "x2_sector": "dst",
+     "color": "src"
+    },
+    "data": {"$data": "d1"}
+   }
+  },
+  {
+   "op": "coordinate",
+   "nid": 1,
+   "args": [
+    {
+     "$coord": "CircularCoordinate",
+     "container": true,
+     "kwargs": {
+      "data_diameter": null,
+      "r_inner": 0.85,
+      "r_outer": 1.0,
+      "wrap_gap_deg": null,
+      "inner": {"$node": 3},
+      "start_deg": 0.0,
+      "end_deg": 360.0
+     }
+    }
+   ],
+   "kwargs": {}
+  }
+ ],
+ "data": {
+  "d1": {
+   "src": ["A", "A", "B"],
+   "dst": ["B", "C", "C"],
+   "x1a": [0, 18, 0],
+   "x1b": [10, 28, 15],
+   "x2a": [0, 0, 0],
+   "x2b": [10, 8, 12]
+  }
+ }
+}

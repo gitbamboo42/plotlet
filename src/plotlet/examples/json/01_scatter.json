@@ -1,0 +1,57 @@
+{
+ "version": 1,
+ "root_nid": 1,
+ "entries": [
+  {
+   "op": "new_chart",
+   "nid": 1,
+   "args": [],
+   "kwargs": {
+    "data": {"$data": "d1"},
+    "data_width": 524,
+    "data_height": 322,
+    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
+    "mapping": {"x": "flipper_length_mm", "y": "body_mass_g", "color": "species"}
+   }
+  },
+  {"op": "title", "nid": 1, "args": ["Palmer penguins"], "kwargs": {}},
+  {"op": "xlabel", "nid": 1, "args": ["flipper length (mm)"], "kwargs": {}},
+  {"op": "ylabel", "nid": 1, "args": ["body mass (g)"], "kwargs": {}},
+  {"op": "gridlines", "nid": 1, "args": [true], "kwargs": {}},
+  {
+   "op": "add_scatter",
+   "nid": 1,
+   "args": [],
+   "kwargs": {
+    "size": 3,
+    "alpha": 0.7,
+    "mapping": {"x": "flipper_length_mm", "y": "body_mass_g", "color": "species"},
+    "data": {"$data": "d1"}
+   }
+  }
+ ],
+ "data": {
+  "d1": {
+   "species": ["Adelie", "Adelie", "Adelie", "Adelie", "Adelie", "Adelie", "Adelie", "Adelie",
+               "Adelie", "Adelie", "Adelie", "Adelie", "Adelie", "Adelie", "Adelie", "Adelie",
+               "Adelie", "Adelie", "Adelie", "Adelie", "Adelie", "Adelie", "Adelie", "Adelie",
+               "Adelie", "Adelie", "Gentoo", "Gentoo", "Gentoo", "Gentoo", "Gentoo", "Gentoo",
+               "Gentoo", "Gentoo", "Gentoo", "Gentoo", "Gentoo", "Gentoo", "Gentoo", "Gentoo",
+               "Gentoo", "Gentoo", "Gentoo", "Gentoo", "Gentoo", "Gentoo", "Chinstrap", "Chinstrap",
+               "Chinstrap", "Chinstrap", "Chinstrap", "Chinstrap", "Chinstrap", "Chinstrap",
+               "Chinstrap", "Chinstrap", "Chinstrap"],
+   "flipper_length_mm": [181.0, 195.0, 191.0, 194.0, 187.0, 178.0, 180.0, 196.0, 191.0, 191.0, 195.0,
+                         188.0, 197.0, 195.0, 194.0, 205.0, 196.0, 190.0, 197.0, 196.0, 198.0, 195.0,
+                         199.0, 193.0, 185.0, 201.0, 210.0, 216.0, 221.0, 215.0, 220.0, 220.0, 225.0,
+                         225.0, 225.0, 224.0, 230.0, 221.0, 220.0, 224.0, 230.0, 226.0, 228.0, 219.0,
+                         230.0, 215.0, 193.0, 195.0, 190.0, 181.0, 200.0, 187.0, 192.0, 196.0, 199.0,
+                         191.0, 195.0],
+   "body_mass_g": [3750.0, 4675.0, 3800.0, 4200.0, 3800.0, 3900.0, 3550.0, 4400.0, 4150.0, 3700.0,
+                   4400.0, 4100.0, 4150.0, 4000.0, 3550.0, 4300.0, 4350.0, 4250.0, 4775.0, 4075.0,
+                   3500.0, 4300.0, 4475.0, 4250.0, 3650.0, 4000.0, 4550.0, 5550.0, 6300.0, 5050.0,
+                   5550.0, 5400.0, 5700.0, 5400.0, 5000.0, 5550.0, 5700.0, 5000.0, 6000.0, 5350.0,
+                   5550.0, 5200.0, 5600.0, 5500.0, 5500.0, 4850.0, 3650.0, 4150.0, 3575.0, 3600.0,
+                   3400.0, 3350.0, 2700.0, 3675.0, 3325.0, 3250.0, 3650.0]
+  }
+ }
+}

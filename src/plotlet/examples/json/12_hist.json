@@ -1,0 +1,50 @@
+{
+ "version": 1,
+ "root_nid": 1,
+ "entries": [
+  {
+   "op": "new_chart",
+   "nid": 1,
+   "args": [],
+   "kwargs": {
+    "data": {"$data": "d1"},
+    "data_width": 380,
+    "data_height": 200,
+    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
+    "mapping": {"x": "body_mass_g", "fill": "species"}
+   }
+  },
+  {"op": "title", "nid": 1, "args": ["body mass"], "kwargs": {}},
+  {"op": "xlabel", "nid": 1, "args": ["body mass (g)"], "kwargs": {}},
+  {"op": "ylabel", "nid": 1, "args": ["count"], "kwargs": {}},
+  {
+   "op": "add_hist",
+   "nid": 1,
+   "args": [],
+   "kwargs": {
+    "bins": 24,
+    "position": "stack",
+    "mapping": {"x": "body_mass_g", "fill": "species"},
+    "data": {"$data": "d1"}
+   }
+  }
+ ],
+ "data": {
+  "d1": {
+   "species": ["Adelie", "Adelie", "Adelie", "Adelie", "Adelie", "Adelie", "Adelie", "Adelie",
+               "Adelie", "Adelie", "Adelie", "Adelie", "Adelie", "Adelie", "Adelie", "Adelie",
+               "Adelie", "Adelie", "Adelie", "Adelie", "Adelie", "Adelie", "Adelie", "Adelie",
+               "Adelie", "Adelie", "Gentoo", "Gentoo", "Gentoo", "Gentoo", "Gentoo", "Gentoo",
+               "Gentoo", "Gentoo", "Gentoo", "Gentoo", "Gentoo", "Gentoo", "Gentoo", "Gentoo",
+               "Gentoo", "Gentoo", "Gentoo", "Gentoo", "Gentoo", "Gentoo", "Chinstrap", "Chinstrap",
+               "Chinstrap", "Chinstrap", "Chinstrap", "Chinstrap", "Chinstrap", "Chinstrap",
+               "Chinstrap", "Chinstrap", "Chinstrap"],
+   "body_mass_g": [3750.0, 4675.0, 3800.0, 4200.0, 3800.0, 3900.0, 3550.0, 4400.0, 4150.0, 3700.0,
+                   4400.0, 4100.0, 4150.0, 4000.0, 3550.0, 4300.0, 4350.0, 4250.0, 4775.0, 4075.0,
+                   3500.0, 4300.0, 4475.0, 4250.0, 3650.0, 4000.0, 4550.0, 5550.0, 6300.0, 5050.0,
+                   5550.0, 5400.0, 5700.0, 5400.0, 5000.0, 5550.0, 5700.0, 5000.0, 6000.0, 5350.0,
+                   5550.0, 5200.0, 5600.0, 5500.0, 5500.0, 4850.0, 3650.0, 4150.0, 3575.0, 3600.0,
+                   3400.0, 3350.0, 2700.0, 3675.0, 3325.0, 3250.0, 3650.0]
+  }
+ }
+}

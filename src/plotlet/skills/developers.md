@@ -58,7 +58,7 @@ site build.
 
 ## Running tests
 
-`pip install -e ".[test]"` then `pytest tests/` (add `--update` after intentional visual changes to regenerate baselines). For per-set gallery HTML: `python tests/gen_gallery.py <set>` or `python tests/gen_gallery.py all`. Machine-specific Python paths in `CLAUDE.local.md` (gitignored).
+`pip install -e ".[test]"` then `pytest tests/` (add `--update` after intentional visual changes to regenerate baselines). For per-set gallery HTML: `python tests/gen_gallery.py <set>` or `python tests/gen_gallery.py all`. After changing an example, `python tests/gen_json_examples.py` regenerates its JSON twin. Machine-specific Python paths in `CLAUDE.local.md` (gitignored).
 
 ## Script style
 

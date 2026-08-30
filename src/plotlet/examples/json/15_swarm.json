@@ -1,0 +1,70 @@
+{
+ "version": 1,
+ "root_nid": 1,
+ "entries": [
+  {
+   "op": "new_chart",
+   "nid": 1,
+   "args": [],
+   "kwargs": {
+    "data": {"$data": "d1"},
+    "data_width": 380,
+    "data_height": 220,
+    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
+    "mapping": {"x": "day", "y": "tip", "color": "sex"}
+   }
+  },
+  {"op": "title", "nid": 1, "args": ["tips by day"], "kwargs": {}},
+  {"op": "ylabel", "nid": 1, "args": ["tip ($)"], "kwargs": {}},
+  {
+   "op": "xscale",
+   "nid": 1,
+   "args": ["category"],
+   "kwargs": {"order": ["Thur", "Fri", "Sat", "Sun"]}
+  },
+  {
+   "op": "add_swarm",
+   "nid": 1,
+   "args": [],
+   "kwargs": {
+    "size": 2.2,
+    "mapping": {"x": "day", "y": "tip", "color": "sex"},
+    "data": {"$data": "d1"}
+   }
+  }
+ ],
+ "data": {
+  "d1": {
+   "total_bill": [16.99, 25.29, 10.27, 21.58, 17.92, 17.81, 9.55, 24.06, 16.04, 18.29, 12.54, 19.49,
+                  20.29, 20.08, 12.02, 10.51, 19.44, 34.83, 28.97, 40.17, 11.35, 15.36, 14.0, 17.31,
+                  11.69, 29.8, 19.08, 8.51, 17.47, 8.35, 14.07, 29.85, 21.5, 24.52, 50.81, 32.9,
+                  34.65, 20.69, 15.69, 7.56, 18.71, 16.47, 30.06, 12.9, 12.16, 16.27, 24.01, 10.07,
+                  27.18],
+   "tip": [1.01, 4.71, 1.71, 3.92, 4.08, 2.34, 1.45, 3.6, 2.24, 3.0, 2.5, 3.51, 3.21, 3.15, 1.97,
+           1.25, 3.0, 5.17, 3.0, 4.73, 2.5, 1.64, 3.0, 3.5, 2.31, 4.2, 1.5, 1.25, 3.5, 1.5, 2.5,
+           5.14, 3.5, 3.48, 10.0, 3.11, 3.68, 5.0, 1.5, 1.44, 4.0, 3.23, 2.0, 1.1, 2.2, 2.5, 2.0,
+           1.25, 2.0],
+   "sex": ["Female", "Male", "Male", "Male", "Male", "Male", "Male", "Male", "Male", "Male", "Male",
+           "Male", "Male", "Male", "Male", "Male", "Male", "Female", "Male", "Male", "Female",
+           "Male", "Male", "Female", "Male", "Female", "Male", "Female", "Female", "Female", "Male",
+           "Female", "Male", "Male", "Male", "Male", "Male", "Male", "Male", "Male", "Male",
+           "Female", "Male", "Female", "Male", "Female", "Male", "Male", "Female"],
+   "smoker": ["No", "No", "No", "No", "No", "No", "No", "No", "No", "No", "No", "No", "Yes", "No",
+              "No", "No", "Yes", "No", "Yes", "Yes", "Yes", "Yes", "No", "No", "No", "No", "No",
+              "No", "No", "No", "No", "No", "No", "No", "Yes", "Yes", "Yes", "No", "Yes", "No",
+              "Yes", "Yes", "Yes", "Yes", "Yes", "Yes", "Yes", "No", "Yes"],
+   "day": ["Sun", "Sun", "Sun", "Sun", "Sat", "Sat", "Sat", "Sat", "Sat", "Sun", "Sun", "Sun", "Sat",
+           "Sat", "Sat", "Sat", "Thur", "Thur", "Fri", "Fri", "Fri", "Sat", "Sat", "Sun", "Thur",
+           "Thur", "Thur", "Thur", "Thur", "Thur", "Sun", "Sun", "Sun", "Sun", "Sat", "Sun", "Sun",
+           "Sun", "Sun", "Thur", "Thur", "Thur", "Sat", "Sat", "Fri", "Fri", "Sat", "Sat", "Sat"],
+   "time": ["Dinner", "Dinner", "Dinner", "Dinner", "Dinner", "Dinner", "Dinner", "Dinner", "Dinner",
+            "Dinner", "Dinner", "Dinner", "Dinner", "Dinner", "Dinner", "Dinner", "Lunch", "Lunch",
+            "Dinner", "Dinner", "Dinner", "Dinner", "Dinner", "Dinner", "Lunch", "Lunch", "Lunch",
+            "Lunch", "Lunch", "Lunch", "Dinner", "Dinner", "Dinner", "Dinner", "Dinner", "Dinner",
+            "Dinner", "Dinner", "Dinner", "Lunch", "Lunch", "Lunch", "Dinner", "Dinner", "Lunch",
+            "Lunch", "Dinner", "Dinner", "Dinner"],
+   "size": [2, 4, 2, 2, 2, 4, 2, 3, 3, 2, 2, 2, 2, 3, 2, 2, 2, 4, 2, 4, 2, 2, 2, 2, 2, 6, 2, 2, 2, 2,
+            2, 5, 4, 3, 3, 2, 4, 5, 2, 2, 3, 3, 3, 2, 2, 2, 4, 2, 2]
+  }
+ }
+}

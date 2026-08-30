@@ -9,6 +9,7 @@ from pathlib import Path
 _GUIDES = {
     "user": "users.md",
     "developer": "developers.md",
+    "json": "json.md",
 }
 
 
@@ -23,6 +24,9 @@ def skill(which="user"):
         live, machine-readable debugging.
         ``"developer"`` — for AI assistants *working on plotlet itself*:
         architecture, policies, test workflow (assumes a repo clone).
+        ``"json"`` — for AI assistants and tools *authoring a plot as a
+        JSON journal* (no code execution): the blob format, its rules,
+        and where the shipped JSON examples live.
 
     Typical use: tell your AI assistant "run ``pt.skill()`` and follow
     it" at the start of a session, or "save the output of ``pt.skill()``

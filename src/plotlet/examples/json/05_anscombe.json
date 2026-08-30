@@ -1,0 +1,132 @@
+{
+ "version": 1,
+ "root_nid": 1,
+ "entries": [
+  {
+   "op": "new_chart",
+   "nid": 2,
+   "args": [],
+   "kwargs": {
+    "data": {"$data": "d1"},
+    "data_width": 190,
+    "data_height": 140,
+    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
+    "mapping": {"x": "x", "y": "y"}
+   }
+  },
+  {"op": "title", "nid": 2, "args": ["dataset I"], "kwargs": {}},
+  {
+   "op": "add_scatter",
+   "nid": 2,
+   "args": [],
+   "kwargs": {"size": 3.5, "alpha": 0.8, "mapping": {"x": "x", "y": "y"}, "data": {"$data": "d1"}}
+  },
+  {
+   "op": "add_regression",
+   "nid": 2,
+   "args": [],
+   "kwargs": {"mapping": {"x": "x", "y": "y"}, "data": {"$data": "d1"}}
+  },
+  {
+   "op": "new_chart",
+   "nid": 3,
+   "args": [],
+   "kwargs": {
+    "data": {"$data": "d2"},
+    "data_width": 190,
+    "data_height": 140,
+    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
+    "mapping": {"x": "x", "y": "y"}
+   }
+  },
+  {"op": "title", "nid": 3, "args": ["dataset II"], "kwargs": {}},
+  {
+   "op": "add_scatter",
+   "nid": 3,
+   "args": [],
+   "kwargs": {"size": 3.5, "alpha": 0.8, "mapping": {"x": "x", "y": "y"}, "data": {"$data": "d2"}}
+  },
+  {
+   "op": "add_regression",
+   "nid": 3,
+   "args": [],
+   "kwargs": {"mapping": {"x": "x", "y": "y"}, "data": {"$data": "d2"}}
+  },
+  {
+   "op": "new_chart",
+   "nid": 4,
+   "args": [],
+   "kwargs": {
+    "data": {"$data": "d3"},
+    "data_width": 190,
+    "data_height": 140,
+    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
+    "mapping": {"x": "x", "y": "y"}
+   }
+  },
+  {"op": "title", "nid": 4, "args": ["dataset III"], "kwargs": {}},
+  {
+   "op": "add_scatter",
+   "nid": 4,
+   "args": [],
+   "kwargs": {"size": 3.5, "alpha": 0.8, "mapping": {"x": "x", "y": "y"}, "data": {"$data": "d3"}}
+  },
+  {
+   "op": "add_regression",
+   "nid": 4,
+   "args": [],
+   "kwargs": {"mapping": {"x": "x", "y": "y"}, "data": {"$data": "d3"}}
+  },
+  {
+   "op": "new_chart",
+   "nid": 5,
+   "args": [],
+   "kwargs": {
+    "data": {"$data": "d4"},
+    "data_width": 190,
+    "data_height": 140,
+    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
+    "mapping": {"x": "x", "y": "y"}
+   }
+  },
+  {"op": "title", "nid": 5, "args": ["dataset IV"], "kwargs": {}},
+  {
+   "op": "add_scatter",
+   "nid": 5,
+   "args": [],
+   "kwargs": {"size": 3.5, "alpha": 0.8, "mapping": {"x": "x", "y": "y"}, "data": {"$data": "d4"}}
+  },
+  {
+   "op": "add_regression",
+   "nid": 5,
+   "args": [],
+   "kwargs": {"mapping": {"x": "x", "y": "y"}, "data": {"$data": "d4"}}
+  },
+  {
+   "op": "new_layout",
+   "nid": 1,
+   "args": [],
+   "kwargs": {"layout_kind": "grid", "children": [2, 3, 4, 5], "grid_rows": 2, "grid_cols": 2}
+  },
+  {"op": "share_x", "nid": 1, "args": [true], "kwargs": {"hide_labels": true}},
+  {"op": "share_y", "nid": 1, "args": [true], "kwargs": {"hide_labels": true}}
+ ],
+ "data": {
+  "d1": {
+   "x": [10.0, 8.0, 13.0, 9.0, 11.0, 14.0, 6.0, 4.0, 12.0, 7.0, 5.0],
+   "y": [8.04, 6.95, 7.58, 8.81, 8.33, 9.96, 7.24, 4.26, 10.84, 4.82, 5.68]
+  },
+  "d2": {
+   "x": [10.0, 8.0, 13.0, 9.0, 11.0, 14.0, 6.0, 4.0, 12.0, 7.0, 5.0],
+   "y": [9.14, 8.14, 8.74, 8.77, 9.26, 8.1, 6.13, 3.1, 9.13, 7.26, 4.74]
+  },
+  "d3": {
+   "x": [10.0, 8.0, 13.0, 9.0, 11.0, 14.0, 6.0, 4.0, 12.0, 7.0, 5.0],
+   "y": [7.46, 6.77, 12.74, 7.11, 7.81, 8.84, 6.08, 5.39, 8.15, 6.42, 5.73]
+  },
+  "d4": {
+   "x": [8.0, 8.0, 8.0, 8.0, 8.0, 8.0, 8.0, 19.0, 8.0, 8.0, 8.0],
+   "y": [6.58, 5.76, 7.71, 8.84, 8.47, 7.04, 5.25, 12.5, 5.56, 7.91, 6.89]
+  }
+ }
+}
