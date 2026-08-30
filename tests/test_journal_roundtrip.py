@@ -1,7 +1,7 @@
 """Journal round-trip correctness: two paths, one contract.
 
   - In-memory:  `from_journal(to_journal(fig)).to_svg()` == `fig.to_svg()`
-  - JSON:       `from_json(json.loads(json.dumps(to_json(fig)))).to_svg()`
+  - JSON:       `from_json(to_json(fig)).to_svg()` (to_json emits text)
                                                               == `fig.to_svg()`
 
 The in-memory path exercises the journal event log itself. The JSON
@@ -77,9 +77,8 @@ def test_json_roundtrip(label, fn):
     fig = fn()
     svg_original = fig.to_svg()
 
-    blob = pt.to_json(fig)
-    text = json.dumps(blob)
-    fig_from_json = pt.from_json(json.loads(text))
+    text = pt.to_json(fig)
+    fig_from_json = pt.from_json(text)
     svg_from_json = fig_from_json.to_svg()
 
     assert svg_original == svg_from_json, (
@@ -104,9 +103,9 @@ def test_json_roundtrip_dates_in_dataframe():
     c.add_line()
     svg_original = c.to_svg()
 
-    text = json.dumps(pt.to_json(c))
+    text = pt.to_json(c)
     assert '"$date"' in text
-    assert pt.from_json(json.loads(text)).to_svg() == svg_original
+    assert pt.from_json(text).to_svg() == svg_original
 
 
 def test_json_roundtrip_integer_dataframe():
@@ -121,8 +120,8 @@ def test_json_roundtrip_integer_dataframe():
 
     journal_df = c._data
     assert all(type(v) is int for row in journal_df.values for v in row)
-    text = json.dumps(pt.to_json(c))
-    assert pt.from_json(json.loads(text)).to_svg() == svg_original
+    text = pt.to_json(c)
+    assert pt.from_json(text).to_svg() == svg_original
 
 
 def test_almost_primitive_rows_still_take_the_slow_path():
@@ -142,8 +141,8 @@ def test_almost_primitive_rows_still_take_the_slow_path():
     c = pt.chart(df, aes(x="x", y="y"))
     c.add_line()
     svg_original = c.to_svg()
-    text = json.dumps(pt.to_json(c))
-    assert pt.from_json(json.loads(text)).to_svg() == svg_original
+    text = pt.to_json(c)
+    assert pt.from_json(text).to_svg() == svg_original
 
     # A date past a long primitive prefix must still envelope as $date.
     import datetime
@@ -173,8 +172,7 @@ def test_grid_artists_intern_their_matrix_in_the_data_section():
     stored = j.data[ref["$data"]]
     assert isinstance(stored, np.ndarray) and stored.tolist() == big
     assert pt.from_journal(j).to_svg() == svg_original
-    assert pt.from_json(json.loads(json.dumps(pt.to_json(c)))).to_svg() \
-        == svg_original
+    assert pt.from_json(pt.to_json(c)).to_svg() == svg_original
 
     # No size floor: a tiny matrix is still data, like a tiny table.
     c2 = pt.chart()

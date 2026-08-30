@@ -96,7 +96,8 @@ def to_python(fig, *, var: str = "fig") -> str:
     """Generate a Python script that rebuilds `fig`.
 
     Accepts a `Chart` / `Layout` / `FacetGrid`, a `Journal`, a
-    `JournalNode`, or a journal JSON dict (the `to_json` form). Returns
+    `JournalNode`, or journal JSON (the `to_json` text or its parsed
+    dict). Returns
     source whose final figure is bound to `var` ("fig" by default) —
     `exec` it, or save it and edit like any hand-written plotlet script.
 
@@ -109,6 +110,8 @@ def to_python(fig, *, var: str = "fig") -> str:
         raise ValueError(
             f"to_python: var={var!r} is not a valid Python variable name."
         )
+    if isinstance(fig, str):
+        fig = json.loads(fig)
     if isinstance(fig, dict):
         journal = Journal.from_dict(fig)
         root_nid = journal.root_nid

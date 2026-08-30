@@ -470,8 +470,8 @@ byte-identical SVG.
 j = pt.to_journal(c)          # Journal — flat event list, the user's calls
 node = pt.from_journal(j)     # JournalNode; .to_svg() / .to_html()
 
-blob = pt.to_json(c)          # JSON-safe dict of the journal
-node = pt.from_json(blob)     # inverse; json.dumps(blob) is the file form
+text = pt.to_json(c)          # canonical JSON text — pretty, deterministic
+node = pt.from_json(text)     # inverse; also accepts the parsed dict
 
 print(pt.to_python(c))        # Python script that rebuilds the figure
 ```
@@ -482,7 +482,8 @@ directly — format guide via `pt.skill("json")`, worked examples in
 `examples/json/`. `to_python` closes the loop by turning any figure —
 including one loaded from JSON — into an editable script in house
 style. `to_python` accepts a `Chart` / layout, a `Journal`, a
-`JournalNode`, or the JSON dict itself.
+`JournalNode`, or journal JSON (text or parsed dict). For the dict
+form of a figure, use `pt.to_journal(c).to_dict()`.
 
 `pt.to_ir(c)` / `pt.from_ir(...)` are the lower, per-node compiled
 level (the render contract) — for inspection and programmatic

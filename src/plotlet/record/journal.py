@@ -505,15 +505,21 @@ def from_journal(events) -> JournalNode:
     return JournalNode(journal, journal.root_nid)
 
 
-def to_json(node) -> dict:
-    """Serialize a plot to a JSON-safe dict. `json.dumps(...)` produces
-    the string form. Round-trips through `from_json`."""
-    return to_journal(node).to_dict()
+def to_json(node) -> str:
+    """Serialize a plot to canonical JSON text: pretty-printed (small
+    objects inline, long data columns wrapped and aligned) and
+    deterministic — same figure, same bytes. Round-trips through
+    `from_json`. For the dict form, use `to_journal(node).to_dict()`."""
+    from .._json_layer import pretty_dumps
+    return pretty_dumps(to_journal(node).to_dict())
 
 
-def from_json(blob: dict) -> JournalNode:
-    """Inverse of `to_json`. Returns a `JournalNode` that renders to
-    the same SVG as the original."""
+def from_json(blob: str | dict) -> JournalNode:
+    """Inverse of `to_json`. Accepts the JSON text or its parsed dict;
+    returns a `JournalNode` that renders to the same SVG as the
+    original."""
+    if isinstance(blob, str):
+        blob = json.loads(blob)
     return from_journal(Journal.from_dict(blob))
 
 

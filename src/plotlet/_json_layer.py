@@ -36,6 +36,7 @@ both halves need it (the render tree's hydrator and the front half's
 facet expansion) and it resolves only against shared vocabulary.
 """
 from __future__ import annotations
+import json
 from typing import Any
 
 import numpy as np
@@ -134,6 +135,53 @@ def json_hydrate(value: Any) -> Any:
             return list(value)
         return [json_hydrate(v) for v in value]
     return value
+
+
+_PRETTY_WIDTH = 100     # target line width for pretty_dumps
+
+
+def pretty_dumps(value: Any) -> str:
+    """Canonical JSON text form — what `pt.to_json` returns and the
+    shipped example twins use. Objects and arrays stay on one line when
+    they fit in `_PRETTY_WIDTH` columns; a too-long dict or mixed list
+    expands one element per line (1-space indent steps); a too-long
+    list of primitives wraps at the width, continuation lines aligned
+    under its opening bracket — so journal entries read structurally
+    while data columns stay a few dense lines. Deterministic (same
+    value → same bytes) and whitespace-only: `json.loads` of the
+    result equals `json.loads(json.dumps(value))`."""
+    return _pretty(value, 0, "")
+
+
+def _pretty(value: Any, col: int, pad: str) -> str:
+    """Render `value` starting at column `col`; `pad` is the
+    indentation of the enclosing construct."""
+    compact = json.dumps(value)
+    if col + len(compact) <= _PRETTY_WIDTH \
+            or not isinstance(value, (dict, list)):
+        return compact
+    inner = pad + " "
+    if isinstance(value, dict):
+        lines = []
+        for k, v in value.items():
+            key = f"{inner}{json.dumps(k)}: "
+            lines.append(key + _pretty(v, len(key), inner))
+        return "{\n" + ",\n".join(lines) + "\n" + pad + "}"
+    if all(not isinstance(v, (dict, list)) for v in value):
+        room = max(_PRETTY_WIDTH - col - 1, 20)     # width left after "["
+        parts, lines, used = [json.dumps(v) for v in value], [], -2
+        for part in parts:
+            if used < 0 or used + 2 + len(part) > room:
+                lines.append([part])
+                used = len(part)
+            else:
+                lines[-1].append(part)
+                used += 2 + len(part)
+        joined = (",\n" + " " * (col + 1)).join(
+            ", ".join(line) for line in lines)
+        return "[" + joined + "]"
+    lines = [inner + _pretty(v, len(inner), inner) for v in value]
+    return "[\n" + ",\n".join(lines) + "\n" + pad + "]"
 
 
 def _decode(value: Any, nid_to_node: dict, data_table: dict) -> Any:

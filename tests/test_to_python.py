@@ -30,7 +30,7 @@ def _canon_json(fig) -> str:
     # replay ignores) irrelevant, the NaN token sidesteps `nan != nan`
     # breaking dict equality, and string compare keeps 0 and 0.0 apart
     # where dict `==` would not.
-    return json.dumps(pt.to_json(fig), sort_keys=True)
+    return json.dumps(json.loads(pt.to_json(fig)), sort_keys=True)
 
 
 @pytest.mark.parametrize("label,fn", PLOTS, ids=[p[0] for p in PLOTS])
@@ -53,17 +53,17 @@ def test_python_roundtrip(label, fn):
 
 
 def test_from_json_blob_directly():
-    """The agent flow: a journal JSON dict in, a script out — no live
+    """The agent flow: journal JSON text in, a script out — no live
     figure objects on the input side."""
     df = {"x": [1, 2, 3], "y": [3, 1, 2]}
 
     c = pt.chart(df, aes(x="x", y="y"))
     c.add_line()
-    blob = json.loads(json.dumps(pt.to_json(c)))
+    text = pt.to_json(c)
 
-    src = pt.to_python(blob)
+    src = pt.to_python(text)
     regen = _rebuild(src)
-    assert pt.to_json(regen) == blob
+    assert pt.to_json(regen) == text
 
 
 def test_root_variable_name():
@@ -86,7 +86,7 @@ def test_inherit_aes_false_survives():
     c.add_scatter(aes(x="x", y="y"), inherit_aes=False)
 
     regen = _rebuild(pt.to_python(c))
-    assert pt.to_json(regen) == pt.to_json(c)
+    assert _canon_json(regen) == _canon_json(c)
     assert regen.to_svg() == c.to_svg()
 
 
@@ -180,8 +180,7 @@ def test_non_identifier_data_id():
 
     c = pt.chart(df, aes(x="x", y="y"))
     c.add_line()
-    blob = json.loads(
-        json.dumps(pt.to_json(c)).replace('"d1"', '"my-table"'))
+    blob = pt.to_json(c).replace('"d1"', '"my-table"')
 
     regen = _rebuild(pt.to_python(blob))
     assert regen.to_svg() == c.to_svg()

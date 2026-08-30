@@ -133,7 +133,6 @@ def test_facet_mode_validation():
 
 
 def test_facet_grid_json_roundtrip():
-    import json
     from plotlet.record.journal import to_json, from_json
 
     def build():
@@ -141,7 +140,7 @@ def test_facet_grid_json_roundtrip():
         g.add_scatter(aes(x="x", y="y"))
         return g
 
-    node = from_json(json.loads(json.dumps(to_json(build()))))
+    node = from_json(to_json(build()))
     assert node.to_svg() == build().to_svg()
 
 
