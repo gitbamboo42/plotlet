@@ -32,7 +32,7 @@ extension-import hint, same as `render.validate`.
 from __future__ import annotations
 
 from .._spec import _MARGIN_FLOOR, _SIZESPEC
-from ..registry import get_artist
+from ..registry import op_to_artist
 from ..utils import DataFrameLite
 
 import dataclasses
@@ -336,7 +336,7 @@ class _Gen:
         target = self.var[nid]
 
         if nid in self.chart_info:                  # chart node
-            spec = get_artist(op)
+            spec = op_to_artist(op)
             if spec is not None:
                 self._emit_artist(target, nid, op, spec, args, kw)
                 return
@@ -417,7 +417,7 @@ class _Gen:
             parts.append(f"data={self._fmt(data_emit)}")
         if not inherit:
             parts.append("inherit_aes=False")
-        self.lines.append(_join(f"{target}.add_{op}", parts))
+        self.lines.append(_join(f"{target}.{op}", parts))
 
     # ---------- values ----------
 

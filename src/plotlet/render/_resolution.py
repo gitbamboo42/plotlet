@@ -40,7 +40,7 @@ from . import _chrome_bands
 from ._chrome_visibility import resolve_axis_chrome
 from ..utils import (hist_bin_edges, hist_bin_counts, hist_transform,
                      collect_categories, group_color)
-from ..registry import get_artist
+from ..registry import get_artist, op_to_artist
 
 # Frame metadata methods (title, xlabel, etc.) — these aren't artists,
 # they're just state setters. Kept as a fixed set. `theme` joins the set
@@ -291,7 +291,7 @@ def _merge_aes(call):
     kwarg namespace from here on, and `resolve_aes` reads the tag
     instead of sniffing the data. No-op for frame ops and unmapped
     entries."""
-    if get_artist(call[0]) is None or "mapping" not in call[2]:
+    if op_to_artist(call[0]) is None or "mapping" not in call[2]:
         return call
     kw = dict(call[2])
     for k, v in kw.pop("mapping").items():
@@ -308,7 +308,7 @@ def _hoist_table_positional(call):
     fn, whose own signature or usage error handles it (heatmap teaching
     the tidy form for a bare matrix). Runs before `frame_defaults` so
     hooks and `record()` both see the long form."""
-    spec = get_artist(call[0])
+    spec = op_to_artist(call[0])
     args = call[1]
     if (spec is None or spec.data_input != "table" or len(args) != 1
             or "data" in call[2]
@@ -337,7 +337,7 @@ def _expand_frame_defaults(calls):
     out = []
     for call in calls:
         call = _hoist_table_positional(_merge_aes(call))
-        spec = get_artist(call[0])
+        spec = op_to_artist(call[0])
         if spec is not None and spec.frame_defaults is not None:
             for d in spec.frame_defaults(list(call[1]), dict(call[2])) or ():
                 out.append((*d, True))
@@ -742,7 +742,7 @@ def _replay(calls):
         else:
             name, args, kw = call
             from_default = False
-        spec = get_artist(name)
+        spec = op_to_artist(name)
         if spec is not None:
             _record_artist(state, spec, args, kw)
         elif name == "title":    _record_text_field(state, "title", *args, **kw)

@@ -211,7 +211,7 @@ def to_journal(root) -> Journal:
     from .chart import _Renderable
     from ..sectors import Sectors
     from ..utils import Aes, DataFrameLite, all_primitive
-    from ..registry import get_artist
+    from ..registry import op_to_artist
     from .._coord_registry import _COORD_REGISTRY
 
     journal = Journal()
@@ -466,7 +466,7 @@ def to_journal(root) -> Journal:
         if (args and isinstance(args[0], (DataFrameLite, dict))
                 and not isinstance(args[0], Aes)):
             args[0] = _intern(args[0])
-        spec = get_artist(name)
+        spec = op_to_artist(name)
         if (spec is not None and spec.data_input == "matrix"
                 and args and (type(args[0]) is list
                               or isinstance(args[0], np.ndarray))):

@@ -167,7 +167,7 @@ def test_grid_artists_intern_their_matrix_in_the_data_section():
     svg_original = c.to_svg()
 
     j = pt.to_journal(c)
-    entry = next(e for e in j.entries if e["op"] == "image_cmap")
+    entry = next(e for e in j.entries if e["op"] == "add_image_cmap")
     ref = entry["args"][0]
     assert set(ref) == {"$data"}
     stored = j.data[ref["$data"]]
@@ -180,7 +180,7 @@ def test_grid_artists_intern_their_matrix_in_the_data_section():
     c2 = pt.chart()
     c2.add_image_cmap([[1.0, 2.0], [3.0, 4.0]])
     j2 = pt.to_journal(c2)
-    entry2 = next(e for e in j2.entries if e["op"] == "image_cmap")
+    entry2 = next(e for e in j2.entries if e["op"] == "add_image_cmap")
     assert entry2["args"][0] == {"$data": "d1"}
     assert pt.from_journal(j2).to_svg() == c2.to_svg()
 

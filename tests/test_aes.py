@@ -38,7 +38,7 @@ def test_aes_maps_the_same_string_to_the_column():
     assert mapped.to_svg() != lit.to_svg()
     # and the journal records the mapping explicitly
     blob = pt.to_json(mapped)
-    art = [e for e in blob["entries"] if e["op"] == "scatter"][0]
+    art = [e for e in blob["entries"] if e["op"] == "add_scatter"][0]
     assert art["kwargs"]["mapping"] == {"x": "x", "y": "y", "color": "purple"}
     assert "color" not in art["kwargs"]
 
@@ -132,7 +132,7 @@ def test_inherit_aes_is_a_directive_not_recorded():
     c = pt.chart(df, aes(x="x", y="y", color="g"))
     c.add_line(aes(x="x", y="y"), inherit_aes=False)
     blob = pt.to_json(c)
-    art = [e for e in blob["entries"] if e["op"] == "line"][0]
+    art = [e for e in blob["entries"] if e["op"] == "add_line"][0]
     assert "inherit_aes" not in art["kwargs"]
     # the recorded mapping carries only what the call kept (no color="g")
     assert "color" not in art["kwargs"]["mapping"]

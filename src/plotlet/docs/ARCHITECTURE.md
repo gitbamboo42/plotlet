@@ -60,7 +60,8 @@ IRNode(nid, kind, init, ops, insets)
 - `kind` — `"chart" | "legend" | "diagram" | "layout"`.
 - `init` — construction kwargs (below).
 - `ops` — `[{"op": <name>, "args": [...], "kwargs": {...}}, ...]` in
-  original per-node order.
+  original per-node order. The op is the Python method name verbatim
+  (`add_scatter`, `title`).
 - `insets` — `[{"rect": [x, y, w, h], "chart_nid": <nid>}, ...]`
   (fractional rect in the host's data area). Insets live on leaf
   nodes — never on a layout — and `chart_nid` must name a chart node.

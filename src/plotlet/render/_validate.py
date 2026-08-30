@@ -19,8 +19,9 @@ out in `docs/ARCHITECTURE.md`:
     in the coord registry and carry a `container` flag matching the
     registered class (stamped at record time — the flag is what lets
     lowering place hoisted ops without touching the registry)
-  * op names resolve: chart-family ops against the artist registry ∪
-    the frame-method set ∪ `attach_*`; layout ops against the
+  * op names resolve: chart-family ops against the artist registry
+    (as `add_<name>` method names, via `op_to_artist`) ∪ the
+    frame-method set ∪ `attach_*`; layout ops against the
     materialized ∪ passthrough sets
   * the root node is a layout — `journal_to_ir` wraps a lone leaf in a
     1×1 layout at lowering (hoisting a chart root's composition-level
@@ -49,10 +50,10 @@ def _err(msg: str) -> ValueError:
 
 
 def _chart_op_ok(name: str) -> bool:
-    from ..registry import get_artist
+    from ..registry import op_to_artist
     from ._resolution import _FRAME_OPS
     return (name in _FRAME_OPS or name in _ATTACH_OPS
-            or get_artist(name) is not None)
+            or op_to_artist(name) is not None)
 
 
 def _layout_op_ok(name: str) -> bool:
@@ -232,6 +233,12 @@ def _check_ops(node, kinds: dict, data_ids) -> None:
                 f"'kwargs': {{...}}}}; got {op!r}."
             )
         if not op_ok(op["op"]):
+            from ..registry import get_artist
+            if node.kind != "layout" and get_artist(op["op"]) is not None:
+                raise _err(
+                    f"{where}: op {op['op']!r} — artist ops are the "
+                    f"Python method name: use {'add_' + op['op']!r}."
+                )
             raise _err(
                 f"{where}: op {op['op']!r} does not resolve to {family}. "
                 f"Extension artists register on import — a figure "

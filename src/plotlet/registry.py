@@ -224,6 +224,13 @@ def get_artist(name: str) -> ArtistSpec | None:
     return _REGISTRY.get(name)
 
 
+def op_to_artist(op: str) -> ArtistSpec | None:
+    """Registry lookup for a journal op name. Artist ops carry the Python
+    method name verbatim (`add_scatter`); the registry keys the bare
+    artist name (`scatter`). Any other op returns None."""
+    return _REGISTRY.get(op[4:]) if op.startswith("add_") else None
+
+
 def all_artist_names() -> list[str]:
     return list(_REGISTRY.keys())
 

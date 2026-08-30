@@ -212,7 +212,7 @@ def test_circular_root_hoists_title_coordinate_sectors():
     assert root.kind == "layout"
     assert sorted(_op_names(root)) == ["coordinate", "sectors", "title"]
     assert not set(_op_names(leaf)) & {"title", "coordinate", "sectors"}
-    assert "scatter" in _op_names(leaf)
+    assert "add_scatter" in _op_names(leaf)
 
 
 def test_plain_root_wraps_with_no_hoist():

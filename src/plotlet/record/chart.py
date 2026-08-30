@@ -48,7 +48,7 @@ from .._spec import _SIZESPEC, _MARGIN_FLOOR
 from .._tree import compute_share_classes, normalize_share_mode
 from ..utils import _to_px, _normalize_data, _normalize_matrix, \
     _check_table, _data_has_column, Aes, DataFrameLite
-from ..registry import get_artist, all_artist_names
+from ..registry import get_artist, op_to_artist, all_artist_names
 
 
 # Frame-state methods recordable on a Chart (replayed by `_replay`). Lives
@@ -442,7 +442,8 @@ class Chart(_Renderable):
         if self._aes_map:
             kv = ", ".join(f"{k}={v!r}" for k, v in self._aes_map.items())
             parts.append(f"aes({kv})")
-        arts = [op for op, _a, _k in self._calls if get_artist(op) is not None]
+        arts = [op for op, _a, _k in self._calls
+                if op_to_artist(op) is not None]
         if arts:
             shown = ", ".join(arts[:6])
             if len(arts) > 6:
@@ -631,11 +632,12 @@ class Chart(_Renderable):
         # interfere with _calls / _data_width / etc.
         if name.startswith("_"):
             raise AttributeError(name)
-        # Artists are called as `add_<op>` (`c.add_scatter(...)`); the
-        # journal records the canonical op name (`"scatter"`), so the
-        # spelling of the method never reaches the journal or the render
-        # half. Frame methods (title, xlim, …) stay bare — `add_title`
-        # does not resolve, and neither does a bare artist name.
+        # Artists are called as `add_<name>` (`c.add_scatter(...)`) and
+        # the journal records that method name verbatim — the op in a
+        # journal entry is always the Python spelling. Frame methods
+        # (title, xlim, …) are bare methods, so their ops are bare;
+        # `add_title` does not resolve, and neither does a bare artist
+        # name. The registry keys bare artist names, hence the strip.
         op = name.removeprefix("add_")
         spec = get_artist(op) if name.startswith("add_") else None
         if name in _FRAME_METHODS or spec is not None:
@@ -720,8 +722,7 @@ class Chart(_Renderable):
                 # Only the user action is recorded — an artist's
                 # frame_defaults regenerate inside `_replay` on every
                 # render (see `_expand_frame_defaults` in render/_resolution.py).
-                # `op`, not `name`: the journal carries canonical op names.
-                self._calls.append((op, list(args), dict(kwargs)))
+                self._calls.append((name, list(args), dict(kwargs)))
                 return self
             # Surface the artist's module docstring on the recorder so
             # `c.add_line?` / `help(c.add_line)` / `c.add_line.__doc__` reach

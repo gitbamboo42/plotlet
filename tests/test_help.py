@@ -37,7 +37,7 @@ def test_chart_repr_summarizes_state():
     assert "300×200px" in r
     assert "3 rows × 3 cols" in r
     assert "color='g'" in r
-    assert "line, scatter" in r
+    assert "add_line, add_scatter" in r
 
 
 def test_empty_chart_repr():
