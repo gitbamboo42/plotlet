@@ -19,6 +19,13 @@ untouched; only the data section shrinks. Matrix tables (nested row
 lists) are left whole, and any example whose thinned JSON still
 exceeds `MAX_BYTES` gets no twin — that's megabytes of inlined matrix,
 useless as a format example.
+
+Every float in the twin is also rounded to `SIG_DIGITS` significant
+digits. Example data made with `random.gauss` (libm-backed) or `sum()`
+(more accurate from Python 3.12) differs in the last couple of digits
+across OSes and Python versions; full-precision twins would go stale on
+every platform except the one that wrote them. Rounding removes that
+noise, so the staleness test can run on the whole CI matrix.
 """
 from __future__ import annotations
 
@@ -32,6 +39,19 @@ JSON_DIR = EXAMPLES / "json"
 
 MAX_BYTES = 100_000
 MAX_ROWS = 60   # per-table row cap in the twins (evenly sampled)
+SIG_DIGITS = 6  # float precision in the twins (see module docstring)
+
+
+def _round_floats(x):
+    """Round every float in `x` (nested lists/dicts included) to
+    `SIG_DIGITS` significant digits."""
+    if isinstance(x, float):
+        return float(f"{x:.{SIG_DIGITS}g}")
+    if isinstance(x, list):
+        return [_round_floats(v) for v in x]
+    if isinstance(x, dict):
+        return {k: _round_floats(v) for k, v in x.items()}
+    return x
 
 
 def _thin_tables(blob: dict) -> dict:
@@ -70,7 +90,7 @@ def example_json(py_path: Path) -> str:
     ns: dict = {}
     src = py_path.read_text(encoding="utf-8")
     exec(compile(src, str(py_path), "exec"), ns)
-    blob = _thin_tables(pt.to_journal(ns["c"]).to_dict())
+    blob = _round_floats(_thin_tables(pt.to_journal(ns["c"]).to_dict()))
     return pretty_dumps(blob) + "\n"
 
 
