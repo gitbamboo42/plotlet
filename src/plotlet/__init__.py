@@ -42,6 +42,7 @@ from .skill import skill
 # `from plotlet.lint import lint` still resolves via sys.modules.
 from .lint import lint
 from .describe import describe
+from .op_help import op_help  # same shadowing pattern as lint
 from . import draw, utils
 
 
@@ -71,7 +72,7 @@ __all__ = ["chart", "Chart", "Layout", "SPEC", "TAB10",
            "to_json", "from_json", "to_python", "register_coord_codec",
            "to_journal", "from_journal", "JournalNode", "Journal",
            "to_ir", "from_ir", "FigureIR", "IRNode",
-           "skill", "lint", "describe",
+           "skill", "lint", "describe", "op_help",
            "draw", "utils"]
 
 # Single source of truth: pyproject.toml. importlib.metadata reads it at

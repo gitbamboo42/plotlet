@@ -1,6 +1,7 @@
-"""Help-bridge tests — `Chart.__getattr__` attaches each artist's module
-docstring to the returned recorder so `c.add_line?` / `help(c.add_line)` /
-`c.add_line.__doc__` work via Python's standard introspection."""
+"""Help-bridge tests — `Chart.__getattr__` attaches docs to the
+returned recorder so `c.add_line?` / `help(c.add_line)` / `.__doc__`
+work via Python's standard introspection: artists get their module
+docstring, frame methods their `_FRAME_DOCS` line."""
 
 import plotlet as pt
 
@@ -11,12 +12,14 @@ def test_artist_doc_surfaces_on_recorder():
     assert c.add_line.__name__ == "add_line"
 
 
-def test_frame_method_has_no_artist_doc():
-    # Frame methods go through the recorder path too but have no artist
-    # spec — they document via docs/API.md, not module docstrings. Pin
-    # the current behavior so a future change is explicit.
+def test_frame_method_doc_is_its_frame_docs_line():
+    # Frame methods have no artist spec — the recorder doc is the
+    # `_FRAME_DOCS` entry (the same prose `pt.op_help` serves), never
+    # some artist's module docstring.
+    from plotlet.record.chart import _FRAME_DOCS
     c = pt.chart()
-    assert c.title.__doc__ is None
+    assert c.title.__doc__ == _FRAME_DOCS["title"]
+    assert c.title.__name__ == "title"
 
 
 # ---------------------------------------------------------------------------

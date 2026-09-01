@@ -51,16 +51,77 @@ from ..utils import _to_px, _normalize_data, _normalize_matrix, \
 from ..registry import get_artist, op_to_artist, all_artist_names
 
 
-# Frame-state methods recordable on a Chart (replayed by `_replay`). Lives
-# here because `Chart.__getattr__` / `__dir__` are the only consumers —
-# the dispatcher in `_replay` matches on name directly.
-_FRAME_METHODS = {
-    "title", "subtitle", "caption", "xlabel", "ylabel", "xlim", "ylim",
-    "xscale", "yscale", "gridlines", "legend",
-    "xticks", "yticks", "spines", "theme", "spec",
-    "x_expand", "y_expand", "clip", "facecolor",
-    "coordinate", "sectors", "aspect",
+# Frame-state methods recordable on a Chart (replayed by `_replay`; the
+# per-op `_record_*` handler signatures in `render/_resolution.py`
+# validate each call's shape). One dict entry per op: membership drives
+# `__getattr__` / `__dir__`, and the doc string becomes the recorder's
+# `__doc__` (so `help(c.xlim)` answers) and the prose `pt.op_help`
+# serves to journal authors. A None doc marks the ops whose specialized
+# `Chart` methods shadow `__getattr__` — their docstrings live on the
+# methods. Keep each doc to call shape + semantics; parameter lists are
+# derived live from the `_record_*` handlers by `pt.op_help`, never
+# written out here.
+_FRAME_DOCS = {
+    "title": 'The panel title. One positional string; "\\n" starts a new line.',
+    "subtitle": ("Secondary title line under the title, smaller. "
+                 "One positional string."),
+    "caption": "Small caption under the panel. One positional string.",
+    "xlabel": ('The x-axis label. One positional string; "\\n" starts a '
+               "new line."),
+    "ylabel": ('The y-axis label. One positional string; "\\n" starts a '
+               "new line."),
+    "xlim": ("Fix the x-axis range: xlim(lo, hi), or one (lo, hi) pair. "
+             "Not calling it autoscales from the data."),
+    "ylim": ("Fix the y-axis range: ylim(lo, hi), or one (lo, hi) pair. "
+             "Not calling it autoscales from the data."),
+    "xscale": ('Set the x scale kind: "linear", "log", "symlog", "power", '
+               '"sqrt", "category", or "time". A kindless call (kwargs '
+               "only) keeps the current kind. Kwargs: order= and padding= "
+               "(category levels), linthresh= (symlog), exponent= (power), "
+               "reverse= (flip direction), splits= / split_gap= / groups= "
+               "(partition a category axis)."),
+    "yscale": "Same as xscale, for the y axis.",
+    "xticks": ("Tick content and style for the x axis. Positional: tick "
+               "positions, then labels — [] hides ticks, None resets to "
+               "auto, labels=False keeps the marks but hides the label "
+               "text. Style kwargs: rotation=, fontsize=, fontstyle=, "
+               'fontweight=, decoration=, direction= ("in"/"out"/"inout"), '
+               "marks= (bool), format= (tick label format), minor=, "
+               'step=, count=, side= ("bottom"/"top").'),
+    "yticks": 'Same as xticks, for the y axis (side= is "left"/"right").',
+    "gridlines": ("Toggle gridlines: gridlines() / gridlines(False). Pass "
+                  '"major", "minor", or "both" (positionally or as which=) '
+                  "to pick which tick set draws lines."),
+    "legend": None,
+    "spines": ("Style or hide the frame's border lines. Base kwargs "
+               "color=, width=, linestyle= apply to every side; per-side "
+               "top=, right=, bottom=, left= (and walls=, the inter-sector "
+               "dividers) take a bool (show/hide) or a dict with color / "
+               "width / linestyle / visible."),
+    "theme": None,
+    "spec": None,
+    "x_expand": ("Autoscale breathing room on x, as fractions of the data "
+                 "span: one number (symmetric) or two (lo, hi). "
+                 "x_expand(0) pins the data to the frame edges."),
+    "y_expand": "Same as x_expand, for y.",
+    "clip": "clip(True/False): whether marks clip to the data rectangle.",
+    "facecolor": ("Background fill of the data rectangle (a CSS color; "
+                  "None for the theme default)."),
+    "coordinate": ("Attach a coordinate system to this chart, e.g. "
+                   "pt.CircularCoordinate(...). In a journal the value is "
+                   'a {"$coord": name, "container": bool, "kwargs": {...}} '
+                   "envelope."),
+    "sectors": ("Partition an axis into labeled sectors: sectors(spec, "
+                'column=..., axis="x", divider=, label=, gap=). column= '
+                "names the per-row sector tag (required for continuous "
+                "sectors). A pt.Sectors object encodes as "
+                '{"$sectors": ...} in a journal; a plain dict / list spec '
+                "stays as-is."),
+    "aspect": ('Lock the data-region aspect: "equal" (one y unit renders '
+               "as long as one x unit) or a positive number (the pixel "
+               "length of one y unit per one x unit)."),
 }
+_FRAME_METHODS = frozenset(_FRAME_DOCS)
 
 
 # Notebook display renders PNG at 2x and pins the logical size in the
@@ -724,18 +785,22 @@ class Chart(_Renderable):
                 # render (see `_expand_frame_defaults` in render/_resolution.py).
                 self._calls.append((name, list(args), dict(kwargs)))
                 return self
-            # Surface the artist's module docstring on the recorder so
-            # `c.add_line?` / `help(c.add_line)` / `c.add_line.__doc__` reach
-            # it — __getattr__ dispatch otherwise blocks Python's standard
-            # help path. Frame methods (no spec) keep the empty default.
-            # Pointing `__wrapped__` at the record function makes
-            # `inspect.signature(c.add_bar)` and `c.add_bar?` show the artist's
-            # real parameter list.
+            # Surface docs on the recorder so `c.add_line?` / `help(c.xlim)`
+            # / `.__doc__` reach them — __getattr__ dispatch otherwise
+            # blocks Python's standard help path. Artists get their module
+            # docstring, plus the record fn's real parameter list via
+            # `__wrapped__` (read by `inspect.signature` and `?`). Frame
+            # methods get their `_FRAME_DOCS` line; their parameter lists
+            # live on the render half's `_record_*` handlers, which must
+            # not load here (render imports stay lazy until first render)
+            # — `pt.op_help` derives them for anyone who asks.
             if spec is not None:
                 recorder.__wrapped__ = spec.record
                 mod = inspect.getmodule(spec.record)
                 recorder.__doc__ = (mod.__doc__ if mod is not None else None) or ""
-                recorder.__name__ = name
+            else:
+                recorder.__doc__ = _FRAME_DOCS[name] or ""
+            recorder.__name__ = name
             return recorder
         # An installed-but-not-imported extension from the plotlet-extensions
         # package registers its artist only on import; hint at that. `op`

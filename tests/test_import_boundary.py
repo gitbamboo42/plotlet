@@ -37,7 +37,7 @@ from pathlib import Path
 # needs no import to consume one.) Everything else under plotlet/ is
 # shared vocabulary (or render-internal).
 FRONT_HALF = {
-    "record", "lint", "layout_diagram",
+    "record", "lint", "layout_diagram", "op_help",
 }
 
 

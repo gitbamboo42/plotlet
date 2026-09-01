@@ -132,8 +132,12 @@ Copy the pattern, adapt the data.
 ## Where to find API details
 
 - `help(c.add_<name>)` / `c.add_<name>?` — plotlet forwards artist docstrings
-  through the recorder. Always check before first use; signatures are
-  not uniform (e.g. some artists take a matrix positionally).
+  through the recorder (frame methods like `c.xlim` answer too). Always
+  check before first use; signatures are not uniform (e.g. some artists
+  take a matrix positionally).
+- `pt.op_help("add_<name>")` — the same reference *returned as a string*,
+  keyed by method name, no chart object needed; `pt.op_help()` lists
+  every op. Made for tooling (MCP servers, journal authoring).
 - `artists/<name>.py` inside the installed package — core artist source.
 - `docs/` inside the installed package — deep dives on subplots,
   coordinates, themes, extending, SVG schema (list under "Deep dives").

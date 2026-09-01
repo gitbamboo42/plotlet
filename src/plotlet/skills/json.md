@@ -110,7 +110,9 @@ evenly spaced sample of rows; matrix tables are kept whole (the
 entries are untouched — the twins teach the format, not the data). Read the pair to learn the
 Python↔JSON mapping for the plot type nearest your task, then adapt
 the data. Kwargs in an entry are the same kwargs the Python method
-takes, so `help(c.add_<name>)` documents them.
+takes, and `pt.op_help(op)` returns any op's reference — parameter
+list plus docs — as a string; `pt.op_help()` lists the whole op
+vocabulary. Look an op up instead of guessing a kwarg name.
 
 ## Serving plotlet over MCP: keep data server-side
 
@@ -133,6 +135,12 @@ plotlet ever sees the blob. Keep two rules absolute: every blob that
 reaches `pt.from_json` is self-contained, and a journal never carries
 file paths or URLs — `from_json` does no I/O, which is what keeps a
 model-authored blob inert data rather than a file-read primitive.
+
+Also expose a doc-lookup tool backed by `pt.op_help(op)` — it returns
+the op's reference (parameter list + docs) as a string, which is what
+`help(c.add_bar)` can't do for a model that never executes Python.
+Without it the model guesses kwarg names from other libraries'
+vocabularies and burns a render round-trip per wrong guess.
 
 ## Checking your work
 
