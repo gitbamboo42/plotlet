@@ -23,7 +23,7 @@ def chart_text():
 
     c = pt.chart(df, aes(x="x", y="y"), title="text annotations", xlabel="x", ylabel="y")
     c.add_scatter()
-    c.add_text(data=df2, mapping=aes(x="x", y="y", label="label"), dy=-10, ha="center")
+    c.add_text(df2, aes(x="x", y="y", label="label"), dy=-10, ha="center")
     c.add_annotate("peak", xy=(3, 9.5), color="C3", ha="center")
     return c
 

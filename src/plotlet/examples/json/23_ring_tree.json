@@ -1,48 +1,25 @@
 {
  "version": 1,
- "root_nid": 1,
  "entries": [
-  {
-   "op": "new_chart",
-   "nid": 2,
-   "args": [],
-   "kwargs": {
-    "data": null,
-    "data_width": 524,
-    "data_height": 322,
-    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0}
-   }
-  },
-  {"op": "xlim", "nid": 2, "args": [0, 1], "kwargs": {}},
-  {"op": "ylim", "nid": 2, "args": [0, 1], "kwargs": {}},
+  {"op": "new_chart", "nid": 2, "kwargs": {"data": null}},
+  {"op": "xlim", "nid": 2, "args": [0, 1]},
+  {"op": "ylim", "nid": 2, "args": [0, 1]},
   {
    "op": "add_heatmap",
    "nid": 2,
-   "args": [],
+   "args": [{"$data": "d1"}],
    "kwargs": {
-    "data": {"$data": "d1"},
     "values": ["f0", "f1", "f2", "f3", "f4", "f5"],
     "cmap": "RdBu_r",
     "center": 0,
-    "mapping": {"x": "leaf"}
+    "aes": {"x": "leaf"}
    }
   },
-  {
-   "op": "new_chart",
-   "nid": 3,
-   "args": [],
-   "kwargs": {
-    "data": null,
-    "data_width": 524,
-    "data_height": 322,
-    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0}
-   }
-  },
-  {"op": "xlim", "nid": 3, "args": [0, 1], "kwargs": {}},
+  {"op": "new_chart", "nid": 3, "kwargs": {"data": null}},
+  {"op": "xlim", "nid": 3, "args": [0, 1]},
   {
    "op": "add_dendrogram",
    "nid": 3,
-   "args": [],
    "kwargs": {
     "data": [
      [2.56503, 0.662053, -0.407829, -0.777698, -0.109809, 0.956728],
@@ -72,7 +49,6 @@
   {
    "op": "new_layout",
    "nid": 1,
-   "args": [],
    "kwargs": {"layout_kind": "v", "children": [2, 3], "grid_rows": null, "grid_cols": null}
   },
   {
@@ -92,11 +68,10 @@
       "end_deg": 360.0
      }
     }
-   ],
-   "kwargs": {}
+   ]
   },
-  {"op": "heights", "nid": 1, "args": [[1.0, 2.2]], "kwargs": {}},
-  {"op": "title", "nid": 1, "args": ["circular annotated heatmap"], "kwargs": {}}
+  {"op": "heights", "nid": 1, "args": [[1.0, 2.2]]},
+  {"op": "title", "nid": 1, "args": ["circular annotated heatmap"]}
  ],
  "data": {
   "d1": {

@@ -469,16 +469,15 @@ class Aes(dict):
 def aes(**mappings) -> Aes:
     """Map aesthetics to data columns: `aes(x="displ", color="class")`.
 
-    Pass it as `mapping=` to `pt.chart(...)` or to any artist call
-    (ggplot-style; positional also works). Every value must be a
-    column name (a string); literal values stay as plain kwargs
+    Pass it positionally to `pt.chart(...)` or to any artist call
+    (ggplot-style; the `aes=` keyword also works). Every value must be
+    a column name (a string); literal values stay as plain kwargs
     outside `aes(...)`:
 
-        c.add_scatter(data=df, mapping=aes(x="displ", color="class"),
-                      size=3)
+        c.add_scatter(df, aes(x="displ", color="class"), size=3)
 
     maps x/color to columns and sets a literal marker size. In the
-    journal the mapping is recorded under the reserved `"mapping"` key
+    journal the mapping is recorded under the reserved `"aes"` key
     of the call's kwargs, so a stored journal says which values are
     column references without consulting the data.
     """

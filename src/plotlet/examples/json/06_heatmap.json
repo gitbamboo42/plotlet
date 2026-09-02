@@ -1,36 +1,23 @@
 {
  "version": 1,
- "root_nid": 1,
  "entries": [
-  {
-   "op": "new_chart",
-   "nid": 2,
-   "args": [],
-   "kwargs": {
-    "data": null,
-    "data_width": 420,
-    "data_height": 240,
-    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0}
-   }
-  },
-  {"op": "title", "nid": 2, "args": ["airline passengers"], "kwargs": {}},
+  {"op": "new_chart", "nid": 2, "kwargs": {"data": null, "data_width": 420, "data_height": 240}},
+  {"op": "title", "nid": 2, "args": ["airline passengers"]},
   {
    "op": "add_heatmap",
    "nid": 2,
-   "args": [],
+   "args": [{"$data": "d1"}],
    "kwargs": {
-    "data": {"$data": "d1"},
     "values": ["January", "February", "March", "April", "May", "June", "July", "August", "September",
                "October", "November", "December"],
     "cmap": "viridis",
     "legend": {"label": "passengers"},
-    "mapping": {"x": "year"}
+    "aes": {"x": "year"}
    }
   },
   {
    "op": "new_leaf",
    "nid": 3,
-   "args": [],
    "kwargs": {
     "leaf_kind": "legend",
     "canvas_width": 1,
@@ -51,10 +38,9 @@
   {
    "op": "new_layout",
    "nid": 1,
-   "args": [],
    "kwargs": {"layout_kind": "grid", "children": [2, 3], "grid_rows": 1, "grid_cols": 2}
   },
-  {"op": "gap", "nid": 1, "args": [0], "kwargs": {}}
+  {"op": "gap", "nid": 1, "args": [0]}
  ],
  "data": {
   "d1": {

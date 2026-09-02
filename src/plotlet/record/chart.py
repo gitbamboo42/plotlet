@@ -371,7 +371,7 @@ class Chart(_Renderable):
                  data_width: int | float | str | None = None,
                  data_height: int | float | str | None = None,
                  margin: dict | None = None,
-                 mapping: dict | None = None,
+                 aes: dict | None = None,
                  x: str | None = None, y: str | None = None,
                  fill: str | None = None,
                  color: str | None = None,
@@ -425,9 +425,8 @@ class Chart(_Renderable):
         # Chart-level aesthetic defaults inherited by artist calls — set
         # once at chart construction, overridden by per-artist values.
         # Two pools: `_aes_map` holds column mappings from a chart-level
-        # `mapping=aes(...)`; `_aes` holds literal defaults from bare
-        # kwargs.
-        self._aes_map = dict(mapping) if mapping else {}
+        # `aes(...)`; `_aes` holds literal defaults from bare kwargs.
+        self._aes_map = dict(aes) if aes else {}
         self._aes = {"x": x, "y": y,
                      "fill": fill, "color": color, "group": group,
                      "linestyle": linestyle,
@@ -709,11 +708,11 @@ class Chart(_Renderable):
                             f"{self._leaf_kind} leaves don't take artists — "
                             f"draw {name}() on a pt.chart() and compose the two."
                         )
-                    # Column mappings arrive as `mapping=aes(...)` (or a
-                    # positional aes(...), ggplot-style); fold them into
-                    # the reserved "mapping" entry of the recorded
-                    # kwargs. "mapping" is reserved — no artist kwarg
-                    # may use it for anything else.
+                    # Column mappings arrive as a positional aes(...)
+                    # (ggplot-style) or `aes=aes(...)`; fold them into
+                    # the reserved "aes" entry of the recorded kwargs.
+                    # "aes" is reserved — no artist kwarg may use it
+                    # for anything else.
                     aes_map = {}
                     # `inherit_aes=False` (ggplot2's inherit.aes) opts this
                     # artist out of the chart-level aes inheritance below —
@@ -721,11 +720,11 @@ class Chart(_Renderable):
                     # A record-time directive: consumed here, never recorded
                     # or handed to the artist's record fn.
                     inherit_aes = kwargs.pop("inherit_aes", True)
-                    m = kwargs.pop("mapping", None)
+                    m = kwargs.pop("aes", None)
                     if m is not None:
                         if not isinstance(m, (Aes, dict)):
                             raise TypeError(
-                                f"c.{name}(mapping=...) takes aes(...); "
+                                f"c.{name}(aes=...) takes aes(...); "
                                 f"got {type(m).__name__}."
                             )
                         aes_map.update(m)
@@ -1325,7 +1324,7 @@ class Layout(_Renderable):
                     f"{self._layout_kind!r}."
                 )
 
-def chart(data=None, mapping=None, *,
+def chart(data=None, aes=None, *,
           data_width=None, data_height=None, margin=None,
           x=None, y=None, fill=None, color=None, group=None,
           linestyle=None, palette=None,
@@ -1339,9 +1338,9 @@ def chart(data=None, mapping=None, *,
           x_expand=None, y_expand=None,
           legend=None, gridlines=None, clip=None,
           facecolor=None) -> Chart:
-    """Construct a table-bound Chart. Column mappings go in
-    `mapping=aes(...)` — `pt.chart(df, mapping=aes(x="displ",
-    y="hwy"))`, ggplot-style, positional also accepted — and are
+    """Construct a table-bound Chart. Column mappings go in a
+    positional `aes(...)` — `pt.chart(df, aes(x="displ", y="hwy"))`,
+    ggplot-style (the `aes=` keyword also works) — and are
     inherited by artist calls that don't override them. Structural
     kwargs (`data_width`, `data_height`, `margin`) and literal aes
     defaults (`fill`, `color`, `linestyle`, `palette`, …) go to the
@@ -1351,10 +1350,10 @@ def chart(data=None, mapping=None, *,
     `pt.chart(df).title("foo").xlim(0, 10)`."""
     # `pt.chart(aes(x=...))` with no data — the mapping arrives in the
     # data slot; shift it over.
-    if isinstance(data, Aes) and mapping is None:
-        data, mapping = None, data
+    if isinstance(data, Aes) and aes is None:
+        data, aes = None, data
     c = Chart(data, data_width=data_width, data_height=data_height,
-              margin=margin, mapping=dict(mapping) if mapping else None,
+              margin=margin, aes=dict(aes) if aes else None,
               x=x, y=y, fill=fill, color=color,
               group=group, linestyle=linestyle, palette=palette)
     if title    is not None: c.title(title)
@@ -1450,7 +1449,7 @@ def _inherit_chart_aes(aes_map, kwargs, args, chart_aes_map, chart_aes,
                     and (known is None or k in known)):
                 kwargs[k] = v
     if aes_map:
-        kwargs["mapping"] = dict(aes_map)
+        kwargs["aes"] = dict(aes_map)
     if (chart_data is not None and "data" not in kwargs
             and not args
             and (known is None or "data" in known)

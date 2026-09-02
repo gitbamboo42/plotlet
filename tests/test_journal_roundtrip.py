@@ -330,9 +330,9 @@ def test_facet_journal_stores_one_table():
 
 _CHART_ENTRY = {"op": "new_chart", "nid": 2, "args": [],
                 "kwargs": {"data": {"$data": "d1"},
-                           "mapping": {"x": "x", "y": "y"}}}
+                           "aes": {"x": "x", "y": "y"}}}
 _LINE_ENTRY = {"op": "add_line", "nid": 2, "args": [],
-               "kwargs": {"mapping": {"x": "x", "y": "y"},
+               "kwargs": {"aes": {"x": "x", "y": "y"},
                           "data": {"$data": "d1"}}}
 
 

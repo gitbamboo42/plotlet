@@ -1,32 +1,23 @@
 {
  "version": 1,
- "root_nid": 1,
  "entries": [
   {
    "op": "new_chart",
    "nid": 2,
-   "args": [],
    "kwargs": {
     "data": {"$data": "d1"},
     "data_width": 300,
     "data_height": 260,
-    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
-    "mapping": {"x": "x", "y": "y"}
+    "aes": {"x": "x", "y": "y"}
    }
   },
-  {"op": "title", "nid": 2, "args": ["3000 points, binned"], "kwargs": {}},
-  {"op": "xlabel", "nid": 2, "args": ["x"], "kwargs": {}},
-  {"op": "ylabel", "nid": 2, "args": ["y"], "kwargs": {}},
-  {
-   "op": "add_hexbin",
-   "nid": 2,
-   "args": [],
-   "kwargs": {"gridsize": 22, "mapping": {"x": "x", "y": "y"}, "data": {"$data": "d1"}}
-  },
+  {"op": "title", "nid": 2, "args": ["3000 points, binned"]},
+  {"op": "xlabel", "nid": 2, "args": ["x"]},
+  {"op": "ylabel", "nid": 2, "args": ["y"]},
+  {"op": "add_hexbin", "nid": 2, "kwargs": {"gridsize": 22}},
   {
    "op": "new_leaf",
    "nid": 3,
-   "args": [],
    "kwargs": {
     "leaf_kind": "legend",
     "canvas_width": 1,
@@ -47,7 +38,6 @@
   {
    "op": "new_layout",
    "nid": 1,
-   "args": [],
    "kwargs": {"layout_kind": "h", "children": [2, 3], "grid_rows": null, "grid_cols": null}
   }
  ],

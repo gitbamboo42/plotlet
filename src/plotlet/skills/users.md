@@ -60,7 +60,7 @@ c.add_scatter()   # same mapping, no repetition
 
 - **Table + `aes` go positionally on `pt.chart(...)`; artists stay bare** —
   they inherit the chart mapping and carry only their own styling
-  (`color=`, `linewidth=`, `label=`, `alpha=`). Drop `data=` / `mapping=`.
+  (`color=`, `linewidth=`, `label=`, `alpha=`). Drop `data=` / `aes=`.
 - **Data first, one blank line, then the chart.** Every table is a
   variable at the top; never build a dict inline in a plotting call
   (`pt.chart({"x": [1, 2], ...})`, `c.add_line(data={...})`).
@@ -108,10 +108,10 @@ There is no `figsize`, no `dpi`, no inches-by-default.
   print(pathlib.Path(plotlet.__file__).parent / "examples")
   ```
 - Almost every example also has a JSON twin in `examples/json/` — the
-  same calls as a `pt.to_json` journal blob, with the column tables
-  thinned to a small sample (the two large image examples ship
+  same calls as a `pt.to_json_lite` journal-lite blob, with the column
+  tables thinned to a small sample (the two large image examples ship
   without one). To author a plot as JSON instead of Python (no
-  code execution; renders via `pt.from_json(blob).to_svg()`), read
+  code execution; renders via `pt.from_json_lite(blob).to_svg()`), read
   `pt.skill("json")`.
 - [`plotlet-cookbook`](https://github.com/gitbamboo42/plotlet-cookbook) repo —
   worked multi-file recipes (annotated heatmaps, circular / ring plots, ...).

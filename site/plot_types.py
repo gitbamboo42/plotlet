@@ -217,7 +217,7 @@ for r in range(5):
     data[f"r{r}"] = [math.sin(i * 0.7 + r) for i in range(8)]
 
 c = pt.chart()
-c.add_heatmap(data=data, mapping=aes(x="col"),
+c.add_heatmap(data, aes(x="col"),
               values=[f"r{r}" for r in range(5)], cmap="viridis")
 """),
     ("Gridded & matrix", "image_cmap", """\

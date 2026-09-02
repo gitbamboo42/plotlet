@@ -2,57 +2,63 @@
 
 For AI assistants and tools that author a plot as a **JSON journal**
 instead of Python code. The blob is data, not code: hand it to
-`pt.from_json(blob)` and call `.to_svg()` to render, or
-`pt.to_python(pt.from_json(blob))` to hand the user an editable Python
-script that rebuilds the same figure. Nothing in the blob is executed,
-so this is the safe interchange format for services (e.g. an MCP
-server) that must not run model-written code.
+`pt.from_json_lite(blob)` and call `.to_svg()` to render, or
+`pt.to_python(pt.from_json_lite(blob))` to hand the user an editable
+Python script that rebuilds the same figure. Nothing in the blob is
+executed, so this is the safe interchange format for services (e.g. an
+MCP server) that must not run model-written code.
 
 Print this guide from an installed package with `pt.skill("json")`.
 
-## The blob
+## The blob — journal-lite, the authoring form
 
 ```json
 {
  "version": 1,
- "root_nid": 1,
  "entries": [
-  {"op": "new_chart", "nid": 1, "args": [], "kwargs": {
+  {"op": "new_chart", "nid": 1, "kwargs": {
     "data": {"$data": "d1"},
-    "mapping": {"x": "x", "y": "y", "color": "g"}}},
-  {"op": "title", "nid": 1, "args": ["Demo"], "kwargs": {}},
-  {"op": "add_line", "nid": 1, "args": [], "kwargs": {
-    "mapping": {"x": "x", "y": "y", "color": "g"},
-    "data": {"$data": "d1"}}}
+    "aes": {"x": "x", "y": "y", "color": "g"}}},
+  {"op": "title", "nid": 1, "args": ["Demo"]},
+  {"op": "add_line", "nid": 1}
  ],
  "data": {"d1": {"x": [1, 2, 3], "y": [2, 4, 3], "g": ["a", "a", "b"]}}
 }
 ```
 
-Each entry is one recorded call: `op` (the method name), `nid` (which
-node it targets), `args` / `kwargs` (passed straight to the method).
-`new_chart` creates a chart node; every later entry with the same `nid`
-is a method call on it. `root_nid` names the node that renders.
+Each entry is one call: `op` (the Python method name), `nid` (which
+node it targets), `args` / `kwargs` (passed straight to the method —
+either may be omitted when empty). `new_chart` creates a chart node;
+every later entry with the same `nid` is a method call on it.
+
+This is **journal-lite**: everything derivable may be omitted. It is
+the form to write and the form the shipped examples teach. `pt.to_json`
+emits the **canonical** sibling — every entry fully explicit (args,
+kwargs, aes, data, sizing all spelled out) — which is also valid
+input: lite is terser, not weaker, and the two render byte-identically.
 
 ## Rules the examples alone won't teach
 
-- **No aes inheritance at replay.** In Python, `c.add_line()` inherits
-  the chart's mapping and data. The journal is the record *after* that
-  inheritance: every artist entry must carry explicit `mapping` and
-  `data` kwargs, even when they repeat the chart's. An artist entry
-  with empty kwargs fails with "requires data=, x=, y=".
+- **An artist entry with no `aes` inherits the chart's** —
+  mapping, literal aesthetic defaults, and `data` — just like a bare
+  `c.add_line()` in Python. A *present* `aes` is taken as
+  complete (no per-key merging with the chart's), and
+  `"inherit_aes": false` opts out of inheritance entirely.
 - **An op is the Python method name, verbatim.** Artist entries use
   the full name (`add_line`, `add_scatter`, `add_heatmap`); frame
   calls (`title`, `xlabel`, `gridlines`, `xlim`, ...) are bare because
   the Python methods are. Frame calls are their own entries, not
   `new_chart` kwargs.
 - **Tables live in the `data` section**, keyed `"d1"`, `"d2"`, ... in
-  first-use order; entries reference them as `{"$data": "d1"}`. Never
-  inline a column table in an entry. A table is a dict of equal-length
-  columns; a matrix artist's `$data` holds nested row lists.
+  first-use order; entries reference them as `{"$data": "d1"}`. A
+  table may also be written inline where the reference belongs —
+  loading interns it (avoid `$`-prefixed column names). A table is a
+  dict of equal-length columns; a matrix artist's `$data` holds
+  nested row lists.
 - **Order matters.** A node's `new_*` entry comes before any entry
   targeting it, and before any entry that references it. nids are
-  small ints starting at 1.
+  small ints starting at 1. `root_nid` names the node that renders
+  and defaults to the last node created; `version` defaults to 1.
 - **Chart sizing is optional.** `data_width` / `data_height` / `margin`
   on `new_chart` default sensibly when omitted (`pt.to_json` always
   writes them out).
@@ -78,7 +84,8 @@ is a method call on it. `root_nid` names the node that renders.
 ## Multi-panel figures
 
 Emit each chart's entries first, then a layout node whose `children`
-lists their nids, and point `root_nid` at the layout:
+lists their nids. With the layout created last, `root_nid` defaults
+to it — write it only when some other node should render:
 
 ```json
 {"op": "new_layout", "nid": 1, "args": [], "kwargs": {
@@ -94,7 +101,7 @@ layout child — see `examples/json/07_annotated_heatmap.json`.
 ## Where to find examples — imitate, don't guess
 
 Almost every shipped Python example has a JSON twin, generated by
-`pt.to_json` from the example itself, in the installed package. The
+`pt.to_json_lite` from the example itself, in the installed package. The
 exceptions are the image examples (`21_image_cmap`, `24_image_rgba`):
 their matrix data is too large for a useful twin, so none ships — read
 their `.py` files instead.
@@ -104,15 +111,16 @@ import plotlet, pathlib
 print(pathlib.Path(plotlet.__file__).parent / "examples" / "json")
 ```
 
-`examples/json/01_scatter.json` is `pt.to_json` of
-`examples/01_scatter.py` with each column table thinned to a small,
-evenly spaced sample of rows; matrix tables are kept whole (the
-entries are untouched — the twins teach the format, not the data). Read the pair to learn the
-Python↔JSON mapping for the plot type nearest your task, then adapt
-the data. Kwargs in an entry are the same kwargs the Python method
-takes, and `pt.op_help(op)` returns any op's reference — parameter
-list plus docs — as a string; `pt.op_help()` lists the whole op
-vocabulary. Look an op up instead of guessing a kwarg name.
+`examples/json/01_scatter.json` is `pt.to_json_lite` of
+`examples/01_scatter.py` (the journal-lite form) with each column
+table thinned to a small, evenly spaced sample of rows; matrix tables
+are kept whole (the entries are untouched — the twins teach the
+format, not the data). Read the pair to learn the Python↔JSON mapping
+for the plot type nearest your task, then adapt the data. Kwargs in
+an entry are the same kwargs the Python method takes, and
+`pt.op_help(op)` returns any op's reference — parameter list plus
+docs — as a string; `pt.op_help()` lists the whole op vocabulary.
+Look an op up instead of guessing a kwarg name.
 
 ## Serving plotlet over MCP: keep data server-side
 
@@ -126,15 +134,15 @@ never needs to pass through the model — in either direction:
    `"data": {"d1": "t42"}`.
 3. The server splices the real table in over the binding
    (`blob["data"]["d1"] = tables["t42"]`) and only then calls
-   `pt.from_json(blob)`. The spliced blob is complete and
+   `pt.from_json_lite(blob)`. The spliced blob is complete and
    self-contained — that's the one to save as the reproducible
    artifact.
 
 Binding names like `"t42"` are server convention, resolved before
 plotlet ever sees the blob. Keep two rules absolute: every blob that
-reaches `pt.from_json` is self-contained, and a journal never carries
-file paths or URLs — `from_json` does no I/O, which is what keeps a
-model-authored blob inert data rather than a file-read primitive.
+reaches `pt.from_json_lite` is self-contained, and a journal never
+carries file paths or URLs — loading does no I/O, which is what keeps
+a model-authored blob inert data rather than a file-read primitive.
 
 Also expose a doc-lookup tool backed by `pt.op_help(op)` — it returns
 the op's reference (parameter list + docs) as a string, which is what
@@ -144,9 +152,10 @@ vocabularies and burns a render round-trip per wrong guess.
 
 ## Checking your work
 
-`pt.from_json` only decodes the blob — it checks the `version` field
-and nothing else, so a successful call proves little. The real check
-is rendering: call `.to_svg()` and read any error it raises. Unknown
+`pt.from_json_lite` only expands and decodes the blob — it checks the
+`version` field and nothing else, so a successful call proves little.
+The real check is rendering: call `.to_svg()` and read any error it
+raises. Unknown
 op names, dangling `$data` / nid references, out-of-order entries, and
 envelopes where bare nids belong all fail with a message that names
 the problem. After it renders, read the figure back instead of

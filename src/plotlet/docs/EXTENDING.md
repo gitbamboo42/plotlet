@@ -26,7 +26,7 @@ from plotlet.draw import segment, circle
 #    rejects a typo like `c.add_lollipop(..., widht=2)` at render, and
 #    `c.lollipop?` shows the real parameters. `data=` first lets a caller
 #    pass the table positionally (`c.add_lollipop(df, aes(x=, y=))`). The
-#    user's `aes(...)` (the reserved `mapping` kwarg) is merged into
+#    user's `aes(...)` (the reserved `aes` kwarg) is merged into
 #    plain kwargs as aes-tagged strings before record() runs, so
 #    `data[x]` indexes the column as before. For a kwarg that may be a
 #    column or a literal, `resolve_aes(data, value)` classifies:

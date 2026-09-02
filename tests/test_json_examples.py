@@ -2,10 +2,11 @@
 
 Every `examples/NN_<name>.py` under the size cap must have a
 `examples/json/NN_<name>.json` twin that is byte-identical to what
-`tests/gen_json_examples.py` emits for that example today (`pt.to_json`
-output, tables thinned, pretty-printed), and every shipped twin must
-load through `pt.from_json` and render. On failure, rerun
-`python tests/gen_json_examples.py` and review the diff.
+`tests/gen_json_examples.py` emits for that example today (the
+journal-lite authoring form: `pt.to_json` piped through
+`journal_lite.simplify`, tables thinned, pretty-printed), and every
+shipped twin must load through `pt.from_json_lite` and render. On
+failure, rerun `python tests/gen_json_examples.py` and review the diff.
 """
 import json
 
@@ -42,7 +43,7 @@ def test_json_twin_is_current(py_path):
                          ids=[p.stem for p in sorted(JSON_DIR.glob("*.json"))])
 def test_json_twin_loads_and_renders(json_path):
     blob = json.loads(json_path.read_text(encoding="utf-8"))
-    svg = pt.from_json(blob).to_svg()
+    svg = pt.from_json_lite(blob).to_svg()
     assert svg.startswith("<svg")
 
 

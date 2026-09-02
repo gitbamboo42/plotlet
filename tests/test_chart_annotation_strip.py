@@ -123,7 +123,7 @@ def chart_heatmap_split_attached():
                divider=False, label=False)
     hm.sectors(_by_label(row_labels, row_groups), axis="y",
                divider=False, label=False)
-    hm.add_heatmap(data=_tidy_heatmap(matrix, col_labels, row_labels, xname="col"), mapping=aes(x="col"), values=row_labels,
+    hm.add_heatmap(_tidy_heatmap(matrix, col_labels, row_labels, xname="col"), aes(x="col"), values=row_labels,
                legend={"label": "value"})
     # First arg sits closest to the host; order outward is strip, bar.
     hm.attach_above(strip, bar)
@@ -149,7 +149,7 @@ def chart_heatmap_block_titles():
     hm = pt.chart(data_width=360, data_height=180)
     hm.sectors(_by_label(col_labels, col_groups), axis="x",
                divider=False, label=False)
-    hm.add_heatmap(data=_tidy_heatmap(matrix, col_labels, row_labels, xname="col"), mapping=aes(x="col"), values=row_labels,
+    hm.add_heatmap(_tidy_heatmap(matrix, col_labels, row_labels, xname="col"), aes(x="col"), values=row_labels,
                legend={"label": "value"})
     hm.attach_above(titles)
 
@@ -175,7 +175,7 @@ def chart_heatmap_block_filled():
     hm = pt.chart(data_width=360, data_height=180)
     hm.sectors(_by_label(col_labels, col_groups), axis="x",
                divider=False, label=False)
-    hm.add_heatmap(data=_tidy_heatmap(matrix, col_labels, row_labels, xname="col"), mapping=aes(x="col"), values=row_labels,
+    hm.add_heatmap(_tidy_heatmap(matrix, col_labels, row_labels, xname="col"), aes(x="col"), values=row_labels,
                legend={"label": "value"})
     hm.attach_above(block)
 

@@ -287,7 +287,7 @@ def share_x_scatter_heatmap():
     for row, name in enumerate(tracks):
         df[name] = [math.sin(0.5 * c + row) for c in cols]
     hm = pt.chart(title="tracks", data_height=90)
-    hm.add_heatmap(data=df, mapping=aes(x="x"), values=tracks, cmap="viridis")
+    hm.add_heatmap(df, aes(x="x"), values=tracks, cmap="viridis")
     hm.xlim(-0.5, 11.5)
     return (sc / hm).share_x(True)
 

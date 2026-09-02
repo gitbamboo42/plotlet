@@ -1,28 +1,20 @@
 {
  "version": 1,
- "root_nid": 1,
  "entries": [
   {
    "op": "new_chart",
    "nid": 1,
-   "args": [],
    "kwargs": {
     "data": {"$data": "d1"},
     "data_width": 260,
     "data_height": 230,
-    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
-    "mapping": {"sample": "s"}
+    "aes": {"sample": "s"}
    }
   },
-  {"op": "title", "nid": 1, "args": ["Q-Q vs N(0, 1)"], "kwargs": {}},
-  {"op": "xlabel", "nid": 1, "args": ["theoretical quantile"], "kwargs": {}},
-  {"op": "ylabel", "nid": 1, "args": ["sample quantile"], "kwargs": {}},
-  {
-   "op": "add_qq",
-   "nid": 1,
-   "args": [],
-   "kwargs": {"dist": "normal", "mapping": {"sample": "s"}, "data": {"$data": "d1"}}
-  }
+  {"op": "title", "nid": 1, "args": ["Q-Q vs N(0, 1)"]},
+  {"op": "xlabel", "nid": 1, "args": ["theoretical quantile"]},
+  {"op": "ylabel", "nid": 1, "args": ["sample quantile"]},
+  {"op": "add_qq", "nid": 1, "kwargs": {"dist": "normal"}}
  ],
  "data": {
   "d1": {

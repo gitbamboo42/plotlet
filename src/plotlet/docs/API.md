@@ -1,6 +1,6 @@
 # API reference
 
-`pt.chart(data=None, mapping=None, **opts)` returns a `Chart`.
+`pt.chart(data=None, aes=None, **opts)` returns a `Chart`.
 Table-shaped marks (`scatter`, `line`, `bar`, `hist`, `ecdf`, …) take
 long-form input only: pass a data table (any object supporting
 `data[col_name]` — pandas / polars / dict-of-lists / dict-of-arrays)
@@ -269,7 +269,7 @@ c.add_line()                                 # inherits df + mapping
 c.add_line(aes(color="g"))                   # adds a column mapping
 c.add_line(aes(x="t", y="v"), color="red")   # literals stay bare
 c.add_line(df2, aes(x="t", y="v"))           # per-call data — overrides the chart's df
-c.add_line(data=df2, mapping=aes(x="t", y="v"))  # fully named spelling
+c.add_line(data=df2, aes=aes(x="t", y="v"))  # fully named spelling
 ```
 
 The primary grouping aes is `color=` for stroke-defaulted artists

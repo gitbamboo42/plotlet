@@ -396,7 +396,7 @@ def to_journal(root) -> Journal:
             **aes,
         }
         if chart._aes_map:
-            kwargs["mapping"] = dict(chart._aes_map)
+            kwargs["aes"] = dict(chart._aes_map)
         journal.append("new_chart", nid, kwargs=kwargs)
 
     def _append_leaf(leaf, nid: int) -> None:

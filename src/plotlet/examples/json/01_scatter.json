@@ -1,34 +1,19 @@
 {
  "version": 1,
- "root_nid": 1,
  "entries": [
   {
    "op": "new_chart",
    "nid": 1,
-   "args": [],
    "kwargs": {
     "data": {"$data": "d1"},
-    "data_width": 524,
-    "data_height": 322,
-    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
-    "mapping": {"x": "flipper_length_mm", "y": "body_mass_g", "color": "species"}
+    "aes": {"x": "flipper_length_mm", "y": "body_mass_g", "color": "species"}
    }
   },
-  {"op": "title", "nid": 1, "args": ["Palmer penguins"], "kwargs": {}},
-  {"op": "xlabel", "nid": 1, "args": ["flipper length (mm)"], "kwargs": {}},
-  {"op": "ylabel", "nid": 1, "args": ["body mass (g)"], "kwargs": {}},
-  {"op": "gridlines", "nid": 1, "args": [true], "kwargs": {}},
-  {
-   "op": "add_scatter",
-   "nid": 1,
-   "args": [],
-   "kwargs": {
-    "size": 3,
-    "alpha": 0.7,
-    "mapping": {"x": "flipper_length_mm", "y": "body_mass_g", "color": "species"},
-    "data": {"$data": "d1"}
-   }
-  }
+  {"op": "title", "nid": 1, "args": ["Palmer penguins"]},
+  {"op": "xlabel", "nid": 1, "args": ["flipper length (mm)"]},
+  {"op": "ylabel", "nid": 1, "args": ["body mass (g)"]},
+  {"op": "gridlines", "nid": 1, "args": [true]},
+  {"op": "add_scatter", "nid": 1, "kwargs": {"size": 3, "alpha": 0.7}}
  ],
  "data": {
   "d1": {

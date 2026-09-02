@@ -1,28 +1,20 @@
 {
  "version": 1,
- "root_nid": 1,
  "entries": [
   {
    "op": "new_chart",
    "nid": 1,
-   "args": [],
    "kwargs": {
     "data": {"$data": "d1"},
     "data_width": 320,
     "data_height": 240,
-    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
-    "mapping": {"x": "month", "y": "temp"}
+    "aes": {"x": "month", "y": "temp"}
    }
   },
-  {"op": "title", "nid": 1, "args": ["daily temperature"], "kwargs": {}},
-  {"op": "xlabel", "nid": 1, "args": ["temperature (\u00b0C)"], "kwargs": {}},
-  {
-   "op": "add_ridge",
-   "nid": 1,
-   "args": [],
-   "kwargs": {"overlap": 1.6, "mapping": {"x": "month", "y": "temp"}, "data": {"$data": "d1"}}
-  },
-  {"op": "yticks", "nid": 1, "args": [[]], "kwargs": {}}
+  {"op": "title", "nid": 1, "args": ["daily temperature"]},
+  {"op": "xlabel", "nid": 1, "args": ["temperature (\u00b0C)"]},
+  {"op": "add_ridge", "nid": 1, "kwargs": {"overlap": 1.6}},
+  {"op": "yticks", "nid": 1, "args": [[]]}
  ],
  "data": {
   "d1": {

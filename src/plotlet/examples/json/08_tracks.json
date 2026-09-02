@@ -1,61 +1,36 @@
 {
  "version": 1,
- "root_nid": 1,
  "entries": [
   {
    "op": "new_chart",
    "nid": 2,
-   "args": [],
    "kwargs": {
     "data": {"$data": "d1"},
     "data_width": 480,
     "data_height": 80,
-    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
-    "mapping": {"x": "pos", "y": "score"}
+    "aes": {"x": "pos", "y": "score"}
    }
   },
-  {"op": "ylabel", "nid": 2, "args": ["score"], "kwargs": {}},
-  {"op": "ylim", "nid": 2, "args": [0, 1], "kwargs": {}},
-  {
-   "op": "add_scatter",
-   "nid": 2,
-   "args": [],
-   "kwargs": {
-    "size": 3,
-    "color": "#534AB7",
-    "mapping": {"x": "pos", "y": "score"},
-    "data": {"$data": "d1"}
-   }
-  },
+  {"op": "ylabel", "nid": 2, "args": ["score"]},
+  {"op": "ylim", "nid": 2, "args": [0, 1]},
+  {"op": "add_scatter", "nid": 2, "kwargs": {"size": 3, "color": "#534AB7"}},
   {
    "op": "new_chart",
    "nid": 3,
-   "args": [],
    "kwargs": {
     "data": {"$data": "d2"},
     "data_width": 480,
     "data_height": 80,
-    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
-    "mapping": {"x": "pos", "y": "cov", "group": "region"}
+    "aes": {"x": "pos", "y": "cov", "group": "region"}
    }
   },
-  {"op": "ylabel", "nid": 3, "args": ["coverage"], "kwargs": {}},
-  {"op": "ylim", "nid": 3, "args": [0, 1], "kwargs": {}},
-  {
-   "op": "add_line",
-   "nid": 3,
-   "args": [],
-   "kwargs": {
-    "color": "#1D9E75",
-    "mapping": {"x": "pos", "y": "cov", "group": "region"},
-    "data": {"$data": "d2"}
-   }
-  },
+  {"op": "ylabel", "nid": 3, "args": ["coverage"]},
+  {"op": "ylim", "nid": 3, "args": [0, 1]},
+  {"op": "add_line", "nid": 3, "kwargs": {"color": "#1D9E75"}},
   {"op": "add_axhline", "nid": 3, "args": [0.5], "kwargs": {"color": "#888888", "linestyle": "--"}},
   {
    "op": "new_layout",
    "nid": 1,
-   "args": [],
    "kwargs": {"layout_kind": "grid", "children": [2, 3], "grid_rows": 2, "grid_cols": 1}
   },
   {"op": "share_x", "nid": 1, "args": ["col"], "kwargs": {"hide_labels": true}},

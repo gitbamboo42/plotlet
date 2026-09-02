@@ -1,29 +1,21 @@
 {
  "version": 1,
- "root_nid": 1,
  "entries": [
   {
    "op": "new_chart",
    "nid": 1,
-   "args": [],
    "kwargs": {
     "data": {"$data": "d1"},
     "data_width": 460,
     "data_height": 200,
-    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
-    "mapping": {"x": "t", "y": "n"}
+    "aes": {"x": "t", "y": "n"}
    }
   },
-  {"op": "title", "nid": 1, "args": ["airline passengers"], "kwargs": {}},
-  {"op": "xlabel", "nid": 1, "args": ["year"], "kwargs": {}},
-  {"op": "ylabel", "nid": 1, "args": ["passengers / month"], "kwargs": {}},
-  {"op": "gridlines", "nid": 1, "args": [true], "kwargs": {}},
-  {
-   "op": "add_line",
-   "nid": 1,
-   "args": [],
-   "kwargs": {"mapping": {"x": "t", "y": "n"}, "data": {"$data": "d1"}}
-  }
+  {"op": "title", "nid": 1, "args": ["airline passengers"]},
+  {"op": "xlabel", "nid": 1, "args": ["year"]},
+  {"op": "ylabel", "nid": 1, "args": ["passengers / month"]},
+  {"op": "gridlines", "nid": 1, "args": [true]},
+  {"op": "add_line", "nid": 1}
  ],
  "data": {
   "d1": {

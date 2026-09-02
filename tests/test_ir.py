@@ -65,7 +65,7 @@ def _composed_fig():
 
     a = pt.chart(data, aes(x="x", y="y"), data_width=200, data_height=140, title="a")
     a.add_scatter(label="pts")
-    inset = a.inset(rect=(0.55, 0.55, 0.4, 0.4), data=data, mapping=aes(x="x", y="y"))
+    inset = a.inset(rect=(0.55, 0.55, 0.4, 0.4), data=data, aes=aes(x="x", y="y"))
     inset.add_line()
 
     top = pt.chart(data, aes(x="x", y="y"), data_width=200, data_height=40)

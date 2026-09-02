@@ -286,22 +286,22 @@ def _sector_remap_data(call_kw, state):
 
 
 def _merge_aes(call):
-    """Fold an artist entry's reserved "mapping" kwarg (plain strings in
+    """Fold an artist entry's reserved "aes" kwarg (plain strings in
     the journal) into its kwargs as `ColumnRef`-tagged strings — one
     kwarg namespace from here on, and `resolve_aes` reads the tag
     instead of sniffing the data. No-op for frame ops and unmapped
     entries."""
-    if op_to_artist(call[0]) is None or "mapping" not in call[2]:
+    if op_to_artist(call[0]) is None or "aes" not in call[2]:
         return call
     kw = dict(call[2])
-    for k, v in kw.pop("mapping").items():
+    for k, v in kw.pop("aes").items():
         kw[k] = ColumnRef(v)
     return (call[0], call[1], kw, *call[3:])
 
 
 def _hoist_table_positional(call):
     """First-positional-is-data sugar: `c.add_line(df, aes(x=, y=))` is
-    the same as `c.add_line(data=df, mapping=aes(x=, y=))`. Opt-in via
+    the same as `c.add_line(df, aes(x=, y=))`. Opt-in via
     `ArtistSpec.data_input == "table"` (the default). Type-gated: only
     a table-shaped value (dict / DataFrame) reads as the data — any
     other bare value (a matrix, a scalar) falls through to the record

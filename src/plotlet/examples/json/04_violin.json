@@ -1,31 +1,19 @@
 {
  "version": 1,
- "root_nid": 1,
  "entries": [
   {
    "op": "new_chart",
    "nid": 1,
-   "args": [],
    "kwargs": {
     "data": {"$data": "d1"},
     "data_width": 380,
     "data_height": 220,
-    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
-    "mapping": {"x": "species", "y": "body_mass_g", "fill": "sex"}
+    "aes": {"x": "species", "y": "body_mass_g", "fill": "sex"}
    }
   },
-  {"op": "title", "nid": 1, "args": ["body mass by species and sex"], "kwargs": {}},
-  {"op": "ylabel", "nid": 1, "args": ["body mass (g)"], "kwargs": {}},
-  {
-   "op": "add_violin",
-   "nid": 1,
-   "args": [],
-   "kwargs": {
-    "inner": "box",
-    "mapping": {"x": "species", "y": "body_mass_g", "fill": "sex"},
-    "data": {"$data": "d1"}
-   }
-  }
+  {"op": "title", "nid": 1, "args": ["body mass by species and sex"]},
+  {"op": "ylabel", "nid": 1, "args": ["body mass (g)"]},
+  {"op": "add_violin", "nid": 1, "kwargs": {"inner": "box"}}
  ],
  "data": {
   "d1": {

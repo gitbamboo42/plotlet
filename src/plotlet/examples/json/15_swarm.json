@@ -1,37 +1,25 @@
 {
  "version": 1,
- "root_nid": 1,
  "entries": [
   {
    "op": "new_chart",
    "nid": 1,
-   "args": [],
    "kwargs": {
     "data": {"$data": "d1"},
     "data_width": 380,
     "data_height": 220,
-    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
-    "mapping": {"x": "day", "y": "tip", "color": "sex"}
+    "aes": {"x": "day", "y": "tip", "color": "sex"}
    }
   },
-  {"op": "title", "nid": 1, "args": ["tips by day"], "kwargs": {}},
-  {"op": "ylabel", "nid": 1, "args": ["tip ($)"], "kwargs": {}},
+  {"op": "title", "nid": 1, "args": ["tips by day"]},
+  {"op": "ylabel", "nid": 1, "args": ["tip ($)"]},
   {
    "op": "xscale",
    "nid": 1,
    "args": ["category"],
    "kwargs": {"order": ["Thur", "Fri", "Sat", "Sun"]}
   },
-  {
-   "op": "add_swarm",
-   "nid": 1,
-   "args": [],
-   "kwargs": {
-    "size": 2.2,
-    "mapping": {"x": "day", "y": "tip", "color": "sex"},
-    "data": {"$data": "d1"}
-   }
-  }
+  {"op": "add_swarm", "nid": 1, "kwargs": {"size": 2.2}}
  ],
  "data": {
   "d1": {

@@ -1,20 +1,12 @@
 {
  "version": 1,
- "root_nid": 1,
  "entries": [
   {
    "op": "new_chart",
    "nid": 1,
-   "args": [],
-   "kwargs": {
-    "data": {"$data": "d1"},
-    "data_width": 524,
-    "data_height": 322,
-    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
-    "mapping": {"x": "cat", "y": "val", "fill": "cat"}
-   }
+   "kwargs": {"data": {"$data": "d1"}, "aes": {"x": "cat", "y": "val", "fill": "cat"}}
   },
-  {"op": "title", "nid": 1, "args": ["categorical sectors on a ring"], "kwargs": {}},
+  {"op": "title", "nid": 1, "args": ["categorical sectors on a ring"]},
   {
    "op": "coordinate",
    "nid": 1,
@@ -32,20 +24,10 @@
       "end_deg": 360.0
      }
     }
-   ],
-   "kwargs": {}
+   ]
   },
   {"op": "sectors", "nid": 1, "args": [{"$data": "d2"}], "kwargs": {"axis": "x"}},
-  {
-   "op": "add_bar",
-   "nid": 1,
-   "args": [],
-   "kwargs": {
-    "palette": "Set2",
-    "mapping": {"x": "cat", "y": "val", "fill": "cat"},
-    "data": {"$data": "d1"}
-   }
-  }
+  {"op": "add_bar", "nid": 1, "kwargs": {"palette": "Set2"}}
  ],
  "data": {
   "d1": {"cat": ["a", "b", "c", "d", "e", "f", "g", "h"], "val": [3, 5, 2, 6, 4, 7, 3, 5]},

@@ -32,7 +32,7 @@ tree_ring.add_dendrogram(data=matrix, labels=labels, method="ward",
                          orientation="bottom", color="#3B3B4F")
 
 hm_ring = pt.chart(xlim=(0, 1), ylim=(0, 1))
-hm_ring.add_heatmap(data=data, mapping=aes(x="leaf"),
+hm_ring.add_heatmap(data, aes(x="leaf"),
                     values=[f"f{j}" for j in range(len(matrix[0]))],
                     cmap="RdBu_r", center=0)
 

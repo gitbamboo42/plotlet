@@ -1,28 +1,20 @@
 {
  "version": 1,
- "root_nid": 1,
  "entries": [
   {
    "op": "new_chart",
    "nid": 1,
-   "args": [],
    "kwargs": {
     "data": {"$data": "d1"},
     "data_width": 320,
     "data_height": 210,
-    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
-    "mapping": {"x": "total_bill", "color": "time"}
+    "aes": {"x": "total_bill", "color": "time"}
    }
   },
-  {"op": "title", "nid": 1, "args": ["bill size by service"], "kwargs": {}},
-  {"op": "xlabel", "nid": 1, "args": ["total bill ($)"], "kwargs": {}},
-  {"op": "ylabel", "nid": 1, "args": ["fraction of parties"], "kwargs": {}},
-  {
-   "op": "add_ecdf",
-   "nid": 1,
-   "args": [],
-   "kwargs": {"mapping": {"x": "total_bill", "color": "time"}, "data": {"$data": "d1"}}
-  }
+  {"op": "title", "nid": 1, "args": ["bill size by service"]},
+  {"op": "xlabel", "nid": 1, "args": ["total bill ($)"]},
+  {"op": "ylabel", "nid": 1, "args": ["fraction of parties"]},
+  {"op": "add_ecdf", "nid": 1}
  ],
  "data": {
   "d1": {

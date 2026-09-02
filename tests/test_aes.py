@@ -39,7 +39,7 @@ def test_aes_maps_the_same_string_to_the_column():
     # and the journal records the mapping explicitly
     blob = json.loads(pt.to_json(mapped))
     art = [e for e in blob["entries"] if e["op"] == "add_scatter"][0]
-    assert art["kwargs"]["mapping"] == {"x": "x", "y": "y", "color": "purple"}
+    assert art["kwargs"]["aes"] == {"x": "x", "y": "y", "color": "purple"}
     assert "color" not in art["kwargs"]
 
 
@@ -134,4 +134,4 @@ def test_inherit_aes_is_a_directive_not_recorded():
     art = [e for e in blob["entries"] if e["op"] == "add_line"][0]
     assert "inherit_aes" not in art["kwargs"]
     # the recorded mapping carries only what the call kept (no color="g")
-    assert "color" not in art["kwargs"]["mapping"]
+    assert "color" not in art["kwargs"]["aes"]

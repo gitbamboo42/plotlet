@@ -3,12 +3,15 @@
     python tests/gen_json_examples.py
 
 Each `src/plotlet/examples/NN_<name>.py` builds a figure in a variable
-named `c`. This script executes each one, serializes the figure with
-`pt.to_json`, and writes `src/plotlet/examples/json/NN_<name>.json`.
-The pairs are the ground truth for authoring journal JSON by hand (see
-`skills/json.md`) — generated, never edited, so they cannot drift from
-what `to_json` actually emits. `tests/test_json_examples.py` fails if a
-checked-in twin goes stale; rerun this script to fix it.
+named `c`. This script executes each one, serializes the figure, and
+writes `src/plotlet/examples/json/NN_<name>.json` in the **journal-lite
+authoring form** — `pt.to_json` piped through `journal_lite.simplify`,
+the same pipeline as `pt.to_json_lite`. The pairs are the ground truth
+for authoring journal JSON by hand (see `skills/json.md`) — generated,
+never edited, so they cannot drift from what the lite form actually
+is (`simplify` proves each twin expands back to its canonical
+journal). `tests/test_json_examples.py` fails if a checked-in twin
+goes stale; rerun this script to fix it.
 
 The twins exist to teach the *format*, not to carry data: every column
 table is thinned to at most `MAX_ROWS` evenly spaced rows before
@@ -83,14 +86,15 @@ def _thin_tables(blob: dict) -> dict:
 
 
 def example_json(py_path: Path) -> str:
-    """Execute one example and return its journal JSON, ready to write.
-    Same bytes as `pt.to_json` of the figure, except the tables are
-    thinned first."""
+    """Execute one example and return its journal-lite JSON, ready to
+    write. Same bytes as `pt.to_json_lite` of the figure, except the
+    tables are thinned first."""
     from plotlet._json_layer import pretty_dumps
+    from plotlet.record.journal_lite import simplify
     ns: dict = {}
     src = py_path.read_text(encoding="utf-8")
     exec(compile(src, str(py_path), "exec"), ns)
-    blob = _round_floats(_thin_tables(pt.to_journal(ns["c"]).to_dict()))
+    blob = simplify(_round_floats(_thin_tables(pt.to_journal(ns["c"]).to_dict())))
     return pretty_dumps(blob) + "\n"
 
 

@@ -282,7 +282,7 @@ def ring_dendrogram_heatmap():
     tree_ring.add_dendrogram(data=matrix, labels=labels, method="ward",
                          orientation="bottom", color="#3B3B4F")
     hm_ring = pt.chart(xlim=(0, 1), ylim=(0, 1))
-    hm_ring.add_heatmap(data=data, mapping=aes(x="leaf"),
+    hm_ring.add_heatmap(data, aes(x="leaf"),
                     values=[f"f{j}" for j in range(len(matrix[0]))],
                     cmap="RdBu_r", center=0)
     pile = (hm_ring / tree_ring).coordinate(
@@ -432,7 +432,7 @@ def ring_text_annotate():
     c.coordinate(pt.CircularCoordinate())
     c.add_scatter(color="#534AB7", size=3)
     df2 = {"x": pts_t, "y": pts_v, "name": names}
-    c.add_text(data=df2, mapping=aes(x="x", y="y", label="name"), fontsize=8, ha="center", dy=-6)
+    c.add_text(df2, aes(x="x", y="y", label="name"), fontsize=8, ha="center", dy=-6)
     c.add_annotate("peak", xy=(0.40, 0.85), xytext=(0.55, 0.15),
                fontsize=8, ha="center", bbox=True)
     return c
@@ -449,7 +449,7 @@ def ring_heatmap():
 
     c = pt.chart(title="heatmap — ring")
     c.coordinate(pt.CircularCoordinate(r_inner=0.35))
-    c.add_heatmap(data=df, mapping=aes(x="pos"), values=tracks, cmap="viridis")
+    c.add_heatmap(df, aes(x="pos"), values=tracks, cmap="viridis")
     return c
 
 
@@ -481,7 +481,7 @@ def ring_heatmap_sectors():
     sc.add_scatter(color="#534AB7", size=2.5, alpha=0.8)
     df2 = {"grp": grp, "x": xh, "t1": t1, "t2": t2}
     hm = pt.chart(xlim=(0, 1), ylim=(0, 1))
-    hm.add_heatmap(data=df2, mapping=aes(x="x", sector="grp"), values=["t1", "t2"], cmap="viridis")
+    hm.add_heatmap(df2, aes(x="x", sector="grp"), values=["t1", "t2"], cmap="viridis")
 
     pile = (sc / hm).coordinate(
         pt.CircularCoordinate(r_inner=0.30, wrap_gap_deg=8))

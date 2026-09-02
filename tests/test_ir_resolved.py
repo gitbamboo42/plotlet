@@ -290,7 +290,7 @@ def test_resolved_ir_stable_under_render():
         c = pt.chart(df)
         c.add_hist(aes(x="v", fill="g"))
         df2 = {"x": [1.0, 2.0], "y": [1.0, 2.0]}
-        c.add_scatter(data=df2, mapping=aes(x="x", y="y"))
+        c.add_scatter(df2, aes(x="x", y="y"))
         return pt.to_ir(c)
 
     rendered = pt.to_ir(build()).resolve()

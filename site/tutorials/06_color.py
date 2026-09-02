@@ -74,11 +74,11 @@ for r in range(6):
 values = [f"r{r}" for r in range(6)]
 
 left = pt.chart(title="viridis", data_width=220, data_height=150)
-left.add_heatmap(data=data, mapping=aes(x="col"), values=values,
+left.add_heatmap(data, aes(x="col"), values=values,
                  cmap="viridis")
 right = pt.chart(title="RdBu_r, center=0", data_width=220,
                  data_height=150)
-right.add_heatmap(data=data, mapping=aes(x="col"), values=values,
+right.add_heatmap(data, aes(x="col"), values=values,
                   cmap="RdBu_r", center=0)
 c = left | right
 """,

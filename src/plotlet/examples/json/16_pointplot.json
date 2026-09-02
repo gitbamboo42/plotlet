@@ -1,34 +1,26 @@
 {
  "version": 1,
- "root_nid": 1,
  "entries": [
   {
    "op": "new_chart",
    "nid": 1,
-   "args": [],
    "kwargs": {
     "data": {"$data": "d1"},
     "data_width": 320,
     "data_height": 200,
-    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
-    "mapping": {"x": "week", "y": "score", "color": "arm"}
+    "aes": {"x": "week", "y": "score", "color": "arm"}
    }
   },
-  {"op": "title", "nid": 1, "args": ["response over time"], "kwargs": {}},
-  {"op": "xlabel", "nid": 1, "args": ["timepoint"], "kwargs": {}},
-  {"op": "ylabel", "nid": 1, "args": ["score"], "kwargs": {}},
+  {"op": "title", "nid": 1, "args": ["response over time"]},
+  {"op": "xlabel", "nid": 1, "args": ["timepoint"]},
+  {"op": "ylabel", "nid": 1, "args": ["score"]},
   {
    "op": "xscale",
    "nid": 1,
    "args": ["category"],
    "kwargs": {"order": ["1 wk", "2 wk", "4 wk", "8 wk"]}
   },
-  {
-   "op": "add_pointplot",
-   "nid": 1,
-   "args": [],
-   "kwargs": {"mapping": {"x": "week", "y": "score", "color": "arm"}, "data": {"$data": "d1"}}
-  }
+  {"op": "add_pointplot", "nid": 1}
  ],
  "data": {
   "d1": {

@@ -1,33 +1,20 @@
 {
  "version": 1,
- "root_nid": 1,
  "entries": [
   {
    "op": "new_chart",
    "nid": 1,
-   "args": [],
    "kwargs": {
     "data": {"$data": "d1"},
     "data_width": 380,
     "data_height": 200,
-    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
-    "mapping": {"x": "body_mass_g", "fill": "species"}
+    "aes": {"x": "body_mass_g", "fill": "species"}
    }
   },
-  {"op": "title", "nid": 1, "args": ["body mass"], "kwargs": {}},
-  {"op": "xlabel", "nid": 1, "args": ["body mass (g)"], "kwargs": {}},
-  {"op": "ylabel", "nid": 1, "args": ["count"], "kwargs": {}},
-  {
-   "op": "add_hist",
-   "nid": 1,
-   "args": [],
-   "kwargs": {
-    "bins": 24,
-    "position": "stack",
-    "mapping": {"x": "body_mass_g", "fill": "species"},
-    "data": {"$data": "d1"}
-   }
-  }
+  {"op": "title", "nid": 1, "args": ["body mass"]},
+  {"op": "xlabel", "nid": 1, "args": ["body mass (g)"]},
+  {"op": "ylabel", "nid": 1, "args": ["count"]},
+  {"op": "add_hist", "nid": 1, "kwargs": {"bins": 24, "position": "stack"}}
  ],
  "data": {
   "d1": {

@@ -161,7 +161,7 @@ def sectors_categorical_y_heatmap():
                  data_width=320, data_height=260)
     c.sectors({"pwA": ["g1", "g2", "g3"], "pwB": ["g4", "g5"]},
               axis="y", divider=False)
-    c.add_heatmap(data=df, mapping=aes(x="col"), values=rows)
+    c.add_heatmap(df, aes(x="col"), values=rows)
     return c
 
 

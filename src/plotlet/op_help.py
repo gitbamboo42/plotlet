@@ -101,19 +101,21 @@ def _artist_notes(op: str, spec) -> str:
     if spec.data_input == "table":
         return (
             'Journal form — one entry targeting a chart nid:\n'
-            '  {"op": "' + op + '", "nid": N, "args": [], "kwargs": {...}}\n'
-            '- A column reference belongs inside the "mapping" kwarg: '
+            '  {"op": "' + op + '", "nid": N, "kwargs": {...}}\n'
+            '- A column reference belongs inside the "aes" kwarg: '
             'aes(x="col", ...)\n'
-            '  in the examples below is {"mapping": {"x": "col", ...}} in '
+            '  in the examples below is {"aes": {"x": "col", ...}} in '
             'the entry.\n'
             '  The same name as a bare top-level kwarg is a literal value '
             '(a color, a\n'
             '  number, a vector of values) — never a column name.\n'
-            '- The entry carries "mapping" and "data" explicitly, no '
-            'inheritance at\n'
-            '  replay. Tables sit in the blob\'s data section, referenced '
-            'as\n'
-            '  {"data": {"$data": "d1"}}.\n'
+            '- Omit "aes" and "data" to inherit the chart\'s '
+            '(journal-lite); a\n'
+            '  present "aes" is complete. pt.to_json spells both out '
+            'explicitly.\n'
+            '  Tables sit in the blob\'s data section, referenced as '
+            '{"data":\n'
+            '  {"$data": "d1"}}.\n'
             '- Omit a kwarg to get its default.'
         )
     if spec.data_input == "matrix":
@@ -188,21 +190,19 @@ def _node_section(op: str) -> str:
             _sig_block("new_chart", Chart.__init__, drop_var_kw=True),
             'Every kwarg is optional. "data" is {"$data": id} into the '
             "blob's data\n"
-            'section (or None); "mapping" is the chart-level column '
+            'section (or None); "aes" is the chart-level column '
             "mapping and x / y /\n"
             "fill / color / group / linestyle / palette are literal "
             "aesthetic defaults —\n"
-            "recorded chart state that replay applies no inheritance "
-            "from (every\n"
-            "artist entry carries its own mapping and data), kept so "
-            "pt.to_python\n"
-            "round-trips to idiomatic code. data_width / data_height "
-            "(pixels) and\n"
-            "margin default sensibly when omitted; pt.to_json always "
-            "writes them.\n"
-            "Frame state (title, xlim, gridlines, ...) is never a "
-            "new_chart kwarg —\n"
-            "each is its own entry targeting this nid.",
+            "what an artist entry without its own \"aes\" inherits "
+            "(journal-lite;\n"
+            "pt.to_json writes every entry out explicitly instead). "
+            "data_width /\n"
+            "data_height (pixels) and margin default sensibly when "
+            "omitted; pt.to_json\n"
+            "always writes them. Frame state (title, xlim, gridlines, "
+            "...) is never a\n"
+            "new_chart kwarg — each is its own entry targeting this nid.",
         ])
     if op == "new_layout":
         return (
@@ -294,7 +294,7 @@ def _index() -> str:
         'Blob format and authoring rules: pt.skill("json").',
         "",
         "Node-creating ops (every other op targets an existing nid):",
-        "  new_chart       a data chart (data, mapping, sizing, "
+        "  new_chart       a data chart (data, aes, sizing, "
         "aesthetic defaults)",
         '  new_layout      a composition — "h" / "v" / "grid"; '
         "children = bare nids",

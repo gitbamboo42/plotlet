@@ -140,7 +140,7 @@ def _big_continuous_heatmap(with_y_sectors):
     if with_y_sectors:
         c.sectors({"A": tracks[:10], "B": tracks[10:]}, axis="y",
                   divider=False, label=False)
-    c.add_heatmap(data=data, mapping=aes(x="x"), values=tracks, cmap="viridis")
+    c.add_heatmap(data, aes(x="x"), values=tracks, cmap="viridis")
     return c.to_svg()
 
 

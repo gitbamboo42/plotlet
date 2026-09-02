@@ -1,45 +1,21 @@
 {
  "version": 1,
- "root_nid": 1,
  "entries": [
   {
    "op": "new_chart",
    "nid": 1,
-   "args": [],
    "kwargs": {
     "data": {"$data": "d1"},
     "data_width": 300,
     "data_height": 260,
-    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
-    "mapping": {"x": "x", "y": "y"}
+    "aes": {"x": "x", "y": "y"}
    }
   },
-  {"op": "title", "nid": 1, "args": ["2-D KDE"], "kwargs": {}},
-  {"op": "xlabel", "nid": 1, "args": ["x"], "kwargs": {}},
-  {"op": "ylabel", "nid": 1, "args": ["y"], "kwargs": {}},
-  {
-   "op": "add_scatter",
-   "nid": 1,
-   "args": [],
-   "kwargs": {
-    "size": 1.2,
-    "alpha": 0.25,
-    "color": "#444444",
-    "mapping": {"x": "x", "y": "y"},
-    "data": {"$data": "d1"}
-   }
-  },
-  {
-   "op": "add_kde_2d",
-   "nid": 1,
-   "args": [],
-   "kwargs": {
-    "n_grid": 40,
-    "cmap": "viridis",
-    "mapping": {"x": "x", "y": "y"},
-    "data": {"$data": "d1"}
-   }
-  }
+  {"op": "title", "nid": 1, "args": ["2-D KDE"]},
+  {"op": "xlabel", "nid": 1, "args": ["x"]},
+  {"op": "ylabel", "nid": 1, "args": ["y"]},
+  {"op": "add_scatter", "nid": 1, "kwargs": {"size": 1.2, "alpha": 0.25, "color": "#444444"}},
+  {"op": "add_kde_2d", "nid": 1, "kwargs": {"n_grid": 40, "cmap": "viridis"}}
  ],
  "data": {
   "d1": {

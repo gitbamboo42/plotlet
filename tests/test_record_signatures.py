@@ -125,13 +125,13 @@ ENUM_CASES = [
     ("text-ha",
      lambda v: _bare(lambda c: c.add_text(
          data={"x": [1.0], "y": [1.0], "s": ["A"]},
-         mapping=aes(x="x", y="y", label="s"), ha=v)), "middle", "center"),
+         aes=aes(x="x", y="y", label="s"), ha=v)), "middle", "center"),
     ("annotate-va",
      lambda v: _bare(lambda c: c.add_annotate("hi", xy=(1, 1), va=v)),
      "middle", "center"),
     ("qq-dist",
      lambda v: _bare(lambda c: c.add_qq(
-         data={"v": [1.0, 2.0, 3.0]}, mapping=aes(sample="v"), dist=v)),
+         data={"v": [1.0, 2.0, 3.0]}, aes=aes(sample="v"), dist=v)),
      "gaussian", "normal"),
     ("xscale-kind",
      lambda v: _xy(lambda c: c.xscale(v)), "logarithmic", "log"),
@@ -144,7 +144,7 @@ ENUM_CASES = [
     ("line-linestyle",
      lambda v: _bare(lambda c: c.add_line(
          data={"x": [0.5, 1.5], "y": [0.5, 1.5]},
-         mapping=aes(x="x", y="y"), linestyle=v)), "dahsed", "dashed"),
+         aes=aes(x="x", y="y"), linestyle=v)), "dahsed", "dashed"),
 ]
 
 
@@ -210,7 +210,7 @@ def _text_svg(**style):
     df = {"x": [1.0], "y": [1.0], "s": ["Ag"]}
 
     c = pt.chart(xlim=(0, 2), ylim=(0, 2))
-    c.add_text(data=df, mapping=aes(x="x", y="y", label="s"), **style)
+    c.add_text(df, aes(x="x", y="y", label="s"), **style)
     return c.to_svg()
 
 
@@ -243,7 +243,7 @@ def test_linestyle_raw_dasharray_and_hint():
     def line(ls):
         return _bare(lambda c: c.add_line(
             data={"x": [0.5, 1.5], "y": [0.5, 1.5]},
-            mapping=aes(x="x", y="y"), linestyle=ls))
+            aes=aes(x="x", y="y"), linestyle=ls))
     # Raw SVG dasharrays stay accepted — the vocabulary is open.
     assert 'stroke-dasharray="6,3,1,3"' in line("6,3,1,3").to_svg()
     # A near-miss typo gets a did-you-mean hint.
@@ -259,7 +259,7 @@ def test_ragged_chart_data_raises_at_chart():
 def test_ragged_artist_data_raises_at_call():
     c = pt.chart()
     with pytest.raises(ValueError, match=r"add_line\(data=\)"):
-        c.add_line(data={"x": [1, 2], "y": [1.0]}, mapping=aes(x="x", y="y"))
+        c.add_line(data={"x": [1, 2], "y": [1.0]}, aes=aes(x="x", y="y"))
 
 
 def test_ragged_positional_table_raises_at_call():

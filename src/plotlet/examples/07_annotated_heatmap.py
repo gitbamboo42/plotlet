@@ -32,7 +32,7 @@ hm.sectors(by_group, axis="x", divider=False, label=False)
 data = {"sample": samples}
 for r, gene in enumerate(genes):
     data[gene] = matrix[r]
-hm.add_heatmap(data=data, mapping=aes(x="sample"), values=genes,
+hm.add_heatmap(data, aes(x="sample"), values=genes,
                cmap="viridis", legend={"label": "expression"})
 hm.attach_above(tree)
 

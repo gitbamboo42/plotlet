@@ -99,7 +99,7 @@ def test_inset_fit_roundtrip():
     host = pt.chart(df, aes(x="x", y="y"), data_width=47, data_height=47)
     host.add_line()
     ins = host.inset((0.1, 0.1, 0.45, 0.45), data=df,
-                     mapping=aes(x="x", y="y"))
+                     aes=aes(x="x", y="y"))
     ins.add_scatter()
     fig = host.fit(canvas_width=93)
 

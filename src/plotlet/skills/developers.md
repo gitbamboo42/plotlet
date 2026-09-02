@@ -77,7 +77,7 @@ c.add_scatter()   # same mapping, no repetition
 
 - **Table + `aes` go positionally on `pt.chart(...)`; artists stay bare** —
   they inherit the chart mapping and carry only their own styling
-  (`color=`, `linewidth=`, `label=`, `alpha=`). Drop `data=` / `mapping=`.
+  (`color=`, `linewidth=`, `label=`, `alpha=`). Drop `data=` / `aes=`.
 - **Data first, one blank line, then the chart.** Every table is a
   variable at the top; never build a dict inline in a plotting call
   (`pt.chart({"x": [1, 2], ...})`, `c.add_line(data={...})`).

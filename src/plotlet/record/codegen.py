@@ -17,11 +17,11 @@ script *from* validated JSON on the trusted side; don't accept scripts
 as the interchange format, or the no-code-execution property is gone.
 
 Inheritance is inverted for readability: an artist call whose recorded
-mapping/data just restates the chart's is emitted bare. Every such
+aes/data just restates the chart's is emitted bare. Every such
 minimization is verified by re-running the recorder's own inheritance
 helper on the emitted form; if it wouldn't reproduce the journal entry
 exactly, the generator falls back to the verbatim form
-(`inherit_aes=False`, explicit mapping and data). Prettiness never
+(`inherit_aes=False`, explicit aes and data). Prettiness never
 costs fidelity.
 
 Not reconstructible: diagram leaves (`pt.layout_diagram` output embeds a
@@ -45,7 +45,7 @@ import re
 import numpy as np
 
 # Kwargs of `new_chart` that aren't chart-level bare aes defaults.
-_CHART_STRUCTURAL = ("data", "data_width", "data_height", "margin", "mapping")
+_CHART_STRUCTURAL = ("data", "data_width", "data_height", "margin", "aes")
 
 # Journal key → `pt.legend` parameter. The journal stores the leaf's
 # post-normalization state, so drop decisions compare against a
@@ -256,11 +256,11 @@ class _Gen:
         if kw.get("data") is not None:
             ref = self._fmt(kw["data"])
             parts.append(f"data={ref}" if inset else ref)
-        if kw.get("mapping"):
-            m = self._fmt_aes(kw["mapping"])
-            parts.append(f"mapping={m}" if inset else m)
+        if kw.get("aes"):
+            m = self._fmt_aes(kw["aes"])
+            parts.append(f"aes={m}" if inset else m)
         for k, v in kw.items():
-            if k in ("data", "mapping") or k in skip:
+            if k in ("data", "aes") or k in skip:
                 continue
             if (not inset and k in ("data_width", "data_height")
                     and _same(v, _SIZESPEC[k])):
@@ -368,7 +368,7 @@ class _Gen:
         when re-recording the minimized call provably reproduces `kw`."""
         from .chart import _inherit_chart_aes
         info = self.chart_info[nid]
-        cmap = info.get("mapping", {}) or {}
+        cmap = info.get("aes", {}) or {}
         cbare = {k: v for k, v in info.items() if k not in _CHART_STRUCTURAL}
         cdata = info.get("data")
         known = getattr(spec.record, "__kwarg_names__", None)
@@ -376,8 +376,8 @@ class _Gen:
         def ok(k):
             return known is None or k in known
 
-        A = kw.get("mapping", {}) or {}
-        L = {k: v for k, v in kw.items() if k not in ("mapping", "data")}
+        A = kw.get("aes", {}) or {}
+        L = {k: v for k, v in kw.items() if k not in ("aes", "data")}
         data_ref = kw.get("data")
 
         def simulate(a_emit, l_emit, data_emit, inherit):

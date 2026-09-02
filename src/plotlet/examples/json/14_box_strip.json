@@ -1,44 +1,26 @@
 {
  "version": 1,
- "root_nid": 1,
  "entries": [
   {
    "op": "new_chart",
    "nid": 1,
-   "args": [],
    "kwargs": {
     "data": {"$data": "d1"},
     "data_width": 340,
     "data_height": 220,
-    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
-    "mapping": {"x": "day", "y": "total_bill"}
+    "aes": {"x": "day", "y": "total_bill"}
    }
   },
-  {"op": "title", "nid": 1, "args": ["bill by day"], "kwargs": {}},
-  {"op": "ylabel", "nid": 1, "args": ["total bill ($)"], "kwargs": {}},
+  {"op": "title", "nid": 1, "args": ["bill by day"]},
+  {"op": "ylabel", "nid": 1, "args": ["total bill ($)"]},
   {
    "op": "xscale",
    "nid": 1,
    "args": ["category"],
    "kwargs": {"order": ["Thur", "Fri", "Sat", "Sun"]}
   },
-  {
-   "op": "add_boxplot",
-   "nid": 1,
-   "args": [],
-   "kwargs": {"mapping": {"x": "day", "y": "total_bill"}, "data": {"$data": "d1"}}
-  },
-  {
-   "op": "add_strip",
-   "nid": 1,
-   "args": [],
-   "kwargs": {
-    "size": 2.5,
-    "alpha": 0.45,
-    "mapping": {"x": "day", "y": "total_bill"},
-    "data": {"$data": "d1"}
-   }
-  }
+  {"op": "add_boxplot", "nid": 1},
+  {"op": "add_strip", "nid": 1, "kwargs": {"size": 2.5, "alpha": 0.45}}
  ],
  "data": {
   "d1": {

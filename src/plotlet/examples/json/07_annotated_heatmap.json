@@ -1,18 +1,7 @@
 {
  "version": 1,
- "root_nid": 1,
  "entries": [
-  {
-   "op": "new_chart",
-   "nid": 3,
-   "args": [],
-   "kwargs": {
-    "data": null,
-    "data_width": 524,
-    "data_height": 60,
-    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0}
-   }
-  },
+  {"op": "new_chart", "nid": 3, "kwargs": {"data": null, "data_height": 60}},
   {
    "op": "add_dendrogram",
    "nid": 3,
@@ -24,18 +13,8 @@
     "method": "ward"
    }
   },
-  {
-   "op": "new_chart",
-   "nid": 2,
-   "args": [],
-   "kwargs": {
-    "data": null,
-    "data_width": 420,
-    "data_height": 180,
-    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0}
-   }
-  },
-  {"op": "title", "nid": 2, "args": ["expression by sample"], "kwargs": {}},
+  {"op": "new_chart", "nid": 2, "kwargs": {"data": null, "data_width": 420, "data_height": 180}},
+  {"op": "title", "nid": 2, "args": ["expression by sample"]},
   {
    "op": "sectors",
    "nid": 2,
@@ -45,20 +24,18 @@
   {
    "op": "add_heatmap",
    "nid": 2,
-   "args": [],
+   "args": [{"$data": "d3"}],
    "kwargs": {
-    "data": {"$data": "d3"},
     "values": ["gene 1", "gene 2", "gene 3", "gene 4", "gene 5", "gene 6"],
     "cmap": "viridis",
     "legend": {"label": "expression"},
-    "mapping": {"x": "sample"}
+    "aes": {"x": "sample"}
    }
   },
   {"op": "attach_above", "nid": 2, "args": [{"$node": 3}], "kwargs": {"hide_labels": true}},
   {
    "op": "new_leaf",
    "nid": 4,
-   "args": [],
    "kwargs": {
     "leaf_kind": "legend",
     "canvas_width": 1,
@@ -79,10 +56,9 @@
   {
    "op": "new_layout",
    "nid": 1,
-   "args": [],
    "kwargs": {"layout_kind": "grid", "children": [2, 4], "grid_rows": 1, "grid_cols": 2}
   },
-  {"op": "gap", "nid": 1, "args": [0], "kwargs": {}}
+  {"op": "gap", "nid": 1, "args": [0]}
  ],
  "data": {
   "d1": [

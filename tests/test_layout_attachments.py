@@ -37,7 +37,7 @@ def attach_four_sides_chained():
     hm_df = {"col": cols}
     for name, values in zip(rows, matrix):
         hm_df[name] = values
-    host.add_heatmap(data=hm_df, mapping=aes(x="col"), values=rows)
+    host.add_heatmap(hm_df, aes(x="col"), values=rows)
 
     def row_line(values):
         df = {"x": values, "y": rows}
@@ -255,7 +255,7 @@ def _run_invariants() -> int:
     h8_df = {"col": cols7}
     for name, values in zip(rows7, h8_mat):
         h8_df[name] = values
-    h8.add_heatmap(data=h8_df, mapping=aes(x="col"), values=rows7)
+    h8.add_heatmap(h8_df, aes(x="col"), values=rows7)
     df13 = {"x": [1, 2, 1, 2], "y": rows7}
     left8 = pt.chart(df13, aes(x="x", y="y"), data_width=20)
     left8.yscale("category", order=rows7, padding=0)

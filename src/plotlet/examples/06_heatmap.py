@@ -16,7 +16,7 @@ for m in months:
                if month == m]
 
 hm = pt.chart(title="airline passengers", data_width=420, data_height=240)
-hm.add_heatmap(data=data, mapping=aes(x="year"), values=months,
+hm.add_heatmap(data, aes(x="year"), values=months,
                cmap="viridis", legend={"label": "passengers"})
 
 c = pt.grid([[hm, pt.legend()]]).gap(0)

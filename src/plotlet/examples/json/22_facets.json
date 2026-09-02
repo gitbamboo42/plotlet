@@ -1,11 +1,9 @@
 {
  "version": 1,
- "root_nid": 1,
  "entries": [
   {
    "op": "new_facet_grid",
    "nid": 1,
-   "args": [],
    "kwargs": {
     "data": {"$data": "d1"},
     "by": "species",
