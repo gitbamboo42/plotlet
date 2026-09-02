@@ -301,7 +301,7 @@ def _merge_aes(call):
 
 def _hoist_table_positional(call):
     """First-positional-is-data sugar: `c.add_line(df, aes(x=, y=))` is
-    the same as `c.add_line(df, aes(x=, y=))`. Opt-in via
+    the same as `c.add_line(data=df, aes=aes(x=, y=))`. Opt-in via
     `ArtistSpec.data_input == "table"` (the default). Type-gated: only
     a table-shaped value (dict / DataFrame) reads as the data — any
     other bare value (a matrix, a scalar) falls through to the record

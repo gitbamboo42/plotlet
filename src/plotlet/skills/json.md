@@ -122,7 +122,33 @@ an entry are the same kwargs the Python method takes, and
 docs — as a string; `pt.op_help()` lists the whole op vocabulary.
 Look an op up instead of guessing a kwarg name.
 
-## Serving plotlet over MCP: keep data server-side
+## Serving plotlet over MCP: the five tools
+
+Everything a server needs to serve ships in the wheel. This is the
+reference contract — expose these five tools instead of inventing a
+surface:
+
+1. **context()** — `pt.skill("json")` (this guide) plus the op index
+   (`pt.op_help()`), served once per session.
+2. **op_help(op)** — `pt.op_help(op)`, the per-op reference as a
+   string. Without it the model guesses kwargs from other libraries'
+   vocabularies and burns a render round trip per wrong guess.
+   `pt.op_schema(op)` is the structured sibling (generate per-op tool
+   schemas, validate kwarg names), and the shipped JSON Schema at
+   `plotlet/schemas/journal_lite.schema.json` validates whole blobs
+   before a render.
+3. **example(name)** — a twin from `examples/json/` with its `.py`
+   sibling, so the model imitates instead of guessing.
+4. **render(blob)** — validate against the shipped JSON Schema first
+   (a wrong kwarg name fails there, against the accepted list), then
+   splice data handles (below), call
+   `pt.from_json_lite(blob).to_svg()`, and on failure return the
+   exception message verbatim so the model can retry.
+5. **check(blob)** — after a successful render, `pt.lint(...)` and
+   `pt.describe(...)`, so the model verifies what actually got
+   plotted without seeing pixels.
+
+### Keep data server-side
 
 Entries reference tables only by id and column name, so bulk data
 never needs to pass through the model — in either direction:
@@ -143,12 +169,6 @@ plotlet ever sees the blob. Keep two rules absolute: every blob that
 reaches `pt.from_json_lite` is self-contained, and a journal never
 carries file paths or URLs — loading does no I/O, which is what keeps
 a model-authored blob inert data rather than a file-read primitive.
-
-Also expose a doc-lookup tool backed by `pt.op_help(op)` — it returns
-the op's reference (parameter list + docs) as a string, which is what
-`help(c.add_bar)` can't do for a model that never executes Python.
-Without it the model guesses kwarg names from other libraries'
-vocabularies and burns a render round-trip per wrong guess.
 
 ## Checking your work
 

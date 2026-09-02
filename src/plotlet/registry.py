@@ -224,6 +224,11 @@ def get_artist(name: str) -> ArtistSpec | None:
     return _REGISTRY.get(name)
 
 
+def artist_origin(name: str) -> str:
+    """"core" / "extension" / "user" — stamped at registration."""
+    return _ORIGINS.get(name, "unknown")
+
+
 def op_to_artist(op: str) -> ArtistSpec | None:
     """Registry lookup for a journal op name. Artist ops carry the Python
     method name verbatim (`add_scatter`); the registry keys the bare

@@ -23,7 +23,7 @@ import textwrap
 from .record.chart import Chart, Layout, _FRAME_DOCS, chart as _chart_factory
 from .record.facet import facet as _facet_factory
 from .record.legend import legend as _legend_factory
-from .registry import artist_table, get_artist
+from .registry import artist_origin, artist_table, get_artist
 
 # Journal op → its `_record_*` handler in render/_resolution.py, whose
 # explicit signature is the op's validated parameter list (see
@@ -139,47 +139,73 @@ def _artist_notes(op: str, spec) -> str:
     )
 
 
-def _artist_section(op: str, spec) -> str:
-    origin = next((r["origin"] for r in artist_table()
-                   if r["name"] == spec.name), "user")
-    mod = inspect.getmodule(spec.record)
-    doc = inspect.cleandoc((mod.__doc__ if mod is not None else None) or "")
+def _resolve(op: str) -> list[dict]:
+    """What is this op? The one place that decides. Each section the
+    op maps to becomes a descriptor: kind ("artist" / "node" /
+    "frame" / "method"), on ("chart" / "layout", None for
+    node-creating ops), fn (the callable whose signature is the
+    parameter list), doc (the raw reference text), plus spec and
+    origin for artists. `op_help` renders descriptors as prose and
+    `op_schema` as dicts, so the prose and the shipped JSON Schema
+    cannot disagree about what an op is."""
+    out = []
+    if op.startswith("add_"):
+        spec = get_artist(op[4:])
+        if spec is not None:
+            mod = inspect.getmodule(spec.record)
+            out.append({
+                "kind": "artist", "on": "chart", "fn": spec.record,
+                "doc": (mod.__doc__ if mod is not None else None) or "",
+                "spec": spec,
+                "origin": artist_origin(spec.name),
+            })
+    if op in _NODE_OPS:
+        out.append({"kind": "node", "on": None})
+    if op in _FRAME_DOCS or op in _CHART_METHOD_OPS:
+        method = getattr(Chart, op, None)
+        if method is not None:
+            # legend / theme / spec / attach_* — real methods that
+            # shadow `__getattr__`; their docstrings are the reference.
+            out.append({"kind": "method", "on": "chart", "fn": method,
+                        "doc": method.__doc__ or ""})
+        else:
+            # Lazy on purpose: the parameter lists live on the render
+            # half's `_record_*` handlers, and the render half loads
+            # on demand (the recording half must not pull it in —
+            # docs/ARCHITECTURE.md).
+            from .render import _resolution
+            handler = getattr(_resolution, _FRAME_HANDLERS[op])
+            out.append({"kind": "frame", "on": "chart", "fn": handler,
+                        "doc": _FRAME_DOCS[op]})
+    if op in _LAYOUT_OPS:
+        method = getattr(Layout, op)
+        out.append({"kind": "method", "on": "layout", "fn": method,
+                    "doc": method.__doc__ or ""})
+    return out
+
+
+def _artist_section(op: str, d: dict) -> str:
     return "\n\n".join([
-        f"{op} — artist op on a chart node [{origin}]",
-        _sig_block(op, spec.record),
-        _artist_notes(op, spec),
-        doc,
+        f"{op} — artist op on a chart node [{d['origin']}]",
+        _sig_block(op, d["fn"]),
+        _artist_notes(op, d["spec"]),
+        inspect.cleandoc(d["doc"]),
     ])
 
 
-def _chart_section(op: str) -> str:
-    method = getattr(Chart, op, None)
-    if method is not None:
-        # legend / theme / spec / attach_* — real methods that shadow
-        # `__getattr__`; their own docstrings are the reference.
-        return "\n\n".join([
-            f"{op} — op on a chart node",
-            _sig_block(op, method),
-            _doc(method),
-        ])
-    # Lazy on purpose: the parameter lists live on the render half's
-    # `_record_*` handlers, and the render half loads on demand (the
-    # recording half must not pull it in — docs/ARCHITECTURE.md).
-    from .render import _resolution
-    handler = getattr(_resolution, _FRAME_HANDLERS[op])
+def _method_section(op: str, d: dict) -> str:
+    return "\n\n".join([
+        f"{op} — op on a {d['on']} node",
+        _sig_block(op, d["fn"]),
+        _doc(d["fn"]),
+    ])
+
+
+def _frame_section(op: str, d: dict) -> str:
     return "\n\n".join([
         f"{op} — frame op on a chart node",
-        _sig_block(op, handler),
-        _fill(_FRAME_DOCS[op]),
-    ])
-
-
-def _layout_section(op: str) -> str:
-    method = getattr(Layout, op)
-    return "\n\n".join([
-        f"{op} — op on a layout node",
-        _sig_block(op, method),
-        _doc(method),
+        _sig_block(op, d["fn"]),
+        _fill(d["doc"]),
     ])
 
 
@@ -317,9 +343,12 @@ def _index() -> str:
 
 
 def _all_ops() -> list[str]:
-    return (list(_NODE_OPS) + list(_FRAME_DOCS) + list(_CHART_METHOD_OPS)
-            + list(_LAYOUT_OPS)
-            + [f"add_{r['name']}" for r in artist_table()])
+    # set(): legend/theme/spec sit in _FRAME_DOCS and _CHART_METHOD_OPS,
+    # and title/theme/spec in _LAYOUT_OPS too — one mention each.
+    return sorted(set(
+        list(_NODE_OPS) + list(_FRAME_DOCS) + list(_CHART_METHOD_OPS)
+        + list(_LAYOUT_OPS)
+        + [f"add_{r['name']}" for r in artist_table()]))
 
 
 def op_help(op: str | None = None) -> str:
@@ -343,23 +372,137 @@ def op_help(op: str | None = None) -> str:
     if op is None:
         return _index()
     sections = []
-    if op.startswith("add_"):
-        spec = get_artist(op[4:])
-        if spec is not None:
-            sections.append(_artist_section(op, spec))
-    if op in _NODE_OPS:
-        sections.append(_node_section(op))
-    if op in _FRAME_DOCS or op in _CHART_METHOD_OPS:
-        sections.append(_chart_section(op))
-    if op in _LAYOUT_OPS:
-        sections.append(_layout_section(op))
+    for d in _resolve(op):
+        if d["kind"] == "artist":
+            sections.append(_artist_section(op, d))
+        elif d["kind"] == "node":
+            sections.append(_node_section(op))
+        elif d["kind"] == "frame":
+            sections.append(_frame_section(op, d))
+        else:
+            sections.append(_method_section(op, d))
     if not sections:
-        import difflib
-        close = difflib.get_close_matches(op, _all_ops(), n=3)
-        hint = f" Closest: {', '.join(close)}." if close else ""
-        raise ValueError(
-            f"op_help: unknown op {op!r}.{hint} op_help() lists the "
-            "vocabulary; an extension artist's op only exists once its "
-            "module is imported (import plotlet.extensions.<name>)."
-        )
+        raise ValueError(_unknown_message("op_help", op))
     return "\n\n".join(sections)
+
+
+def _unknown_message(fn: str, op: str) -> str:
+    import difflib
+    close = difflib.get_close_matches(op, _all_ops(), n=3)
+    hint = f" Closest: {', '.join(close)}." if close else ""
+    return (
+        f"{fn}: unknown op {op!r}.{hint} op_help() lists the "
+        "vocabulary; an extension artist's op only exists once its "
+        "module is imported (import plotlet.extensions.<name>)."
+    )
+
+
+# ---------------------------------------------------------------------------
+# op_schema — the machine-readable sibling of op_help
+# ---------------------------------------------------------------------------
+
+
+def _params(sig: inspect.Signature) -> list[dict]:
+    """Parameter list as data. Non-JSON defaults (UNSET, tuples)
+    become their reprs — informational, not round-trippable."""
+    out = []
+    for p in sig.parameters.values():
+        if p.kind is inspect.Parameter.VAR_POSITIONAL:
+            out.append({"name": "*" + p.name, "required": False})
+            continue
+        if p.kind is inspect.Parameter.VAR_KEYWORD:
+            out.append({"name": "**" + p.name, "required": False})
+            continue
+        d = {"name": p.name,
+             "required": p.default is inspect.Parameter.empty}
+        if not d["required"]:
+            v = p.default
+            d["default"] = (v if isinstance(v, (str, int, float, bool,
+                                                type(None)))
+                            else repr(v))
+        out.append(d)
+    return out
+
+
+def _first_line(text) -> str:
+    text = (text or "").strip()
+    return text.splitlines()[0] if text else ""
+
+
+# Node-creating ops have no single Python callable to inspect (their
+# kwargs mirror recorded state) — hand-listed here, checked against
+# `to_journal` output by tests/test_op_help.py.
+_NODE_PARAMS = {
+    "new_layout": ("layout_kind", "children", "grid_rows", "grid_cols"),
+    "new_leaf": ("leaf_kind", "canvas_width", "canvas_height", "margin",
+                 "legend_sources", "legend_names_pairs",
+                 "legend_group_by_chart", "legend_valign", "legend_ncols",
+                 "legend_reverse", "legend_manual", "legend_user_width",
+                 "legend_user_height", "legend_gap", "diagram_inner"),
+    "new_facet_grid": ("data", "by", "row", "col", "col_wrap",
+                       "share_x", "share_y", "chart_opts"),
+    "_inset_add": ("rect", "inset_nid"),
+}
+
+
+def _node_schema(op: str) -> dict:
+    if op == "new_chart":
+        return {"on": None, "kind": "node",
+                "params": _params(_sig(Chart.__init__, drop_var_kw=True)),
+                "summary": "creates a chart node"}
+    summaries = {
+        "new_layout": 'creates a composition node ("h"/"v"/"grid"; '
+                      "children = bare nids)",
+        "new_leaf": "creates a non-data leaf (legend or diagram)",
+        "new_facet_grid": "creates a facet recorder — expands to a "
+                          "grid of charts at render",
+        "_inset_add": "binds an already-created chart as an inset",
+    }
+    required = {"new_layout": {"layout_kind", "children"},
+                "new_leaf": {"leaf_kind"},
+                "new_facet_grid": {"data"},
+                "_inset_add": {"rect", "inset_nid"}}[op]
+    return {"on": None, "kind": "node",
+            "params": [{"name": n, "required": n in required}
+                       for n in _NODE_PARAMS[op]],
+            "summary": summaries[op]}
+
+
+def op_schema(op: str | None = None):
+    """The machine-readable sibling of `op_help`: one op's reference
+    as data instead of prose — `{"op", "sections": [{"on", "kind",
+    "params": [{"name", "required", "default"}, ...], "summary"}]}`.
+    With no argument, the full dump for every registered op:
+    `{"schema_version": 1, "ops": {op: schema}}` — always
+    JSON-serializable, so a server can generate per-op tool schemas,
+    hand a model a compact vocabulary, or validate kwarg names before
+    a render. Prose stays in `op_help`; artist sections carry
+    `data_input`, `origin`, `params_open` (a **kw catch-all accepts
+    anything), and `extra_kwargs` (reserved journal kwargs accepted
+    beyond the parameter list). Defaults that aren't JSON types
+    appear as their reprs (e.g. "UNSET" = omit the key)."""
+    if op is None:
+        return {"schema_version": 1,
+                "ops": {name: op_schema(name) for name in _all_ops()}}
+    sections = []
+    for d in _resolve(op):
+        if d["kind"] == "artist":
+            spec = d["spec"]
+            known = getattr(spec.record, "__kwarg_names__", None)
+            sections.append({
+                "on": "chart", "kind": "artist", "origin": d["origin"],
+                "data_input": spec.data_input,
+                "params": _params(_sig(spec.record)),
+                "params_open": known is None,
+                "extra_kwargs": ["aes", "inherit_aes"],
+                "summary": _first_line(d["doc"]),
+            })
+        elif d["kind"] == "node":
+            sections.append(_node_schema(op))
+        else:
+            sections.append({"on": d["on"], "kind": d["kind"],
+                             "params": _params(_sig(d["fn"])),
+                             "summary": _first_line(d["doc"])})
+    if not sections:
+        raise ValueError(_unknown_message("op_schema", op))
+    return {"op": op, "sections": sections}

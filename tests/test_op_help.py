@@ -119,6 +119,69 @@ def test_unknown_op_raises_and_names_the_closest_match():
         pt.op_help("frobnicate")
 
 
+def test_op_schema_is_json_serializable_for_every_op():
+    import json
+    dump = pt.op_schema()
+    assert dump["schema_version"] == 1
+    json.dumps(dump)                       # the whole point: pure data
+    assert "add_bar" in dump["ops"] and "share_x" in dump["ops"]
+
+
+def test_op_schema_artist_section():
+    s = pt.op_schema("add_bar")["sections"][0]
+    assert s["kind"] == "artist" and s["data_input"] == "table"
+    params = {p["name"]: p for p in s["params"]}
+    assert params["stat"]["default"] == "identity"
+    assert params["ci"]["default"] == "UNSET"      # repr'd sentinel
+    assert "aes" in s["extra_kwargs"]
+
+
+def test_op_schema_dual_ops_carry_both_sections():
+    ons = [s["on"] for s in pt.op_schema("title")["sections"]]
+    assert ons == ["chart", "layout"]
+
+
+def test_op_schema_unknown_op_raises():
+    with pytest.raises(ValueError):
+        pt.op_schema("add_barr")
+
+
+def test_node_param_lists_match_what_to_journal_writes():
+    # _NODE_PARAMS is hand-listed — pin it to reality: every kwarg
+    # to_journal emits for a node entry must be in the list, and the
+    # probe figures must between them emit every listed op (a probe
+    # set that skips one would quietly unpin it).
+    from plotlet.op_help import _NODE_PARAMS
+    df = {"x": [1, 2], "y": [3, 4]}
+
+    def pair():
+        a = pt.chart(df, pt.aes(x="x", y="y"))
+        a.add_scatter(label="pts")
+        b = pt.chart(df, pt.aes(x="x", y="y"))
+        b.add_line()
+        return a, b
+
+    lay = pt.grid([[*pair()]])
+    c, d = pair()
+    lay2 = c | d | pt.legend(c, d)
+    host, _ = pair()
+    ins = host.inset((0.6, 0.6, 0.35, 0.35), data=df,
+                     aes=pt.aes(x="x", y="y"))
+    ins.add_line()
+    fdf = {"x": [1, 2, 3, 4], "y": [3, 4, 2, 5], "g": ["a", "a", "b", "b"]}
+    fac = pt.facet(fdf, by="g")
+    fac.add_scatter(pt.aes(x="x", y="y"))
+    seen = set()
+    for fig in (lay, lay2, host, fac):
+        for entry in pt.to_journal(fig).entries:
+            listed = _NODE_PARAMS.get(entry["op"])
+            if listed is not None:
+                seen.add(entry["op"])
+                extra = set(entry["kwargs"]) - set(listed)
+                assert not extra, (entry["op"], extra)
+    assert seen == set(_NODE_PARAMS)
+
+
 def test_frame_docs_reach_interactive_help():
     # The same prose serves `help(c.xlim)` — __getattr__ stamps it on
     # the recorder (artists already got their module docstring there).

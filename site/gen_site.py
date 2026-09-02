@@ -187,6 +187,9 @@ AGENT_GROUPS = [
     ("verify", "Verify, don't trust", [
         ("bytes", "Diff the bytes"),
     ]),
+    ("author", "Author as JSON", [
+        ("journal-lite", "journal-lite: plots as data"),
+    ]),
     ("extend", "Extend the vocabulary", [
         ("new-artist", "A new plot type is three functions"),
     ]),
@@ -469,7 +472,8 @@ def render_agents() -> dict:
     ns: dict = {"pt": pt, "aes": aes}
     exec(compile(AGENT_CHART, "<agents:chart>", "exec"), ns)
     c = ns["c"]
-    ag["chart_svg"] = namespace_ids(c.to_svg(), "ag-chart")
+    svg = c.to_svg()
+    ag["chart_svg"] = namespace_ids(svg, "ag-chart")
 
     # Seam 1: the journal.
     entries = pt.to_journal(c).to_dict()["entries"]
@@ -485,7 +489,7 @@ def render_agents() -> dict:
     ])
 
     # Seam 3: the data-plotlet-* attributes in the SVG itself.
-    ag["attr_fragment"] = _data_attr_fragment(c.to_svg())
+    ag["attr_fragment"] = _data_attr_fragment(svg)
 
     # Seam 4: chrome geometry.
     ag["regions"] = "\n".join(repr(r) for r in c.regions()[:8]) + "\n…"
@@ -511,6 +515,16 @@ def render_agents() -> dict:
     exec(compile(AGENT_LAYOUT, "<agents:layout>", "exec"), ns)
     ag["layout_grid_svg"] = namespace_ids(ns["g"].to_svg(), "ag-layout-g")
     ag["layout_diagram_svg"] = namespace_ids(ns["d"].to_svg(), "ag-layout-d")
+
+    # journal-lite: the authoring form, round-tripped on every build —
+    # the lite text must load and render byte-identical to the chart
+    # it abbreviates.
+    lite = pt.to_json_lite(c)
+    if pt.from_json_lite(lite).to_svg() != svg:
+        raise SystemExit("agents page: journal-lite round-trip drifted")
+    ag["journal_lite"] = lite
+    ag["op_help_excerpt"] = "\n".join(
+        pt.op_help("add_line").splitlines()[:12]) + "\n…"
 
     # Pillar 3: a complete custom plot type, registered and used.
     ns = {"pt": pt, "aes": aes}
@@ -1492,6 +1506,30 @@ palette, category order. The four sections below inspect this chart:</p>
             code(AGENT_LAYOUT),
             split(f'<div class="fig">{ag["layout_grid_svg"]}</div>',
                   f'<div class="fig">{ag["layout_diagram_svg"]}</div>')),
+        sec("journal-lite",
+            "A plot can be authored as JSON &mdash; no code execution "
+            "&mdash; and handed to <code>pt.from_json_lite(blob)</code> "
+            "to render. The form is <strong>journal-lite</strong>: the "
+            "journal with everything derivable omitted. An artist entry "
+            "inherits the chart&rsquo;s <code>aes</code> and "
+            "<code>data</code>, defaults stay implicit, and every entry "
+            "reads exactly like its Python line. The demo chart above, "
+            "as its complete lite blob:",
+            code("print(pt.to_json_lite(c))"),
+            out(ag["journal_lite"]),
+            '<p class="blurb">Any op&rsquo;s reference is one call away '
+            "&mdash; returned as a string, so a service (e.g. an MCP "
+            "server) can serve docs to a model that never executes "
+            "Python. <code>pt.op_schema(op)</code> is the structured "
+            "sibling, and a generated JSON Schema ships in the wheel "
+            "for validating blobs before a render. The full server "
+            "recipe &mdash; five tools, bulk data kept server-side "
+            "&mdash; is in "
+            f'<a href="{GITHUB}/blob/main/src/plotlet/skills/json.md">'
+            "the JSON guide</a> (<code>pt.skill(&quot;json&quot;)</code>"
+            ").</p>",
+            code('print(pt.op_help("add_line"))'),
+            out(ag["op_help_excerpt"])),
         sec("new-artist",
             "The built-in vocabulary ends somewhere, and a machine "
             "author hits that edge often. A new plot type is three "
