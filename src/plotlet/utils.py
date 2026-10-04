@@ -625,23 +625,27 @@ def resolve_orientation(owner, data, x_col, y_col, orientation,
     without an explicit kwarg. Both-numeric stays on x, which keeps a
     numeric category column (years, doses) behaving as before.
 
-    `require_numeric=False` for artists that can place a value on a
-    category scale (strip, swarm draw a fine categorical-vs-categorical
-    dot plot); the rest need real numbers for quantiles or bar heights and
-    say so at the call site rather than failing inside the draw."""
+    The value column must be numeric. `require_numeric=False` relaxes
+    that for artists that can place a value on a category scale (strip,
+    swarm draw a fine categorical-vs-categorical dot plot) — but only
+    when the category column is discrete too: a numeric column forced
+    onto the category axis beside a discrete value column is a swapped
+    mapping, not a dot plot, and is rejected for every artist."""
+    x_num = all_numeric(to_list(data[x_col]))
+    y_num = all_numeric(to_list(data[y_col]))
     if orientation is None:
-        x_num = all_numeric(to_list(data[x_col]))
-        y_num = all_numeric(to_list(data[y_col]))
         orientation = "y" if (x_num and not y_num) else "x"
-    cat_col, val_col = (y_col, x_col) if orientation == "y" else (x_col, y_col)
-    if require_numeric and not all_numeric(to_list(data[val_col])):
-        val_axis = "x" if orientation == "y" else "y"
+    if orientation == "y":
+        cat_col, val_col, cat_num, val_num = y_col, x_col, y_num, x_num
+    else:
+        cat_col, val_col, cat_num, val_num = x_col, y_col, x_num, y_num
+    if not val_num and (require_numeric or cat_num):
+        cat_axis, val_axis = ("y", "x") if orientation == "y" else ("x", "y")
         raise TypeError(
-            f"{owner}: with orientation={orientation!r} the categories come "
-            f"from {orientation}={cat_col!r} and the values from "
-            f"{val_axis}={val_col!r}, so {val_axis}= must be numeric — "
-            f"{val_col!r} is not. Swap the mapping if you meant the other "
-            f"axis to hold the categories."
+            f"{owner}: categories on {cat_axis}={cat_col!r}, values on "
+            f"{val_axis}={val_col!r} — {val_axis}= must be numeric and "
+            f"{val_col!r} is not. Swap the mapping, or set orientation=, "
+            f"if the other axis should hold the categories."
         )
     return orientation, cat_col, val_col
 

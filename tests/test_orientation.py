@@ -90,6 +90,29 @@ def test_non_numeric_value_axis_raises_at_the_call_site(artist):
         c.to_svg()
 
 
+@pytest.mark.parametrize("artist", CATEGORICAL)
+def test_explicit_orientation_against_the_dtypes_raises(artist):
+    # orientation="y" says "categories on y", but y is the numeric column
+    # and x the discrete one — a swapped mapping. strip/swarm would
+    # otherwise draw it silently (each float a category, strings as
+    # values), so every artist rejects it, with the swap hint.
+    c = pt.chart(_df(), aes(x="cat", y="value"))
+    getattr(c, "add_" + artist)(orientation="y")
+    with pytest.raises(TypeError, match="must be numeric"):
+        c.to_svg()
+
+
+def test_numeric_error_does_not_blame_an_unset_orientation():
+    # guessed layout: the message names the columns and the fix, and
+    # never quotes an orientation= the user did not pass
+    df = {"cat": ["a", "a", "b", "b"], "other": ["p", "q", "p", "q"]}
+    c = pt.chart(df, aes(x="cat", y="other"))
+    c.add_boxplot()
+    with pytest.raises(TypeError, match="y= must be numeric") as info:
+        c.to_svg()
+    assert "orientation='x'" not in str(info.value)
+
+
 @pytest.mark.parametrize("artist", ("strip", "swarm"))
 def test_two_discrete_columns_draw_a_dot_plot(artist):
     # strip/swarm place points on a category scale happily — a
