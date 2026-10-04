@@ -8,6 +8,7 @@ CI options:
 
 API (long-form only):
   c.add_pointplot(aes(x="cat", y="value"))
+  c.add_pointplot(aes(x="value", y="cat"))                  # horizontal
   c.add_pointplot(aes(x="cat", y="value", color="group"))   # one series per level
 
 Aesthetics:
@@ -16,6 +17,10 @@ Aesthetics:
   palette=           maps levels → colors when color is mapped in aes
 
 Styling kwargs:
+  orientation=None   which axis holds the categories: 'x' (the upright
+                     layout) or 'y'. Unset guesses it — whichever of x/y is
+                     the discrete column becomes the category axis, so
+                     aes(x="value", y="cat") reads as horizontal on its own.
   estimator='mean'   'median' for the central tendency
   ci='t'             see above
   level=0.95         confidence level
@@ -30,8 +35,9 @@ import random
 
 from ..registry import ArtistSpec, add_artist
 from ..utils import (pack_opts, categorical_groups, resolve_aes, quantile,
-                     validate_ci, ci_bounds, check_option)
-from ..draw import segment, circle, polyline, errorbar_v
+                     validate_ci, ci_bounds, check_option,
+                     resolve_orientation)
+from ..draw import segment, circle, polyline, errorbar_v, errorbar_h
 from ..utils import group_color
 from ._shared import edge_px, swatch_radius, swatch_stroke
 
@@ -42,18 +48,22 @@ def _pointplot_record(data=None,
                       estimator="mean", ci="t", level=0.95, n_boot=1000,
                       seed=0,
                       # style — packed into opts for the draw/legend side
-                      size=None, capsize=None, linewidth=None,
+                      orientation=None, size=None, capsize=None, linewidth=None,
                       palette=None, label=None, legend=None):
     if data is None or x is None or y is None:
         raise TypeError("pointplot requires data=, x=, y=.")
     check_option("pointplot", "estimator", estimator, ("mean", "median"))
+    check_option("pointplot", "orientation", orientation, ("x", "y"))
     color_kind, color_value = resolve_aes(data, color)
     group_col = color if color_kind == "column" else None
-    opts = pack_opts(size=size, capsize=capsize, linewidth=linewidth,
-                     palette=palette, label=label, legend=legend)
+    orientation, cat_col, val_col = resolve_orientation(
+        "pointplot", data, x, y, orientation)
+    opts = pack_opts(orientation=orientation, size=size, capsize=capsize,
+                     linewidth=linewidth, palette=palette, label=label,
+                     legend=legend)
     if color_kind == "literal" and color_value is not None:
         opts["color"] = color_value
-    cats, groups, vals = categorical_groups(data, x, y, group_col)
+    cats, groups, vals = categorical_groups(data, cat_col, val_col, group_col)
     validate_ci("pointplot", ci)
     rng = random.Random(seed)
     est_fn = ((lambda xs: sum(xs) / len(xs) if xs else float("nan"))
@@ -72,14 +82,23 @@ def _pointplot_record(data=None,
             "_ests": ests, "_los": los, "_his": his, "opts": opts}
 
 
-def _pointplot_xdomain(a): return a["cats"]
+def _pointplot_horizontal(a):
+    return a["opts"].get("orientation") == "y"
 
 
-def _pointplot_ydomain(a):
+def _pointplot_values(a):
     out = [v for g in a["_ests"] for v in g]
     out += [v for g in a["_los"] for v in g if v == v]
     out += [v for g in a["_his"] for v in g if v == v]
     return out
+
+
+def _pointplot_xdomain(a):
+    return _pointplot_values(a) if _pointplot_horizontal(a) else a["cats"]
+
+
+def _pointplot_ydomain(a):
+    return a["cats"] if _pointplot_horizontal(a) else _pointplot_values(a)
 
 
 def _pointplot_draw(a, ctx):
@@ -89,6 +108,9 @@ def _pointplot_draw(a, ctx):
     r = opts.get("size", 4)
     capsize = opts.get("capsize", 4)
     lw = opts.get("linewidth", 1.4)
+    horizontal = _pointplot_horizontal(a)
+    cat_scale, val_scale = ((ctx.y_scale, ctx.x_scale) if horizontal
+                            else (ctx.x_scale, ctx.y_scale))
     out = []
     for j in range(len(groups)):
         col = group_color(groups, palette, j, ctx.color)
@@ -97,14 +119,15 @@ def _pointplot_draw(a, ctx):
                                     a["_los"][j], a["_his"][j]):
             if est != est:
                 continue
-            cx = ctx.x_scale(cat)
-            py = ctx.y_scale(est)
+            cp = cat_scale(cat)
+            vp = val_scale(est)
             if lo == lo and hi == hi:
-                out.append(errorbar_v(cx, edge_px(ctx.y_scale, lo),
-                                      edge_px(ctx.y_scale, hi),
-                                      capsize=capsize, color=col, width=lw,
-                                      project=ctx.warp))
-            pts.append((cx, py))
+                bar = errorbar_h if horizontal else errorbar_v
+                out.append(bar(cp, edge_px(val_scale, lo),
+                               edge_px(val_scale, hi),
+                               capsize=capsize, color=col, width=lw,
+                               project=ctx.warp))
+            pts.append((vp, cp) if horizontal else (cp, vp))
         out.append(polyline(pts, color=col, width=lw, project=ctx.warp))
         for x, y in pts:
             out.append(circle(x, y, r, fill=col, project=ctx.warp))

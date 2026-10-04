@@ -1,7 +1,8 @@
 """Bee-swarm plot: categorical scatter with greedy non-overlapping point placement.
 
 Long-form only:
-  c.add_swarm(aes(x="cat", y="value"))
+  c.add_swarm(aes(x="cat", y="value"))              # vertical
+  c.add_swarm(aes(x="value", y="cat"))              # horizontal
   c.add_swarm(aes(x="cat", y="value", color="group"), palette={...})
 
 Mapping `aes(color="col")` dodges sub-swarms side-by-side within each cat
@@ -14,7 +15,11 @@ Aesthetics — scatter's vocabulary:
   palette=              maps group levels → colors when color is mapped
 
 Other styling kwargs:
-  orientation='v'   'h' for horizontal (cats on y axis)
+  orientation=None      which axis holds the categories: 'x' (the upright
+                        layout) or 'y'. Unset guesses it — whichever of
+                        x/y is the discrete column becomes the category
+                        axis, so aes(x="value", y="cat") reads as
+                        horizontal on its own.
   width=0.8         total dodge-group width as a band fraction
   gap=0.1           slot-gap fraction between dodged sub-swarms
   size=3            point radius in pixels
@@ -28,7 +33,8 @@ from ..registry import ArtistSpec, add_artist
 from ..draw import circle
 from ..utils import (pack_opts, resolve_aes, dodge_positions,
                      categorical_groups, _drop_nan, check_option,
-                     group_color as _group_fill)
+                     group_color as _group_fill,
+                     resolve_orientation)
 from ..draw import raster_declined, should_rasterize, splat_disks_by_color
 from .._spec import _FRAME
 from ._shared import point_outline
@@ -56,21 +62,23 @@ def _swarm_record(data=None,
         raise TypeError(
             "swarm requires data=, x=, y= (color= optional)."
         )
-    check_option("swarm", "orientation", orientation, ("v", "h"))
+    check_option("swarm", "orientation", orientation, ("x", "y"))
     color_literal, group_col = _resolve_color_kwarg(data, color)
-    cats, groups, vals = categorical_groups(data, x, y, group_col)
+    orientation, cat_col, val_col = resolve_orientation(
+        "swarm", data, x, y, orientation, require_numeric=False)
+    cats, groups, vals = categorical_groups(data, cat_col, val_col, group_col)
     opts = pack_opts(orientation=orientation, width=width, gap=gap,
                      color=color_literal, edgecolor=edgecolor,
                      palette=palette, size=size, alpha=alpha,
                      linewidth=linewidth, label=label, legend=legend,
                      rasterize=rasterize)
-    if group_col is not None and group_col == x:
+    if group_col is not None and group_col == cat_col:
         opts["_redundant_grouping"] = True
     return {"type": "swarm", "cats": cats, "groups": groups,
             "vals": vals, "opts": opts}
 
 
-def _swarm_horizontal(a): return a["opts"].get("orientation") == "h"
+def _swarm_horizontal(a): return a["opts"].get("orientation") == "y"
 def _swarm_values(a):
     # NaN dropped here and in draw — it has no position, and one NaN
     # poisons min/max domain resolution.

@@ -613,6 +613,39 @@ def categorical_groups(data, x_col, y_col, group_col=None):
     return cats, groups, vals
 
 
+def resolve_orientation(owner, data, x_col, y_col, orientation,
+                        require_numeric=True):
+    """Decide which mapping is the category axis for a categorical artist.
+
+    Returns `(orientation, cat_col, val_col)`. `orientation="x"` puts the
+    categories on x (the upright layout), `"y"` puts them on y.
+
+    When the caller leaves `orientation` unset, the discrete mapping wins
+    the category axis — so `aes(x="value", y="cat")` reads as horizontal
+    without an explicit kwarg. Both-numeric stays on x, which keeps a
+    numeric category column (years, doses) behaving as before.
+
+    `require_numeric=False` for artists that can place a value on a
+    category scale (strip, swarm draw a fine categorical-vs-categorical
+    dot plot); the rest need real numbers for quantiles or bar heights and
+    say so at the call site rather than failing inside the draw."""
+    if orientation is None:
+        x_num = all_numeric(to_list(data[x_col]))
+        y_num = all_numeric(to_list(data[y_col]))
+        orientation = "y" if (x_num and not y_num) else "x"
+    cat_col, val_col = (y_col, x_col) if orientation == "y" else (x_col, y_col)
+    if require_numeric and not all_numeric(to_list(data[val_col])):
+        val_axis = "x" if orientation == "y" else "y"
+        raise TypeError(
+            f"{owner}: with orientation={orientation!r} the categories come "
+            f"from {orientation}={cat_col!r} and the values from "
+            f"{val_axis}={val_col!r}, so {val_axis}= must be numeric — "
+            f"{val_col!r} is not. Swap the mapping if you meant the other "
+            f"axis to hold the categories."
+        )
+    return orientation, cat_col, val_col
+
+
 def collect_categories(artists, axis):
     """Unique values an artist contributes on `axis`, in first-appearance order.
 

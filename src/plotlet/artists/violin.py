@@ -1,7 +1,8 @@
 """Mirrored KDE outline per category with a mini-boxplot inside.
 
 Long-form only:
-  c.add_violin(aes(x="cat", y="value"))
+  c.add_violin(aes(x="cat", y="value"))            # vertical
+  c.add_violin(aes(x="value", y="cat"))            # horizontal
   c.add_violin(aes(x="cat", y="value", fill="group"), palette={...})
 
 Mapping `aes(fill="col")` dodges sub-violins side-by-side within each cat
@@ -15,7 +16,11 @@ Aesthetics:
   palette=             maps group levels → fills when fill is mapped in aes
 
 Other styling kwargs:
-  orientation='v'       'h' for horizontal (cats on y axis)
+  orientation=None      which axis holds the categories: 'x' (the upright
+                        layout) or 'y'. Unset guesses it — whichever of
+                        x/y is the discrete column becomes the category
+                        axis, so aes(x="value", y="cat") reads as
+                        horizontal on its own.
   width=0.8             total dodge-group width as a band fraction
   gap=0.1               slot-gap fraction between dodged violins
   inner='box'           'box' mini-boxplot (Q1-Q3 + median + whiskers),
@@ -32,7 +37,8 @@ Other styling kwargs:
 from ..registry import ArtistSpec, add_artist
 from ..utils import (UNSET, pack_opts, quantile, resolve_aes,
                      dodge_positions, categorical_groups,
-                     silverman_bw, kde_1d, check_option)
+                     silverman_bw, kde_1d, check_option,
+                     resolve_orientation)
 from ..utils import _drop_nan, group_color as _group_fill
 from ..draw import resolve_color
 from ..draw import polygon, rect, segment
@@ -63,11 +69,13 @@ def _violin_record(data=None,
         raise TypeError(
             "violin requires data=, x=, y= (fill= optional)."
         )
-    check_option("violin", "orientation", orientation, ("v", "h"))
+    check_option("violin", "orientation", orientation, ("x", "y"))
     if inner is not UNSET:
         check_option("violin", "inner", inner, ("box", "quartile"))
     do_fill, fill_literal, group_col = _resolve_fill_kwarg(data, fill)
-    cats, groups, vals = categorical_groups(data, x, y, group_col)
+    orientation, cat_col, val_col = resolve_orientation(
+        "violin", data, x, y, orientation)
+    cats, groups, vals = categorical_groups(data, cat_col, val_col, group_col)
     opts = pack_opts(orientation=orientation, width=width, gap=gap,
                      color=color, palette=palette, trim=trim,
                      fill_alpha=fill_alpha, linewidth=linewidth, whis=whis,
@@ -80,13 +88,13 @@ def _violin_record(data=None,
     opts["_do_fill"] = do_fill
     if fill_literal is not None:
         opts["_fill_literal"] = fill_literal
-    if group_col is not None and group_col == x:
+    if group_col is not None and group_col == cat_col:
         opts["_redundant_grouping"] = True
     return {"type": "violin", "cats": cats, "groups": groups,
             "vals": vals, "opts": opts}
 
 
-def _violin_horizontal(a): return a["opts"].get("orientation") == "h"
+def _violin_horizontal(a): return a["opts"].get("orientation") == "y"
 def _violin_values(a):
     return [v for row in a["vals"] for g in row for v in g]
 

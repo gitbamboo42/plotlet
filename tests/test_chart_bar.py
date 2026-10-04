@@ -121,10 +121,10 @@ def chart_bar_h_xerr():
     df = {"cat": ["alpha", "beta", "gamma"], "mean": [4.2, 5.6, 3.1],
           "err": [0.5, 1.1, 0.4]}
 
-    c = pt.chart(df, aes(x="cat", y="mean", xerr="err"),
+    c = pt.chart(df, aes(x="mean", y="cat", xerr="err"),
                  data_width=300, data_height=180,
                  title="bar horizontal ± xerr", xlabel="mean")
-    c.add_bar(orientation="h", ecolor="gray", capsize=3)
+    c.add_bar(ecolor="gray", capsize=3)
     return c
 
 
@@ -218,10 +218,10 @@ def chart_bar_h_stack():
     # along x from 0.
     df = _bar_quarterly_df()
 
-    c = pt.chart(df, aes(x="quarter", y="value", fill="series"),
+    c = pt.chart(df, aes(x="value", y="quarter", fill="series"),
                  data_width=300, data_height=200,
                  title="bar horizontal stack", xlabel="$M", legend=True)
-    c.add_bar(position="stack", orientation="h")
+    c.add_bar(position="stack", orientation="y")
     c.legend()
     return c
 
@@ -276,8 +276,8 @@ def test_bar_err_matches_orientation():
     c.add_bar()
     with pytest.raises(TypeError, match="yerr"):
         c.to_svg()
-    c = pt.chart(df, aes(x="cat", y="v", yerr="sd"))
-    c.add_bar(orientation="h")
+    c = pt.chart(df, aes(x="v", y="cat", yerr="sd"))
+    c.add_bar()
     with pytest.raises(TypeError, match="xerr"):
         c.to_svg()
 

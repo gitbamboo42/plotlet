@@ -1,6 +1,7 @@
 """Bar chart — long-form only.
 
   c.add_bar(aes(x="cat", y="val"))                                  # single
+  c.add_bar(aes(x="val", y="cat"))                                  # horizontal
   c.add_bar(aes(x="cat", y="val"), fill="C0")                       # constant color
   c.add_bar(aes(x="cat", y="val", fill="series"), position="stack") # grouped
   c.add_bar(aes(x="cat", y="val", fill="series"), position="dodge")
@@ -31,12 +32,17 @@ Aesthetics:
 Error bars (same specs as the errorbar artist — aes-mapped column, bare
 scalar, or a (lower, upper) tuple of either):
   yerr=         value-axis error for vertical bars
-  xerr=         value-axis error for horizontal bars (orientation='h')
+  xerr=         value-axis error for horizontal bars (orientation='y')
   ecolor=<themed>     whisker color
   capsize=<themed>    whisker cap width (px)
 
 Other styling kwargs:
-  orientation='v'     'h' for horizontal bars
+  orientation=None    which axis holds the categories: 'x' (upright bars)
+                      or 'y' (horizontal bars). Unset guesses it — whichever
+                      of x/y is the discrete column becomes the category
+                      axis, so aes(x="value", y="cat") reads as horizontal.
+                      stat='count' maps x only, so it stays upright unless
+                      orientation='y' says otherwise.
   bottom=0            baseline value (single / dodge); stacks always start at 0
   alpha=<themed>      bar fill opacity
   linewidth=<themed>  stroke width (used only when color is set)
@@ -47,7 +53,8 @@ Other styling kwargs:
 import random
 
 from ..registry import ArtistSpec, add_artist
-from ..utils import (UNSET, pack_opts, to_list, resolve_aes, dodge_positions,
+from ..utils import (UNSET, pack_opts, to_list, resolve_aes,
+                     resolve_orientation, dodge_positions,
                      validate_ci, ci_bounds, check_option,
                      DODGE_WIDTH, DODGE_GAP)
 from ..draw import resolve_color
@@ -205,7 +212,7 @@ def _resolve_err_spec(stat, orientation, bottom, yerr, xerr):
             "bar: stat= aggregates for you — stat='mean' supplies error "
             "bars from the CI; drop yerr=/xerr=."
         )
-    horizontal = orientation == "h"
+    horizontal = orientation == "y"
     if yerr is not None and horizontal:
         raise TypeError("bar: horizontal bars take xerr= (the value axis is x).")
     if xerr is not None and not horizontal:
@@ -244,25 +251,33 @@ def _bar_record(data=None,
                 color=None, alpha=None, linewidth=None, linestyle=None,
                 ecolor=None, capsize=None, palette=None,
                 label=None, legend=None):
-    check_option("bar", "orientation", orientation, ("v", "h"))
+    check_option("bar", "orientation", orientation, ("x", "y"))
     ci = _resolve_stat_ci(stat, data, x, y, ci)
     # `fill` is a literal color when passed bare, a column when mapped
     # via aes. Column → drives grouping; literal → applied to every bar.
     fill_kind, fill_value = resolve_aes(data, fill)
     group_col = fill if fill_kind == "column" else None
+    if y is None:
+        # stat="count" maps x only — there is no second column to guess
+        # from, so bars stay upright unless orientation says otherwise.
+        orientation = orientation or "x"
+        cat_col, val_col = x, None
+    else:
+        orientation, cat_col, val_col = resolve_orientation(
+            "bar", data, x, y, orientation)
     stat_err_lo = stat_err_hi = None
     if stat == "identity":
-        cats, groups, series = _aggregate_long(data, x, y, group_col)
+        cats, groups, series = _aggregate_long(data, cat_col, val_col, group_col)
     else:
         cats, groups, series, stat_err_lo, stat_err_hi = _aggregate_stat(
-            data, x, y, group_col, stat, ci, level, n_boot, seed)
+            data, cat_col, val_col, group_col, stat, ci, level, n_boot, seed)
     opts = pack_opts(orientation=orientation, bottom=bottom, width=width,
                      gap=gap, color=color, alpha=alpha, linewidth=linewidth,
                      linestyle=linestyle, ecolor=ecolor, capsize=capsize,
                      palette=palette, label=label, legend=legend)
     if fill_kind == "literal":
         opts["_fill_literal"] = fill_value
-    if group_col is not None and group_col == x:
+    if group_col is not None and group_col == cat_col:
         opts["_redundant_grouping"] = True
     err = _resolve_err_spec(stat, orientation, bottom, yerr, xerr)
     position = _resolve_position(position, len(series), err, stat)
@@ -275,13 +290,13 @@ def _bar_record(data=None,
                 f"use position='dodge'."
             )
         rec["err_lo"], rec["err_hi"] = _aggregate_err(
-            data, x, group_col, err, cats, groups)
+            data, cat_col, group_col, err, cats, groups)
     elif stat_err_lo is not None:
         rec["err_lo"], rec["err_hi"] = stat_err_lo, stat_err_hi
     return rec
 
 
-def _bar_horizontal(a): return a["opts"].get("orientation") == "h"
+def _bar_horizontal(a): return a["opts"].get("orientation") == "y"
 
 
 def _bar_vals_for_domain(a):

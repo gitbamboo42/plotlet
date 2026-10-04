@@ -419,7 +419,8 @@
        "kwargs": {
         "propertyNames": {
          "enum": ["aes", "capsize", "ci", "color", "data", "estimator", "inherit_aes", "label",
-                  "legend", "level", "linewidth", "n_boot", "palette", "seed", "size", "x", "y"]
+                  "legend", "level", "linewidth", "n_boot", "orientation", "palette", "seed", "size",
+                  "x", "y"]
         }
        }
       }

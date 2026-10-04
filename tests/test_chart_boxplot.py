@@ -68,10 +68,10 @@ def chart_boxplot_notch_h():
             rows.append({"site": site, "ph": rng.gauss(mu, 1.1)})
     data = {k: [r[k] for r in rows] for k in rows[0]}
 
-    c = pt.chart(data, aes(x="site", y="ph"),
+    c = pt.chart(data, aes(x="ph", y="site"),
                  data_width=320, data_height=200,
                  title="boxplot horizontal + notch + means", xlabel="pH")
-    c.add_boxplot(orientation="h", notch=True, showmeans=True)
+    c.add_boxplot(notch=True, showmeans=True)
     return c
 
 

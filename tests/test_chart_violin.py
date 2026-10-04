@@ -36,8 +36,26 @@ def chart_violin():
     return c
 
 
+def chart_violin_horizontal():
+    # Categories on y: the mapping alone picks the horizontal layout, no
+    # orientation= kwarg. Values on x, so xlabel carries the unit.
+    rng = random.Random(4)
+    rows = []
+    for site, mu in (("north", 6.4), ("mid", 7.1), ("south", 6.8)):
+        for _ in range(90):
+            rows.append({"site": site, "ph": rng.gauss(mu, 0.5)})
+    data = {k: [r[k] for r in rows] for k in rows[0]}
+
+    c = pt.chart(data, aes(x="ph", y="site"),
+                 data_width=320, data_height=200,
+                 title="violin horizontal (guessed)", xlabel="pH")
+    c.add_violin(inner="quartile")
+    return c
+
+
 PLOTS = {
     "violin": chart_violin,
+    "violin_horizontal": chart_violin_horizontal,
 }
 
 

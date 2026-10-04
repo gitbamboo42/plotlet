@@ -30,7 +30,10 @@ Multi-group layout:
 
 Other styling kwargs:
   histtype='bar'      'bar', 'step' (outline-only), or 'stepfilled'
-  orientation='v'     'h' for horizontal bars
+  orientation='x'     which axis the values are binned along: 'x' (upright
+                      bars) or 'y' (horizontal bars). hist maps x= only, so
+                      there is no second column to guess from — unlike the
+                      categorical artists this one has no unset/guess mode.
   alpha=<themed>      bar fill opacity
   linewidth=<themed>  stroke width (used only when color is set)
 """
@@ -50,7 +53,7 @@ _POSITIONS = ("overlay", "stack", "fill", "dodge")
 def _artist_hist(a, xs_, ys_, col, bins, warp=None):
     out = []
     opts = a["opts"]
-    horizontal = opts.get("orientation") == "h"
+    horizontal = opts.get("orientation") == "y"
     bin_scale, count_scale = (ys_, xs_) if horizontal else (xs_, ys_)
     base = count_scale(0)
     alpha = opts.get("alpha", SPEC["hist"]["alpha"])
@@ -163,7 +166,7 @@ def _hist_record(data=None,
             f"hist position={position!r} needs histtype='bar' — step "
             f"outlines can't stack or dodge."
         )
-    check_option("hist", "orientation", orientation, ("v", "h"))
+    check_option("hist", "orientation", orientation, ("x", "y"))
     if bins is not None and not isinstance(bins, int):
         edges = [float(e) for e in to_list(bins)]
         if len(edges) < 2 or any(b <= a for a, b in zip(edges, edges[1:])):
@@ -230,7 +233,7 @@ def _hist_data_attrs(a):
     return out
 
 
-def _hist_horizontal(a): return a["opts"].get("orientation") == "h"
+def _hist_horizontal(a): return a["opts"].get("orientation") == "y"
 
 
 def _hist_xdomain(a):
