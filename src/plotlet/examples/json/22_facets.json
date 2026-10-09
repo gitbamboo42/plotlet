@@ -7,11 +7,7 @@
    "kwargs": {
     "data": {"$data": "d1"},
     "by": "species",
-    "row": null,
-    "col": null,
     "col_wrap": 3,
-    "share_x": true,
-    "share_y": true,
     "chart_opts": {
      "data_width": 170,
      "data_height": 150,

@@ -59,9 +59,10 @@ input: lite is terser, not weaker, and the two render byte-identically.
   targeting it, and before any entry that references it. nids are
   small ints starting at 1. `root_nid` names the node that renders
   and defaults to the last node created; `version` defaults to 1.
-- **Chart sizing is optional.** `data_width` / `data_height` / `margin`
-  on `new_chart` default sensibly when omitted (`pt.to_json` always
-  writes them out).
+- **Construction kwargs are optional.** `data_width` / `data_height` /
+  `margin` on `new_chart`, a legend leaf's canvas and `legend_*` state,
+  and `new_facet_grid`'s `pt.facet` parameters all default sensibly
+  when omitted (`pt.to_json` always writes them out).
 
 ## Envelopes for non-JSON values
 
@@ -70,8 +71,10 @@ input: lite is terser, not weaker, and the two render byte-identically.
   `inner` chart, a legend-source name. Do **not** use it in a layout's
   `children` or `legend_sources` — those two fields take bare int
   nids (see the multi-panel example below).
-- `{"$coord": "CircularCoordinate", "container": true, "kwargs": {...}}`
-  — a coordinate system (see `examples/json/09_circular.json`).
+- `{"$coord": "CircularCoordinate", "kwargs": {"r_inner": 0.3}}` — a
+  coordinate system; omitted kwargs take the class defaults (see
+  `examples/json/09_circular.json`). `pt.to_json` adds a derived
+  `container` flag — never write it yourself.
 - `{"$sectors": {...}}` — a sectors object.
 - `{"$aes": {...}}` — an `aes(...)` mapping passed to a facet call.
 - `{"$tuple": [...]}`, `{"$set": [...]}`, `{"$date": "..."}`,
@@ -96,7 +99,8 @@ to it — write it only when some other node should render:
 `layout_kind` is `"h"`, `"v"`, or `"grid"`. Layout methods (`share_x`,
 `share_y`, `gap`, ...) are entries targeting the layout's nid. A shared
 legend is a `new_leaf` node with `"leaf_kind": "legend"` placed as a
-layout child — see `examples/json/07_annotated_heatmap.json`.
+layout child — `{"op": "new_leaf", "nid": 4, "kwargs": {"leaf_kind":
+"legend"}}` is complete; see `examples/json/07_annotated_heatmap.json`.
 
 ## Where to find examples — imitate, don't guess
 

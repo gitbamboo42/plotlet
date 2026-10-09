@@ -45,21 +45,6 @@ def facet(data, *, by=None, row=None, col=None, col_wrap=None,
     # Same recorder-boundary normalization as `pt.chart(data)` — the
     # journal (and JSON layer) never hold a library-specific object.
     data = _check_table(_normalize_data(data), "pt.facet(data=)")
-    if by is not None and (row is not None or col is not None):
-        raise TypeError(
-            "pt.facet: pass either by= (wrapped panels) or row=/col= "
-            "(two-factor grid), not both."
-        )
-    if by is None and row is None and col is None:
-        raise TypeError(
-            "pt.facet requires by= (wrapped panels) or row=/col= "
-            "(two-factor grid)."
-        )
-    if col_wrap is not None and by is None:
-        raise TypeError(
-            "pt.facet: col_wrap= applies to by= wrapping; a row=/col= "
-            "grid is shaped by its factor levels."
-        )
     return FacetGrid(data, by=by, row=row, col=col, col_wrap=col_wrap,
                      share_x=share_x, share_y=share_y,
                      chart_opts=chart_opts)
@@ -138,6 +123,23 @@ class FacetGrid:
 
     def __init__(self, data, *, by, row, col, col_wrap,
                  share_x, share_y, chart_opts):
+        # Validated here, not in `facet()`, so a journal-built grid
+        # (`new_facet_grid` → this constructor) gets the same messages.
+        if by is not None and (row is not None or col is not None):
+            raise TypeError(
+                "pt.facet: pass either by= (wrapped panels) or row=/col= "
+                "(two-factor grid), not both."
+            )
+        if by is None and row is None and col is None:
+            raise TypeError(
+                "pt.facet requires by= (wrapped panels) or row=/col= "
+                "(two-factor grid)."
+            )
+        if col_wrap is not None and by is None:
+            raise TypeError(
+                "pt.facet: col_wrap= applies to by= wrapping; a row=/col= "
+                "grid is shaped by its factor levels."
+            )
         self._data = data
         self._by = by
         self._row = row

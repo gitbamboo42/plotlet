@@ -250,7 +250,10 @@ def _node_section(op: str) -> str:
             "new_leaf — creates a non-data leaf (usually a legend panel)",
             'Kwargs: leaf_kind ("legend" or "diagram"), canvas_width, '
             "canvas_height,\n"
-            "margin — plus, for a legend, the pt.legend(...) state:\n"
+            "margin — plus, for a legend, the pt.legend(...) state. Only "
+            "leaf_kind is\n"
+            "required (journal-lite); every other kwarg defaults to a bare "
+            "pt.legend():\n"
             "  legend_sources      bare chart nids to harvest entries "
             "from ([] =\n"
             "                      every leaf in the parent layout)\n"
@@ -273,7 +276,9 @@ def _node_section(op: str) -> str:
             'Kwargs: data ({"$data": id}), by, row, col, col_wrap, '
             "share_x, share_y,\n"
             "chart_opts (dict of pt.chart kwargs applied to every "
-            "panel). Artist and\n"
+            "panel) — the\n"
+            "pt.facet parameters, with the same defaults when omitted. "
+            "Artist and\n"
             "frame entries then target this nid and apply to every "
             "panel; a mapped\n"
             'aes rides in such an entry\'s args as an {"$aes": {...}} '

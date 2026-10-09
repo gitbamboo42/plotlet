@@ -149,6 +149,62 @@ def test_inline_matrix_interns_positionally():
     assert j["data"]["d1"] == [[1, 2], [3, 4]]
 
 
+# Rule 2 beyond new_chart: the other construction ops and the $coord
+# envelope are just as omissible, and each minimal form renders
+# byte-identical to the Python session it abbreviates.
+
+
+def test_minimal_legend_leaf_renders_like_pt_legend():
+    lite = {"entries": [
+        {"op": "new_chart", "nid": 1,
+         "kwargs": {"data": dict(DF),
+                    "aes": {"x": "month", "y": "sales",
+                            "color": "region"}}},
+        {"op": "add_line", "nid": 1},
+        {"op": "new_leaf", "nid": 2, "kwargs": {"leaf_kind": "legend"}},
+        {"op": "new_layout", "nid": 3,
+         "kwargs": {"layout_kind": "h", "children": [1, 2]}},
+    ]}
+    c = pt.chart(DF, aes(x="month", y="sales", color="region"))
+    c.add_line()
+    fig = c | pt.legend()
+    assert pt.from_json_lite(lite).to_svg() == fig.to_svg()
+    # to_python reads the expanded form, so the lite leaf is fine there too.
+    assert "pt.legend()" in pt.to_python(pt.from_json_lite(lite))
+
+
+def test_minimal_facet_grid_renders_like_pt_facet():
+    lite = {"entries": [
+        {"op": "new_facet_grid", "nid": 1,
+         "kwargs": {"data": dict(DF), "by": "region"}},
+        {"op": "add_line", "nid": 1,
+         "kwargs": {"aes": {"x": "month", "y": "sales"}}},
+    ]}
+    g = pt.facet(DF, by="region")
+    g.add_line(aes(x="month", y="sales"))
+    assert pt.from_json_lite(lite).to_svg() == g.to_svg()
+
+
+def test_coord_envelope_needs_no_container_flag():
+    def entries(coord):
+        return [
+            {"op": "new_chart", "nid": 1,
+             "kwargs": {"data": dict(DF),
+                        "aes": {"x": "region", "y": "sales"}}},
+            {"op": "coordinate", "nid": 1, "args": [coord]},
+            {"op": "add_bar", "nid": 1},
+        ]
+    bare = {"$coord": "CircularCoordinate", "kwargs": {"r_inner": 0.4}}
+    e = expand({"entries": entries(bare)})["entries"][1]
+    assert e["args"][0]["container"] is True
+    c = pt.chart(DF, aes(x="region", y="sales"))
+    c.coordinate(pt.CircularCoordinate(r_inner=0.4))
+    c.add_bar()
+    assert pt.from_json_lite({"entries": entries(bare)}).to_svg() == c.to_svg()
+    # No kwargs at all is the class's defaults.
+    pt.from_json_lite({"entries": entries({"$coord": "CircularCoordinate"})}).to_svg()
+
+
 # ---------------------------------------------------------------------------
 # simplify / to_json_lite — inverse direction
 # ---------------------------------------------------------------------------
@@ -176,6 +232,21 @@ def test_to_json_lite_drops_defaults_and_keeps_overrides():
     c = pt.chart(DF, aes(x="month", y="sales"), data_width=700)
     c.add_line()
     assert '"data_width": 700' in pt.to_json_lite(c)
+
+
+def test_to_json_lite_strips_leaf_facet_and_coord_defaults():
+    c = pt.chart(DF, aes(x="region", y="sales", fill="region"))
+    c.coordinate(pt.CircularCoordinate(r_inner=0.4))
+    c.add_bar()
+    fig = c | pt.legend(ncols=2)
+    lite = pt.to_json_lite(fig)
+    assert '"container"' not in lite
+    assert '"legend_valign"' not in lite and '"legend_ncols": 2' in lite
+    g = pt.facet(DF, by="region", col_wrap=2)
+    g.add_line(aes(x="month", y="sales"))
+    lite = pt.to_json_lite(g)
+    assert '"row"' not in lite and '"share_x"' not in lite
+    assert '"col_wrap": 2' in lite
 
 
 def test_lite_round_trip_renders_byte_identical():

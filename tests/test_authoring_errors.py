@@ -53,6 +53,19 @@ CASES = [
     ("matrix_artist_given_table",
      [CH, {"op": "add_image_cmap", "nid": 1, "kwargs": {"data": dict(DF)}}],
      ["unexpected keyword argument 'data'"], []),
+    ("facet_without_a_factor",
+     [{"op": "new_facet_grid", "nid": 1, "kwargs": {"data": dict(DF)}},
+      {"op": "add_line", "nid": 1, "kwargs": {"aes": {"x": "x", "y": "y"}}}],
+     ["by=", "row=/col="], ["None not found"]),
+    ("facet_unknown_factor_column",
+     [{"op": "new_facet_grid", "nid": 1,
+       "kwargs": {"data": dict(DF), "by": "nope"}},
+      {"op": "add_line", "nid": 1, "kwargs": {"aes": {"x": "x", "y": "y"}}}],
+     ["'nope'", "not found"], []),
+    ("unknown_coord",
+     [CH, {"op": "coordinate", "nid": 1, "args": [{"$coord": "PolarCoord"}]},
+      {"op": "add_line", "nid": 1}],
+     ["'PolarCoord'", "Registered coords"], []),
 ]
 
 

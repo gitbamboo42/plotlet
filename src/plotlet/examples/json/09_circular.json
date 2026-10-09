@@ -13,7 +13,6 @@
    "args": [
     {
      "$coord": "CircularCoordinate",
-     "container": true,
      "kwargs": {
       "data_diameter": null,
       "r_inner": 0.3,

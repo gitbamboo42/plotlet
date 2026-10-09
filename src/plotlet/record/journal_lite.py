@@ -11,7 +11,10 @@ The authoring rules (taught in skills/json.md):
 
 1. `args` / `kwargs` on an entry default to empty.
 2. Any omitted kwarg means the op's default (`pt.op_help(op)` names
-   them) — `new_chart` sizing and margin included.
+   them) — `new_chart` sizing and margin, a legend `new_leaf`'s
+   canvas and `legend_*` state, and `new_facet_grid`'s `pt.facet`
+   parameters included. A `$coord` envelope's `container` flag is
+   derived from the registered class, so an author never writes it.
 3. An artist entry with no `aes` inherits the chart's (filtered
    to kwargs the artist accepts), plus the chart's literal aesthetic
    defaults and its `data`. A present `aes` is taken as complete
@@ -38,15 +41,72 @@ output round-trips (`expand(simplify(j)) == j`) before returning.
 """
 from __future__ import annotations
 
+import copy
+import inspect
 import json
 
 from .._spec import _MARGIN_FLOOR, _SIZESPEC
 from ..registry import op_to_artist
+from ..utils import all_primitive
 from .journal import Journal, from_journal, to_journal
 
 # Literal aesthetic-default keys a `new_chart` may carry (Chart._aes).
 _CHART_AES_KEYS = ("x", "y", "fill", "color", "group", "linestyle",
                    "palette")
+
+
+def _legend_leaf_defaults() -> dict:
+    """The `new_leaf` kwargs `to_journal` writes for a bare
+    `pt.legend()` — the journal's own defaults, so they can't drift
+    from the recorder. Only legend leaves have an authoring form
+    (a diagram leaf embeds pre-rendered SVG and is never hand-written)."""
+    from .legend import legend
+    return copy.deepcopy(to_journal(legend()).entries[0]["kwargs"])
+
+
+def _facet_defaults() -> dict:
+    """`new_facet_grid` kwargs mirror `pt.facet`'s parameters, so the
+    signature is the default table; `chart_opts` is its **kwargs."""
+    from .facet import facet
+    out = {p.name: p.default
+           for p in inspect.signature(facet).parameters.values()
+           if p.default is not inspect.Parameter.empty}
+    out["chart_opts"] = {}
+    return out
+
+
+def _coord_container(name: str) -> bool:
+    """The `container` flag `to_journal` stamps on a `$coord` envelope
+    — a fact about the registered class, re-derived here so a lite
+    author never states it. `render.validate` still cross-checks the
+    filled flag against the class at render."""
+    from .._coord_registry import resolve_coord
+    return hasattr(resolve_coord(name), "render_layout")
+
+
+def _fill_coord_flags(value):
+    """Return `value` with every `$coord` envelope in it carrying its
+    `container` flag. Pure — nested containers are rebuilt, not
+    mutated, so the caller's blob stays untouched."""
+    if isinstance(value, dict):
+        out = {k: _fill_coord_flags(v) for k, v in value.items()}
+        if "$coord" in out and "container" not in out:
+            out["container"] = _coord_container(out["$coord"])
+        return out
+    if isinstance(value, list) and not all_primitive(value):
+        return [_fill_coord_flags(v) for v in value]
+    return value
+
+
+def _strip_coord_flags(value):
+    """Inverse of `_fill_coord_flags` for `simplify`."""
+    if isinstance(value, dict):
+        out = {k: _strip_coord_flags(v) for k, v in value.items()
+               if not (k == "container" and "$coord" in value)}
+        return out
+    if isinstance(value, list) and not all_primitive(value):
+        return [_strip_coord_flags(v) for v in value]
+    return value
 
 
 def _is_inline_table(value) -> bool:
@@ -108,8 +168,8 @@ def expand(blob: dict) -> dict:
     last_new_nid = None
     for entry in blob["entries"]:
         e = dict(entry)
-        e["args"] = list(e.get("args", []))
-        e["kwargs"] = dict(e.get("kwargs", {}))
+        e["args"] = _fill_coord_flags(list(e.get("args", [])))
+        e["kwargs"] = _fill_coord_flags(dict(e.get("kwargs", {})))
         if _is_inline_table(e["kwargs"].get("data")):
             e["kwargs"]["data"] = intern(e["kwargs"]["data"])
         spec = op_to_artist(e["op"])
@@ -125,15 +185,21 @@ def expand(blob: dict) -> dict:
             _inherit_entry(e, charts[e["nid"]], spec)
         if e["op"].startswith("new_"):
             last_new_nid = e["nid"]
+            kw = e["kwargs"]
+            # The canonical form spells every construction kwarg out
+            # (`to_journal` writes them) — lite rule 2 makes them
+            # omissible, so expansion owns the defaults.
             if e["op"] == "new_chart":
-                # The canonical form always spells the sizing out
-                # (`to_journal` writes it) — lite rule 2 makes it
-                # omissible, so expansion owns the defaults.
-                kw = e["kwargs"]
                 kw.setdefault("data_width", _SIZESPEC["data_width"])
                 kw.setdefault("data_height", _SIZESPEC["data_height"])
                 kw.setdefault("margin", dict(_MARGIN_FLOOR))
                 charts[e["nid"]] = kw
+            elif e["op"] == "new_leaf" and kw.get("leaf_kind") == "legend":
+                for k, v in _legend_leaf_defaults().items():
+                    kw.setdefault(k, v)
+            elif e["op"] == "new_facet_grid":
+                for k, v in _facet_defaults().items():
+                    kw.setdefault(k, v)
         entries.append(e)
 
     root_nid = blob.get("root_nid")
@@ -148,16 +214,24 @@ def expand(blob: dict) -> dict:
 def _simplify_entry(entry: dict, charts: dict) -> dict:
     """One entry, minus everything `expand` re-derives."""
     e = dict(entry)
-    e["args"] = list(e.get("args", []))
-    e["kwargs"] = dict(e.get("kwargs", {}))
+    e["args"] = _strip_coord_flags(list(e.get("args", [])))
+    e["kwargs"] = _strip_coord_flags(dict(e.get("kwargs", {})))
+    kw = e["kwargs"]
     if e["op"] == "new_chart":
-        kw = e["kwargs"]
         if kw.get("data_width") == _SIZESPEC["data_width"]:
             kw.pop("data_width", None)
         if kw.get("data_height") == _SIZESPEC["data_height"]:
             kw.pop("data_height", None)
         if kw.get("margin") == dict(_MARGIN_FLOOR):
             kw.pop("margin", None)
+    elif e["op"] == "new_leaf" and kw.get("leaf_kind") == "legend":
+        for k, v in _legend_leaf_defaults().items():
+            if k in kw and kw[k] == v and k != "leaf_kind":
+                del kw[k]
+    elif e["op"] == "new_facet_grid":
+        for k, v in _facet_defaults().items():
+            if k in kw and kw[k] == v:
+                del kw[k]
     spec = op_to_artist(e["op"])
     if spec is not None and e["nid"] in charts:
         # Greedy: drop aes+data / data / aes, keeping the

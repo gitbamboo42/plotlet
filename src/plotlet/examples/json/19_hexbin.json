@@ -15,26 +15,7 @@
   {"op": "xlabel", "nid": 2, "args": ["x"]},
   {"op": "ylabel", "nid": 2, "args": ["y"]},
   {"op": "add_hexbin", "nid": 2, "kwargs": {"gridsize": 22}},
-  {
-   "op": "new_leaf",
-   "nid": 3,
-   "kwargs": {
-    "leaf_kind": "legend",
-    "canvas_width": 1,
-    "canvas_height": 1,
-    "margin": {"top": 0, "right": 0, "bottom": 0, "left": 0},
-    "legend_sources": [2],
-    "legend_names_pairs": [],
-    "legend_group_by_chart": true,
-    "legend_valign": "middle",
-    "legend_ncols": 1,
-    "legend_reverse": false,
-    "legend_manual": [],
-    "legend_user_width": null,
-    "legend_user_height": null,
-    "legend_gap": null
-   }
-  },
+  {"op": "new_leaf", "nid": 3, "kwargs": {"leaf_kind": "legend", "legend_sources": [2]}},
   {
    "op": "new_layout",
    "nid": 1,
